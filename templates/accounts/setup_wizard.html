@@ -1,0 +1,238 @@
+{% extends 'base.html' %}
+{% load crispy_forms_tags %}
+
+{% block content %}
+<div class="max-w-2xl mx-auto">
+    <div class="mb-8 text-center">
+        <h1 class="text-3xl font-bold mb-2">Completa il tuo profilo</h1>
+        <p class="text-slate-400">Configurazione account: <span class="text-cyan-400 font-bold">{{ role }}</span></p>
+    </div>
+
+    <div class="bg-slate-900 rounded-xl p-6 md:p-8 border border-slate-700">
+        <form method="post" enctype="multipart/form-data" id="setup-form">
+            {% csrf_token %}
+
+            <h3 class="text-xl font-bold mb-4 border-b border-slate-700 pb-2">Dati Personali</h3>
+            {{ user_form|crispy }}
+
+            {% if form %}
+            <h3 class="text-xl font-bold mt-8 mb-4 border-b border-slate-700 pb-2">Dati Specifici {{ role }}</h3>
+
+            {% if role == "Genitore/Fan" %}
+            <!-- FORM FAN -->
+            <div class="space-y-6">
+                <!-- Selezione campionato -->
+                <div>
+                    <label class="block text-sm font-medium text-slate-300 mb-2">Campionato</label>
+                    <select id="league-select" name="league"
+                        class="w-full bg-slate-800 border border-slate-600 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-cyan-500">
+                        <option value="">--- Seleziona Campionato ---</option>
+                        {% for choice_val, choice_label in form.league.field.choices %}
+                        {% if choice_val %}
+                        <option value="{{ choice_val }}">{{ choice_label }}</option>
+                        {% endif %}
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <!-- Selezione squadra (popolata via JS) -->
+                <div id="team-select-wrapper" class="hidden">
+                    <label class="block text-sm font-medium text-slate-300 mb-2">Squadra Preferita</label>
+                    <select id="team-select"
+                        class="w-full bg-slate-800 border border-slate-600 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-cyan-500">
+                        <option value="">--- Seleziona Squadra ---</option>
+                    </select>
+                    <input type="hidden" name="favorite_team" id="favorite-team-hidden">
+                </div>
+
+                <!-- Ricerca atleta -->
+                <div>
+                    <label class="block text-sm font-medium text-slate-300 mb-2">Atleta Preferito</label>
+                    <div class="relative">
+                        <input type="text" id="athlete-search-input" autocomplete="off"
+                            placeholder="Scrivi nome e cognome dell'atleta..."
+                            class="w-full bg-slate-800 border border-slate-600 rounded-lg px-4 py-2 text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500">
+                        <div id="athlete-results"
+                            class="hidden absolute z-10 w-full mt-1 bg-slate-800 border border-slate-600 rounded-lg shadow-xl max-h-48 overflow-y-auto">
+                        </div>
+                    </div>
+                    <input type="hidden" name="favorite_player_id" id="favorite-player-id">
+                    <p id="selected-athlete-label" class="text-sm text-cyan-400 mt-2 hidden"></p>
+                </div>
+            </div>
+
+            {% else %}
+            <!-- TUTTI GLI ALTRI FORM (atleta, allenatore, arbitro) -->
+            {{ form|crispy }}
+            {% endif %}
+            {% endif %}
+
+            <button type="submit"
+                class="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-4 rounded-lg mt-8 transition-colors">
+                Salva e Continua
+            </button>
+        </form>
+    </div>
+</div>
+
+<script>
+    // ============================================
+    // CAMPO "ALTRO" — SPECIALIZZAZIONE ALLENATORE
+    // ============================================
+    (function () {
+        const specSelect = document.querySelector('select[name="specialization"]');
+        const specOtherInput = document.querySelector('input[name="specialization_other"]');
+        if (specSelect && specOtherInput) {
+            const wrapper = specOtherInput.closest('.form-group') || specOtherInput.parentElement;
+            const toggleSpecOther = () => {
+                if (specSelect.value === 'altro') {
+                    wrapper.style.display = '';
+                } else {
+                    wrapper.style.display = 'none';
+                    specOtherInput.value = '';
+                }
+            };
+            wrapper.style.display = 'none';
+            specSelect.addEventListener('change', toggleSpecOther);
+            toggleSpecOther();
+        }
+    })();
+
+    // ============================================
+    // CAMPO "ALTRO" — LIVELLO ARBITRO
+    // ============================================
+    (function () {
+        const levelSelect = document.querySelector('select[name="license_level"]');
+        const levelOtherInput = document.querySelector('input[name="license_level_other"]');
+        if (levelSelect && levelOtherInput) {
+            const wrapper = levelOtherInput.closest('.form-group') || levelOtherInput.parentElement;
+            const toggleLevelOther = () => {
+                if (levelSelect.value === 'altro') {
+                    wrapper.style.display = '';
+                } else {
+                    wrapper.style.display = 'none';
+                    levelOtherInput.value = '';
+                }
+            };
+            wrapper.style.display = 'none';
+            levelSelect.addEventListener('change', toggleLevelOther);
+            toggleLevelOther();
+        }
+    })();
+
+    // ============================================
+    // FAN — CASCATA CAMPIONATO → SQUADRA
+    // ============================================
+    const leagueSelect = document.getElementById('league-select');
+    const teamSelectWrapper = document.getElementById('team-select-wrapper');
+    const teamSelect = document.getElementById('team-select');
+    const favoriteTeamHidden = document.getElementById('favorite-team-hidden');
+
+    if (leagueSelect) {
+        // Funzione per caricare le squadre di un campionato
+        const loadTeams = async (leagueId, selectedTeamId = null) => {
+            teamSelectWrapper.classList.add('hidden');
+            teamSelect.innerHTML = '<option value="">--- Caricamento... ---</option>';
+
+            if (!leagueId) {
+                favoriteTeamHidden.value = '';
+                return;
+            }
+
+            try {
+                const resp = await fetch(`/accounts/api/teams-by-league/?league_id=${leagueId}`);
+                const teams = await resp.json();
+                teamSelect.innerHTML = '<option value="">--- Seleziona Squadra ---</option>';
+                teams.forEach(t => {
+                    const selectedAttr = (selectedTeamId && t.id == selectedTeamId) ? 'selected' : '';
+                    teamSelect.innerHTML += `<option value="${t.id}" ${selectedAttr}>${t.name}</option>`;
+                });
+                teamSelectWrapper.classList.remove('hidden');
+                if (selectedTeamId) {
+                    favoriteTeamHidden.value = selectedTeamId;
+                }
+            } catch (e) {
+                console.error('Errore caricamento squadre:', e);
+            }
+        };
+
+        leagueSelect.addEventListener('change', function () {
+            loadTeams(this.value);
+        });
+
+        teamSelect.addEventListener('change', function () {
+            favoriteTeamHidden.value = this.value;
+        });
+
+        // INIT: Se c'è già un campionato selezionato (modifica profilo)
+        window.addEventListener('load', () => {
+            if (leagueSelect.value) {
+                const preselectedTeamId = "{{ form.favorite_team.value|default:'' }}";
+                loadTeams(leagueSelect.value, preselectedTeamId);
+            }
+        });
+    }
+
+    // ============================================
+    // FAN — RICERCA ATLETA LIVE
+    // ============================================
+    const athleteSearchInput = document.getElementById('athlete-search-input');
+    const athleteResults = document.getElementById('athlete-results');
+    const favoritePlayerId = document.getElementById('favorite-player-id');
+    const selectedAthleteLabel = document.getElementById('selected-athlete-label');
+
+    if (athleteSearchInput) {
+        // INIT: Se c'è già un atleta selezionato
+        window.addEventListener('load', () => {
+            if (favoritePlayerId.value && athleteSearchInput.value) {
+                selectedAthleteLabel.textContent = `✅ Atleta selezionato: ${athleteSearchInput.value}`;
+                selectedAthleteLabel.classList.remove('hidden');
+            }
+        });
+
+        let searchTimeout;
+        athleteSearchInput.addEventListener('input', function () {
+            clearTimeout(searchTimeout);
+            const query = this.value.trim();
+            if (query.length < 2) {
+                athleteResults.classList.add('hidden');
+                return;
+            }
+            searchTimeout = setTimeout(async () => {
+                try {
+                    const resp = await fetch(`/accounts/api/search-athlete/?q=${encodeURIComponent(query)}`);
+                    const athletes = await resp.json();
+                    athleteResults.innerHTML = '';
+                    if (athletes.length === 0) {
+                        athleteResults.innerHTML = '<div class="px-4 py-3 text-slate-400 text-sm">Nessun atleta trovato</div>';
+                    } else {
+                        athletes.forEach(a => {
+                            const div = document.createElement('div');
+                            div.className = 'px-4 py-3 hover:bg-slate-700 cursor-pointer text-sm border-b border-slate-700 last:border-0';
+                            div.innerHTML = `<span class="font-bold text-white">${a.full_name}</span> <span class="text-slate-400 text-xs ml-2">${a.team || 'Squadra non specificata'}</span>`;
+                            div.addEventListener('click', () => {
+                                favoritePlayerId.value = a.id;
+                                athleteSearchInput.value = a.full_name;
+                                athleteResults.classList.add('hidden');
+                                selectedAthleteLabel.textContent = `✅ Atleta selezionato: ${a.full_name}`;
+                                selectedAthleteLabel.classList.remove('hidden');
+                            });
+                            athleteResults.appendChild(div);
+                        });
+                    }
+                    athleteResults.classList.remove('hidden');
+                } catch (e) {
+                    console.error('Errore ricerca atleta:', e);
+                }
+            }, 350);
+        });
+
+        // Chiudi dropdown al click fuori
+        document.addEventListener('click', function (e) {
+            if (!athleteSearchInput.contains(e.target) && !athleteResults.contains(e.target)) {
+                athleteResults.classList.add('hidden');
+            }
+        });
+    }
+</script>
+{% endblock %}

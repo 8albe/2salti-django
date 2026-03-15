@@ -1,0 +1,62 @@
+<div
+    class="glass-panel p-4 hover:bg-white/5 transition-all group relative overflow-hidden border-l-4 {% if match.is_finished %}border-l-slate-600{% else %}border-l-green-500{% endif %}">
+    <a href="{% url 'match_detail' match.id %}" class="block relative z-10">
+        <!-- HEADER -->
+        <div class="flex justify-between items-center mb-4 text-xs text-slate-400 font-mono">
+            <span class="bg-black/30 px-2 py-1 rounded">{{ match.match_date|date:"d/m/Y H:i" }}</span>
+            <span class="uppercase tracking-wide">{{ match.league.name }}</span>
+        </div>
+
+        <!-- TEAMS -->
+        <div class="flex items-center justify-between gap-4">
+            <!-- HOUSE -->
+            <div class="flex-1 flex flex-col items-center gap-2 text-center">
+                <div
+                    class="w-12 h-12 rounded-full bg-slate-800 p-1 flex items-center justify-center border border-white/10 group-hover:border-cyan-500/50 transition-colors">
+                    {% if match.home_team.society.logo %}
+                    <img src="{{ match.home_team.society.logo.url }}" class="w-full h-full object-contain">
+                    {% else %}
+                    <span class="text-xl">🏠</span>
+                    {% endif %}
+                </div>
+                <div class="font-bold text-sm leading-tight text-white">{{ match.home_team.name }}</div>
+            </div>
+
+            <!-- VS / SCORE -->
+            <div class="flex flex-col items-center">
+                {% if match.is_finished %}
+                <div
+                    class="text-3xl font-display font-bold text-white tracking-widest bg-black/20 px-4 py-1 rounded-lg">
+                    {{ match.home_score }}-{{ match.away_score }}
+                </div>
+                <span class="text-xs text-slate-500 mt-1">Conclusa</span>
+                {% else %}
+                <div class="text-2xl font-display font-bold text-slate-600">VS</div>
+                {% if match.match_date|date:"Y-m-d" == now|date:"Y-m-d" %}
+                <span class="text-xs text-green-400 font-bold animate-pulse mt-1">OGGI</span>
+                {% else %}
+                <object>
+                    <a href="https://www.google.com/maps/search/?api=1&query={{ match.location }}" target="_blank"
+                        class="text-xs text-slate-500 mt-1 hover:text-cyan-400 transition-colors underline decoration-dotted z-20 relative">
+                        {{ match.location }}
+                    </a>
+                </object>
+                {% endif %}
+                {% endif %}
+            </div>
+
+            <!-- AWAY -->
+            <div class="flex-1 flex flex-col items-center gap-2 text-center">
+                <div
+                    class="w-12 h-12 rounded-full bg-slate-800 p-1 flex items-center justify-center border border-white/10 group-hover:border-purple-500/50 transition-colors">
+                    {% if match.away_team.society.logo %}
+                    <img src="{{ match.away_team.society.logo.url }}" class="w-full h-full object-contain">
+                    {% else %}
+                    <span class="text-xl">✈️</span>
+                    {% endif %}
+                </div>
+                <div class="font-bold text-sm leading-tight text-white">{{ match.away_team.name }}</div>
+            </div>
+        </div>
+    </a>
+</div>

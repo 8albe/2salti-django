@@ -1,0 +1,29 @@
+{% extends 'base.html' %}
+{% load crispy_forms_tags %}
+
+{% block content %}
+<div class="max-w-3xl mx-auto">
+    <div class="text-center mb-8">
+        <h1 class="text-3xl font-bold mb-2">Crea la tua Società</h1>
+        <p class="text-slate-400">Inserisci i dati ufficiali della tua società sportiva.</p>
+    </div>
+
+    <div class="bg-slate-900 rounded-xl p-8 border border-slate-700">
+        <form method="post" enctype="multipart/form-data">
+            {% csrf_token %}
+
+            {{ form|crispy }}
+
+            <div class="mt-6 bg-blue-900/20 border border-blue-500/30 rounded-lg p-4 text-sm text-blue-200">
+                <p>ℹ️ <strong>Nota Bene:</strong> Creando la società, verranno generate automaticamente le squadre per
+                    tutte le categorie (U10, U12, ..., Senior). Potrai assegnare gli allenatori in seguito.</p>
+            </div>
+
+            <button type="submit"
+                class="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-4 rounded-lg mt-8 transition-colors">
+                Crea Società e Continua
+            </button>
+        </form>
+    </div>
+</div>
+{% endblock %}

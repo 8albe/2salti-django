@@ -1,0 +1,85 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="max-w-4xl mx-auto px-4 py-8">
+    <div class="flex justify-between items-center mb-8">
+        <div>
+            <h1 class="text-3xl font-bold text-white mb-2">Programma Allenamenti</h1>
+            <p class="text-gray-400">Tutti i turni della società</p>
+        </div>
+        {% if user_membership.role == 'PRESIDENT' or user_membership.role == 'HEAD_COACH' %}
+        <a href="{% url 'training_create' %}"
+            class="bg-cyan-500 hover:bg-cyan-600 text-black px-6 py-2 rounded-full font-bold transition-all flex items-center gap-2">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
+            </svg>
+            Nuovo Allenamento
+        </a>
+        {% endif %}
+    </div>
+
+    <div class="space-y-6">
+        {% regroup occurrences by start_time.date as daily_occurrences %}
+
+        {% for day in daily_occurrences %}
+        <div class="glass-card overflow-hidden">
+            <div class="bg-white/5 px-4 py-2 border-b border-white/10 flex justify-between items-center">
+                <h3 class="text-cyan-400 font-bold uppercase tracking-wider text-sm">{{ day.grouper|date:"l d F Y" }}
+                </h3>
+            </div>
+
+            <div class="divide-y divide-white/5">
+                {% for occurrence in day.list %}
+                <div class="flex items-center p-3 hover:bg-white/5 transition-all group">
+                    <div class="w-20 text-center border-r border-white/10 mr-4">
+                        <span class="block text-white font-bold">{{ occurrence.start_time|date:"H:i" }}</span>
+                        <span class="text-xs text-gray-500">{{ occurrence.end_time|date:"H:i" }}</span>
+                    </div>
+
+                    <div class="flex-grow">
+                        <div class="flex items-center gap-2">
+                            <span class="text-white font-semibold">{{ occurrence.training.title }}</span>
+                            <span
+                                class="px-2 py-0.5 rounded text-[10px] font-bold bg-cyan-500/20 text-cyan-400 border border-cyan-500/30">
+                                {{ occurrence.training.team.category }}
+                            </span>
+                        </div>
+                        <div class="text-sm text-gray-400 flex items-center gap-3 mt-1">
+                            <span class="flex items-center gap-1">
+                                <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                        d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z">
+                                    </path>
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                        d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"></path>
+                                </svg>
+                                {{ occurrence.training.location }}
+                            </span>
+                        </div>
+                    </div>
+
+                    <div class="flex items-center gap-3 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <a href="{% url 'training_rsvp' occurrence.id %}"
+                            class="text-xs bg-white/10 hover:bg-white/20 text-white px-3 py-1 rounded transition-all">
+                            Check-in / RSVP
+                        </a>
+                    </div>
+                </div>
+                {% empty %}
+                <div class="p-4 text-center text-gray-500">Nessun allenamento programmato.</div>
+                {% endfor %}
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+
+<style>
+    .glass-card {
+        background: rgba(255, 255, 255, 0.03);
+        backdrop-filter: blur(10px);
+        border: 1px solid rgba(255, 255, 255, 0.05);
+        border-radius: 12px;
+    }
+</style>
+{% endblock %}

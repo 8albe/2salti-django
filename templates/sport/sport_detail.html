@@ -1,0 +1,43 @@
+{% extends 'base.html' %}
+{% load core_extras %}
+
+{% block content %}
+<div class="mb-8">
+    <h1 class="text-4xl font-bold sport-accent mb-2">{{ sport.name }}</h1>
+    <p class="text-slate-400">Stagione {{ current_season|default:"Corrente" }}</p>
+</div>
+
+<!-- CAMPIONATI E PARTITE -->
+<div class="space-y-12">
+    {% for item in leagues_data %}
+    <div class="glass-panel p-6">
+        <div class="flex items-center justify-between mb-6">
+            <div>
+                <h2 class="text-2xl font-bold font-display text-white">{{ item.league.name }}</h2>
+                <p class="text-slate-400 text-sm">Stagione {{ item.league.season }}</p>
+            </div>
+            <a href="{% url 'league_standings' item.league.id %}"
+                class="text-cyan-400 hover:text-cyan-300 text-sm font-bold flex items-center gap-1">
+                Vedi Classifica <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 8l4 4m0 0l-4 4m4-4H3">
+                    </path>
+                </svg>
+            </a>
+        </div>
+
+        <!-- MATCH LIST -->
+        <div class="glass-panel overflow-hidden border border-white/10 rounded-xl bg-slate-900/50">
+            <div class="divide-y divide-white/5">
+                {% for match in item.matches %}
+                {% include 'matches/compact_match_row.html' with match=match %}
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+    {% empty %}
+    <div class="text-center py-12 text-slate-500">
+        Nessuna partita in programma al momento.
+    </div>
+    {% endfor %}
+</div>
+{% endblock %}

@@ -1,0 +1,35 @@
+server {
+    listen 80;
+    server_name formichina.com www.formichina.com duesalti.com www.duesalti.com duesalti.it www.duesalti.it 2salti.it www.2salti.it;
+    return 301 https://2salti.com$request_uri;
+}
+
+# Redirect formichina.com with its own certificate to avoid browser warnings
+server {
+    listen 443 ssl;
+    server_name formichina.com www.formichina.com;
+    
+    ssl_certificate /etc/letsencrypt/live/formichina.com/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/formichina.com/privkey.pem;
+    
+    include /etc/letsencrypt/options-ssl-nginx.conf;
+    ssl_dhparam /etc/letsencrypt/ssl-dhparams.pem;
+
+    return 301 https://2salti.com$request_uri;
+}
+
+# Redirect other domains (duesalti.com, duesalti.it, 2salti.it)
+server {
+    listen 443 ssl;
+    server_name duesalti.com www.duesalti.com duesalti.it www.duesalti.it 2salti.it www.2salti.it;
+    
+    ssl_certificate /etc/letsencrypt/live/duesalti.com/fullchain.pem; 
+    ssl_certificate_key /etc/letsencrypt/live/duesalti.com/privkey.pem;
+    
+    include /etc/letsencrypt/options-ssl-nginx.conf;
+    ssl_dhparam /etc/letsencrypt/ssl-dhparams.pem;
+
+    return 301 https://2salti.com$request_uri;
+}
+
+

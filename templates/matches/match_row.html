@@ -1,0 +1,52 @@
+<tr class="hover:bg-white/5 transition-colors border-b border-white/5 last:border-0 cursor-pointer"
+    onclick="window.location='{% url 'match_detail' match.id %}';">
+    <!-- Home Team -->
+    <td class="py-4 pl-4 text-right w-5/12">
+        <div class="flex items-center justify-end gap-3">
+            <a href="{% url 'team_detail' match.home_team.slug %}" onclick="event.stopPropagation();"
+                class="font-bold text-white text-lg hover:underline">{{ match.home_team.name }}</a>
+            <div
+                class="w-10 h-10 rounded-full bg-slate-800 p-1 flex items-center justify-center border border-white/10">
+                {% if match.home_team.society.logo %}
+                <img src="{{ match.home_team.society.logo.url }}" class="w-full h-full object-contain">
+                {% else %}
+                <span>🏠</span>
+                {% endif %}
+            </div>
+        </div>
+    </td>
+
+    <!-- VS / Info -->
+    <td class="py-4 px-2 text-center w-2/12">
+        <div class="flex flex-col items-center justify-center">
+            <span class="text-xl font-display font-bold text-slate-500 mb-1">VS</span>
+
+            <!-- Google Maps Pool Link -->
+            <a href="https://www.google.com/maps/search/?api=1&query={{ match.location }}" target="_blank"
+                class="text-xs text-cyan-400 hover:text-cyan-300 font-bold underline decoration-dotted truncate max-w-[150px]">
+                {{ match.location }}
+            </a>
+
+            <!-- Date & Time -->
+            <span class="text-xs text-slate-500 font-mono mt-0.5">
+                {{ match.match_date|date:"D d M Y" }} - {{ match.match_date|date:"H:i" }}
+            </span>
+        </div>
+    </td>
+
+    <!-- Away Team -->
+    <td class="py-4 pr-4 text-left w-5/12">
+        <div class="flex items-center justify-start gap-3">
+            <div
+                class="w-10 h-10 rounded-full bg-slate-800 p-1 flex items-center justify-center border border-white/10">
+                {% if match.away_team.society.logo %}
+                <img src="{{ match.away_team.society.logo.url }}" class="w-full h-full object-contain">
+                {% else %}
+                <span>✈️</span>
+                {% endif %}
+            </div>
+            <a href="{% url 'team_detail' match.away_team.slug %}" onclick="event.stopPropagation();"
+                class="font-bold text-white text-lg hover:underline">{{ match.away_team.name }}</a>
+        </div>
+    </td>
+</tr>

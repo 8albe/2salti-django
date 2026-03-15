@@ -1,0 +1,189 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<!-- MATCH HEADER -->
+<div class="relative w-full rounded-3xl overflow-hidden mb-8 glass border-0 shadow-2xl">
+    <!-- Background Gradient -->
+    <div class="absolute inset-0 bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 opacity-90"></div>
+    <div class="absolute inset-0 bg-[url('/static/img/pattern.png')] opacity-10"></div>
+
+    <div class="relative z-10 p-8 md:p-12">
+        <!-- Info Bar -->
+        <div class="text-center mb-8">
+            <span
+                class="px-4 py-1 rounded-full bg-white/5 border border-white/10 text-xs font-mono text-cyan-300 uppercase tracking-widest">
+                {{ match.league.name }}
+            </span>
+            <div class="mt-4 text-slate-400 flex items-center justify-center gap-2 text-sm">
+                <span>📅 {{ match.match_date|date:"d/m/Y" }}</span>
+                <span>⏰ {{ match.match_date|date:"H:i" }}</span>
+                {% if match.location %}<a href="{{ match.google_maps_url }}" target="_blank"
+                    class="hover:text-cyan-400 transition-colors hover:underline">📍 {{ match.location }}</a>{% endif %}
+            </div>
+        </div>
+
+        <!-- SCOREBOARD -->
+        <div class="flex items-center justify-between max-w-4xl mx-auto gap-4">
+            <!-- HOME -->
+            <a href="{% url 'team_detail' match.home_team.slug %}" class="flex-1 text-center group">
+                <div
+                    class="w-24 h-24 md:w-32 md:h-32 rounded-full bg-slate-800/80 p-4 mx-auto mb-4 border border-white/10 group-hover:border-cyan-500 shadow-2xl transition-all">
+                    {% if match.home_team.society.logo %}
+                    <img src="{{ match.home_team.society.logo.url }}" class="w-full h-full object-contain">
+                    {% else %}
+                    <span class="text-4xl">🏠</span>
+                    {% endif %}
+                </div>
+                <h2
+                    class="text-xl md:text-3xl font-display font-bold text-white mb-1 group-hover:text-cyan-400 transition-colors">
+                    {{ match.home_team.name }}</h2>
+                <p class="text-slate-500 text-sm md:text-base hidden sm:block">Casa</p>
+            </a>
+
+            <!-- CENTER -->
+            <div
+                class="px-4 md:px-12 py-6 rounded-2xl bg-black/20 backdrop-blur-sm border border-white/5 text-center min-w-[120px]">
+                {% if match.is_finished %}
+                <div
+                    class="text-5xl md:text-7xl font-display font-bold text-white tracking-widest bg-clip-text text-transparent bg-gradient-to-b from-white to-slate-400">
+                    {{ match.home_score }}-{{ match.away_score }}
+                </div>
+                <div
+                    class="mt-2 text-green-400 font-bold text-xs uppercase tracking-widest border border-green-500/20 bg-green-500/10 px-2 py-1 rounded inline-block">
+                    Conclusa
+                </div>
+                {% else %}
+                <div class="text-4xl md:text-6xl font-display font-bold text-slate-600">VS</div>
+                <div class="mt-2 text-slate-500 font-mono text-xs uppercase tracking-widest">
+                    Preview
+                </div>
+                {% endif %}
+            </div>
+
+            <!-- AWAY -->
+            <a href="{% url 'team_detail' match.away_team.slug %}" class="flex-1 text-center group">
+                <div
+                    class="w-24 h-24 md:w-32 md:h-32 rounded-full bg-slate-800/80 p-4 mx-auto mb-4 border border-white/10 group-hover:border-purple-500 shadow-2xl transition-all">
+                    {% if match.away_team.society.logo %}
+                    <img src="{{ match.away_team.society.logo.url }}" class="w-full h-full object-contain">
+                    {% else %}
+                    <span class="text-4xl">✈️</span>
+                    {% endif %}
+                </div>
+                <h2
+                    class="text-xl md:text-3xl font-display font-bold text-white mb-1 group-hover:text-purple-400 transition-colors">
+                    {{ match.away_team.name }}</h2>
+                <p class="text-slate-500 text-sm md:text-base hidden sm:block">Ospite</p>
+            </a>
+        </div>
+
+        {% if match.referees.exists %}
+        <div class="mt-8 text-center pt-8 border-t border-white/5">
+            <p class="text-sm text-slate-500">
+                <span class="font-bold text-slate-400">Arbitri:</span>
+                {{ match.referees.all|join:", " }}
+            </p>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+{% if match.is_finished %}
+<div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+
+    <!-- MATCH EVENTS (GOALS) -->
+    <div class="glass-panel p-6">
+        <h3 class="text-xl font-bold text-white mb-6 flex items-center gap-2">
+            <span>⚽</span> Tabellino
+        </h3>
+
+        <div
+            class="relative space-y-8 before:absolute before:inset-0 before:ml-5 before:-translate-x-px md:before:mx-auto md:before:translate-x-0 before:h-full before:w-0.5 before:bg-gradient-to-b before:from-transparent before:via-slate-600 before:to-transparent">
+            {% for goal in goals %}
+            <div class="relative flex items-center justify-between md:justify-normal md:odd:flex-row-reverse group">
+                <!-- Icon -->
+                <div
+                    class="flex items-center justify-center w-10 h-10 rounded-full border border-slate-600 bg-slate-900 group-hover:bg-cyan-900/50 group-hover:border-cyan-500 shadow-[0_0_10px_rgba(0,0,0,0.5)] shrink-0 z-10 md:order-1 md:group-odd:-translate-x-1/2 md:group-even:translate-x-1/2 transition-all duration-300">
+                    <span class="text-xs font-bold text-cyan-400 group-hover:text-cyan-300">{{ goal.minute }}'</span>
+                </div>
+
+                <!-- Card -->
+                <div
+                    class="w-[calc(100%-4rem)] md:w-[calc(50%-2.5rem)] p-4 rounded-xl border border-white/5 bg-white/5 backdrop-blur-sm shadow-lg hover:shadow-cyan-500/10 hover:border-cyan-500/30 transition-all duration-300">
+                    <div class="flex items-center justify-between mb-2">
+                        <div class="font-bold text-white text-lg">{{ goal.player.get_full_name }}</div>
+                        <div
+                            class="px-2 py-0.5 rounded bg-black/30 border border-white/5 text-xs text-slate-400 font-mono">
+                            {{ goal.quarter }}° Q</div>
+                    </div>
+                    <div class="flex items-center justify-between">
+                        <a href="{% url 'team_detail' goal.team.slug %}"
+                            class="text-sm text-cyan-400 font-medium hover:underline">{{ goal.team.name }}</a>
+                        <div class="text-xs text-slate-500">Gol</div>
+                    </div>
+                </div>
+            </div>
+            {% empty %}
+            <div class="text-center py-12 text-slate-500 italic flex flex-col items-center">
+                <i class="fas fa-wind text-3xl mb-3 opacity-50"></i>
+                <p>Nessun gol registrato in questo match.</p>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+
+    <!-- CARDS & TIMEOUTS -->
+    <div class="space-y-6">
+        <!-- Expulsions -->
+        {% if expulsions %}
+        <div class="glass-panel p-6 border-l-4 border-red-500">
+            <h3 class="text-xl font-bold text-white mb-6 flex items-center gap-2">
+                <span class="text-2xl">🟥</span> Sanzioni
+            </h3>
+            <div class="space-y-4">
+                {% for exp in expulsions %}
+                <div
+                    class="flex items-center justify-between p-4 rounded-xl bg-gradient-to-r from-red-500/10 to-transparent border border-red-500/20 hover:border-red-500/40 transition-all">
+                    <div class="flex items-center gap-4">
+                        <div
+                            class="w-10 h-10 rounded-full bg-red-900/50 flex items-center justify-center text-red-500 font-bold border border-red-500/30">
+                            {{ exp.minute }}'
+                        </div>
+                        <div>
+                            <div class="font-bold text-red-100 text-lg">{{ exp.player.get_full_name }}</div>
+                            <a href="{% url 'team_detail' exp.team.slug %}"
+                                class="text-sm text-red-300 hover:underline">{{ exp.team.name }}</a>
+                        </div>
+                    </div>
+                    <span
+                        class="text-xs font-mono font-bold text-red-400 bg-black/40 px-3 py-1 rounded-full border border-red-500/20">{{ exp.quarter }}° Q</span>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- Timeouts -->
+        {% if timeouts %}
+        <div class="glass-panel p-6 border-l-4 border-amber-500">
+            <h3 class="text-xl font-bold text-white mb-6 flex items-center gap-2">
+                <span class="text-2xl">⏱️</span> Timeout
+            </h3>
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                {% for timeout in timeouts %}
+                <div
+                    class="p-4 rounded-xl bg-slate-800/50 border border-slate-700 hover:border-amber-500/50 transition-all flex justify-between items-center group">
+                    <a href="{% url 'team_detail' timeout.team.slug %}"
+                        class="font-bold text-slate-300 group-hover:text-amber-400 transition-colors hover:underline">{{ timeout.team.name }}</a>
+                    <span class="text-xs font-mono text-slate-500 bg-black/30 px-2 py-1 rounded">{{ timeout.minute }}'
+                        ({{ timeout.quarter }}° Q)</span>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endif %}
+
+{% endblock %}

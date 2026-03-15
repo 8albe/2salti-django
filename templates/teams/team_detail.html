@@ -1,0 +1,247 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<!-- HEADER SQUADRA -->
+<div class="bg-slate-900 rounded-xl p-8 mb-8 border border-slate-700 relative overflow-hidden">
+    <!-- Backgound decoration -->
+    <div
+        class="absolute top-0 right-0 w-64 h-64 bg-sport opacity-5 rounded-full blur-3xl -mr-32 -mt-32 pointer-events-none">
+    </div>
+
+    <div class="relative z-10 flex flex-col md:flex-row items-center gap-8 text-center md:text-left">
+        {% if team.society.logo %}
+        <img src="{{ team.society.logo.url }}" alt="{{ team.society.name }}"
+            class="w-40 h-40 object-contain drop-shadow-2xl bg-white/5 rounded-2xl p-2">
+        {% endif %}
+
+        <div>
+            <div class="text-sm font-mono text-slate-400 mb-1 tracking-wider uppercase">{{ team.get_category_display }}
+            </div>
+            <h1 class="text-5xl font-bold sport-accent mb-2">{{ team.name }}</h1>
+
+            {% if team.league %}
+            <div
+                class="mt-4 inline-flex items-center gap-2 bg-slate-800 px-3 py-1 rounded-full text-sm border border-slate-700">
+                🏆 Partecipa a: <span class="font-bold text-sport">{{ team.league.name }}</span>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- CATEGORY NAVIGATION (Horizontal Scroll) -->
+    {% if other_teams %}
+    <div class="mt-8 pt-4 border-t border-slate-800">
+        <p class="text-xs text-slate-500 uppercase tracking-widest mb-3">Altre Categorie {{ team.society.name }}</p>
+        <div class="flex gap-3 overflow-x-auto pb-2 scrollbar-hide">
+            {% for other_team in other_teams %}
+            <a href="{% url 'team_detail' other_team.slug %}"
+                class="shrink-0 px-4 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 hover:border-cyan-500/50 transition-all text-sm font-medium text-slate-300">
+                {{ other_team.get_category_display }}
+            </a>
+            {% endfor %}
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Action Bar -->
+    <div class="mt-8 pt-8 border-t border-slate-800 flex justify-center md:justify-start gap-4">
+        {% if user.is_authenticated %}
+        {% if team in user.favorite_teams.all %}
+        <form method="post" action="{% url 'toggle_follow_team' team.id %}">
+            {% csrf_token %}
+            <button
+                class="bg-slate-800 text-yellow-500 px-4 py-2 rounded-lg font-bold border border-yellow-500/30 hover:bg-slate-700 transition-colors">
+                ⭐ Segui già
+            </button>
+        </form>
+        {% else %}
+        <form method="post" action="{% url 'toggle_follow_team' team.id %}">
+            {% csrf_token %}
+            <button
+                class="bg-slate-800 hover:bg-slate-700 text-slate-300 px-4 py-2 rounded-lg font-bold transition-colors border border-transparent hover:border-slate-600">
+                ☆ Segui Squadra
+            </button>
+        </form>
+        {% endif %}
+        {% endif %}
+
+        {% if request.user_membership.society == team.society %}
+        <a href="{% url 'bacheca_team' team.slug %}"
+            class="bg-cyan-500 hover:bg-cyan-600 text-black px-6 py-2 rounded-lg font-bold transition-all flex items-center gap-2">
+            <span>📢</span> Bacheca
+        </a>
+        <a href="{% url 'chat_team' team.slug %}"
+            class="bg-white/10 hover:bg-white/20 text-white px-6 py-2 rounded-lg font-bold border border-white/10 transition-all flex items-center gap-2">
+            <span>💬</span> Chat
+        </a>
+        {% endif %}
+    </div>
+</div>
+
+<div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+    <!-- ROSA GIOCATORI -->
+    <div class="lg:col-span-2">
+        <h2 class="text-2xl font-bold mb-6">Rosa {{ team.get_category_display }}</h2>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {% for player_profile in roster %}
+            <a href="{% url 'profile' player_profile.user.username %}"
+                class="bg-slate-900 border border-slate-800 p-4 rounded-xl flex items-center gap-4 hover:border-sport hover:bg-slate-800 transition-all group">
+                <div class="relative">
+                    {% if player_profile.user.profile_picture %}
+                    <img src="{{ player_profile.user.profile_picture.url }}"
+                        class="w-14 h-14 rounded-full object-cover">
+                    {% else %}
+                    <div class="w-14 h-14 rounded-full bg-slate-700 flex items-center justify-center text-xl">
+                        👤
+                    </div>
+                    {% endif %}
+                    <div
+                        class="absolute -bottom-1 -right-1 bg-slate-900 text-xs font-bold px-1.5 py-0.5 rounded border border-slate-700 group-hover:border-sport text-sport">
+                        {{ player_profile.jersey_number|default:"-" }}
+                    </div>
+                </div>
+
+                <div>
+                    <div class="font-bold text-lg group-hover:text-sport transition-colors">
+                        {% if player_profile.user.get_full_name %}
+                            {{ player_profile.user.get_full_name }}
+                        {% elif player_profile.user.first_name or player_profile.user.last_name %}
+                            {{ player_profile.user.first_name }} {{ player_profile.user.last_name }}
+                        {% elif player_profile.user.username %}
+                            {{ player_profile.user.username }}
+                        {% else %}
+                            Giocatore senza nome
+                        {% endif %}
+                    </div>
+                    <div class="text-sm text-slate-400">{{ player_profile.position|default:"Ruolo non spec." }}</div>
+                </div>
+
+                <div class="ml-auto text-center hidden sm:block">
+                    <div class="text-xs text-slate-500 uppercase tracking-tighter">Gol</div>
+                    <div class="font-bold font-mono">{{ player_profile.total_goals }}</div>
+                </div>
+            </a>
+            {% empty %}
+            <div class="col-span-2 bg-slate-900/50 p-8 rounded-xl text-center border-2 border-dashed border-slate-800">
+                <p class="text-slate-500">Nessun giocatore in rosa.</p>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+
+    <!-- STAFF & ULTIME PARTITE -->
+    <div class="space-y-8">
+        <!-- STAFF -->
+        <div class="bg-slate-900 rounded-xl p-6 border border-slate-800">
+            <h3 class="text-xl font-bold mb-4">Staff Tecnico</h3>
+            {% for coach in team.coaches.all %}
+            <a href="{% url 'profile' coach.user.username %}"
+                class="flex items-center gap-3 mb-3 last:mb-0 hover:bg-slate-800 p-2 -mx-2 rounded-lg transition-colors">
+                {% if coach.user.profile_picture %}
+                <img src="{{ coach.user.profile_picture.url }}" class="w-10 h-10 rounded-full object-cover">
+                {% else %}
+                <div class="w-10 h-10 rounded-full bg-slate-700 flex items-center justify-center">🧢</div>
+                {% endif %}
+                <div>
+                    <div class="font-bold">{{ coach.user.get_full_name }}</div>
+                    <div class="text-xs text-slate-400">Allenatore</div>
+                </div>
+            </a>
+            {% empty %}
+            <p class="text-slate-500 text-sm">Nessun allenatore assegnato.</p>
+            {% endfor %}
+        </div>
+
+        <!-- PARTITE -->
+        <!-- PARTITE -->
+        <div>
+            <!-- PROSSIMA PARTITA -->
+            {% if next_match %}
+            <div class="mb-8">
+                <h3 class="text-xl font-bold mb-4 text-cyan-400">Prossima Partita</h3>
+                <!-- NEXT MATCH CARD (TABELLINO) -->
+                <div
+                    class="glass-panel p-6 relative overflow-hidden group hover:border-cyan-500/50 transition-all hover:scale-[1.01] duration-300">
+
+                    {% if request.user_membership.role == 'HEAD_COACH' or request.user_membership.role == 'PRESIDENT' %}
+                    <a href="{% url 'convocation_create' next_match.id %}"
+                        class="absolute top-2 left-2 z-20 bg-cyan-500 text-black text-[10px] font-bold px-3 py-1 rounded-full shadow-lg hover:bg-cyan-400 transition-all">
+                        Crea Convocazione
+                    </a>
+                    {% endif %}
+
+                    <a href="{% url 'match_detail' next_match.id %}" class="absolute inset-0 z-10"
+                        aria-label="Vedi dettagli partita"></a>
+                    <div
+                        class="absolute top-0 right-0 p-2 opacity-50 text-[10px] font-mono border-b border-l border-white/10 rounded-bl-lg bg-black/20">
+                        {{ next_match.league.name }}
+                    </div>
+
+                    <div class="flex flex-col items-center">
+                        <div class="text-sm text-cyan-300 font-mono mb-6 flex items-center gap-2">
+                            <span>📅 {{ next_match.match_date|date:"D d F"|upper }}</span>
+                            <span>⏰ {{ next_match.match_date|time:"H:i" }}</span>
+                        </div>
+
+                        <div class="flex items-center justify-between w-full gap-4 mb-6">
+                            <!-- HOME -->
+                            <div class="flex-1 flex flex-col items-center gap-3 text-center">
+                                {% if next_match.home_team.society.logo %}
+                                <img src="{{ next_match.home_team.society.logo.url }}"
+                                    class="w-20 h-20 object-contain drop-shadow-lg">
+                                {% else %}
+                                <div
+                                    class="w-20 h-20 rounded-full bg-slate-800 flex items-center justify-center text-4xl">
+                                    🏠</div>
+                                {% endif %}
+                                <span class="font-bold text-lg leading-tight">{{ next_match.home_team.name }}</span>
+                            </div>
+
+                            <!-- VS -->
+                            <div class="text-4xl font-display font-bold text-slate-600">VS</div>
+
+                            <!-- AWAY -->
+                            <div class="flex-1 flex flex-col items-center gap-3 text-center">
+                                {% if next_match.away_team.society.logo %}
+                                <img src="{{ next_match.away_team.society.logo.url }}"
+                                    class="w-20 h-20 object-contain drop-shadow-lg">
+                                {% else %}
+                                <div
+                                    class="w-20 h-20 rounded-full bg-slate-800 flex items-center justify-center text-4xl">
+                                    ✈️</div>
+                                {% endif %}
+                                <span class="font-bold text-lg leading-tight">{{ next_match.away_team.name }}</span>
+                            </div>
+                        </div>
+
+                        {% if next_match.location %}
+                        <a href="{{ next_match.google_maps_url }}" target="_blank" onclick="event.stopPropagation();"
+                            class="flex items-center gap-2 text-slate-400 hover:text-cyan-400 transition-colors text-sm bg-black/20 px-4 py-2 rounded-full border border-white/5 hover:border-cyan-500/30 z-20 relative">
+                            <span>📍</span> {{ next_match.location }}
+                        </a>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+
+            <!-- ULTIME PARTITE -->
+            <div>
+                <h3 class="text-xl font-bold mb-4">Ultime Partite</h3>
+                {% if last_matches %}
+                <div class="glass-panel overflow-hidden border border-white/10 rounded-xl bg-slate-900/50">
+                    <div class="divide-y divide-white/5">
+                        {% for match in last_matches %}
+                        {% include 'matches/compact_match_row.html' with match=match %}
+                        {% endfor %}
+                    </div>
+                </div>
+                {% else %}
+                <p class="text-slate-500 text-sm italic">Nessuna partita recente.</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

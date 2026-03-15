@@ -1,0 +1,185 @@
+/* 1x2 Codex - Neon Dark Theme */
+
+:root {
+    --bg-dark: #020617;
+    --bg-card: rgba(15, 23, 42, 0.6);
+    --bg-panel: rgba(30, 41, 59, 0.4);
+    --accent-primary: #06b6d4;
+    --accent-secondary: #8b5cf6;
+    --text-main: #e2e8f0;
+    --text-muted: #94a3b8;
+    --glass-border: rgba(255, 255, 255, 0.1);
+}
+
+[data-theme="light"] {
+    --bg-dark: #f8fafc;
+    --bg-card: rgba(255, 255, 255, 0.6);
+    --bg-panel: rgba(241, 245, 249, 0.8);
+    --text-main: #0f172a;
+    --text-muted: #64748b;
+    --glass-border: rgba(0, 0, 0, 0.05);
+}
+
+body {
+    background-color: var(--bg-dark);
+    color: var(--text-main);
+    font-family: 'Inter', sans-serif;
+    overflow-x: hidden;
+}
+
+/* Glassmorphism */
+.glass {
+    background: var(--bg-card);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid var(--glass-border);
+}
+
+.glass-panel {
+    background: var(--bg-panel);
+    backdrop-filter: blur(8px);
+    border: 1px solid var(--glass-border);
+    border-radius: 1rem;
+}
+
+/* Neon Glows */
+.neon-text {
+    text-shadow: 0 0 10px rgba(6, 182, 212, 0.5);
+}
+
+.neon-border {
+    border-color: var(--accent-primary);
+    box-shadow: 0 0 10px rgba(6, 182, 212, 0.3);
+}
+
+.neon-box {
+    box-shadow: 0 0 15px rgba(6, 182, 212, 0.2), inset 0 0 10px rgba(6, 182, 212, 0.1);
+}
+
+/* Scrollbar */
+::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+}
+
+::-webkit-scrollbar-track {
+    background: var(--bg-dark);
+}
+
+::-webkit-scrollbar-thumb {
+    background: var(--text-muted);
+    border-radius: 4px;
+    opacity: 0.5;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: var(--accent-primary);
+}
+
+/* Animations */
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(10px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.animate-fade-in {
+    animation: fadeIn 0.5s ease-out forwards;
+}
+
+/* Dynamic Sport Colors (Will be overridden by inline styles) */
+.sport-glow {
+    box-shadow: 0 0 15px currentColor;
+}
+
+/* ================================
+   MOBILE RESPONSIVENESS
+   ================================ */
+
+/* Tabelle: sempre scrollabili orizzontalmente su mobile */
+.overflow-x-auto {
+    -webkit-overflow-scrolling: touch;
+}
+
+/* Profilo header: compatto su mobile */
+@media (max-width: 640px) {
+
+    /* Header profilo: riduce avatar e testo */
+    .profile-header-avatar {
+        width: 4rem !important;
+        height: 4rem !important;
+    }
+
+    /* Main content: padding ridotto */
+    main {
+        padding: 0.75rem !important;
+    }
+
+    /* H1 profilo */
+    h1.text-4xl {
+        font-size: 1.5rem !important;
+    }
+
+    /* Griglia statistiche: mantieni 3 colonne ma riduci padding */
+    .grid.grid-cols-3>div {
+        padding: 0.75rem !important;
+    }
+
+    .grid.grid-cols-3 .text-4xl {
+        font-size: 1.5rem !important;
+    }
+
+    /* Card partite: font più piccolo */
+    .match-row-name {
+        font-size: 0.7rem !important;
+    }
+
+    /* Tabelle classifiche: font ridotto */
+    table {
+        font-size: 0.75rem;
+    }
+
+    table th,
+    table td {
+        padding: 0.4rem 0.5rem !important;
+    }
+
+    /* Form setup wizard: padding ridotto */
+    .bg-slate-900.rounded-xl {
+        padding: 1rem !important;
+    }
+
+    /* Nasconde elementi decorativi pesanti su mobile */
+    .sport-bg-glow {
+        box-shadow: none !important;
+    }
+}
+
+/* header profilo su mobile: layout colonna invece che riga */
+@media (max-width: 480px) {
+
+    /* Profilo: stack verticale su schermi molto piccoli */
+    .flex.items-start.gap-6.mb-8 {
+        flex-direction: column;
+        align-items: center;
+        text-align: center;
+        gap: 1rem;
+    }
+
+    .flex.items-start.gap-6.mb-8 .flex-1 {
+        width: 100%;
+    }
+
+    /* Avatar circolare: dimensione fissa piccola */
+    .w-32.h-32 {
+        width: 5rem !important;
+        height: 5rem !important;
+        font-size: 1.5rem !important;
+    }
+}

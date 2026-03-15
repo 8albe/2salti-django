@@ -1,0 +1,68 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="mb-8">
+    <h1 class="text-3xl font-bold sport-accent mb-2">{{ league.name }}</h1>
+    <p class="text-slate-400">Stagione {{ league.season }} {% if league.group_name %}• {{ league.group_name }}{% endif
+        %}</p>
+</div>
+
+<div class="bg-slate-900 rounded-xl overflow-hidden border border-slate-800 shadow-xl mb-12">
+    <div class="overflow-x-auto">
+        <table class="w-full text-sm md:text-base">
+            <thead class="bg-slate-800 text-main">
+                <tr class="text-left border-b border-slate-700">
+                    <th class="px-6 py-4 text-slate-400 font-medium w-16 text-center">#</th>
+                    <th class="px-6 py-4 font-medium">Squadra</th>
+                    <th class="px-6 py-4 text-center font-medium" title="Partite Giocate">PG</th>
+                    <th class="px-6 py-4 text-center font-medium text-green-400" title="Vittorie">V</th>
+                    <th class="px-6 py-4 text-center font-medium text-slate-400" title="Pareggi">P</th>
+                    <th class="px-6 py-4 text-center font-medium text-red-400" title="Sconfitte">S</th>
+                    <th class="px-6 py-4 text-center font-bold text-lg sport-accent w-24" title="Punti">PT</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for team, stats in standings %}
+                <tr
+                    class="border-b border-slate-800 hover:bg-slate-800/50 transition-colors {% if forloop.counter <= 3 %}bg-slate-800/20{% endif %}">
+                    <td class="px-6 py-4 text-slate-400 text-center font-mono">
+                        {% if forloop.counter == 1 %}🥇{% elif forloop.counter == 2 %}🥈{% elif forloop.counter == 3
+                        %}🥉{% else %}{{ forloop.counter }}{% endif %}
+                    </td>
+                    <td class="px-6 py-4">
+                        <a href="{% url 'team_detail' team.slug %}"
+                            class="hover:text-sport font-semibold flex items-center gap-3">
+                            {% if team.society.logo %}
+                            <img src="{{ team.society.logo.url }}" class="w-6 h-6 object-contain">
+                            {% endif %}
+                            {{ team.name }}
+                        </a>
+                    </td>
+                    <td class="px-6 py-4 text-center">{{ stats.wins|add:stats.draws|add:stats.losses }}</td>
+                    <td class="px-6 py-4 text-center text-green-400/80">{{ stats.wins }}</td>
+                    <td class="px-6 py-4 text-center text-slate-500">{{ stats.draws }}</td>
+                    <td class="px-6 py-4 text-center text-red-400/80">{{ stats.losses }}</td>
+                    <td class="px-6 py-4 text-center font-bold sport-accent text-lg">{{ stats.points }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- PROSSIME PARTITE DEL CAMPIONATO -->
+<div class="max-w-4xl mx-auto">
+    <h2 class="text-2xl font-bold mb-6 flex items-center gap-2">
+        📅 Prossime Partite
+        <span class="text-sm font-normal text-slate-500 bg-slate-900 px-2 py-1 rounded">Ultimi 5 aggiornamenti</span>
+    </h2>
+    <div class="space-y-4">
+        {% for match in league.matches.all|slice:":5" %}
+        <!-- Usa match_card con stile lista orizzontale se possibile, o standard -->
+        {% include 'matches/match_card.html' %}
+        {% empty %}
+        <p class="text-slate-500">Nessuna partita in programma.</p>
+        {% endfor %}
+    </div>
+</div>
+{% endblock %}

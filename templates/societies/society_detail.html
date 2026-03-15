@@ -1,0 +1,126 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<!-- HEADER SOCIETÀ -->
+<div class="flex items-start gap-6 mb-8">
+    {% if society.logo %}
+    <img src="{{ society.logo.url }}" alt="{{ society.name }}" class="w-32 h-32 rounded-xl object-contain bg-white">
+    {% else %}
+    <div class="w-32 h-32 rounded-xl bg-slate-700 flex items-center justify-center text-4xl">
+        🏛️
+    </div>
+    {% endif %}
+
+    <div class="flex-1">
+        <h1 class="text-4xl font-bold sport-accent mb-2">{{ society.name }}</h1>
+        <p class="text-slate-400">{{ society.city }} • Fondata nel {{ society.founded_year }}</p>
+
+        {% if society.address %}
+        <p class="text-slate-500 text-sm mt-1">{{ society.address }}</p>
+        {% endif %}
+
+        <div class="flex gap-4 mt-4">
+            {% if society.website %}
+            <a href="{{ society.website }}" target="_blank"
+                class="text-sm text-blue-400 hover:underline flex items-center gap-1">
+                🌐 Sito ufficiale
+            </a>
+            {% endif %}
+
+            {% if society.email %}
+            <a href="mailto:{{ society.email }}" class="text-sm text-blue-400 hover:underline flex items-center gap-1">
+                📧 Email
+            </a>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<!-- LISTA CATEGORIE ORIZZONTALE -->
+<div class="mb-12">
+    <h2 class="text-xl font-bold mb-4">Squadre</h2>
+    <div class="flex gap-4 overflow-x-auto pb-4 scrollbar-thin scrollbar-thumb-slate-700">
+        {% for team in teams %}
+        <a href="{% url 'team_detail' team.slug %}"
+            class="flex-shrink-0 bg-slate-900 border-2 border-slate-700 hover:border-sport rounded-xl p-6 min-w-[200px] transition-all hover:scale-105">
+            <div class="text-sm text-slate-400 mb-1 font-mono">{{ team.get_category_display }}</div>
+            <div class="font-bold text-lg mb-2">{{ team.name }}</div>
+            <div class="text-xs text-slate-500">
+                👥 {{ team.get_roster.count }} giocatori
+            </div>
+            {% if team.league %}
+            <div class="text-xs text-sport mt-2 border-t border-slate-800 pt-2">
+                🏆 {{ team.league.name }}
+            </div>
+            {% else %}
+            <div class="text-xs text-slate-600 mt-2 border-t border-slate-800 pt-2">
+                Nessun campionato
+            </div>
+            {% endif %}
+        </a>
+        {% endfor %}
+    </div>
+</div>
+
+<div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+    <!-- STORIA -->
+    <div class="lg:col-span-2">
+        {% if society.history %}
+        <div class="bg-slate-900 rounded-xl p-6 mb-8 border border-slate-800">
+            <h2 class="text-xl font-bold mb-4">Storia</h2>
+            <p class="text-slate-300 whitespace-pre-line leading-relaxed">{{ society.history }}</p>
+        </div>
+        {% endif %}
+
+        <!-- STAFF TECNICO -->
+        <div class="bg-slate-900 rounded-xl p-6 mb-8 border border-slate-800">
+            <h2 class="text-xl font-bold mb-4">Staff Tecnico</h2>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {% for coach in staff %}
+                <a href="{% url 'profile' coach.user.username %}"
+                    class="flex items-center gap-3 p-3 hover:bg-slate-800 rounded-lg transition-colors">
+                    {% if coach.user.profile_picture %}
+                    <img src="{{ coach.user.profile_picture.url }}" class="w-12 h-12 rounded-full object-cover">
+                    {% else %}
+                    <div class="w-12 h-12 rounded-full bg-slate-700 flex items-center justify-center">
+                        🧢
+                    </div>
+                    {% endif %}
+                    <div>
+                        <div class="font-bold">{{ coach.user.get_full_name }}</div>
+                        <div class="text-xs text-slate-400">
+                            {{ coach.current_team.get_category_display }}
+                            {% if coach.specialization %}
+                            • {{ coach.specialization }}
+                            {% endif %}
+                        </div>
+                    </div>
+                </a>
+                {% empty %}
+                <p class="text-slate-400 italic">Nessun allenatore registrato</p>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+
+    <!-- SPONSOR & INFO LATERALI -->
+    <div class="space-y-6">
+        {% if society.sponsors %}
+        <div class="bg-slate-900 rounded-xl p-6 border border-slate-800">
+            <h2 class="text-xl font-bold mb-4">Partner</h2>
+            <div class="grid grid-cols-2 gap-4">
+                {% for sponsor in society.sponsors %}
+                <div class="text-center p-2 bg-white rounded-lg">
+                    {% if sponsor.logo_url %}
+                    <img src="{{ sponsor.logo_url }}" alt="{{ sponsor.name }}" class="h-12 mx-auto object-contain mb-1">
+                    {% endif %}
+                    <p class="text-xs text-slate-900 font-bold truncate">{{ sponsor.name }}</p>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+{% endblock %}

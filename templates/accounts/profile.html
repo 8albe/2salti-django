@@ -1,0 +1,382 @@
+{% extends 'base.html' %}
+{% load core_extras %}
+
+{% block content %}
+<!-- HEADER PROFILO -->
+<div class="flex items-start gap-6 mb-8">
+    {% if profile_user.profile_picture %}
+    <img src="{{ profile_user.profile_picture.url }}"
+        class="w-32 h-32 rounded-full object-cover border-4 border-slate-800">
+    {% else %}
+    <div
+        class="w-32 h-32 rounded-full bg-slate-700 flex items-center justify-center text-4xl border-4 border-slate-800">
+        👤
+    </div>
+    {% endif %}
+
+    <div class="flex-1">
+        <h1 class="text-4xl font-bold mb-2">{{ profile_user.get_full_name }}</h1>
+        <p class="text-slate-400 mb-4 text-xl">{{ profile_user.get_role_display }}</p>
+
+        {% if profile_user.city %}
+        <p class="text-slate-500 mb-2">📍 {{ profile_user.city }}</p>
+        {% endif %}
+
+        {% if profile_user.bio %}
+        <p class="text-slate-300 max-w-2xl italic">"{{ profile_user.bio }}"</p>
+        {% endif %}
+
+        {% if user == profile_user %}
+        <a href="{% url 'edit_profile' %}"
+            class="inline-block mt-4 bg-slate-800 hover:bg-slate-700 px-4 py-2 rounded-lg text-sm transition-colors">
+            ✏️ Modifica Dati
+        </a>
+        {% endif %}
+    </div>
+</div>
+
+<!-- CONTENUTO SPECIFICO PER RUOLO -->
+
+{% if profile_user.role == 'athlete' %}
+<!-- STATISTICHE ATLETA -->
+<div class="grid grid-cols-3 gap-4 mb-8">
+    <div class="bg-slate-900 rounded-xl p-6 text-center border border-slate-800">
+        <div class="text-4xl font-bold sport-accent">{{ athlete_profile.total_goals }}</div>
+        <div class="text-slate-400 mt-2">Gol</div>
+    </div>
+    <div class="bg-slate-900 rounded-xl p-6 text-center border border-slate-800">
+        <div class="text-4xl font-bold sport-accent">{{ athlete_profile.total_matches }}</div>
+        <div class="text-slate-400 mt-2">Partite</div>
+    </div>
+    <div class="bg-slate-900 rounded-xl p-6 text-center border border-slate-800">
+        <div class="text-4xl font-bold text-red-500">{{ athlete_profile.total_expulsions }}</div>
+        <div class="text-slate-400 mt-2">Espulsioni</div>
+    </div>
+</div>
+
+<!-- SQUADRA ATTUALE -->
+{% if athlete_profile.current_team %}
+<div class="bg-slate-900 rounded-xl p-6 mb-8 border border-slate-800">
+    <h2 class="text-xl font-bold mb-4">Squadra Attuale</h2>
+    <a href="{% url 'team_detail' athlete_profile.current_team.slug %}"
+        class="flex items-center gap-4 hover:text-sport transition-colors">
+        {% if athlete_profile.current_team.society.logo %}
+        <img src="{{ athlete_profile.current_team.society.logo.url }}" class="w-16 h-16 object-contain">
+        {% endif %}
+        <div>
+            <div class="font-bold text-lg">{{ athlete_profile.current_team.name|clean_team_name }}</div>
+            <div class="text-slate-400">
+                {% if athlete_profile.position %}{{ athlete_profile.position }} • {% endif %}
+                {% if athlete_profile.jersey_number %}#{{ athlete_profile.jersey_number }}{% endif %}
+            </div>
+        </div>
+    </a>
+</div>
+{% endif %}
+
+<!-- CLASSIFICA CAMPIONATO -->
+{% if league_standings %}
+<div class="bg-slate-900 rounded-xl p-6 mb-8 border border-slate-800">
+    <h2 class="text-xl font-bold mb-4">Classifica {{ league.name }}</h2>
+    <div class="overflow-x-auto">
+        <table class="w-full text-sm text-left">
+            <thead class="text-xs text-slate-400 uppercase bg-slate-800/50 border-b border-slate-700">
+                <tr>
+                    <th class="px-4 py-3">#</th>
+                    <th class="px-4 py-3">Squadra</th>
+                    <th class="px-4 py-3 text-center">Pt</th>
+                    <th class="px-4 py-3 text-center">G</th>
+                </tr>
+            </thead>
+            <tbody class="divide-y divide-slate-800">
+                {% for entry in league_standings %}
+                <tr
+                    class="hover:bg-slate-800/30 {% if entry.team == current_team %}bg-cyan-900/20 border-l-2 border-cyan-500{% endif %}">
+                    <td class="px-4 py-3 font-mono text-slate-400">{{ forloop.counter }}</td>
+                    <td class="px-4 py-3 font-bold text-white">
+                        <div class="flex items-center gap-2">
+                            {% if entry.team.society.logo %}
+                            <img src="{{ entry.team.society.logo.url }}" class="w-6 h-6 object-contain">
+                            {% endif %}
+                            {{ entry.team.name|clean_team_name }}
+                        </div>
+                    </td>
+                    <td class="px-4 py-3 text-center font-bold text-cyan-400">{{ entry.points }}</td>
+                    <td class="px-4 py-3 text-center text-slate-400">{{ entry.played }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endif %}
+
+<!-- ULTIME PARTITE -->
+{% if recent_matches %}
+<div class="bg-slate-900 rounded-xl p-6 mb-8 border border-slate-800">
+    <h2 class="text-xl font-bold mb-4">Ultime Partite</h2>
+    <div class="space-y-4">
+        {% for match in recent_matches %}
+        <div
+            class="flex items-center justify-between px-4 py-2 bg-slate-800/50 rounded-lg hover:bg-slate-800 transition-colors border border-white/5">
+            <div class="text-xs text-slate-400 font-mono">{{ match.match_date|date:"d/m" }}</div>
+            <div class="flex-1 px-4 flex items-center justify-center gap-2">
+                <span class="text-right flex-1 truncate font-bold text-sm">{{ match.home_team.name }}</span>
+                {% if match.is_finished %}
+                <span class="text-cyan-400 font-mono font-bold">{{ match.home_score }}-{{ match.away_score }}</span>
+                {% else %}
+                <span class="text-slate-600 text-xs">VS</span>
+                {% endif %}
+                <span class="text-left flex-1 truncate font-bold text-sm">{{ match.away_team.name }}</span>
+            </div>
+            <a href="{% url 'match_detail' match.id %}" class="text-xs text-cyan-400 hover:underline">Vedi</a>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+{% endif %}
+
+{% elif profile_user.role == 'coach' %}
+<!-- PROFILO ALLENATORE -->
+{% if coach_profile.current_team %}
+<div class="bg-slate-900 rounded-xl p-6 mb-8 border border-slate-800">
+    <h2 class="text-xl font-bold mb-4">Squadra Allenata</h2>
+    <a href="{% url 'team_detail' coach_profile.current_team.slug %}" class="flex items-center gap-4 hover:text-sport">
+        {% if coach_profile.current_team.society.logo %}
+        <img src="{{ coach_profile.current_team.society.logo.url }}" class="w-16 h-16 object-contain">
+        {% endif %}
+        <span class="text-xl font-bold">{{ coach_profile.current_team.name|clean_team_name }}</span>
+    </a>
+</div>
+
+<!-- CLASSIFICA CAMPIONATO (Coach) -->
+{% if league_standings %}
+<div class="bg-slate-900 rounded-xl p-6 mb-8 border border-slate-800">
+    <h2 class="text-xl font-bold mb-4">Classifica {{ league.name }}</h2>
+    <div class="overflow-x-auto">
+        <table class="w-full text-left">
+            <thead class="text-xs text-slate-400 uppercase bg-slate-800/50 border-b border-slate-700">
+                <tr>
+                    <th class="px-4 py-3">#</th>
+                    <th class="px-4 py-3">Squadra</th>
+                    <th class="px-4 py-3 text-center">Pt</th>
+                    <th class="px-4 py-3 text-center">G</th>
+                </tr>
+            </thead>
+            <tbody class="divide-y divide-slate-800">
+                {% for entry in league_standings %}
+                <tr
+                    class="hover:bg-slate-800/30 {% if entry.team == current_team %}bg-cyan-900/20 border-l-2 border-cyan-500{% endif %}">
+                    <td class="px-4 py-3 font-mono text-slate-400">{{ forloop.counter }}</td>
+                    <td class="px-4 py-3 font-bold text-white">
+                        <div class="flex items-center gap-2">
+                            {% if entry.team.society.logo %}
+                            <img src="{{ entry.team.society.logo.url }}" class="w-6 h-6 object-contain">
+                            {% endif %}
+                            {{ entry.team.name|clean_team_name }}
+                        </div>
+                    </td>
+                    <td class="px-4 py-3 text-center font-bold text-cyan-400">{{ entry.points }}</td>
+                    <td class="px-4 py-3 text-center text-slate-400">{{ entry.played }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endif %}
+
+{% if team_matches %}
+<div class="bg-slate-900 rounded-xl p-6 mb-8 border border-slate-800">
+    <h2 class="text-xl font-bold mb-4">Ultime Partite della Squadra</h2>
+    <div class="space-y-4">
+        {% for match in team_matches %}
+        <div
+            class="flex items-center justify-between px-4 py-2 bg-slate-800/50 rounded-lg hover:bg-slate-800 transition-colors border border-white/5">
+            <div class="text-xs text-slate-400 font-mono">{{ match.match_date|date:"d/m" }}</div>
+            <div class="flex-1 px-4 flex items-center justify-center gap-2">
+                <span class="text-right flex-1 truncate font-bold text-sm">{{ match.home_team.name }}</span>
+                {% if match.is_finished %}
+                <span class="text-cyan-400 font-mono font-bold">{{ match.home_score }}-{{ match.away_score }}</span>
+                {% else %}
+                <span class="text-slate-600 text-xs">VS</span>
+                {% endif %}
+                <span class="text-left flex-1 truncate font-bold text-sm">{{ match.away_team.name }}</span>
+            </div>
+            <a href="{% url 'match_detail' match.id %}" class="text-xs text-cyan-400 hover:underline">Vedi</a>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+{% endif %}
+{% endif %}
+
+{% elif profile_user.role == 'referee' %}
+<!-- PROFILO ARBITRO -->
+<div class="bg-slate-900 rounded-xl p-6 mb-8 border border-slate-800">
+    <h2 class="text-xl font-bold mb-4">Statistiche</h2>
+    <p class="text-2xl sport-accent">{{ referee_profile.total_matches_officiated }} partite arbitrate</p>
+    <p class="text-slate-400 mt-2">{{ referee_profile.license_level }} - Tessera: {{ referee_profile.license_number }}
+    </p>
+</div>
+
+{% if officiated_matches %}
+<div class="bg-slate-900 rounded-xl p-6 mb-8 border border-slate-800">
+    <h2 class="text-xl font-bold mb-4">Ultime Partite Arbitrate</h2>
+    <div class="space-y-4">
+        {% for match in officiated_matches %}
+        <div
+            class="flex items-center justify-between px-4 py-2 bg-slate-800/50 rounded-lg hover:bg-slate-800 transition-colors border border-white/5">
+            <div class="text-xs text-slate-400 font-mono">{{ match.match_date|date:"d/m" }}</div>
+            <div class="flex-1 px-4 flex items-center justify-center gap-2">
+                <span class="text-right flex-1 truncate font-bold text-sm">{{ match.home_team.name }}</span>
+                {% if match.is_finished %}
+                <span class="text-cyan-400 font-mono font-bold">{{ match.home_score }}-{{ match.away_score }}</span>
+                {% else %}
+                <span class="text-slate-600 text-xs">VS</span>
+                {% endif %}
+                <span class="text-left flex-1 truncate font-bold text-sm">{{ match.away_team.name }}</span>
+            </div>
+            <a href="{% url 'match_detail' match.id %}" class="text-xs text-cyan-400 hover:underline">Vedi</a>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+{% endif %}
+
+{% elif profile_user.role == 'president' %}
+<!-- PROFILO PRESIDENTE -->
+{% if society %}
+<div class="bg-slate-900 rounded-xl p-6 border border-slate-800">
+    <h2 class="text-xl font-bold mb-4">Società Gestita</h2>
+    <div class="flex items-center gap-4">
+        {% if society.logo %}
+        <img src="{{ society.logo.url }}" class="w-20 h-20 object-contain">
+        {% endif %}
+        <div>
+            <a href="{% url 'society_detail' society.slug %}" class="text-2xl sport-accent hover:underline">
+                {{ society.name }}
+            </a>
+            <p class="text-slate-400">Presidente dal {{ president_profile.since_year }}</p>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+{% elif profile_user.role == 'fan' %}
+<!-- PROFILO GENITORE/FAN -->
+
+{% if fan_athletes %}
+{% for item in fan_athletes %}
+<div class="bg-slate-900 rounded-xl p-6 mb-6 border border-slate-800">
+    <h2 class="text-xl font-bold mb-4">🏃 Atleta Seguito — {{ item.user.get_full_name }}</h2>
+    <div class="grid grid-cols-3 gap-4 mb-4">
+        <div class="bg-slate-800 rounded-xl p-4 text-center">
+            <div class="text-3xl font-bold text-cyan-400">{{ item.profile.total_goals }}</div>
+            <div class="text-slate-400 mt-1 text-sm">Gol</div>
+        </div>
+        <div class="bg-slate-800 rounded-xl p-4 text-center">
+            <div class="text-3xl font-bold text-cyan-400">{{ item.profile.total_matches }}</div>
+            <div class="text-slate-400 mt-1 text-sm">Partite</div>
+        </div>
+        <div class="bg-slate-800 rounded-xl p-4 text-center">
+            <div class="text-3xl font-bold text-red-400">{{ item.profile.total_expulsions }}</div>
+            <div class="text-slate-400 mt-1 text-sm">Espulsioni</div>
+        </div>
+    </div>
+    {% if item.profile.current_team %}
+    <div class="flex items-center gap-3 mt-2">
+        <span class="text-slate-400 text-sm">Squadra:</span>
+        <a href="{% url 'team_detail' item.profile.current_team.slug %}"
+            class="text-cyan-400 font-bold hover:underline text-sm">
+            {{ item.profile.current_team.name }}
+        </a>
+    </div>
+    {% endif %}
+    {% if item.profile.position %}
+    <p class="text-slate-400 text-sm mt-1">Ruolo: {{ item.profile.position }}
+        {% if item.profile.jersey_number %}· #{{ item.profile.jersey_number }}{% endif %}
+    </p>
+    {% endif %}
+</div>
+{% endfor %}
+{% else %}
+<div class="bg-slate-900 rounded-xl p-6 mb-6 border border-slate-800 text-center text-slate-400">
+    Nessun atleta seguito. <a href="{% url 'edit_profile' %}" class="text-cyan-400 hover:underline">Aggiungine uno</a>.
+</div>
+{% endif %}
+
+{% if fan_teams_data %}
+{% for item in fan_teams_data %}
+<div class="bg-slate-900 rounded-xl p-6 mb-6 border border-slate-800">
+    <h2 class="text-xl font-bold mb-4">🛡️ Squadra Seguita — {{ item.team.name }}</h2>
+
+    {% if item.next_match and item.next_match.home_team and item.next_match.away_team %}
+    <div class="bg-slate-800 rounded-lg p-4 mb-4">
+        <p class="text-xs text-slate-400 uppercase tracking-widest mb-2">Prossima Partita</p>
+        <div class="flex items-center justify-center gap-4">
+            <span class="font-bold text-sm text-right flex-1 truncate">{{ item.next_match.home_team.name }}</span>
+            <span class="text-slate-500 text-xs px-2">vs</span>
+            <span class="font-bold text-sm text-left flex-1 truncate">{{ item.next_match.away_team.name }}</span>
+        </div>
+        <p class="text-center text-slate-400 text-xs mt-2">{{ item.next_match.match_date|date:"d/m/Y H:i" }}</p>
+    </div>
+    {% endif %}
+
+    {% if item.standings and item.league %}
+    <p class="text-xs text-slate-400 uppercase tracking-widest mb-2">Classifica {{ item.league.name }}</p>
+    <div class="overflow-x-auto">
+        <table class="w-full text-sm">
+            <thead class="text-xs text-slate-400 uppercase bg-slate-800/50 border-b border-slate-700">
+                <tr>
+                    <th class="px-3 py-2">#</th>
+                    <th class="px-3 py-2 text-left">Squadra</th>
+                    <th class="px-3 py-2 text-center">Pt</th>
+                    <th class="px-3 py-2 text-center">G</th>
+                </tr>
+            </thead>
+            <tbody class="divide-y divide-slate-800">
+                {% for entry in item.standings %}
+                <tr
+                    class="hover:bg-slate-800/30 {% if entry.team == item.team %}bg-cyan-900/20 border-l-2 border-cyan-500{% endif %}">
+                    <td class="px-3 py-2 font-mono text-slate-400 text-xs">{{ forloop.counter }}</td>
+                    <td class="px-3 py-2 font-bold text-white text-xs">{{ entry.team.name }}</td>
+                    <td class="px-3 py-2 text-center font-bold text-cyan-400">{{ entry.points }}</td>
+                    <td class="px-3 py-2 text-center text-slate-400">{{ entry.played }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% endif %}
+</div>
+{% endfor %}
+{% else %}
+<div class="bg-slate-900 rounded-xl p-6 border border-slate-800 text-center text-slate-400">
+    Nessuna squadra seguita. <a href="{% url 'edit_profile' %}" class="text-cyan-400 hover:underline">Aggiungine
+        una</a>.
+</div>
+{% endif %}
+{% endif %}
+
+<!-- STORICO STAGIONI -->
+{% if season_archives %}
+<div class="mt-8 bg-slate-900 rounded-xl p-6 border border-slate-800">
+    <h2 class="text-xl font-bold mb-4">📁 Storico Stagioni</h2>
+    <div class="space-y-3">
+        {% for archive in season_archives %}
+        <details class="bg-slate-800 rounded-lg p-4">
+            <summary class="cursor-pointer font-bold flex justify-between">
+                <span>Stagione {{ archive.season }}</span>
+                <span class="text-slate-400 text-sm">Espandi</span>
+            </summary>
+            <div class="mt-4 text-sm bg-slate-900 p-4 rounded overflow-auto">
+                <pre class="text-slate-300 font-mono text-xs">{{ archive.stats_data|pprint }}</pre>
+            </div>
+        </details>
+        {% endfor %}
+    </div>
+</div>
+{% endif %}
+
+{% endblock %}

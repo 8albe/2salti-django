@@ -1,0 +1,59 @@
+<div
+    class="flex items-center justify-between px-3 py-2 bg-slate-800/30 hover:bg-slate-800/60 transition-colors relative group/row border-b border-white/5 last:border-0 h-12 font-sans text-sm rounded-lg mb-1">
+
+    <!-- DATE (If needed contextually, typically handled by list header but useful here) -->
+    <div class="w-12 text-slate-500 font-mono text-xs flex flex-col items-center leading-tight">
+        <span class="font-bold text-slate-400">{{ match.match_date|date:"d" }}</span>
+        <span class="text-[10px] uppercase">{{ match.match_date|date:"M" }}</span>
+    </div>
+
+    <!-- HOME TEAM (Right aligned) -->
+    <div class="flex-1 flex items-center justify-end gap-3 min-w-0">
+        <a href="{% url 'team_detail' match.home_team.slug %}"
+            class="font-bold text-white text-sm truncate hover:underline z-20 relative transition-colors hover:text-cyan-400">{{ match.home_team.name }}</a>
+        {% if match.home_team.logo %}
+        <img src="{{ match.home_team.logo.url }}" class="w-6 h-6 object-contain flex-shrink-0" alt="">
+        {% else %}
+        <div class="w-6 h-6 bg-slate-700 rounded-full"></div>
+        {% endif %}
+    </div>
+
+    <!-- VS/SCORE (Center) -->
+    <div class="mx-3 flex items-center justify-center w-12 text-center flex-shrink-0">
+        {% if match.is_finished %}
+        <span class="text-cyan-400 font-mono text-base font-bold">{{ match.home_score }}-{{ match.away_score }}</span>
+        {% else %}
+        <span class="text-slate-600 font-bold text-xs">VS</span>
+        {% endif %}
+    </div>
+
+    <!-- AWAY TEAM (Left aligned) -->
+    <div class="flex-1 flex items-center justify-start gap-3 min-w-0">
+        {% if match.away_team.logo %}
+        <img src="{{ match.away_team.logo.url }}" class="w-6 h-6 object-contain flex-shrink-0" alt="">
+        {% else %}
+        <div class="w-6 h-6 bg-slate-700 rounded-full"></div>
+        {% endif %}
+        <a href="{% url 'team_detail' match.away_team.slug %}"
+            class="font-bold text-white text-sm truncate hover:underline z-20 relative transition-colors hover:text-cyan-400">{{ match.away_team.name }}</a>
+    </div>
+
+    <!-- TIME & LOCATION (Right) -->
+    <div class="flex flex-col items-end gap-0.5 ml-4 min-w-[70px]">
+        {% if not match.is_finished %}
+        <span class="font-mono text-white font-bold">{{ match.match_date|time:"H:i" }}</span>
+        {% else %}
+        <span class="text-emerald-500 uppercase font-bold text-[10px]">Conclusa</span>
+        {% endif %}
+
+        {% if match.location %}
+        <a href="{{ match.google_maps_url }}" target="_blank"
+            class="text-[10px] text-slate-500 hover:text-cyan-300 transition-colors z-20 relative flex items-center gap-1">
+            <span>📍</span> {{ match.location|truncatechars:25 }}
+        </a>
+        {% endif %}
+    </div>
+
+    <!-- Link to match detail (Overlay) -->
+    <a href="{% url 'match_detail' match.id %}" class="absolute inset-0 z-10" aria-label="Vedi dettagli partita"></a>
+</div>

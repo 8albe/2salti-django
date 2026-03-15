@@ -1,0 +1,433 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="max-w-3xl mx-auto px-4 py-8 relative">
+    <div class="mb-10 flex justify-between items-end">
+        <div>
+            <h1 class="text-4xl font-display font-black text-white tracking-tight mb-2">
+                Bacheca <span class="text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-blue-500">{{
+                    team.name|default:"Societaria" }}</span>
+            </h1>
+            <p class="text-gray-400 font-medium">Comunicazioni ufficiali e discussioni della community</p>
+        </div>
+        {% if team %}
+        <a href="{% url 'chat_team' team.slug %}"
+            class="group relative flex items-center gap-2 px-6 py-3 bg-cyan-500 text-black font-bold rounded-2xl transition-all hover:scale-105 active:scale-95 shadow-[0_0_20px_rgba(6,182,212,0.3)] hover:shadow-[0_0_30px_rgba(6,182,212,0.5)]">
+            <svg class="w-5 h-5 transition-transform group-hover:rotate-12" fill="none" stroke="currentColor"
+                viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5"
+                    d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z">
+                </path>
+            </svg>
+            Entra in Chat
+        </a>
+        {% endif %}
+    </div>
+
+    <!-- AREA DI POSTING -->
+    {% if can_post %}
+    <div class="glass-card p-6 mb-12 border-cyan-500/20 relative overflow-hidden group">
+        <form action="{% if team %}{% url 'post_create' team.id %}{% else %}{% url 'post_create' 0 %}{% endif %}"
+            method="POST" id="post-form">
+            {% csrf_token %}
+            <div class="flex items-start gap-4 mb-6">
+                <div
+                    class="w-12 h-12 rounded-2xl bg-gradient-to-br from-cyan-500 to-blue-600 flex items-center justify-center text-black font-black text-xl shadow-lg flex-shrink-0">
+                    {{ request.user.username|slice:":1"|upper }}
+                </div>
+                <div class="flex-grow">
+                    <input type="text" name="title" placeholder="Titolo annuncio..."
+                        class="w-full bg-white/5 border-b border-white/10 p-2 text-white font-bold text-lg focus:border-cyan-400 outline-none mb-3 transition-colors placeholder:text-gray-600">
+                    <textarea name="content" id="post-content" rows="3" placeholder="Scrivi una comunicazione..."
+                        class="w-full bg-transparent border-none p-2 text-white focus:ring-0 outline-none resize-none placeholder:text-gray-500 text-lg"
+                        required></textarea>
+                </div>
+            </div>
+            <div class="flex items-center justify-between pt-4 border-t border-white/5">
+                <div class="flex gap-2">
+                    <button type="button" onclick="openTemplateModal()"
+                        class="flex items-center gap-2 px-4 py-2 rounded-xl bg-gradient-to-r from-blue-600/20 to-cyan-500/20 text-cyan-400 border border-cyan-500/30 hover:bg-cyan-500/30 transition-all font-bold text-sm shadow-[0_0_15px_rgba(6,182,212,0.2)]">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M13 10V3L4 14h7v7l9-11h-7z"></path>
+                        </svg>
+                        Usa Modello Scrittura
+                    </button>
+                </div>
+                <div class="flex items-center gap-6">
+                    <label
+                        class="flex items-center gap-2 text-sm text-gray-400 cursor-pointer hover:text-white transition-colors"><input
+                            type="checkbox" name="is_pinned" class="form-checkbox-custom"> Fissa</label>
+                    {% if is_president %}<label
+                        class="flex items-center gap-2 text-sm text-cyan-400 cursor-pointer hover:text-cyan-300 transition-colors"><input
+                            type="checkbox" name="is_broadcast" id="broadcast_check"
+                            class="form-checkbox-custom border-cyan-500/50 checked:bg-cyan-500"> Broadcast</label>{%
+                    endif %}
+                    <button type="submit"
+                        class="bg-white text-black px-8 py-2 rounded-xl font-black transition-all hover:bg-cyan-400 hover:scale-[1.02] active:scale-95 shadow-xl">PUBBLICA</button>
+                </div>
+            </div>
+        </form>
+    </div>
+    {% endif %}
+
+    <!-- FEED -->
+    {% for post in posts %}
+    <div
+        class="glass-card overflow-hidden transition-all hover:border-white/10 hover:bg-white/[0.04] {% if post.is_pinned %}border-cyan-500/40 bg-cyan-500/[0.03]{% endif %}">
+        <div class="p-6">
+            <div class="flex justify-between items-start mb-6">
+                <div class="flex items-center gap-4">
+                    <div
+                        class="w-14 h-14 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center text-white font-black text-xl">
+                        {{ post.author.username|slice:":1"|upper }}
+                    </div>
+                    <div>
+                        <div class="flex items-center gap-2 mb-1">
+                            <span class="text-white font-black text-lg">{{
+                                post.author.get_full_name|default:post.author.username }}</span>
+                            <span
+                                class="text-xs font-black px-2 py-1 rounded-lg bg-white/5 text-gray-400 border border-white/10 tracking-widest uppercase">{{
+                                post.author.get_role_display }}</span>
+                        </div>
+                        <div class="text-sm text-gray-500">{{ post.created_at|date:"d M - H:i" }} • Pubblico</div>
+                    </div>
+                </div>
+                {% if post.is_pinned %}
+                <div
+                    class="flex items-center gap-2 px-3 py-1.5 bg-cyan-500/20 rounded-xl border border-cyan-500/30 text-cyan-400 font-black text-[10px] uppercase">
+                    Fissato</div>
+                {% endif %}
+            </div>
+        </div>
+        {% if post.title %}<h2 class="text-2xl font-black text-white mb-4 leading-tight">{{ post.title }}</h2>{% endif %}
+        <div class="text-gray-300 text-lg leading-relaxed whitespace-pre-wrap mb-8">{{ post.content }}</div>
+        <div class="flex items-center justify-between py-4 border-y border-white/5 mb-6">
+            <div class="flex gap-6">
+                <button class="social-action-btn group">
+                    <svg class="w-6 h-6 group-hover:text-red-500 transition-colors" fill="none" stroke="currentColor"
+                        viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z">
+                        </path>
+                    </svg>
+                    <span class="text-sm font-bold">Interessato</span>
+                </button>
+                <button class="social-action-btn group">
+                    <svg class="w-6 h-6 group-hover:text-cyan-400 transition-colors" fill="none" stroke="currentColor"
+                        viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z">
+                        </path>
+                    </svg>
+                    <span class="text-sm font-bold">{{ post.comments.all.count }} Commenti</span>
+                </button>
+            </div>
+            <button class="social-action-btn group">
+                <svg class="w-6 h-6 group-hover:text-white transition-colors" fill="none" stroke="currentColor"
+                    viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                        d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6a3 3 0 100 2.684m0-2.684l6.632-3.316m0 0a3 3 0 101.342-2.684m-1.342 2.684l6.632 3.316m-6.632-6a3 3 0 110 2.684">
+                    </path>
+                </svg>
+                <span class="text-sm font-bold">Condividi</span>
+            </button>
+        </div>
+        <!-- COMMENTI -->
+        <div class="space-y-6">
+            {% for comment in post.comments.all %}
+            <div class="flex gap-4 group/comment">
+                <div
+                    class="w-10 h-10 rounded-xl bg-white/10 flex items-center justify-center text-xs font-black text-gray-400 flex-shrink-0 border border-white/5">
+                    {{ comment.author.username|slice:":1"|upper }}
+                </div>
+                <div
+                    class="bg-white/5 rounded-2xl p-4 flex-grow border border-white/5 group-hover/comment:bg-white/[0.08] transition-all">
+                    <div class="flex justify-between items-center mb-1">
+                        <span class="text-white font-bold text-sm">{{
+                            comment.author.get_full_name|default:comment.author.username }}</span>
+                        <span class="text-[10px] text-gray-500 font-medium tracking-tight">{{
+                            comment.created_at|timesince }} fa</span>
+                    </div>
+                    <p class="text-gray-400 text-sm leading-relaxed">{{ comment.content }}</p>
+                </div>
+            </div>
+            {% endfor %}
+            <form action="#" method="POST" class="flex gap-4 mt-6">
+                {% csrf_token %}
+                <div
+                    class="w-10 h-10 rounded-xl bg-gradient-to-br from-cyan-500/20 to-blue-600/20 flex-shrink-0 flex items-center justify-center border border-cyan-500/20">
+                    <span class="text-cyan-400 text-xs font-black">{{ request.user.username|slice:":1"|upper }}</span>
+                </div>
+                <div class="relative flex-grow">
+                    <input type="text" placeholder="Rispondi..."
+                        class="w-full bg-white/5 border border-white/10 rounded-2xl px-4 py-2.5 text-sm text-white focus:border-cyan-400 outline-none">
+                </div>
+            </form>
+        </div>
+    </div>
+    {% empty %}
+    <div class="text-center py-20 bg-white/5 rounded-3xl border border-dashed border-white/10 text-gray-500 italic">
+        Bacheca vuota.</div>
+    {% endfor %}
+</div>
+
+<!-- MODALE TEMPLATE -->
+<div id="templateModal"
+    class="fixed inset-0 z-50 hidden bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+    <div
+        class="bg-[#0B0F19] border border-white/10 rounded-3xl w-full max-w-xl mx-auto shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+
+        <!-- Modal Header -->
+        <div class="p-6 border-b border-white/5 flex justify-between items-center">
+            <h3 class="text-2xl font-black text-white" id="modalTitle">Scegli Modello Messaggio</h3>
+            <button onclick="closeTemplateModal()"
+                class="w-8 h-8 flex items-center justify-center rounded-full bg-white/5 text-gray-400 hover:text-white hover:bg-white/10 transition-colors">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12">
+                    </path>
+                </svg>
+            </button>
+        </div>
+
+        <!-- View 1: List of Templates -->
+        <div id="templateListView" class="flex-1 p-6 overflow-y-auto min-h-0 space-y-3">
+            <button onclick="selectTemplate('cambio_orario')"
+                class="w-full text-left p-4 rounded-2xl bg-white/5 border border-white/5 hover:border-cyan-500/50 hover:bg-cyan-500/5 transition-all group">
+                <div class="font-bold text-white mb-1 group-hover:text-cyan-400">1) Cambio orario allenamento</div>
+                <div class="text-sm text-gray-500">Data, Nuovo orario, Piscina, Motivo</div>
+            </button>
+            <button onclick="selectTemplate('promemoria')"
+                class="w-full text-left p-4 rounded-2xl bg-white/5 border border-white/5 hover:border-cyan-500/50 hover:bg-cyan-500/5 transition-all group">
+                <div class="font-bold text-white mb-1 group-hover:text-cyan-400">2) Promemoria allenamento (oggi)
+                </div>
+                <div class="text-sm text-gray-500">Orario, Piscina, Note</div>
+            </button>
+            <button onclick="selectTemplate('logistiche')"
+                class="w-full text-left p-4 rounded-2xl bg-white/5 border border-white/5 hover:border-cyan-500/50 hover:bg-cyan-500/5 transition-all group">
+                <div class="font-bold text-white mb-1 group-hover:text-cyan-400">3) Indicazioni logistiche
+                    (ritrovo/ingresso)</div>
+                <div class="text-sm text-gray-500">Data, Orario ritrovo, Punto ritrovo, Note</div>
+            </button>
+            <button onclick="selectTemplate('materiale')"
+                class="w-full text-left p-4 rounded-2xl bg-white/5 border border-white/5 hover:border-cyan-500/50 hover:bg-cyan-500/5 transition-all group">
+                <div class="font-bold text-white mb-1 group-hover:text-cyan-400">4) Materiale obbligatorio</div>
+                <div class="text-sm text-gray-500">Data, Lista materiale</div>
+            </button>
+            <button onclick="selectTemplate('convocazione')"
+                class="w-full text-left p-4 rounded-2xl bg-white/5 border border-white/5 hover:border-cyan-500/50 hover:bg-cyan-500/5 transition-all group">
+                <div class="font-bold text-white mb-1 group-hover:text-cyan-400">5) Convocazione inviata</div>
+                <div class="text-sm text-gray-500">Avversario, Data, Ora partita, Luogo, Ora ritrovo</div>
+            </button>
+            {% if is_president %}
+            <button onclick="selectTemplate('presidente')"
+                class="w-full text-left p-4 rounded-2xl bg-purple-500/10 border border-purple-500/30 hover:bg-purple-500/20 transition-all group">
+                <div class="flex items-center gap-2 font-black text-purple-400 mb-1">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M11 5.882V19.24a1.76 1.76 0 01-3.417.592l-2.147-6.15M18 13a3 3 0 100-6M5.436 13.683A4.001 4.001 0 017 6h1.832c4.1 0 7.625-1.234 9.168-3v14c-1.543-1.766-5.067-3-9.168-3H7a3.988 3.988 0 01-1.564-.317z">
+                        </path>
+                    </svg>
+                    9) Comunicazione del presidente (Broadcast)
+                </div>
+                <div class="text-sm text-gray-400">Avviso generale visibile a tutte le bacheche societarie</div>
+            </button>
+            {% endif %}
+            <button onclick="selectTemplate('urgenza')"
+                class="w-full text-left p-4 rounded-2xl bg-amber-500/10 border border-amber-500/30 hover:bg-amber-500/20 transition-all group">
+                <div class="font-bold text-amber-500 mb-1">6) Urgenza “oggi serve risposta”</div>
+                <div class="text-sm text-gray-500">Domanda, Scadenza</div>
+            </button>
+        </div>
+
+        <!-- View 2: Form Input -->
+        <div id="templateFormView" class="hidden flex-col flex-1 overflow-hidden min-h-0">
+            <div class="p-6 overflow-y-auto space-y-4" id="dynamicFormFields">
+                <!-- Fields injected by JS -->
+            </div>
+            <div class="p-6 border-t border-white/5 bg-white/[0.02] flex gap-3 mt-auto">
+                <button onclick="showTemplateList()"
+                    class="px-6 py-2.5 rounded-xl font-bold text-gray-400 bg-white/5 hover:bg-white/10 hover:text-white transition-all">Indietro</button>
+                <button onclick="generateTemplateText()"
+                    class="flex-grow bg-cyan-500 text-black font-black rounded-xl hover:bg-cyan-400 transition-all shadow-lg active:scale-95">Inserisci
+                    nel Post</button>
+            </div>
+        </div>
+
+    </div>
+</div>
+</div>
+
+<script>
+    const templates = {
+        'cambio_orario': {
+            title: "Cambio orario allenamento",
+            fields: [
+                { id: 'data', label: 'Data', type: 'text', placeholder: 'es. oggi, 25 Nov' },
+                { id: 'orario', label: 'Nuovo orario', type: 'text', placeholder: 'es. 19:30' },
+                { id: 'piscina', label: 'Piscina/Luogo', type: 'text', placeholder: 'es. Piscina Comunale' },
+                { id: 'motivo', label: 'Motivo (opzionale)', type: 'text', placeholder: 'es. guasto impianto' }
+            ],
+            generate: (d) => `Ciao a tutti, l'allenamento di ${d.data} è spostato a ${d.orario} presso ${d.piscina}.\n${d.motivo ? d.motivo + '\n' : ''}Per favore confermate che avete visto.`
+        },
+        'promemoria': {
+            title: "Promemoria allenamento",
+            fields: [
+                { id: 'orario', label: 'Orario', type: 'text', placeholder: 'es. 20:00' },
+                { id: 'piscina', label: 'Piscina/Luogo', type: 'text', placeholder: 'es. Piscina Centro' },
+                { id: 'note', label: 'Note (opzionale)', type: 'textarea', placeholder: 'es. ricordatevi l\'elastico' }
+            ],
+            generate: (d) => `Promemoria: oggi allenamento alle ${d.orario} a ${d.piscina}.\n${d.note ? d.note : ''}`
+        },
+        'logistiche': {
+            title: "Info logistiche",
+            fields: [
+                { id: 'data', label: 'Data', type: 'text', placeholder: 'es. domenica 12' },
+                { id: 'orario_ritrovo', label: 'Orario ritrovo', type: 'text', placeholder: 'es. 14:00' },
+                { id: 'punto_ritrovo', label: 'Punto ritrovo', type: 'text', placeholder: 'es. Parcheggio palazzetto' },
+                { id: 'note', label: 'Note', type: 'textarea', placeholder: 'es. siate puntuali!' }
+            ],
+            generate: (d) => `Per ${d.data} ritrovo alle ${d.orario_ritrovo} a ${d.punto_ritrovo}.\nNote: ${d.note}`
+        },
+        'materiale': {
+            title: "Materiale",
+            fields: [
+                { id: 'data', label: 'Data', type: 'text', placeholder: 'es. domani' },
+                { id: 'lista_materiale', label: 'Lista materiale', type: 'textarea', placeholder: 'es. pinne, maglietta bianca, borraccia' }
+            ],
+            generate: (d) => `Per ${d.data} portate: ${d.lista_materiale}.`
+        },
+        'convocazione': {
+            title: "Convocazione inviata",
+            fields: [
+                { id: 'avversario', label: 'Avversario', type: 'text', placeholder: 'es. Rari Nantes' },
+                { id: 'data', label: 'Data', type: 'text', placeholder: 'es. Sabato 15' },
+                { id: 'ora_partita', label: 'Ora partita', type: 'text', placeholder: 'es. 18:30' },
+                { id: 'luogo', label: 'Luogo', type: 'text', placeholder: 'es. Piscina Stadio' },
+                { id: 'ora_ritrovo', label: 'Ora ritrovo', type: 'text', placeholder: 'es. 17:00' }
+            ],
+            generate: (d) => `Convocazione inviata per ${d.avversario} — ${d.data} ${d.ora_partita} a ${d.luogo}.\nRitrovo: ${d.ora_ritrovo}.`
+        },
+        'presidente': {
+            title: "Avviso società",
+            isBroadcast: true,
+            fields: [
+                { id: 'testo', label: 'Testo comunicazione', type: 'textarea', placeholder: 'Scrivi la comunicazione per l\'intera società...' }
+            ],
+            generate: (d) => `${d.testo}`
+        },
+        'urgenza': {
+            title: "Richiesta rapida",
+            fields: [
+                { id: 'domanda', label: 'Domanda/Richiesta', type: 'text', placeholder: 'es. chi può portare i palloni stasera?' },
+                { id: 'scadenza', label: 'Scadenza', type: 'text', placeholder: 'es. entro le 14:00' }
+            ],
+            generate: (d) => `Ho bisogno di conferma su: ${d.domanda} entro ${d.scadenza}.`
+        }
+    };
+
+    let currentTemplateId = null;
+
+    function openTemplateModal() {
+        document.getElementById('templateModal').classList.remove('hidden');
+        showTemplateList();
+        document.body.style.overflow = 'hidden';
+    }
+
+    function closeTemplateModal() {
+        document.getElementById('templateModal').classList.add('hidden');
+        document.body.style.overflow = '';
+    }
+
+    function showTemplateList() {
+        document.getElementById('templateListView').classList.remove('hidden');
+        document.getElementById('templateFormView').classList.add('hidden');
+        document.getElementById('modalTitle').textContent = "Scegli Modello Messaggio";
+    }
+
+    function selectTemplate(templateId) {
+        currentTemplateId = templateId;
+        const tmpl = templates[templateId];
+
+        document.getElementById('templateListView').classList.add('hidden');
+        document.getElementById('templateFormView').classList.remove('hidden');
+        document.getElementById('templateFormView').classList.add('flex');
+        document.getElementById('modalTitle').textContent = `Compila: ${tmpl.title}`;
+
+        const container = document.getElementById('dynamicFormFields');
+        container.innerHTML = ''; // pulisci form
+
+        tmpl.fields.forEach(f => {
+            const div = document.createElement('div');
+            let inputHtml = '';
+
+            const commonClasses = "w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white focus:border-cyan-400 outline-none placeholder:text-gray-600 transition-colors";
+
+            if (f.type === 'textarea') {
+                inputHtml = `<textarea id="tmpl_${f.id}" rows="3" placeholder="${f.placeholder}" class="${commonClasses} resize-none"></textarea>`;
+            } else {
+                inputHtml = `<input type="text" id="tmpl_${f.id}" placeholder="${f.placeholder}" class="${commonClasses}">`;
+            }
+
+            div.innerHTML = `
+                <label class="block text-sm font-bold text-gray-400 mb-1 ml-1">${f.label}</label>
+                ${inputHtml}
+            `;
+            container.appendChild(div);
+        });
+
+        // Focus first field
+        setTimeout(() => {
+            const firstInput = document.getElementById(`tmpl_${tmpl.fields[0].id}`);
+            if (firstInput) firstInput.focus();
+        }, 50);
+    }
+
+    function generateTemplateText() {
+        if (!currentTemplateId) return;
+        const tmpl = templates[currentTemplateId];
+
+        const data = {};
+        tmpl.fields.forEach(f => {
+            data[f.id] = document.getElementById(`tmpl_${f.id}`).value;
+        });
+
+        const generatedText = tmpl.generate(data);
+
+        // Populate main form
+        document.querySelector('input[name="title"]').value = tmpl.title;
+        document.getElementById('post-content').value = generatedText;
+
+        // Handle Broadcast checkbox if president
+        if (tmpl.isBroadcast) {
+            const broadcastCheck = document.getElementById('broadcast_check');
+            if (broadcastCheck) {
+                broadcastCheck.checked = true;
+            }
+        }
+
+        closeTemplateModal();
+
+        // Focus content area
+        document.getElementById('post-content').focus();
+    }
+</script>
+
+<style>
+    .glass-card {
+        background: rgba(13, 17, 28, 0.7);
+        backdrop-filter: blur(20px);
+        border: 1px solid rgba(255, 255, 255, 0.05);
+        border-radius: 24px;
+        box-shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.5);
+    }
+
+    .social-action-btn {
+        @apply flex items-center gap-2 text-gray-500 hover:text-white transition-colors py-2;
+    }
+
+    .form-checkbox-custom {
+        @apply w-5 h-5 rounded-lg bg-white/5 border-white/20 text-cyan-500 focus:ring-0 focus:ring-offset-0 transition-all;
+    }
+</style>
+{% endblock %}

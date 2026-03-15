@@ -1,0 +1,75 @@
+<!-- MATCH LIST HEADER -->
+<div class="flex items-center justify-end mb-4 px-2">
+    <span class="text-slate-400 text-sm font-medium">{{ matches|length }} Partite</span>
+</div>
+
+<!-- MATCHES LIST (FLATTENED & COMPACT) -->
+<div class="glass-panel overflow-hidden border border-white/10 rounded-xl bg-slate-900/50">
+    <div class="divide-y divide-white/5">
+        {% for match in matches %}
+        <div
+            class="flex items-center justify-between px-3 py-1.5 hover:bg-white/5 transition-colors relative group/row h-10 font-sans text-sm">
+
+            <!-- LEAGUE (Left - Truncated) -->
+            <div class="hidden md:flex flex-col justify-center w-32 border-r border-white/5 mr-3 pr-2">
+                <span class="text-slate-400 font-medium truncate text-xs">{{ match.league.name }}</span>
+            </div>
+
+            <!-- HOME TEAM (Right aligned) -->
+            <div class="flex-1 flex items-center justify-end gap-2 min-w-0">
+                <span class="font-bold text-white text-xs sm:text-sm truncate">{{ match.home_team.name }}</span>
+                {% if match.home_team.logo %}
+                <img src="{{ match.home_team.logo.url }}" class="w-5 h-5 object-contain flex-shrink-0" alt="">
+                {% endif %}
+            </div>
+
+            <!-- VS/SCORE (Center) -->
+            <div class="mx-2 sm:mx-4 flex items-center justify-center w-10 text-center flex-shrink-0">
+                {% if match.is_finished %}
+                <span class="text-cyan-400 font-mono text-sm font-bold">{{ match.home_score }}-{{ match.away_score
+                    }}</span>
+                {% else %}
+                <span class="text-slate-600 font-bold text-[10px]">VS</span>
+                {% endif %}
+            </div>
+
+            <!-- AWAY TEAM (Left aligned) -->
+            <div class="flex-1 flex items-center justify-start gap-2 min-w-0">
+                {% if match.away_team.logo %}
+                <img src="{{ match.away_team.logo.url }}" class="w-5 h-5 object-contain flex-shrink-0" alt="">
+                {% endif %}
+                <span class="font-bold text-white text-xs sm:text-sm truncate">{{ match.away_team.name }}</span>
+            </div>
+
+            <!-- TIME & LOCATION (Right) -->
+            <div
+                class="flex items-center gap-3 ml-3 sm:ml-6 text-[10px] sm:text-xs text-slate-400 min-w-[60px] justify-end">
+                {% if not match.is_finished %}
+                <span class="font-mono text-slate-300">{{ match.match_date|time:"H:i" }}</span>
+                {% else %}
+                <span class="text-emerald-500 uppercase font-bold text-[9px]">Fin</span>
+                {% endif %}
+
+                {% if match.location %}
+                <a href="{{ match.google_maps_url }}" target="_blank"
+                    class="hidden sm:flex items-center gap-1 text-xs text-slate-500 hover:text-cyan-300 transition-colors z-20 relative truncate max-w-[130px]">
+                    <span>📍</span> {{ match.location|truncatechars:20 }}
+                </a>
+                {% endif %}
+            </div>
+
+            <!-- Link to match detail (Overlay) -->
+            <a href="{% url 'match_detail' match.id %}" class="absolute inset-0 z-10"
+                aria-label="Vedi dettagli partita"></a>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+
+{% if not matches %}
+<div class="glass-panel p-12 text-center border-dashed border-2 border-slate-700/50">
+    <div class="text-4xl mb-4 opacity-50 grayscale">📅</div>
+    <h3 class="text-lg font-bold text-white mb-2">Nessuna partita</h3>
+    <p class="text-slate-400">Non ci sono partite in programma per {{ selected_date|date:"l d F" }}.</p>
+</div>
+{% endif %}

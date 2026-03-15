@@ -1,0 +1,91 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="h-[calc(100vh-80px)] max-w-2xl mx-auto flex flex-col">
+    <!-- HEADER CHAT -->
+    <div class="p-4 bg-white/5 border-b border-white/10 flex items-center justify-between">
+        <div class="flex items-center gap-3">
+            <a href="{% url 'bacheca_team' team.slug %}" class="text-gray-400 hover:text-white transition-all">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path>
+                </svg>
+            </a>
+            <div>
+                <h1 class="text-lg font-bold text-white leading-tight">Chat Team</h1>
+                <p class="text-xs text-cyan-400 font-bold uppercase">{{ team.name }}</p>
+            </div>
+        </div>
+        <div class="flex -space-x-2">
+            <div class="w-8 h-8 rounded-full border-2 border-black bg-cyan-500"></div>
+            <div class="w-8 h-8 rounded-full border-2 border-black bg-purple-500"></div>
+            <div
+                class="w-8 h-8 rounded-full border-2 border-black bg-gray-700 flex items-center justify-center text-[10px] text-white">
+                +5</div>
+        </div>
+    </div>
+
+    <!-- MESSAGGI -->
+    <div class="flex-grow overflow-y-auto p-4 space-y-4 custom-scrollbar" id="chat-box">
+        {% for msg in chat_messages %}
+        <div class="flex {% if msg.author == request.user %}justify-end{% else %}justify-start{% endif %}">
+            <div class="max-w-[80%]">
+                {% if msg.author != request.user %}
+                <p class="text-[10px] text-gray-500 mb-1 ml-2 font-bold">{{ msg.author.get_full_name }}</p>
+                {% endif %}
+                <div
+                    class="p-3 rounded-2xl text-sm {% if msg.author == request.user %}bg-cyan-500 text-black font-semibold rounded-tr-none{% else %}bg-white/10 text-white rounded-tl-none border border-white/5{% endif %} shadow-lg">
+                    {{ msg.content }}
+                    <p class="text-[9px] mt-1 opacity-50 text-right">{{ msg.created_at|date:"H:i" }}</p>
+                </div>
+            </div>
+        </div>
+        {% empty %}
+        <div class="h-full flex flex-col items-center justify-center text-gray-600 space-y-4">
+            <svg class="w-16 h-16 opacity-20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                    d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z">
+                </path>
+            </svg>
+            <p>Nessun messaggio. Inizia la conversazione!</p>
+        </div>
+        {% endfor %}
+    </div>
+
+    <!-- INPUT CHAT -->
+    <div class="p-4 bg-white/5 border-t border-white/10">
+        <form action="{% url 'chat_message_add' team.id %}" method="POST" class="flex gap-2">
+            {% csrf_token %}
+            <input type="text" name="content" autocomplete="off" placeholder="Scrivi un messaggio..."
+                class="flex-grow bg-white/10 border border-white/10 rounded-full px-6 py-3 text-white focus:outline-none focus:border-cyan-500 transition-all font-medium placeholder-gray-500 shadow-inner">
+            <button type="submit"
+                class="bg-cyan-500 hover:bg-cyan-600 text-black w-12 h-12 rounded-full flex items-center justify-center shadow-[0_0_15px_rgba(6,182,212,0.4)] transition-all flex-shrink-0">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                        d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"></path>
+                </svg>
+            </button>
+        </form>
+    </div>
+</div>
+
+<script>
+    // Scroll automatically to bottom
+    const chatBox = document.getElementById('chat-box');
+    chatBox.scrollTop = chatBox.scrollHeight;
+</script>
+
+<style>
+    .custom-scrollbar::-webkit-scrollbar {
+        width: 4px;
+    }
+
+    .custom-scrollbar::-webkit-scrollbar-track {
+        background: transparent;
+    }
+
+    .custom-scrollbar::-webkit-scrollbar-thumb {
+        background: rgba(6, 182, 212, 0.2);
+        border-radius: 10px;
+    }
+</style>
+{% endblock %}

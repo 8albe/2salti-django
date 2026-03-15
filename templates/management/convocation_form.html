@@ -1,0 +1,155 @@
+{% extends 'base.html' %}
+{% load crispy_forms_tags %}
+
+{% block content %}
+<div class="max-w-4xl mx-auto px-4 py-8">
+    <div class="mb-8">
+        <h1 class="text-3xl font-bold text-white mb-2">Nuova Convocazione</h1>
+        <p class="text-gray-400">{{ match.home_team }} vs {{ match.away_team }}</p>
+        <p class="text-cyan-400 text-sm font-mono">{{ match.match_date|date:"d/m/Y H:i" }}</p>
+    </div>
+
+    <!-- PREVIEW SETUP PRECEDENTE (PRD 4.3) -->
+    {% if previous_conv %}
+    <div class="glass-card p-6 mb-8 border-cyan-500/20 bg-cyan-500/5">
+        <div class="flex justify-between items-center mb-4">
+            <h3 class="text-lg font-bold text-white flex items-center gap-2">
+                <svg class="w-5 h-5 text-cyan-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                        d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                </svg>
+                Setup Precedente ({{ previous_conv.match.match_date|date:"d/m/y" }})
+            </h3>
+            <a href="?use_previous=1"
+                class="text-xs bg-cyan-500 text-black px-4 py-1 rounded-full font-bold hover:bg-cyan-400 transition-all">
+                Copia questo setup
+            </a>
+        </div>
+
+        <div class="grid grid-cols-2 gap-6 text-sm">
+            <div>
+                <p class="text-gray-400 mb-1">Capitano / Vice</p>
+                <p class="text-white font-semibold">{{ previous_conv.capitano.get_full_name|default:"-" }} / {{
+                    previous_conv.vicecapitano.get_full_name|default:"-" }}</p>
+            </div>
+            <div>
+                <p class="text-gray-400 mb-1">Titolari</p>
+                <div class="flex flex-wrap gap-2">
+                    {% for n in previous_conv.nominees.all %}
+                    {% if n.is_starter %}
+                    <span class="bg-white/10 px-2 py-0.5 rounded text-[10px] text-white">{{ n.player.get_full_name
+                        }}</span>
+                    {% endif %}
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+
+        <div class="mt-4 pt-4 border-t border-white/5">
+            <p class="text-gray-400 mb-2">Convocati (Compatta)</p>
+            <div class="text-xs text-gray-500 line-clamp-1">
+                {% for n in previous_conv.nominees.all %}
+                {{ n.player.get_full_name }}{% if not forloop.last %}, {% endif %}
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <form method="POST" enctype="multipart/form-data" class="space-y-8">
+        {% csrf_token %}
+        <input type="hidden" name="match" value="{{ match.id }}">
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+            <!-- SELEZIONE CONVOCATI -->
+            <div class="glass-card p-6">
+                <h3 class="text-xl font-bold text-cyan-400 mb-6 border-b border-white/10 pb-2">1. Seleziona Convocati
+                </h3>
+                <div class="max-h-96 overflow-y-auto pr-2 space-y-2 custom-scrollbar" id="nominees-container">
+                    {{ form.nominees }}
+                </div>
+            </div>
+
+            <!-- SELEZIONE TITOLARI E RUOLI -->
+            <div class="space-y-8">
+                <div class="glass-card p-6">
+                    <h3 class="text-xl font-bold text-cyan-400 mb-6 border-b border-white/10 pb-2">2. Sette Titolari
+                    </h3>
+                    <div class="max-h-64 overflow-y-auto pr-2 space-y-2 custom-scrollbar" id="starters-container">
+                        {{ form.starters }}
+                    </div>
+                </div>
+
+                <div class="glass-card p-6">
+                    <h3 class="text-xl font-bold text-cyan-400 mb-6 border-b border-white/10 pb-2">3. Ruoli</h3>
+                    <div class="space-y-4">
+                        {{ form.capitano|as_crispy_field }}
+                        {{ form.vicecapitano|as_crispy_field }}
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="glass-card p-6">
+            <h3 class="text-xl font-bold text-cyan-400 mb-6 border-b border-white/10 pb-2">4. Note e Allegato (AI
+                Cross-check)</h3>
+            {{ form.notes|as_crispy_field }}
+            {{ form.attachment|as_crispy_field }}
+        </div>
+
+        <div class="flex justify-end gap-4">
+            <button type="submit"
+                class="bg-cyan-500 hover:bg-cyan-600 text-black px-12 py-4 rounded-full font-bold shadow-[0_0_30px_rgba(6,182,212,0.4)] transition-all">
+                Salva Convocazione
+            </button>
+        </div>
+    </form>
+</div>
+
+<style>
+    .glass-card {
+        background: rgba(255, 255, 255, 0.03);
+        backdrop-filter: blur(10px);
+        border: 1px solid rgba(255, 255, 255, 0.05);
+        border-radius: 16px;
+    }
+
+    .custom-scrollbar::-webkit-scrollbar {
+        width: 4px;
+    }
+
+    .custom-scrollbar::-webkit-scrollbar-track {
+        background: rgba(255, 255, 255, 0.05);
+    }
+
+    .custom-scrollbar::-webkit-scrollbar-thumb {
+        background: rgba(6, 182, 212, 0.3);
+        border-radius: 10px;
+    }
+
+    /* Styling for checkboxes */
+    #id_nominees,
+    #id_starters {
+        display: flex;
+        flex-direction: column;
+        gap: 0.5rem;
+    }
+
+    #id_nominees li,
+    #id_starters li {
+        list-style: none;
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+        color: #fff;
+        padding: 0.5rem;
+        border-radius: 8px;
+        transition: all 0.2s;
+    }
+
+    #id_nominees li:hover,
+    #id_starters li:hover {
+        background: rgba(255, 255, 255, 0.05);
+    }
+</style>
+{% endblock %}

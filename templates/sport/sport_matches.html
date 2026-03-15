@@ -1,0 +1,50 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="mb-8">
+    <h1 class="text-4xl font-bold sport-accent mb-2">Partite</h1>
+    <p class="text-slate-400">Tutte le partite in programma e i risultati.</p>
+</div>
+
+<!-- CALENDAR PICKER -->
+{% include 'components/date_picker.html' %}
+
+<div class="mb-6">
+    <h3 class="text-xl font-bold text-cyan-400">
+        {{ selected_date|date:"l d F Y"|capfirst }}
+    </h3>
+</div>
+
+{% if matches %}
+{% regroup matches by league as league_groups %}
+{% for group in league_groups %}
+<div class="mb-8">
+    <!-- League Header -->
+    <div class="flex items-center justify-between mb-3">
+        <h3 class="text-base font-bold text-slate-300 uppercase tracking-widest">
+            {{ group.grouper.name }}
+        </h3>
+        <a href="{% url 'league_standings' group.grouper.id %}"
+            class="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-cyan-500/10 border border-cyan-500/20 text-cyan-400 text-xs font-bold hover:bg-cyan-500/20 hover:border-cyan-500/40 transition-all">
+            🏆 Vedi Classifica
+        </a>
+    </div>
+    <!-- Matches for this league -->
+    <div class="glass-panel overflow-hidden border border-white/10 rounded-xl bg-slate-900/50">
+        <div class="divide-y divide-white/5">
+            {% for match in group.list %}
+            {% include 'matches/compact_match_row.html' with match=match %}
+            {% endfor %}
+        </div>
+    </div>
+</div>
+{% endfor %}
+{% else %}
+<div class="glass-panel p-12 text-center border-dashed border-2 border-slate-700/50">
+    <div class="text-4xl mb-4 opacity-50 grayscale">📅</div>
+    <h3 class="text-lg font-bold text-white mb-2">Nessuna partita</h3>
+    <p class="text-slate-400">Non ci sono partite in programma per {{ selected_date|date:"l d F" }}.</p>
+</div>
+{% endif %}
+
+{% endblock %}
