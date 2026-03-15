@@ -48,3 +48,7 @@ backups/
 archive_flutter_nextjs_20260213/
 Varie/
 temp/
+.pub-cache/
+.flutter/
+.dart-tool/
+.dartServer/
