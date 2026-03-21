@@ -13,7 +13,7 @@ def signup(request):
         if form.is_valid():
             user = form.save()
             login(request, user)
-            return redirect('setup_wizard')  # Reindirizza al wizard
+            return redirect('verify_identity')  # Nuovo flusso: prima l'identità
     else:
         form = SignUpForm()
     
@@ -34,14 +34,23 @@ def setup_wizard(request):
     FormClass = None
 
     if user.role == 'athlete':
-        profile = user.athlete_profile
-        FormClass = AthleteSetupForm
+        try:
+            profile = user.athlete_profile
+            FormClass = AthleteSetupForm
+        except:
+            return redirect('claim_profile')
     elif user.role == 'coach':
-        profile = user.coach_profile
-        FormClass = CoachSetupForm
+        try:
+            profile = user.coach_profile
+            FormClass = CoachSetupForm
+        except:
+            return redirect('claim_profile')
     elif user.role == 'referee':
-        profile = user.referee_profile
-        FormClass = RefereeSetupForm
+        try:
+            profile = user.referee_profile
+            FormClass = RefereeSetupForm
+        except:
+            return redirect('claim_profile')
     elif user.role == 'president':
         # Il presidente deve creare la società
         return redirect('create_society')
@@ -96,6 +105,81 @@ def setup_wizard(request):
         'user_form': user_form,
         'role': user.get_role_display()
     })
+
+@login_required
+def verify_identity(request):
+    """Fase 2: Verifica Identità (Mock SPID/CIE)"""
+    user = request.user
+    if user.identity_status == 'VERIFIED':
+        return redirect('process_payment')
+    
+    if request.method == 'POST':
+        # Mocking verification success
+        import django.utils.timezone as timezone
+        user.identity_status = 'VERIFIED'
+        user.identity_verified_at = timezone.now()
+        user.save()
+        return redirect('process_payment')
+        
+    return render(request, 'accounts/onboarding/verify_identity.html')
+
+@login_required
+def process_payment(request):
+    """Fase 3: Pagamento (Mock 0,50€)"""
+    user = request.user
+    if user.subscription_status == 'ACTIVE':
+        return redirect('claim_profile')
+    
+    if request.method == 'POST':
+        # Mocking payment success
+        import django.utils.timezone as timezone
+        import django.contrib.messages as messages
+        # Mock del pagamento andato a buon fine
+        request.user.subscription_status = 'ACTIVE'
+        request.user.subscription_end_date = timezone.now() + timezone.timedelta(days=365)
+        request.user.save()
+        messages.success(request, "Abbonamento attivato con successo! Grazie per aver scelto 2salti.")
+        return redirect('setup_wizard')
+        
+    return render(request, 'accounts/onboarding/payment.html')
+
+@login_required
+def claim_profile(request):
+    """Fase 4: Ricerca e Claim del proprio Profilo Sportivo"""
+    user = request.user
+    
+    # Se ha già un profilo o un claim in attesa/approvato
+    if user.profile_links.filter(status__in=['PENDING', 'APPROVED']).exists():
+        return redirect('team_access')
+        
+    if request.method == 'POST':
+        action = request.POST.get('action')
+        if action == 'skip':
+            return redirect('team_access')
+            
+        profile_id = request.POST.get('profile_id')
+        role = request.POST.get('role')
+        
+        if profile_id and role:
+            from .models import AccountProfileLink, AthleteProfile, CoachProfile, RefereeProfile
+            link = AccountProfileLink(user=user, status='PENDING')
+            try:
+                if role == 'athlete':
+                    link.athlete_profile = AthleteProfile.objects.get(id=profile_id)
+                elif role == 'coach':
+                    link.coach_profile = CoachProfile.objects.get(id=profile_id)
+                elif role == 'referee':
+                    link.referee_profile = RefereeProfile.objects.get(id=profile_id)
+                link.save()
+                import django.contrib.messages as messages
+                messages.success(request, "Richiesta di claim inviata con successo. In attesa di approvazione.")
+                return redirect('team_access')
+            except Exception as e:
+                import django.contrib.messages as messages
+                messages.error(request, "Errore durante la richiesta di claim.")
+                
+    return render(request, 'accounts/onboarding/claim_profile.html', {'role': user.role})
+
 
 @login_required
 def profile_redirect(request):
@@ -287,6 +371,58 @@ def api_teams_by_league(request):
     return JsonResponse(data, safe=False)
 
 
+@login_required
+def api_search_profile_claim(request):
+    from django.http import JsonResponse
+    from .models import AthleteProfile, CoachProfile, RefereeProfile
+    
+    query = request.GET.get('q', '').strip()
+    role = request.GET.get('role', 'athlete')
+    
+    if len(query) < 2:
+        return JsonResponse({'results': []})
+        
+    results = []
+    if role == 'athlete':
+        from django.db.models import Q
+        profiles = AthleteProfile.objects.filter(
+            Q(user__first_name__icontains=query) | Q(user__last_name__icontains=query) | Q(user__username__icontains=query)
+        ).select_related('user', 'current_team')[:10]
+        
+        for p in profiles:
+            team_name = p.current_team.name if p.current_team else "Svincolato"
+            results.append({
+                'id': p.id,
+                'name': p.user.get_full_name() or p.user.username,
+                'info': team_name
+            })
+    elif role == 'coach':
+        from django.db.models import Q
+        profiles = CoachProfile.objects.filter(
+            Q(user__first_name__icontains=query) | Q(user__last_name__icontains=query) | Q(user__username__icontains=query)
+        ).select_related('user', 'current_team')[:10]
+        
+        for p in profiles:
+            team_name = p.current_team.name if p.current_team else "Svincolato"
+            results.append({
+                'id': p.id,
+                'name': p.user.get_full_name() or p.user.username,
+                'info': team_name
+            })
+    elif role == 'referee':
+        from django.db.models import Q
+        profiles = RefereeProfile.objects.filter(
+            Q(user__first_name__icontains=query) | Q(user__last_name__icontains=query) | Q(user__username__icontains=query)
+        ).select_related('user')[:10]
+        
+        for p in profiles:
+            results.append({
+                'id': p.id,
+                'name': p.user.get_full_name() or p.user.username,
+                'info': f"Licenza: {p.get_license_level_display()}"
+            })
+            
+    return JsonResponse({'results': results})
 def api_search_athlete(request):
     """Cerca atleti per nome/cognome (usato dal form fan)"""
     q = request.GET.get('q', '').strip()

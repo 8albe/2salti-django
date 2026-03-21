@@ -1,0 +1,128 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="max-w-md mx-auto mt-10 p-6 bg-white dark:bg-gray-800 rounded-lg shadow border border-gray-200 dark:border-gray-700">
+    <!-- Progress Indicator -->
+    <div class="flex justify-between items-center mb-8">
+        <div class="flex items-center space-x-2">
+            <div class="h-2 w-12 rounded bg-indigo-600"></div>
+            <div class="h-2 w-12 rounded bg-indigo-600"></div>
+            <div class="h-2 w-12 rounded bg-indigo-600"></div>
+            <div class="h-2 w-12 rounded bg-indigo-600"></div>
+            <div class="h-2 w-12 rounded bg-gray-200 dark:bg-gray-600"></div>
+        </div>
+        <span class="text-sm font-medium text-gray-500">Step 4 di 5</span>
+    </div>
+
+    <h2 class="text-2xl font-bold mb-2 text-gray-900 dark:text-white">Rivendica il tuo profilo</h2>
+    <p class="text-gray-600 dark:text-gray-400 mb-6">
+        Cerca il tuo profilo sportivo (creato dai referti ufficiali) per richiederne la gestione. 
+        I dati verranno confermati dal presidente della società.
+    </p>
+
+    <!-- Search Box -->
+    <div class="mb-6 relative">
+        <label for="search_input" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Cerca il tuo nome</label>
+        <input type="text" id="search_input" class="w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white shadow-sm focus:border-indigo-500 focus:ring-indigo-500" placeholder="Mario Rossi...">
+        
+        <div id="search_results" class="absolute w-full mt-1 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-md shadow-lg hidden z-10 max-h-60 overflow-y-auto">
+            <!-- Risultati ajax -->
+        </div>
+    </div>
+
+    <!-- Form per il Claim -->
+    <form method="POST" id="claim_form" class="hidden">
+        {% csrf_token %}
+        <input type="hidden" name="profile_id" id="profile_id">
+        <input type="hidden" name="role" id="role_input" value="{{ role }}">
+        <input type="hidden" name="action" value="claim">
+
+        <div class="bg-indigo-50 dark:bg-indigo-900/30 border border-indigo-100 dark:border-indigo-800 rounded-md p-4 mb-6">
+            <h3 class="text-sm font-medium text-indigo-800 dark:text-indigo-300 mb-1">Profilo selezionato</h3>
+            <p id="selected_name" class="font-bold text-gray-900 dark:text-white"></p>
+            <p id="selected_info" class="text-sm text-gray-600 dark:text-gray-400"></p>
+        </div>
+
+        <button type="submit" class="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
+            Invia Richiesta di Claim
+        </button>
+    </form>
+
+    <!-- Fallback & Skip -->
+    <div class="mt-6 border-t border-gray-200 dark:border-gray-700 pt-6">
+        <p class="text-sm text-gray-500 dark:text-gray-400 mb-4">Non trovi il tuo profilo o non sei ancora in un referto?</p>
+        <form method="POST">
+            {% csrf_token %}
+            <input type="hidden" name="action" value="skip">
+            <button type="submit" class="w-full bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 shadow-sm border border-gray-300 dark:border-gray-600 font-medium py-2 px-4 rounded-md hover:bg-gray-50 dark:hover:bg-gray-700">
+                Salta per ora (Guest Mode)
+            </button>
+        </form>
+    </div>
+</div>
+
+<script>
+    const searchInput = document.getElementById('search_input');
+    const searchResults = document.getElementById('search_results');
+    const claimForm = document.getElementById('claim_form');
+    const profileIdInput = document.getElementById('profile_id');
+    const selectedName = document.getElementById('selected_name');
+    const selectedInfo = document.getElementById('selected_info');
+    const role = document.getElementById('role_input').value;
+
+    let timeout = null;
+
+    searchInput.addEventListener('input', function() {
+        clearTimeout(timeout);
+        const query = this.value.trim();
+        
+        if (query.length < 2) {
+            searchResults.classList.add('hidden');
+            return;
+        }
+
+        timeout = setTimeout(() => {
+            fetch(`/accounts/api/search-profile-claim/?q=${encodeURIComponent(query)}&role=${role}`)
+                .then(response => response.json())
+                .then(data => {
+                    searchResults.innerHTML = '';
+                    if (data.results.length > 0) {
+                        data.results.forEach(item => {
+                            const div = document.createElement('div');
+                            div.className = 'px-4 py-3 hover:bg-gray-50 dark:hover:bg-gray-700 cursor-pointer border-b border-gray-100 dark:border-gray-700 last:border-0';
+                            div.innerHTML = `
+                                <div class="font-medium text-gray-900 dark:text-white">${item.name}</div>
+                                <div class="text-xs text-gray-500 dark:text-gray-400">${item.info}</div>
+                            `;
+                            div.addEventListener('click', () => {
+                                selectProfile(item);
+                            });
+                            searchResults.appendChild(div);
+                        });
+                        searchResults.classList.remove('hidden');
+                    } else {
+                        searchResults.innerHTML = '<div class="px-4 py-3 text-sm text-gray-500">Nessun profilo trovato.</div>';
+                        searchResults.classList.remove('hidden');
+                    }
+                });
+        }, 300);
+    });
+
+    document.addEventListener('click', function(e) {
+        if (!searchInput.contains(e.target) && !searchResults.contains(e.target)) {
+            searchResults.classList.add('hidden');
+        }
+    });
+
+    function selectProfile(item) {
+        searchInput.value = item.name;
+        searchResults.classList.add('hidden');
+        
+        profileIdInput.value = item.id;
+        selectedName.textContent = item.name;
+        selectedInfo.textContent = item.info;
+        
+        claimForm.classList.remove('hidden');
+    }
+</script>
+{% endblock %}

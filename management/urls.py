@@ -8,6 +8,12 @@ urlpatterns = [
     path('bacheca/', views.bacheca_view, name='bacheca_globale'),
     path('team/<slug:team_slug>/bacheca/', views.bacheca_view, name='bacheca_team'),
     path('team/<int:team_id>/post/create/', views.post_create, name='post_create'),
-    path('team/<slug:team_slug>/chat/', views.chat_view, name='chat_team'),
-    path('team/<int:team_id>/chat/add/', views.chat_message_add, name='chat_message_add'),
+    path('team-chat/<slug:team_slug>/', views.chat_view, name='chat_view'),
+    path('team-chat/<int:team_id>/add/', views.chat_message_add, name='chat_message_add'),
+
+    # Nuovo Onboarding & Club Admin (Blueprint v3)
+    path('team-access/', views.team_access, name='team_access'),
+    path('club-admin/', views.club_admin_dashboard, name='club_admin_dashboard'),
+    path('club-admin/request/<int:request_id>/approve/', views.approve_membership, name='approve_membership'),
+    path('club-admin/generate-code/', views.generate_code, name='generate_code'),
 ]

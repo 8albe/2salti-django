@@ -27,7 +27,7 @@
         {% endif %}
 
         {% if user == profile_user %}
-        <a href="{% url 'edit_profile' %}"
+        <a href="#"
             class="inline-block mt-4 bg-slate-800 hover:bg-slate-700 px-4 py-2 rounded-lg text-sm transition-colors">
             ✏️ Modifica Dati
         </a>
@@ -302,7 +302,7 @@
 {% endfor %}
 {% else %}
 <div class="bg-slate-900 rounded-xl p-6 mb-6 border border-slate-800 text-center text-slate-400">
-    Nessun atleta seguito. <a href="{% url 'edit_profile' %}" class="text-cyan-400 hover:underline">Aggiungine uno</a>.
+    Nessun atleta seguito. <a href="#" class="text-cyan-400 hover:underline">Aggiungine uno</a>.
 </div>
 {% endif %}
 
@@ -353,7 +353,7 @@
 {% endfor %}
 {% else %}
 <div class="bg-slate-900 rounded-xl p-6 border border-slate-800 text-center text-slate-400">
-    Nessuna squadra seguita. <a href="{% url 'edit_profile' %}" class="text-cyan-400 hover:underline">Aggiungine
+    Nessuna squadra seguita. <a href="#" class="text-cyan-400 hover:underline">Aggiungine
         una</a>.
 </div>
 {% endif %}

@@ -3,7 +3,7 @@ from django.contrib.auth.decorators import login_required
 from .models import (
     Training, TrainingOccurrence, TrainingAttendance, 
     Post, Comment, ChatMessage, Convocation, ConvocationNominee,
-    Membership
+    Membership, ActivationCode, MembershipRequest
 )
 from .forms import TrainingForm, ConvocationForm
 from .logic import generate_occurrences
@@ -312,3 +312,139 @@ def chat_message_add(request, team_id):
         if content:
             ChatMessage.objects.create(team=team, author=request.user, content=content)
     return redirect(request.META.get('HTTP_REFERER', 'home'))
+
+@login_required
+def team_access(request):
+    """Fase 4: Accesso Squadra (Sezione 7)"""
+    if request.method == 'POST':
+        code_str = request.POST.get('activation_code')
+        if code_str:
+            try:
+                code_obj = ActivationCode.objects.get(code=code_str, is_active=True)
+                # Verifica usi e scadenza...
+                if code_obj.expires_at and code_obj.expires_at < timezone.now():
+                    messages.error(request, "Codice scaduto.")
+                elif code_obj.current_uses >= code_obj.max_uses:
+                    messages.error(request, "Codice già utilizzato il massimo numero di volte.")
+                else:
+                    # Crea Membership
+                    Membership.objects.get_or_create(
+                        user=request.user,
+                        society=code_obj.society,
+                        team=code_obj.team,
+                        role=code_obj.role
+                    )
+                    code_obj.current_uses += 1
+                    code_obj.save()
+                    messages.success(request, f"Benvenuto nella squadra {code_obj.team or code_obj.society}!")
+                    return redirect('profile', username=request.user.username)
+            except ActivationCode.DoesNotExist:
+                messages.error(request, "Codice non valido.")
+        
+        # Gestione Richiesta Manuale
+        manual_team_id = request.POST.get('team_id')
+        if manual_team_id:
+            team = get_object_or_404(Team, id=manual_team_id)
+            MembershipRequest.objects.get_or_create(
+                user=request.user,
+                society=team.society,
+                team=team,
+                role='PLAYER', # Default per richiesta manuale atleta
+                status='PENDING'
+            )
+            messages.success(request, "Richiesta inviata al Club Admin. Sarai avvisato via email.")
+            return render(request, 'management/onboarding/pending_approval.html')
+
+    teams = Team.objects.all().select_related('society')
+    return render(request, 'management/onboarding/team_access.html', {'teams': teams})
+
+@login_required
+@role_required(['PRESIDENT'])
+def club_admin_dashboard(request):
+    """Pannello essenziale per Club Admin (Sezione 3)"""
+    society = request.current_society
+    if not society:
+        # Fallback per presidenti senza società nel middleware
+        if hasattr(request.user, 'president_profile'):
+            society = request.user.president_profile.managed_society
+            
+    if not society:
+        return redirect('home')
+
+    requests = MembershipRequest.objects.filter(society=society, status='PENDING')
+    codes = ActivationCode.objects.filter(society=society)
+    
+    return render(request, 'management/club_admin/dashboard.html', {
+        'society': society,
+        'membership_requests': requests,
+        'activation_codes': codes,
+    })
+
+@login_required
+@role_required(['PRESIDENT'])
+def approve_membership(request, request_id):
+    req = get_object_or_404(MembershipRequest, id=request_id)
+    if request.method == 'POST':
+        action = request.POST.get('action')
+        if action == 'approve':
+            req.status = 'APPROVED'
+            Membership.objects.get_or_create(
+                user=req.user,
+                society=req.society,
+                team=req.team,
+                role=req.role
+            )
+            messages.success(request, f"Membro {req.user.username} approvato.")
+        else:
+            req.status = 'REJECTED'
+            messages.warning(request, f"Richiesta di {req.user.username} respinta.")
+        req.save()
+    return redirect('club_admin_dashboard')
+
+import random
+import string
+
+@login_required
+@role_required(['PRESIDENT'])
+def generate_code(request):
+    """View per generare nuovi codici di attivazione (Club Admin)"""
+    society = request.current_society
+    if not society:
+        if hasattr(request.user, 'president_profile'):
+            society = request.user.president_profile.managed_society
+            
+    if not society:
+        messages.error(request, "Devi essere associato a una società.")
+        return redirect('home')
+
+    if request.method == 'POST':
+        team_id = request.POST.get('team_id')
+        role = request.POST.get('role', 'PLAYER')
+        max_uses = int(request.POST.get('max_uses', 50))
+        
+        team = Team.objects.filter(id=team_id, society=society).first() if team_id else None
+        
+        # Generatore sicuro di codici custom
+        prefix = ''.join(e for e in society.name if e.isalnum())[:4].upper()
+        if len(prefix) < 4:
+            prefix = prefix.ljust(4, 'X')
+        random_str = ''.join(random.choices(string.ascii_uppercase + string.digits, k=6))
+        code_str = f"{prefix}-{random_str[:3]}-{random_str[3:]}"
+        
+        from core.models import Team # Se non importato
+        from .models import ActivationCode
+        
+        ActivationCode.objects.create(
+            code=code_str,
+            society=society,
+            team=team,
+            role=role,
+            max_uses=max_uses
+        )
+        
+        messages.success(request, f"Nuovo codice generato: {code_str}")
+        return redirect('club_admin_dashboard')
+        
+    from core.models import Team
+    teams = Team.objects.filter(society=society)
+    return render(request, 'management/club_admin/generate_code.html', {'teams': teams, 'society': society})

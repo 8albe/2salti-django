@@ -1,0 +1,91 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="max-w-7xl mx-auto py-8 px-4 sm:px-6 lg:px-8">
+    <div class="flex flex-col md:flex-row md:items-center md:justify-between mb-12 gap-4">
+        <div>
+            <h1 class="text-4xl font-extrabold text-white shadow-text">{{ society.name }}</h1>
+            <p class="text-slate-400 mt-1">Dashboard Club Admin • Pannello Gestione Membership</p>
+        </div>
+        <div class="flex gap-4">
+            <a href="{% url 'generate_code' %}" class="px-6 py-2 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white font-bold transition-all shadow-lg">
+                Genera Codici
+            </a>
+        </div>
+    </div>
+
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        <!-- Richieste in Attesa -->
+        <div class="lg:col-span-2 space-y-6">
+            <div class="flex items-center justify-between">
+                <h3 class="text-xl font-bold text-white flex items-center">
+                    <i class="fas fa-user-plus text-cyan-500 mr-3"></i>
+                    Richieste di Membership
+                    <span class="ml-3 px-2 py-0.5 rounded-full bg-cyan-500/20 text-cyan-400 text-xs font-bold">
+                        {{ membership_requests|length }}
+                    </span>
+                </h3>
+            </div>
+
+            {% if membership_requests %}
+                <div class="grid gap-4">
+                    {% for req in membership_requests %}
+                    <div class="glass p-6 rounded-2xl border border-white/10 flex items-center justify-between">
+                        <div class="flex items-center gap-4">
+                            <div class="h-12 w-12 rounded-full bg-slate-700 flex items-center justify-center text-white font-bold">
+                                {{ req.user.username|make_list|first|upper }}
+                            </div>
+                            <div>
+                                <h4 class="text-white font-bold">{{ req.user.get_full_name|default:req.user.username }}</h4>
+                                <p class="text-xs text-slate-400">Richiede accesso come <span class="text-cyan-400">{{ req.get_role_display }}</span> per <span class="text-white">{{ req.team.name|default:"Tutta la società" }}</span></p>
+                                <p class="text-[10px] text-slate-500 mt-1">Inviata il {{ req.created_at|date:"d/m/Y H:i" }}</p>
+                            </div>
+                        </div>
+                        <form method="POST" action="{% url 'approve_membership' req.id %}" class="flex gap-2">
+                            {% csrf_token %}
+                            <button type="submit" name="action" value="reject"
+                                class="p-3 rounded-xl border border-red-500/30 text-red-400 hover:bg-red-500/10 transition-all">
+                                <i class="fas fa-times"></i>
+                            </button>
+                            <button type="submit" name="action" value="approve"
+                                class="px-6 py-3 rounded-xl bg-emerald-600/20 border border-emerald-500/30 text-emerald-400 hover:bg-emerald-600/30 transition-all font-bold">
+                                Approva
+                            </button>
+                        </form>
+                    </div>
+                    {% endfor %}
+                </div>
+            {% else %}
+                <div class="glass p-12 rounded-2xl border border-white/10 text-center">
+                    <i class="fas fa-inbox text-slate-600 text-4xl mb-4"></i>
+                    <p class="text-slate-400">Nessuna richiesta in attesa al momento.</p>
+                </div>
+            {% endif %}
+        </div>
+
+        <!-- Codici Attivi -->
+        <div class="space-y-6">
+            <h3 class="text-xl font-bold text-white flex items-center">
+                <i class="fas fa-key text-yellow-500 mr-3"></i>
+                Codici Attivi
+            </h3>
+            
+            <div class="glass p-6 rounded-2xl border border-white/10 space-y-4">
+                {% if activation_codes %}
+                    {% for code in activation_codes %}
+                    <div class="pb-4 border-b border-white/5 last:border-0 last:pb-0">
+                        <div class="flex justify-between items-center mb-1">
+                            <code class="text-cyan-400 font-mono font-bold">{{ code.code }}</code>
+                            <span class="text-[10px] text-slate-500">{{ code.current_uses }}/{{ code.max_uses }} usi</span>
+                        </div>
+                        <p class="text-xs text-slate-400">{{ code.team.name|default:"Società" }} • {{ code.get_role_display }}</p>
+                    </div>
+                    {% endfor %}
+                {% else %}
+                    <p class="text-sm text-slate-500 italic">Nessun codice generato.</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
