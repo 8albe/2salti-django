@@ -1,0 +1,202 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Dashboard | 2salti{% endblock %}
+
+{% block content %}
+<div class="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
+    
+    <!-- HEADER / WELCOME -->
+    <header class="flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div>
+            <h1 class="text-3xl md:text-4xl font-display font-bold text-white mb-2">
+                Ciao, <span class="text-cyan-400">{{ user.first_name|default:user.username }}</span>! 👋
+            </h1>
+            <p class="text-slate-400">Bentornato nel tuo spazio personale su 2salti.</p>
+        </div>
+        <div class="flex items-center gap-3">
+            <a href="{% url 'profile' user.username %}" class="px-6 py-2 rounded-xl bg-white/5 border border-white/10 hover:bg-white/10 transition-colors text-sm font-medium">
+                Vedi Profilo Pubblico
+            </a>
+            <a href="{% url 'edit_profile' %}" class="px-6 py-2 rounded-xl bg-cyan-600 text-white hover:bg-cyan-500 transition-colors text-sm font-bold shadow-lg shadow-cyan-900/20">
+                Modifica Dati
+            </a>
+        </div>
+    </header>
+
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        
+        <!-- LEFT COL: STATS & STATUS -->
+        <div class="lg:col-span-1 space-y-6">
+            
+            <!-- ONBOARDING PROGRESS CARD -->
+            <div class="glass p-6 rounded-3xl border border-white/5 relative overflow-hidden">
+                <h3 class="text-xs font-bold text-slate-500 uppercase tracking-widest mb-4">La tua Registrazione</h3>
+                
+                {% if user.onboarding_state == 'IDENTITY_PENDING' %}
+                <div class="space-y-4">
+                    <div class="flex items-start gap-3">
+                        <span class="text-2xl">🆔</span>
+                        <div>
+                            <p class="font-bold text-white text-sm">Verifica Identità</p>
+                            <p class="text-xs text-slate-400">Verifica i tuoi dati via SPID/CIE per sbloccare le funzionalità operative.</p>
+                        </div>
+                    </div>
+                    <a href="{% url 'verify_identity' %}" class="block w-full text-center py-3 rounded-xl bg-cyan-600 text-white text-sm font-bold hover:bg-cyan-500 transition-all shadow-lg shadow-cyan-900/40">
+                        Inizia Verifica
+                    </a>
+                </div>
+
+                {% elif user.onboarding_state == 'PAYMENT_PENDING' %}
+                <div class="space-y-4">
+                    <div class="flex items-start gap-3">
+                        <span class="text-2xl">💳</span>
+                        <div>
+                            <p class="font-bold text-white text-sm">Abbonamento Annuale</p>
+                            <p class="text-xs text-slate-400">Identità verificata ✅. Attiva l'abbonamento (0,50€) per procedere.</p>
+                        </div>
+                    </div>
+                    <a href="{% url 'process_payment' %}" class="block w-full text-center py-3 rounded-xl bg-cyan-600 text-white text-sm font-bold hover:bg-cyan-500 transition-all shadow-lg shadow-cyan-900/40">
+                        Paga e Attiva
+                    </a>
+                </div>
+
+                {% elif user.onboarding_state == 'SETUP_PENDING' %}
+                <div class="space-y-4">
+                    <div class="flex items-start gap-3">
+                        <span class="text-2xl">⚙️</span>
+                        <div>
+                            <p class="font-bold text-white text-sm">Completa Setup</p>
+                            <p class="text-xs text-slate-400">Pagamento ricevuto ✅. Ora configura i dettagli del tuo profilo sportivo.</p>
+                        </div>
+                    </div>
+                    <a href="{% url 'setup_wizard' %}" class="block w-full text-center py-3 rounded-xl bg-cyan-600 text-white text-sm font-bold hover:bg-cyan-500 transition-all shadow-lg shadow-cyan-900/40">
+                        Configura Ora
+                    </a>
+                </div>
+
+                {% elif user.onboarding_state == 'MEMBERSHIP_PENDING' %}
+                <div class="space-y-4">
+                    <div class="flex items-start gap-3">
+                        <span class="text-2xl">🛡️</span>
+                        <div>
+                            <p class="font-bold text-white text-sm">Entra nel Club</p>
+                            <p class="text-xs text-slate-400">Profilo pronto ✅. Unisciti a una squadra o rivendica un profilo esistente.</p>
+                        </div>
+                    </div>
+                    <a href="{% url 'team_access' %}" class="block w-full text-center py-3 rounded-xl bg-cyan-600 text-white text-sm font-bold hover:bg-cyan-500 transition-all shadow-lg shadow-cyan-900/40">
+                        Cerca Squadra
+                    </a>
+                </div>
+
+                {% else %}
+                <div class="flex items-center gap-4">
+                    <div class="w-12 h-12 rounded-xl bg-green-500/20 flex items-center justify-center text-xl">✅</div>
+                    <div>
+                        <p class="font-bold text-white text-sm">Onboarding Completo</p>
+                        <p class="text-xs text-slate-400">Sei un membro attivo di 2salti.</p>
+                    </div>
+                </div>
+                {% endif %}
+            </div>
+
+            {% if athlete_profile %}
+            <!-- ATHLETE FAST STATS -->
+            <div class="glass p-6 rounded-3xl border border-white/5 bg-gradient-to-br from-cyan-500/5 to-transparent">
+                <h3 class="text-xs font-bold text-slate-500 uppercase tracking-widest mb-4">I tuoi Numeri</h3>
+                <div class="grid grid-cols-2 gap-4">
+                    <div class="p-4 rounded-2xl bg-white/5 border border-white/5">
+                        <p class="text-2xl font-display font-bold text-white">{{ athlete_profile.matches_played|default:0 }}</p>
+                        <p class="text-[10px] text-slate-500 uppercase font-bold tracking-tighter">Partite</p>
+                    </div>
+                    <div class="p-4 rounded-2xl bg-white/5 border border-white/5">
+                        <p class="text-2xl font-display font-bold text-cyan-400">{{ athlete_profile.total_goals|default:0 }}</p>
+                        <p class="text-[10px] text-slate-500 uppercase font-bold tracking-tighter">Gol Totali</p>
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+        </div>
+
+        <!-- RIGHT COL: ACTIVITY & TEAMS -->
+        <div class="lg:col-span-2 space-y-8">
+            
+            <!-- FOLLOWED TEAMS -->
+            <section>
+                <div class="flex items-center justify-between mb-4">
+                    <h2 class="text-xl font-display font-bold text-white">Le tue Squadre</h2>
+                    <a href="/" class="text-sm text-cyan-400 hover:underline">Cerca altre</a>
+                </div>
+                
+                {% if followed_teams or current_team %}
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {% if current_team %}
+                    <a href="{% url 'team_detail' current_team.slug %}" class="group glass p-4 rounded-2xl border border-cyan-500/30 bg-cyan-500/5 hover:bg-cyan-500/10 transition-all">
+                        <div class="flex items-center gap-4">
+                            <div class="w-12 h-12 rounded-xl bg-white/10 flex items-center justify-center text-xl group-hover:scale-110 transition-transform">
+                                {% if current_team.society.logo %}<img src="{{ current_team.society.logo.url }}" class="w-8 h-8 object-contain">{% else %}🛡️{% endif %}
+                            </div>
+                            <div class="flex-1 min-w-0">
+                                <h4 class="font-bold text-white truncate group-hover:text-cyan-400 transition-colors">{{ current_team.society.name }}</h4>
+                                <p class="text-xs text-slate-500">{{ current_team.get_category_display }} • <span class="text-cyan-500 font-bold">La tua squadra</span></p>
+                            </div>
+                            <span class="text-slate-600 group-hover:translate-x-1 transition-transform">→</span>
+                        </div>
+                    </a>
+                    {% endif %}
+
+                    {% for team in followed_teams %}
+                    {% if team != current_team %}
+                    <a href="{% url 'team_detail' team.slug %}" class="group glass p-4 rounded-2xl border border-white/5 hover:bg-white/5 transition-all">
+                        <div class="flex items-center gap-4">
+                            <div class="w-12 h-12 rounded-xl bg-white/5 flex items-center justify-center text-xl group-hover:scale-110 transition-transform">
+                                {% if team.society.logo %}<img src="{{ team.society.logo.url }}" class="w-8 h-8 object-contain">{% else %}🕒{% endif %}
+                            </div>
+                            <div class="flex-1 min-w-0">
+                                <h4 class="font-bold text-white truncate group-hover:text-cyan-400 transition-colors">{{ team.society.name }}</h4>
+                                <p class="text-xs text-slate-500">{{ team.get_category_display }} • {{ team.league.name|default:"Amichevole" }}</p>
+                            </div>
+                            <span class="text-slate-600 group-hover:translate-x-1 transition-transform">→</span>
+                        </div>
+                    </a>
+                    {% endif %}
+                    {% endfor %}
+                </div>
+                {% else %}
+                <div class="glass p-12 rounded-3xl border border-dashed border-white/10 text-center">
+                    <p class="text-slate-500 mb-4 text-sm">Non stai ancora seguendo nessuna squadra.</p>
+                    <a href="/" class="inline-block px-8 py-3 rounded-xl bg-white/5 text-white hover:bg-white/10 transition-colors">
+                        Sfoglia e segui
+                    </a>
+                </div>
+                {% endif %}
+            </section>
+
+            {% if user.is_staff %}
+            <!-- STAFF QUICK ACTIONS -->
+            <section class="p-6 rounded-3xl bg-yellow-500/5 border border-yellow-500/20">
+                <div class="flex items-center gap-3 mb-4">
+                    <span class="text-xl">🛠️</span>
+                    <h2 class="text-xl font-display font-bold text-yellow-500">Strumenti Operativi</h2>
+                </div>
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <a href="{% url 'report_queue' %}" class="flex flex-col items-center justify-center p-4 rounded-2xl bg-white/5 hover:bg-white/10 transition-all border border-white/5 text-center">
+                        <span class="text-2xl mb-2">📥</span>
+                        <span class="text-sm font-bold text-white">Coda Validazione</span>
+                    </a>
+                    <a href="/admin/" class="flex flex-col items-center justify-center p-4 rounded-2xl bg-white/5 hover:bg-white/10 transition-all border border-white/5 text-center">
+                        <span class="text-2xl mb-2">🏗️</span>
+                        <span class="text-sm font-bold text-white">Django Admin</span>
+                    </a>
+                    <a href="{% url 'create_society' %}" class="flex flex-col items-center justify-center p-4 rounded-2xl bg-white/5 hover:bg-white/10 transition-all border border-white/5 text-center">
+                        <span class="text-2xl mb-2">🏢</span>
+                        <span class="text-sm font-bold text-white">Nuova Società</span>
+                    </a>
+                </div>
+            </section>
+            {% endif %}
+
+        </div>
+    </div>
+</div>
+{% endblock %}

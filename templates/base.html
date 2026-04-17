@@ -1,10 +1,38 @@
 <!DOCTYPE html>
 <html lang="it">
+{% load static %}
 
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{% block title %}2salti{% endblock %}</title>
+    <title>{% block title %}{{ seo_title|default:"2salti" }}{% endblock %} | 2salti.com</title>
+    
+    <!-- SEO Meta Tags -->
+    <meta name="description" content="{% block meta_description %}{{ seo_description|default:"2salti: la piattaforma per il volley e la pallanuoto. Risultati, classifiche e statistiche in tempo reale." }}{% endblock %}">
+    <link rel="canonical" href="{% block canonical %}{{ canonical_url|default:request.scheme|add:"://"|add:request.get_host|add:request.path }}{% endblock %}">
+
+    <!-- Open Graph / Facebook -->
+    <meta property="og:type" content="{% block og_type %}website{% endblock %}">
+    <meta property="og:url" content="{% block og_url %}{{ canonical_url|default:request.build_absolute_uri }}{% endblock %}">
+    <meta property="og:title" content="{% block og_title %}{{ seo_title|default:"2salti" }}{% endblock %}">
+    <meta property="og:description" content="{% block og_description %}{{ seo_description|default:"2salti" }}{% endblock %}">
+    <meta property="og:image" content="{% block og_image %}{{ request.scheme }}://{{ request.get_host }}{% static 'img/og-fallback.png' %}{% endblock %}">
+    <meta property="og:site_name" content="2salti">
+
+    <!-- Twitter -->
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:url" content="{{ request.build_absolute_uri }}">
+    <meta name="twitter:title" content="{% block twitter_title %}{{ seo_title|default:"2salti" }}{% endblock %}">
+    <meta name="twitter:description" content="{% block twitter_description %}{{ seo_description|default:"2salti" }}{% endblock %}">
+    <meta name="twitter:image" content="{% block twitter_image %}{{ request.scheme }}://{{ request.get_host }}{% static 'img/og-fallback.png' %}{% endblock %}">
+
+    {% block extra_head %}{% endblock %}
+    
+    {% load core_extras %}
+    {% if structured_data %}
+        {% render_json_ld structured_data %}
+    {% endif %}
+    {% block structured_data %}{% endblock %}
 
     <!-- Google Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -17,7 +45,6 @@
     <script src="https://cdn.tailwindcss.com"></script>
 
     <!-- Custom CSS -->
-    {% load static %}
     <link rel="stylesheet" href="{% static 'css/style.css' %}">
 
     <script>
@@ -104,32 +131,64 @@
         {% if request.path != '/' %}
         <aside class="hidden lg:flex w-64 flex-col glass border-r border-slate-800 z-20">
             <div class="h-16 flex items-center px-6 border-b border-white/5">
-                <a href="/"
-                    class="text-2xl font-display font-bold bg-clip-text text-transparent bg-gradient-to-r from-cyan-400 to-blue-500">
-                    2salti
+                <a href="/" class="flex items-center gap-2">
+                    <img src="{% static 'img/logo.png' %}" alt="2salti" class="h-8 w-auto">
+                    <span class="text-2xl font-display font-bold bg-clip-text text-transparent bg-gradient-to-r from-cyan-400 to-blue-500">2salti</span>
                 </a>
             </div>
 
-            <nav class="flex-1 px-4 py-6 space-y-2">
-                <!-- MAIN NAVIGATION (Always Visible) -->
-                <div class="space-y-1">
-                    <a href="/"
-                        class="flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-white/5 transition-colors {% if request.resolver_match.url_name == 'home' %}bg-white/10 text-cyan-400{% endif %}">
-                        <span>🏠</span> <span class="font-medium">Home</span>
-                    </a>
-                    {% if sport %}
-                    <a href="{% url 'sport_matches' sport.slug %}"
-                        class="flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-white/5 transition-colors {% if request.resolver_match.url_name == 'sport_matches' %}bg-white/10 text-cyan-400{% endif %}">
-                        <span>⚽</span> <span class="font-medium">Partite</span>
-                    </a>
-                    {% else %}
-                    <a href="#" class="flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-white/5 transition-colors opacity-50 cursor-not-allowed">
-                        <span>⚽</span> <span class="font-medium">Partite</span>
-                    </a>
-                    {% endif %}
+            <nav class="flex-1 px-4 py-6 overflow-y-auto space-y-6">
+                <!-- AI SEARCH BAR (Desktop) -->
+                <div class="px-2 pb-2">
+                    <div class="relative">
+                        <input type="text" id="ai-search-input" 
+                            placeholder="Chiedi all'AI (es: gol Rossi)..." 
+                            class="w-full bg-white/5 border border-white/10 rounded-xl py-2 px-10 text-sm focus:outline-none focus:ring-2 focus:ring-cyan-500/50 placeholder:text-slate-500 text-white">
+                        <span class="absolute left-3 top-2.5 text-slate-500 text-xs">🔍</span>
+                        <div id="ai-search-loading" class="hidden absolute right-3 top-2.5">
+                            <span class="animate-spin inline-block w-4 h-4 border-2 border-cyan-500 border-t-transparent rounded-full"></span>
+                        </div>
+                    </div>
+                    <div id="ai-search-results" class="hidden mt-2 p-3 bg-cyan-500/10 border border-cyan-500/20 rounded-xl text-[11px] text-cyan-100 leading-relaxed shadow-lg"></div>
+                </div>
+
+                <!-- EXPLORE SECTION (Always Visible) -->
+                <div>
+                    <h3 class="text-[10px] text-slate-500 uppercase tracking-[0.2em] px-4 mb-3 font-bold">Esplora</h3>
+                    <div class="space-y-1">
+                        <a href="{% if sport %}{% url 'sport_detail' sport.slug %}{% else %}/{% endif %}"
+                            class="flex items-center gap-3 px-4 py-2 rounded-xl hover:bg-white/5 transition-colors {% if request.resolver_match.url_name == 'home' or request.resolver_match.url_name == 'sport_detail' %}bg-white/10 text-cyan-400{% endif %}">
+                            <span class="text-lg">🏠</span> <span class="font-medium text-sm">Home</span>
+                        </a>
+                        {% if sport %}
+                        <a href="{% url 'sport_matches' sport.slug %}"
+                            class="flex items-center gap-3 px-4 py-2 rounded-xl hover:bg-white/5 transition-colors {% if request.resolver_match.url_name == 'sport_matches' %}bg-white/10 text-cyan-400{% endif %}">
+                            <span class="text-lg">📅</span> <span class="font-medium text-sm">Risultati</span>
+                        </a>
+                        <a href="{% url 'sport_detail' sport.slug %}"
+                            class="flex items-center gap-3 px-4 py-2 rounded-xl hover:bg-white/5 transition-colors {% if request.resolver_match.url_name == 'sport_detail' %}bg-white/10 text-cyan-400{% endif %}">
+                            <span class="text-lg">🏆</span> <span class="font-medium text-sm">Classifiche</span>
+                        </a>
+                        {% endif %}
+                    </div>
                 </div>
 
                 {% if user.is_authenticated %}
+                <!-- PERSONAL SPACE SECTION -->
+                <div>
+                    <h3 class="text-[10px] text-cyan-500/50 uppercase tracking-[0.2em] px-4 mb-3 font-bold">Mio Spazio</h3>
+                    <div class="space-y-1">
+                        <a href="{% url 'dashboard' %}"
+                            class="flex items-center gap-3 px-4 py-2 rounded-xl hover:bg-white/5 transition-colors {% if request.resolver_match.url_name == 'dashboard' %}bg-cyan-500/10 text-cyan-400{% endif %}">
+                            <span class="text-lg">📊</span> <span class="font-medium text-sm">Dashboard</span>
+                        </a>
+                        <a href="{% url 'profile' user.username %}"
+                            class="flex items-center gap-3 px-4 py-2 rounded-xl hover:bg-white/5 transition-colors {% if request.resolver_match.url_name == 'profile' %}bg-white/10 text-cyan-400{% endif %}">
+                            <span class="text-lg">👤</span> <span class="font-medium text-sm">Profilo</span>
+                        </a>
+                    </div>
+                </div>
+
                 <!-- SQUADRE SEGUITE -->
                 {% with current_team=user.athlete_profile.current_team|default:user.coach_profile.current_team %}
                 {% if current_team or user.favorite_teams.exists %}
@@ -172,20 +231,20 @@
                 </div>
                 {% endif %}
                 {% endwith %}
-                <div class="pt-4 mt-2 border-t border-white/5">
+                <div class="border-t border-white/5 pt-4">
                     <a href="{% url 'bacheca_globale' %}"
-                        class="flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-white/5 transition-colors {% if request.resolver_match.url_name == 'bacheca_globale' %}bg-white/10 text-cyan-400{% endif %}">
-                        <span>📢</span> <span class="font-medium">Bacheca</span>
-                    </a>
-                    <a href="{% url 'profile' user.username %}"
-                        class="flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-white/5 transition-colors {% if request.resolver_match.url_name == 'profile' %}bg-white/10 text-cyan-400{% endif %}">
-                        <span>👤</span> <span class="font-medium">Profilo</span>
+                        class="flex items-center gap-3 px-4 py-2 rounded-xl hover:bg-white/5 transition-colors {% if request.resolver_match.url_name == 'bacheca_globale' %}bg-white/10 text-cyan-400{% endif %}">
+                        <span class="text-lg">📢</span> <span class="font-medium text-sm">Bacheca</span>
                     </a>
                 </div>
 
                 {% if user.is_staff %}
                 <div class="pt-4 mt-2 border-t border-white/5 border-dashed">
                     <p class="text-[10px] text-yellow-500/50 uppercase tracking-[0.2em] px-4 mb-2 font-bold">Admin Management</p>
+                    <a href="{% url 'report_queue' %}"
+                        class="flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-yellow-500/5 transition-colors text-yellow-500/80 hover:text-yellow-500 {% if request.resolver_match.url_name == 'report_queue' %}bg-white/10 text-yellow-400{% endif %}">
+                        <span class="text-lg">📥</span> <span class="font-medium text-sm">Coda Validazione</span>
+                    </a>
                     <a href="/admin/"
                         class="flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-yellow-500/5 transition-colors text-yellow-500/80 hover:text-yellow-500">
                         <span class="text-lg">🛠️</span> <span class="font-medium text-sm">Django Admin</span>
@@ -250,24 +309,47 @@
 
             <!-- MOBILE HEADER -->
             <header class="lg:hidden h-16 glass flex items-center justify-between px-4 z-30">
-                <a href="/" class="text-xl font-display font-bold text-white">2salti</a>
-                <button id="mobile-menu-btn" class="p-2 text-slate-300 hover:text-white">
-                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                            d="M4 6h16M4 12h16M4 18h16"></path>
-                    </svg>
-                </button>
+                <a href="/" class="flex items-center gap-2">
+                    <img src="{% static 'img/logo.png' %}" alt="2salti" class="h-8 w-auto">
+                    <span class="text-xl font-display font-bold text-white">2salti</span>
+                </a>
+                
+                <div class="flex items-center gap-2">
+                    <button id="mobile-search-toggle" class="p-2 text-slate-300">🔍</button>
+                    <button id="mobile-menu-btn" class="p-2 text-slate-300 hover:text-white">
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M4 6h16M4 12h16M4 18h16"></path>
+                        </svg>
+                    </button>
+                </div>
             </header>
+
+            <!-- MOBILE SEARCH DRAWER -->
+            <div id="mobile-search-drawer" class="hidden lg:hidden glass border-b border-white/5 p-4 z-20">
+                <div class="relative">
+                    <input type="text" id="ai-search-input-mobile" 
+                        placeholder="Chiedi all'AI (es: gol Rossi)..." 
+                        class="w-full bg-white/10 border border-white/10 rounded-xl py-2 px-10 text-sm focus:outline-none text-white">
+                    <span class="absolute left-3 top-2.5 text-slate-500 text-xs">🔍</span>
+                </div>
+                <div id="ai-search-results-mobile" class="hidden mt-2 p-3 bg-cyan-500/10 border border-cyan-500/20 rounded-xl text-xs text-white"></div>
+            </div>
 
             <!-- MOBILE MENU OVERLAY -->
             <div id="mobile-menu"
                 class="hidden relative w-full glass border-b border-slate-700 z-20 flex flex-col p-4 space-y-2 lg:hidden shadow-2xl">
-                <a href="/" class="block px-4 py-3 rounded-lg hover:bg-white/5">Home</a>
-                <a href="#" class="block px-4 py-3 rounded-lg hover:bg-white/5">Partite</a>
-                <a href="#" class="block px-4 py-3 rounded-lg hover:bg-white/5">Classifiche</a>
+                <a href="{% if sport %}{% url 'sport_detail' sport.slug %}{% else %}/{% endif %}" class="block px-4 py-3 rounded-lg hover:bg-white/5">Home</a>
+                {% if sport %}
+                <a href="{% url 'sport_matches' sport.slug %}" class="block px-4 py-3 rounded-lg hover:bg-white/5">Risultati</a>
+                <a href="{% url 'sport_detail' sport.slug %}" class="block px-4 py-3 rounded-lg hover:bg-white/5">Classifiche</a>
+                {% endif %}
+                
+                <hr class="border-white/5 my-2">
+                
                 {% if user.is_authenticated %}
-                <a href="{% url 'profile' user.username %}"
-                    class="block px-4 py-3 rounded-lg hover:bg-white/5 text-cyan-400">Il tuo Profilo</a>
+                <a href="{% url 'dashboard' %}" class="block px-4 py-3 rounded-lg bg-cyan-600/20 text-cyan-400 font-bold">Dashboard</a>
+                <a href="{% url 'profile' user.username %}" class="block px-4 py-3 rounded-lg hover:bg-white/5">Profilo Pubblico</a>
                 <form method="post" action="{% url 'logout' %}">
                     {% csrf_token %}
                     <button type="submit"
@@ -276,8 +358,11 @@
                     </button>
                 </form>
                 {% else %}
-                <a href="{% url 'login' %}"
-                    class="block px-4 py-3 rounded-lg bg-cyan-600 text-white text-center font-bold">Accedi</a>
+                <a href="{% url 'login' %}" class="block px-4 py-3 rounded-lg bg-cyan-600 text-white text-center font-bold">Accedi / Registrati</a>
+                {% endif %}
+                
+                {% if user.is_staff %}
+                <a href="{% url 'report_queue' %}" class="block px-4 py-3 rounded-lg hover:bg-white/5 text-yellow-400">Coda Validazione</a>
                 {% endif %}
             </div>
 
@@ -340,6 +425,67 @@
                 if (menu && !menu.classList.contains('hidden') && !btn.contains(e.target) && !menu.contains(e.target)) {
                     menu.classList.add('hidden');
                 }
+            });
+
+            // AI SEARCH LOGIC
+            const searchInputs = [
+                { input: 'ai-search-input', results: 'ai-search-results', loading: 'ai-search-loading' },
+                { input: 'ai-search-input-mobile', results: 'ai-search-results-mobile', loading: null }
+            ];
+
+            const mobileSearchToggle = document.getElementById('mobile-search-toggle');
+            const mobileSearchDrawer = document.getElementById('mobile-search-drawer');
+            if (mobileSearchToggle && mobileSearchDrawer) {
+                mobileSearchToggle.addEventListener('click', () => {
+                    mobileSearchDrawer.classList.toggle('hidden');
+                    if (!mobileSearchDrawer.classList.contains('hidden')) {
+                        document.getElementById('ai-search-input-mobile').focus();
+                    }
+                });
+            }
+
+            searchInputs.forEach(config => {
+                const inputEl = document.getElementById(config.input);
+                const resultsEl = document.getElementById(config.results);
+                const loadingEl = config.loading ? document.getElementById(config.loading) : null;
+
+                if (!inputEl) return;
+
+                inputEl.addEventListener('keypress', function(e) {
+                    if (e.key === 'Enter') {
+                        const query = this.value.trim();
+                        if (!query) return;
+
+                        if (loadingEl) loadingEl.classList.remove('hidden');
+                        resultsEl.classList.remove('hidden');
+                        resultsEl.innerText = "Pensando...";
+
+                        fetch('/matches/api/v1/ai-query/', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                'X-CSRFToken': '{{ csrf_token }}'
+                            },
+                            body: JSON.stringify({ query: query })
+                        })
+                        .then(response => response.json())
+                        .then(data => {
+                            if (loadingEl) loadingEl.classList.add('hidden');
+                            if (data.error) {
+                                resultsEl.innerText = "⚠️ " + data.error;
+                            } else {
+                                resultsEl.innerText = data.text;
+                                if (data.data && data.data.athlete_id) {
+                                    resultsEl.innerHTML += `<br><a href="/accounts/profile/athlete/${data.data.athlete_id}/" class="mt-2 inline-block text-cyan-400 font-bold hover:underline">Vedi statistiche complete →</a>`;
+                                }
+                            }
+                        })
+                        .catch(err => {
+                            if (loadingEl) loadingEl.classList.add('hidden');
+                            resultsEl.innerText = "❌ Errore durante la query.";
+                        });
+                    }
+                });
             });
         });
     </script>

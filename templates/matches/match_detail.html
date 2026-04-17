@@ -20,6 +20,39 @@
                 {% if match.location %}<a href="{{ match.google_maps_url }}" target="_blank"
                     class="hover:text-cyan-400 transition-colors hover:underline">📍 {{ match.location }}</a>{% endif %}
             </div>
+            
+            <!-- CONTROLLI REFERTO -->
+            {% if user.is_authenticated %}
+            <div class="mt-6 flex flex-col items-center justify-center gap-2">
+                {% if reports %}
+                    {% for report in reports %}
+                        <div class="px-4 py-2 rounded-lg text-sm flex items-center gap-3 border
+                             {% if report.status == 'UPLOADED' or report.status == 'PROCESSING' %} bg-amber-500/10 border-amber-500/30 text-amber-300
+                             {% elif report.status == 'EXTRACTED' %} bg-blue-500/10 border-blue-500/30 text-blue-300
+                             {% elif report.status == 'VALIDATED' or report.status == 'PUBLISHED' %} bg-green-500/10 border-green-500/30 text-green-300
+                             {% else %} bg-red-500/10 border-red-500/30 text-red-300 {% endif %}">
+                            <i class="fas {% if report.status == 'PUBLISHED' %}fa-check-circle{% elif report.status == 'REJECTED' %}fa-times-circle{% else %}fa-spinner fa-spin{% endif %}"></i>
+                            <span>Referto: <strong>{{ report.get_status_display }}</strong></span>
+                            {% if request.user.is_staff or request.user.is_superuser %}
+                                <a href="{% url 'admin:matches_matchreport_review' report.id %}" class="px-3 py-1 bg-cyan-600 hover:bg-cyan-500 text-white text-[10px] font-bold rounded-full ml-3 transition-colors">Review</a>
+                                <a href="{% url 'admin:matches_matchreport_change' report.id %}" target="_blank" class="text-[10px] underline ml-2 opacity-60 hover:opacity-100">Admin</a>
+                            {% endif %}
+                        </div>
+                    {% endfor %}
+                {% endif %}
+                
+                <div class="flex flex-wrap items-center justify-center gap-3 mt-2">
+                    <a href="{% url 'upload_report' match.id %}" 
+                       class="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-slate-800 hover:bg-slate-700 border border-slate-600 text-slate-300 transition-colors text-sm font-medium">
+                       <i class="fas fa-file-upload"></i> Carica Referto
+                    </a>
+                    <a href="{% url 'create_digital_report' match.id %}" 
+                       class="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-cyan-600/20 hover:bg-cyan-600/30 border border-cyan-500/30 text-cyan-400 transition-colors text-sm font-medium">
+                       <i class="fas fa-pen-nib"></i> Referto Digitale
+                    </a>
+                </div>
+            </div>
+            {% endif %}
         </div>
 
         <!-- SCOREBOARD -->
@@ -89,12 +122,46 @@
 </div>
 
 {% if match.is_finished %}
+<!-- BOX SCORE PER QUARTERS -->
+<div class="glass-panel p-6 mb-8 overflow-x-auto">
+    <h3 class="text-sm font-bold text-slate-500 uppercase tracking-widest mb-4 flex items-center gap-2">
+        <span>📊</span> Box Score
+    </h3>
+    <table class="w-full text-center border-collapse">
+        <thead>
+            <tr class="text-xs text-slate-500 uppercase">
+                <th class="p-2 text-left">Squadra</th>
+                {% for q in qs_processed %}
+                <th class="p-2">Q{{ q.q }}</th>
+                {% endfor %}
+                <th class="p-2 font-bold text-white">TOT</th>
+            </tr>
+        </thead>
+        <tbody class="text-lg font-display font-bold text-white">
+            <tr class="border-t border-white/5">
+                <td class="p-2 text-left text-sm font-sans text-slate-400">{{ match.home_team.name }}</td>
+                {% for q in qs_processed %}
+                <td class="p-2">{{ q.home }}</td>
+                {% endfor %}
+                <td class="p-2 text-cyan-400">{{ match.home_score }}</td>
+            </tr>
+            <tr class="border-t border-white/5">
+                <td class="p-2 text-left text-sm font-sans text-slate-400">{{ match.away_team.name }}</td>
+                {% for q in qs_processed %}
+                <td class="p-2">{{ q.away }}</td>
+                {% endfor %}
+                <td class="p-2 text-purple-400">{{ match.away_score }}</td>
+            </tr>
+        </tbody>
+    </table>
+</div>
+
 <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
 
-    <!-- MATCH EVENTS (GOALS) -->
+    <!-- MATCH EVENTS (GOALS & PLAYS) -->
     <div class="glass-panel p-6">
         <h3 class="text-xl font-bold text-white mb-6 flex items-center gap-2">
-            <span>⚽</span> Tabellino
+            <span>🥅</span> Tabellino
         </h3>
 
         <div
@@ -104,14 +171,26 @@
                 <!-- Icon -->
                 <div
                     class="flex items-center justify-center w-10 h-10 rounded-full border border-slate-600 bg-slate-900 group-hover:bg-cyan-900/50 group-hover:border-cyan-500 shadow-[0_0_10px_rgba(0,0,0,0.5)] shrink-0 z-10 md:order-1 md:group-odd:-translate-x-1/2 md:group-even:translate-x-1/2 transition-all duration-300">
+                    {% if goal.event_type == 'PENALTY_GOAL' %}
+                    <span class="text-xs font-bold text-amber-400 group-hover:text-amber-300">🎯</span>
+                    {% else %}
                     <span class="text-xs font-bold text-cyan-400 group-hover:text-cyan-300">{{ goal.minute }}'</span>
+                    {% endif %}
                 </div>
 
                 <!-- Card -->
                 <div
                     class="w-[calc(100%-4rem)] md:w-[calc(50%-2.5rem)] p-4 rounded-xl border border-white/5 bg-white/5 backdrop-blur-sm shadow-lg hover:shadow-cyan-500/10 hover:border-cyan-500/30 transition-all duration-300">
                     <div class="flex items-center justify-between mb-2">
-                        <div class="font-bold text-white text-lg">{{ goal.player.get_full_name }}</div>
+                        <div class="font-bold text-white text-lg">
+                            {% if goal.player %}
+                            <a href="{% url 'profile' goal.player.username %}" class="hover:text-cyan-400 transition-colors">
+                                {{ goal.player.get_full_name }}
+                            </a>
+                            {% else %}
+                            Squadra
+                            {% endif %}
+                        </div>
                         <div
                             class="px-2 py-0.5 rounded bg-black/30 border border-white/5 text-xs text-slate-400 font-mono">
                             {{ goal.quarter }}° Q</div>
@@ -119,7 +198,11 @@
                     <div class="flex items-center justify-between">
                         <a href="{% url 'team_detail' goal.team.slug %}"
                             class="text-sm text-cyan-400 font-medium hover:underline">{{ goal.team.name }}</a>
-                        <div class="text-xs text-slate-500">Gol</div>
+                        <div class="text-xs text-slate-500">
+                            {{ goal.display_label }}
+
+                            {% if goal.is_superiority %}<span class="text-green-500 ml-1">(SN)</span>{% endif %}
+                        </div>
                     </div>
                 </div>
             </div>
@@ -132,13 +215,13 @@
         </div>
     </div>
 
-    <!-- CARDS & TIMEOUTS -->
+    <!-- SANZIONI & ALTRO -->
     <div class="space-y-6">
         <!-- Expulsions -->
         {% if expulsions %}
         <div class="glass-panel p-6 border-l-4 border-red-500">
             <h3 class="text-xl font-bold text-white mb-6 flex items-center gap-2">
-                <span class="text-2xl">🟥</span> Sanzioni
+                <span class="text-2xl">🛑</span> Sanzioni
             </h3>
             <div class="space-y-4">
                 {% for exp in expulsions %}
@@ -150,13 +233,41 @@
                             {{ exp.minute }}'
                         </div>
                         <div>
-                            <div class="font-bold text-red-100 text-lg">{{ exp.player.get_full_name }}</div>
-                            <a href="{% url 'team_detail' exp.team.slug %}"
-                                class="text-sm text-red-300 hover:underline">{{ exp.team.name }}</a>
+                            <div class="font-bold text-red-100 text-lg">
+                                <a href="{% url 'profile' exp.player.username %}" class="hover:text-red-400 transition-colors">
+                                    {{ exp.player.get_full_name }}
+                                </a>
+                            </div>
+                            <div class="flex items-center gap-2">
+                                <a href="{% url 'team_detail' exp.team.slug %}"
+                                    class="text-sm text-red-300 hover:underline">{{ exp.team.name }}</a>
+                                <span class="text-[10px] text-slate-500 px-1 border border-slate-700 rounded">{{ exp.display_label }}</span>
+
+                            </div>
                         </div>
                     </div>
                     <span
                         class="text-xs font-mono font-bold text-red-400 bg-black/40 px-3 py-1 rounded-full border border-red-500/20">{{ exp.quarter }}° Q</span>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- Saves -->
+        {% if saves %}
+        <div class="glass-panel p-6 border-l-4 border-cyan-500">
+            <h3 class="text-xl font-bold text-white mb-6 flex items-center gap-2">
+                <span class="text-2xl">🧤</span> Parate
+            </h3>
+            <div class="grid grid-cols-1 gap-3">
+                {% for save in saves %}
+                <div class="flex items-center justify-between p-3 rounded-lg bg-slate-800/30 border border-white/5">
+                    <div class="flex items-center gap-3">
+                        <span class="text-cyan-500 font-mono text-sm">{{ save.minute }}'</span>
+                        <span class="font-medium text-slate-200">{{ save.player.get_full_name }}</span>
+                    </div>
+                    <span class="text-[10px] uppercase text-slate-500">{{ save.team.name }}</span>
                 </div>
                 {% endfor %}
             </div>

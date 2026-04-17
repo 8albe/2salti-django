@@ -1,0 +1,12 @@
+
+--- Testing query: 'gol Rossi stagione' ---
+Response text: Marco Rossi ha segnato 10 gol nella stagione.
+SUCCESS
+
+--- Testing query: 'quanti gol ha fatto Rossi' ---
+Response text: Marco Rossi ha segnato 10 gol nella stagione.
+SUCCESS
+
+--- Testing query: 'gol Rossi ultime 3 partite' ---
+Response text: Marco Rossi ha segnato 0 gol nelle ultime 3 partite.
+SUCCESS (Partial match)

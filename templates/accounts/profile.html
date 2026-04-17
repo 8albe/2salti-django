@@ -111,10 +111,10 @@
 </div>
 {% endif %}
 
-<!-- ULTIME PARTITE -->
+<!-- ULTIME PARTITE (Pubblicate) -->
 {% if recent_matches %}
 <div class="bg-slate-900 rounded-xl p-6 mb-8 border border-slate-800">
-    <h2 class="text-xl font-bold mb-4">Ultime Partite</h2>
+    <h2 class="text-xl font-bold mb-4">Ultime Partite <span class="text-[10px] text-cyan-500 uppercase ml-2 bg-cyan-500/10 px-2 py-0.5 rounded border border-cyan-500/20">Solo Pubblicate</span></h2>
     <div class="space-y-4">
         {% for match in recent_matches %}
         <div
@@ -133,6 +133,10 @@
         </div>
         {% endfor %}
     </div>
+</div>
+{% else %}
+<div class="bg-slate-900/50 rounded-xl p-8 text-center text-slate-500 italic mb-8 border border-dashed border-slate-800">
+    Nessuna partita pubblicata per questo atleta al momento.
 </div>
 {% endif %}
 

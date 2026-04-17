@@ -1,0 +1,14 @@
+{
+    "id": "r001",
+    "filename": "referto_reale_01_pallanuoto.pdf",
+    "sport": "Pallanuoto",
+    "attributes": {
+        "format": "PDF",
+        "quality": "high",
+        "difficulty": "medium",
+        "handwriting": "none",
+        "usability": "high"
+    },
+    "description": "Primo referto reale di pallanuoto. Formato tabellare standard, stampato, alta leggibilità.",
+    "tags": ["pallanuoto", "real", "high-quality"]
+}

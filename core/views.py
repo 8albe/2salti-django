@@ -1,6 +1,8 @@
-from django.shortcuts import render, get_object_or_404, redirect
+from django.http import JsonResponse
 from django.contrib.auth.decorators import login_required
+from .services.dashboard_service import DashboardService
 from .models import Sport, Society, Team, League
+from matches.models import Match, MatchReport
 from .forms import SocietySetupForm
 
 def home(request):
@@ -36,12 +38,20 @@ def home(request):
         'league'
     ).order_by('match_date')
     
+    from core.services.seo_service import SEOService
+    
     return render(request, 'home.html', {
         'sports': sports,
-        'upcoming_matches': matches, # Rinominato per coerenza nel template (anche se sono di oggi)
+        'upcoming_matches': matches,
         'calendar_dates': calendar_dates,
         'selected_date': selected_date,
         'today': today,
+        'seo_title': f"Risultati e Classifiche del {selected_date.strftime('%d/%m/%Y')}",
+        'seo_description': f"Segui i risultati di pallanuoto, volley e altri sport del {selected_date.strftime('%d/%m/%Y')}. Classifiche e tabellini live su 2salti.",
+        'structured_data': [
+            SEOService.get_website_schema(request),
+            SEOService.get_organization_schema(request)
+        ]
     })
 
 def sport_detail(request, slug):
@@ -90,10 +100,15 @@ def sport_detail(request, slug):
                 'matches': matches
             })
             
+    from core.services.seo_service import SEOService
+    
     return render(request, 'sport/sport_detail.html', {
         'sport': sport, 
         'leagues_data': leagues_data,
-        'sport_color': sport.hex_color
+        'sport_color': sport.hex_color,
+        'seo_title': f"Campionati e Classifiche {sport.name}",
+        'seo_description': f"Tutte le classifiche e i risultati per il mondo {sport.name}. Segui la tua squadra su 2salti.",
+        'structured_data': SEOService.get_breadcrumb_schema(request, [(sport.name, request.path)])
     })
 
 @login_required
@@ -142,11 +157,12 @@ def society_detail(request, slug):
         'teams': teams,
         'staff': staff,
         'sport_color': society.sport.hex_color,
+        'seo_title': f"{society.name} - Società Sportiva",
+        'seo_description': f"Tutte le squadre, lo staff e la storia di {society.name}. Scopri i risultati di pallanuoto e volley della società su 2salti.",
     })
 
 from django.db.models import Q
 from django.utils import timezone
-from matches.models import Match
 
 def team_detail(request, slug):
     """Dettaglio squadra"""
@@ -160,25 +176,49 @@ def team_detail(request, slug):
         match_date__gte=now
     ).order_by('match_date').first()
     
-    # Ultime 2 partite
+    # Ultime 2 partite (Solo pubblicate)
     last_matches = Match.objects.filter(
         Q(home_team=team) | Q(away_team=team),
         match_date__lt=now,
-        is_finished=True 
-    ).order_by('-match_date')[:2]
+        is_finished=True,
+        reports__status=MatchReport.Status.PUBLISHED
+    ).distinct().order_by('-match_date')[:2]
 
     # Altre squadre della stessa società (per navigazione categorie)
     other_teams = Team.objects.filter(society=team.society).exclude(id=team.id).order_by('category')
 
-    return render(request, 'teams/team_detail.html', {
+    # Posizione in classifica
+    standing_pos = None
+    if team.league:
+        standings = team.league.get_standings()
+        for i, entry in enumerate(standings):
+            if entry['team'].id == team.id:
+                standing_pos = i + 1
+                break
+
+    from core.services.seo_service import SEOService
+    from django.urls import reverse
+
+    context = {
         'team': team,
         'roster': roster,
-        'sport': team.society.sport,
-        'sport_color': team.society.sport.hex_color,
         'next_match': next_match,
         'last_matches': last_matches,
+        'standing_pos': standing_pos,
         'other_teams': other_teams,
-    })
+        'sport_color': team.league.sport.hex_color if team.league and team.league.sport else team.society.sport.hex_color,
+        'seo_title': f"{team.name} - {team.league.name if team.league else team.get_category_display()}",
+        'seo_description': f"Dettagli, roster e risultati per {team.name}. Scopri la posizione in classifica e le prossime partite su 2salti.",
+        'structured_data': [
+            SEOService.get_team_schema(request, team),
+            SEOService.get_breadcrumb_schema(request, [
+                (team.league.sport.name if team.league and team.league.sport else team.society.sport.name, 
+                 reverse('sport_detail', args=[team.league.sport.slug if team.league and team.league.sport else team.society.sport.slug])),
+                (team.name, request.path)
+            ])
+        ]
+    }
+    return render(request, 'teams/team_detail.html', context)
 
 @login_required
 def toggle_follow_team(request, team_id):
@@ -214,6 +254,9 @@ def league_standings(request, league_id):
     from matches.stats_services import get_top_scorers
     top_scorers = get_top_scorers(league.id, limit=3)
 
+    from core.services.seo_service import SEOService
+    from django.urls import reverse
+
     context = {
         'league': league,
         'standings': standings,
@@ -221,6 +264,21 @@ def league_standings(request, league_id):
         'sport': league.sport,
         'sport_color': league.sport.hex_color,
         'user_team_id': user_team_id,
+        'seo_title': f"Classifica {league.name} {league.season}",
+        'seo_description': f"Classifica aggiornata per {league.name} stagione {league.season}. Punti, vittorie e statistiche squadre su 2salti.",
+        'structured_data': SEOService.get_breadcrumb_schema(request, [
+            (league.sport.name, reverse('sport_detail', args=[league.sport.slug])),
+            (f"Classifica {league.name}", request.path)
+        ])
     }
     
     return render(request, 'leagues/league_standings.html', context)
+
+@login_required
+def dashboard_me(request):
+    """
+    Endpoint API per la dashboard personale dell'utente loggato.
+    GET /api/dashboard/me
+    """
+    data = DashboardService.get_dashboard_data(request.user)
+    return JsonResponse(data)

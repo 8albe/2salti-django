@@ -1,0 +1,71 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="max-w-2xl mx-auto mt-10">
+    <div class="mb-8 text-center">
+        <h2 class="text-4xl font-display font-bold text-white mb-2 underline decoration-cyan-500/50 underline-offset-8">Accesso alla Squadra</h2>
+        <p class="text-slate-400 mt-4">Hai completato il profilo e il pagamento. Ora unisciti alla tua società sportiva.</p>
+    </div>
+
+    <!-- Progress -->
+    <div class="flex justify-center items-center mb-12 space-x-3">
+        <div class="h-2 w-8 rounded-full bg-cyan-500"></div>
+        <div class="h-2 w-8 rounded-full bg-cyan-500"></div>
+        <div class="h-2 w-8 rounded-full bg-cyan-500"></div>
+        <div class="h-2 w-24 rounded-full bg-cyan-500 shadow-[0_0_15px_rgba(6,182,212,0.6)]"></div>
+        <div class="h-2 w-8 rounded-full bg-slate-700"></div>
+    </div>
+
+    <div class="grid md:grid-cols-2 gap-8">
+        <!-- Option 1: Activation Code -->
+        <div class="glass p-8 rounded-2xl border border-white/10 hover:border-cyan-500/50 transition-all group">
+            <div class="w-12 h-12 rounded-xl bg-cyan-500/10 text-cyan-400 flex items-center justify-center text-2xl mb-6">
+                🎟️
+            </div>
+            <h3 class="text-xl font-display font-bold text-white mb-4">Usa un Codice</h3>
+            <p class="text-slate-400 text-sm mb-6">Se il tuo allenatore ti ha fornito un codice alfanumerico (es: ABCD-123), inseriscilo qui per entrare subito.</p>
+            
+            <form method="POST">
+                {% csrf_token %}
+                <div class="mb-4">
+                    <input type="text" name="activation_code" placeholder="XXXX-XXX-XXX" 
+                           class="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-3 text-white font-mono tracking-widest focus:border-cyan-500 focus:ring-0 transition-colors">
+                </div>
+                <button type="submit" class="w-full py-3 rounded-xl bg-white/10 hover:bg-white/20 text-white font-bold transition-all">
+                    Attiva Codice
+                </button>
+            </form>
+        </div>
+
+        <!-- Option 2: Manual Request -->
+        <div class="glass p-8 rounded-2xl border border-white/10 hover:border-cyan-500/50 transition-all group">
+            <div class="w-12 h-12 rounded-xl bg-purple-500/10 text-purple-400 flex items-center justify-center text-2xl mb-6">
+                🔍
+            </div>
+            <h3 class="text-xl font-display font-bold text-white mb-4">Cerca Società</h3>
+            <p class="text-slate-400 text-sm mb-6">Nessun codice? Cerca la tua squadra e invia una richiesta di adesione manuale che verrà approvata dal club.</p>
+            
+            <form method="POST">
+                {% csrf_token %}
+                <div class="mb-4">
+                    <select name="team_id" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-3 text-white focus:border-cyan-500 focus:ring-0 transition-colors">
+                        <option value="">Seleziona Squadra...</option>
+                        {% for team in teams %}
+                        <option value="{{ team.id }}">{{ team.society.name }} - {{ team.get_category_display }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <button type="submit" class="w-full py-3 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white font-bold transition-all shadow-[0_0_15px_rgba(6,182,212,0.3)]">
+                    Invia Richiesta
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <div class="text-center mt-12">
+        <a href="{% url 'profile' user.username %}" class="text-slate-500 hover:text-white transition-colors text-sm">
+            Salta questo passaggio e continua come Guest
+        </a>
+    </div>
+</div>
+{% endblock %}

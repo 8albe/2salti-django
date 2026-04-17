@@ -20,12 +20,21 @@
         <div class="flex flex-wrap justify-center gap-4">
             {% if not user.is_authenticated %}
             <a href="{% url 'signup' %}"
-                class="px-8 py-3 rounded-full bg-cyan-600 hover:bg-cyan-500 text-white font-bold transition-all shadow-lg hover:shadow-cyan-500/30">
-                Inizia Ora
+                class="px-8 py-3 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white font-bold transition-all shadow-lg hover:shadow-cyan-500/30">
+                Inizia Ora — È Gratis
             </a>
             <a href="{% url 'login' %}"
-                class="px-8 py-3 rounded-full glass hover:bg-white/10 text-white font-bold transition-all">
+                class="px-8 py-3 rounded-xl glass hover:bg-white/10 text-white font-bold transition-all border border-white/10">
                 Accedi
+            </a>
+            {% else %}
+            <a href="{% url 'dashboard' %}"
+                class="px-8 py-3 rounded-xl bg-gradient-to-r from-cyan-600 to-blue-600 text-white font-bold transition-all shadow-lg hover:shadow-cyan-500/30">
+                Vai alla tua Dashboard
+            </a>
+            <a href="{% url 'profile' user.username %}"
+                class="px-8 py-3 rounded-xl glass hover:bg-white/10 text-white font-medium transition-all">
+                Il Mio Profilo
             </a>
             {% endif %}
         </div>

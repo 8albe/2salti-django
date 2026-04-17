@@ -21,8 +21,15 @@
 
             {% if team.league %}
             <div
-                class="mt-4 inline-flex items-center gap-2 bg-slate-800 px-3 py-1 rounded-full text-sm border border-slate-700">
-                🏆 Partecipa a: <span class="font-bold text-sport">{{ team.league.name }}</span>
+                class="mt-4 flex flex-wrap gap-2">
+                <span class="bg-slate-800 px-3 py-1 rounded-full text-sm border border-slate-700">
+                    🏆 <span class="font-bold text-sport">{{ team.league.name }}{% if team.league.group_name %} — {{ team.league.group_name }}{% endif %}</span>
+                </span>
+                {% if standing_pos %}
+                <span class="bg-cyan-500/20 px-3 py-1 rounded-full text-sm border border-cyan-500/30 text-cyan-400 font-bold">
+                    Posizione #{{ standing_pos }}
+                </span>
+                {% endif %}
             </div>
             {% endif %}
         </div>
@@ -85,7 +92,7 @@
 
         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
             {% for player_profile in roster %}
-            <a href="{% url 'profile' player_profile.user.username %}"
+            <a href="{% url 'player_profile' player_profile.user.username %}"
                 class="bg-slate-900 border border-slate-800 p-4 rounded-xl flex items-center gap-4 hover:border-sport hover:bg-slate-800 transition-all group">
                 <div class="relative">
                     {% if player_profile.user.profile_picture %}
@@ -136,7 +143,7 @@
         <div class="bg-slate-900 rounded-xl p-6 border border-slate-800">
             <h3 class="text-xl font-bold mb-4">Staff Tecnico</h3>
             {% for coach in team.coaches.all %}
-            <a href="{% url 'profile' coach.user.username %}"
+            <a href="{% url 'player_profile' coach.user.username %}"
                 class="flex items-center gap-3 mb-3 last:mb-0 hover:bg-slate-800 p-2 -mx-2 rounded-lg transition-colors">
                 {% if coach.user.profile_picture %}
                 <img src="{{ coach.user.profile_picture.url }}" class="w-10 h-10 rounded-full object-cover">
@@ -228,7 +235,7 @@
 
             <!-- ULTIME PARTITE -->
             <div>
-                <h3 class="text-xl font-bold mb-4">Ultime Partite</h3>
+                <h3 class="text-xl font-bold mb-4">Ultime Partite <span class="text-[10px] text-cyan-500 uppercase ml-2 bg-cyan-500/10 px-2 py-0.5 rounded border border-cyan-500/20">Validati</span></h3>
                 {% if last_matches %}
                 <div class="glass-panel overflow-hidden border border-white/10 rounded-xl bg-slate-900/50">
                     <div class="divide-y divide-white/5">

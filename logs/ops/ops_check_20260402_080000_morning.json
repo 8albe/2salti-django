@@ -1,0 +1,20 @@
+{
+  "mode": "morning",
+  "timestamp": "2026-04-02T08:00:00.421440+02:00",
+  "overall_status": "GREEN",
+  "findings": [
+    {
+      "title": "No Pilot Logs Found (Pilot likely pending start)",
+      "severity": "GREEN",
+      "detection_time": "2026-04-02T08:00:00.449194+02:00",
+      "probable_cause": "No daily pilot log was submitted, but this appears expected because the system has 0 total logs recorded.",
+      "impact": "Expected behavior until the first official pilot day log is submitted.",
+      "auto_remediation_attempted": false,
+      "auto_remediation_succeeded": false,
+      "human_action_required": false,
+      "recommended_action": "Remember to file the first Daily Pilot Log when the pilot officially begins.",
+      "outcome_category": "Monitoring only \u2014 no action needed now",
+      "system_autofixed": false
+    }
+  ]
+}

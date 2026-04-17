@@ -1,0 +1,161 @@
+{% extends "base.html" %}
+
+{% block title %}Admin Operations Cockpit{% endblock %}
+
+{% block content %}
+<div class="container mx-auto px-4 py-8">
+    <header class="mb-8 flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div>
+            <h1 class="text-3xl font-bold text-gray-900 font-display">Admin Operations Cockpit</h1>
+            <p class="text-slate-500">Monitoraggio flussi referti e performance operativa pipeline OCR.</p>
+        </div>
+        <div class="flex items-center gap-2">
+            <a href="{% url 'staff_dashboard' %}" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-sm font-bold transition-colors">
+                &lsaquo; Dashboard Salute
+            </a>
+            <div class="px-3 py-1 bg-cyan-100 border border-cyan-300 text-cyan-800 rounded-full text-xs font-bold shadow-sm">
+                MVP COCKPIT v1.0
+            </div>
+        </div>
+    </header>
+
+    <!-- KPI BLOCKS -->
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-6 mb-12">
+        <!-- In Flight -->
+        <div class="bg-white p-6 rounded-xl shadow-sm border-l-4 border-blue-500 hover:shadow-md transition-shadow">
+            <h3 class="text-[10px] font-bold text-slate-500 uppercase tracking-widest">In Flight (OCR)</h3>
+            <p class="text-3xl font-bold text-slate-900">{{ stats.in_flight }}</p>
+            <p class="text-[10px] text-blue-600 mt-1">Caricamento / Processing</p>
+        </div>
+
+        <!-- Pending Review -->
+        <div class="bg-white p-6 rounded-xl shadow-sm border-l-4 border-yellow-500 hover:shadow-md transition-shadow">
+            <h3 class="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Pending Review</h3>
+            <p class="text-3xl font-bold text-slate-900">{{ stats.pending_review }}</p>
+            <p class="text-[10px] text-yellow-600 mt-1">Extracted / Validated</p>
+        </div>
+
+        <!-- Needs Review -->
+        <div class="bg-white p-6 rounded-xl shadow-sm border-l-4 border-orange-500 hover:shadow-md transition-shadow">
+            <h3 class="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Needs Review</h3>
+            <p class="text-3xl font-bold text-slate-900 text-orange-600">{{ stats.needs_review }}</p>
+            <p class="text-[10px] text-orange-600 mt-1">Errori semantici/Header</p>
+        </div>
+
+        <!-- Published Today -->
+        <div class="bg-white p-6 rounded-xl shadow-sm border-l-4 border-green-500 hover:shadow-md transition-shadow">
+            <h3 class="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Published (24h)</h3>
+            <p class="text-3xl font-bold text-slate-900 text-green-600">{{ stats.published_24h }}</p>
+            <p class="text-[10px] text-green-600 mt-1">Referti online</p>
+        </div>
+
+        <!-- Unpublished Matches -->
+        <div class="bg-white p-6 rounded-xl shadow-sm border-l-4 border-indigo-500 hover:shadow-md transition-shadow">
+            <h3 class="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Partite Scurre</h3>
+            <p class="text-3xl font-bold text-slate-900 text-indigo-600">{{ matches_no_report }}</p>
+            <p class="text-[10px] text-indigo-600 mt-1">Senza referto pubblicato</p>
+        </div>
+
+        <!-- Failed -->
+        <div class="bg-white p-6 rounded-xl shadow-sm border-l-4 border-red-500 hover:shadow-md transition-shadow">
+            <h3 class="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Tech Failures</h3>
+            <p class="text-3xl font-bold text-slate-900 {% if stats.failed > 0 %}text-red-600{% endif %}">{{ stats.failed }}</p>
+            <p class="text-[10px] text-red-600 mt-1">Rejected / System Error</p>
+        </div>
+    </div>
+
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+        <!-- OLDEST UNPUBLISHED -->
+        <section class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+            <div class="p-4 border-b border-slate-100 bg-slate-50 flex items-center justify-between">
+                <h2 class="text-sm font-bold text-slate-700 uppercase tracking-wider flex items-center">
+                    <span class="mr-2">⌛</span> Oldest Non-Published Reports
+                </h2>
+                <span class="text-[10px] bg-slate-200 text-slate-600 px-2 py-0.5 rounded-full font-bold">Top 10</span>
+            </div>
+            <div class="overflow-x-auto">
+                <table class="w-full text-left text-sm">
+                    <thead class="bg-slate-50 text-slate-500 border-b border-slate-100">
+                        <tr>
+                            <th class="px-4 py-3 font-semibold">ID</th>
+                            <th class="px-4 py-3 font-semibold">Gara / Status</th>
+                            <th class="px-4 py-3 font-semibold">Caricato il</th>
+                            <th class="px-4 py-3 font-semibold">Azione</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-slate-100">
+                        {% for report in oldest_unpublished %}
+                        <tr class="hover:bg-slate-50 transition-colors">
+                            <td class="px-4 py-4 font-mono text-xs">#{{ report.id }}</td>
+                            <td class="px-4 py-4">
+                                <div class="font-bold text-slate-900 text-xs">{{ report.match.home_team.name }} vs {{ report.match.away_team.name }}</div>
+                                <div class="mt-1 flex items-center gap-1.5">
+                                    <span class="px-1.5 py-0.5 rounded text-[9px] font-bold uppercase 
+                                        {% if report.status == 'NEEDS_REVIEW' %}bg-orange-100 text-orange-700
+                                        {% elif report.status == 'EXTRACTED' %}bg-blue-100 text-blue-700
+                                        {% elif report.status == 'VALIDATED' %}bg-green-100 text-green-700
+                                        {% else %}bg-slate-100 text-slate-600{% endif %}">
+                                        {{ report.status }}
+                                    </span>
+                                </div>
+                            </td>
+                            <td class="px-4 py-4 text-slate-500 text-xs">{{ report.created_at|date:"d/m H:i" }}</td>
+                            <td class="px-4 py-4">
+                                <a href="/admin/matches/matchreport/{{ report.id }}/change/" class="text-cyan-600 hover:text-cyan-800 font-bold text-xs uppercase tracking-tighter">
+                                    Review &rsaquo;
+                                </a>
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="4" class="px-4 py-8 text-center text-slate-400 italic">Nessun referto in attesa. Ottimo lavoro!</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+        <!-- LATEST PUBLISHED -->
+        <section class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+            <div class="p-4 border-b border-slate-100 bg-slate-50 flex items-center justify-between">
+                <h2 class="text-sm font-bold text-slate-700 uppercase tracking-wider flex items-center">
+                    <span class="mr-2">🎉</span> Recently Published
+                </h2>
+                <span class="text-[10px] bg-green-100 text-green-600 px-2 py-0.5 rounded-full font-bold">Ultimi 10</span>
+            </div>
+            <div class="overflow-x-auto">
+                <table class="w-full text-left text-sm">
+                    <thead class="bg-slate-50 text-slate-500 border-b border-slate-100">
+                        <tr>
+                            <th class="px-4 py-3 font-semibold">Match</th>
+                            <th class="px-4 py-3 font-semibold">Pubblicazione</th>
+                            <th class="px-4 py-3 font-semibold">Operatore</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-slate-100">
+                        {% for report in latest_published %}
+                        <tr class="hover:bg-slate-50 transition-colors">
+                            <td class="px-4 py-4">
+                                <span class="font-bold text-slate-900 text-xs">{{ report.match.home_team.name }} {{ report.match.home_score }}-{{ report.match.away_score }} {{ report.match.away_team.name }}</span>
+                                <div class="text-[10px] text-slate-400 uppercase font-mono mt-0.5">ID #{{ report.id }}</div>
+                            </td>
+                            <td class="px-4 py-4 text-slate-500 text-xs">
+                                {{ report.published_at|date:"d/m H:i" }}
+                            </td>
+                            <td class="px-4 py-4 text-xs font-medium text-slate-600">
+                                {{ report.published_by.username|default:"System" }}
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="3" class="px-4 py-8 text-center text-slate-400 italic">Ancora nessun referto pubblicato oggi.</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </section>
+    </div>
+</div>
+{% endblock %}

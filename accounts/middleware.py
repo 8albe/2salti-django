@@ -1,0 +1,43 @@
+from django.shortcuts import redirect
+from django.urls import reverse
+from django.utils.deprecation import MiddlewareMixin
+
+class OnboardingMiddleware(MiddlewareMixin):
+    """
+    Forza l'utente a completare il funnel di onboarding (Identity -> Payment -> Setup -> Membership).
+    Redirige alle viste corrette in base a User.onboarding_state.
+    """
+    def process_request(self, request):
+        if not request.user.is_authenticated:
+            return None
+
+        # Lista di URL permessi durante l'onboarding per evitare loop
+        allowed_urls = [
+            reverse('verify_identity'),
+            reverse('process_payment'),
+            reverse('setup_wizard'),
+            reverse('onboarding_membership'),
+            reverse('logout'),
+            # Aggiungere altri se necessario (es: static, media, api di ricerca)
+        ]
+        
+        # AJAX e API non dovrebbero essere redirette dal middleware (gestite a livello di vista)
+        if request.path.startswith('/api/') or request.headers.get('x-requested-with') == 'XMLHttpRequest':
+            return None
+
+        # Se l'utente è in un URL permesso o è uno staff/superadmin, non fare nulla
+        if request.path in allowed_urls or request.user.is_staff or request.user.is_superuser:
+            return None
+
+        state = request.user.onboarding_state
+        
+        if state == 'IDENTITY_PENDING':
+            return redirect('verify_identity')
+        elif state == 'PAYMENT_PENDING':
+            return redirect('process_payment')
+        elif state == 'SETUP_PENDING':
+            return redirect('setup_wizard')
+        elif state == 'MEMBERSHIP_PENDING':
+            return redirect('onboarding_membership')
+            
+        return None

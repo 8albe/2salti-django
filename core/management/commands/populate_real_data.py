@@ -11,11 +11,9 @@ class Command(BaseCommand):
         self.stdout.write('🚀 Inizio popolamento dati reali...')
 
         # 1. SPORT
-        sport, _ = Sport.objects.get_or_create(
-            name='Pallanuoto',
-            slug='pallanuoto',
-            defaults={'hex_color': '#00ffff', 'icon': '🤽'}
-        )
+        from django.core.management import call_command
+        call_command('bootstrap_sports')
+        sport = Sport.objects.get(slug='pallanuoto')
 
         # 2. CAMPIONATO
         league, _ = League.objects.get_or_create(

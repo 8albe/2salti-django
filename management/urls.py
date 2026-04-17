@@ -16,4 +16,6 @@ urlpatterns = [
     path('club-admin/', views.club_admin_dashboard, name='club_admin_dashboard'),
     path('club-admin/request/<int:request_id>/approve/', views.approve_membership, name='approve_membership'),
     path('club-admin/generate-code/', views.generate_code, name='generate_code'),
+    path('staff-dashboard/', views.staff_dashboard, name='staff_dashboard'),
+    path('ops-cockpit/', views.ops_cockpit, name='ops_cockpit'),
 ]

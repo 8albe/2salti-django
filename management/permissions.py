@@ -3,6 +3,48 @@ from django.core.exceptions import PermissionDenied
 from django.shortcuts import get_object_or_404
 from .models import Membership
 
+def get_society_context(request):
+    """
+    Risolve la società corrente con fallback alla membership se non presente nel middleware.
+    """
+    if hasattr(request, 'current_society') and request.current_society:
+        return request.current_society
+    
+    if request.user.is_authenticated:
+        # Fallback alla prima membership attiva
+        membership = Membership.objects.filter(user=request.user, is_active=True).first()
+        if membership:
+            return membership.society
+        
+        # Fallback ai profili (Presidente, Coach, ecc.)
+        if hasattr(request.user, 'president_profile'):
+            return request.user.president_profile.managed_society
+            
+    return None
+
+def get_membership_context(request, society=None, team=None):
+    """
+    Risolve la membership dell'utente per un determinato contesto.
+    Gestisce correttamente i ruoli di società (es: PRESIDENT) quando si accede a un team.
+    """
+    if not request.user.is_authenticated:
+        return None
+        
+    if team:
+        from django.db.models import Q
+        # Cerca membership specifica al team O alla società (ruoli globali)
+        return Membership.objects.filter(
+            Q(team=team) | Q(society=team.society, team__isnull=True),
+            user=request.user, 
+            is_active=True
+        ).first() # In generale un utente ha un solo ruolo per team/società
+        
+    filters = {'user': request.user, 'is_active': True}
+    if society:
+        filters['society'] = society
+        
+    return Membership.objects.filter(**filters).first()
+
 def get_user_roles(user, society=None, team=None):
     """
     Ritorna i ruoli dell'utente in un determinato contesto.

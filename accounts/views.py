@@ -3,7 +3,7 @@ from django.contrib.auth import login
 from django.contrib.auth.decorators import login_required
 from .forms import SignUpForm, UserSetupForm, AthleteSetupForm, CoachSetupForm, RefereeSetupForm, FanSetupForm
 from .models import User
-from matches.models import Match
+from matches.models import Match, MatchReport
 from django.db import models
 
 def signup(request):
@@ -17,7 +17,11 @@ def signup(request):
     else:
         form = SignUpForm()
     
-    return render(request, 'accounts/signup.html', {'form': form})
+    return render(request, 'accounts/signup.html', {
+        'form': form,
+        'seo_title': "Registrati | 2salti",
+        'seo_description': "Crea il tuo profilo su 2salti. La piattaforma per atleti, coach e appassionati di sport.",
+    })
 
 
 @login_required
@@ -84,6 +88,10 @@ def setup_wizard(request):
                         pass
             user.setup_completed = True
             user.save()
+            
+            from management.utils import log_action
+            log_action(user, None, "ONBOARDING_SETUP_COMPLETED", details={"role": user.role})
+            
             return redirect('profile', username=user.username)
     else:
         initial_data = {}
@@ -103,7 +111,8 @@ def setup_wizard(request):
     return render(request, 'accounts/setup_wizard.html', {
         'form': form,
         'user_form': user_form,
-        'role': user.get_role_display()
+        'role': user.get_role_display(),
+        'seo_title': f"Configura Profilo {user.get_role_display()} | 2salti",
     })
 
 @login_required
@@ -116,32 +125,135 @@ def verify_identity(request):
     if request.method == 'POST':
         # Mocking verification success
         import django.utils.timezone as timezone
+        from django.contrib import messages
+        
         user.identity_status = 'VERIFIED'
         user.identity_verified_at = timezone.now()
         user.save()
+        
+        from management.utils import log_action
+        log_action(user, None, "ONBOARDING_IDENTITY_VERIFIED", details={"method": "MOCK_SPID"}, request=request)
+        
+        messages.success(request, "Identità verificata con successo tramite SPID. Benvenuto!")
         return redirect('process_payment')
         
-    return render(request, 'accounts/onboarding/verify_identity.html')
+    return render(request, 'accounts/onboarding/verify_identity.html', {
+        'seo_title': "Verifica Identità SPID/CIE | 2salti",
+        'seo_description': "Procedura sicura di verifica identità digitale per l'accesso alla piattaforma 2salti.",
+    })
+
 
 @login_required
 def process_payment(request):
     """Fase 3: Pagamento (Mock 0,50€)"""
     user = request.user
-    if user.subscription_status == 'ACTIVE':
-        return redirect('claim_profile')
+    
+    # Se è un fan o ha già pagato, passa oltre
+    if user.role == 'fan' or user.subscription_status == 'ACTIVE':
+        return redirect('setup_wizard')
     
     if request.method == 'POST':
         # Mocking payment success
         import django.utils.timezone as timezone
-        import django.contrib.messages as messages
-        # Mock del pagamento andato a buon fine
-        request.user.subscription_status = 'ACTIVE'
-        request.user.subscription_end_date = timezone.now() + timezone.timedelta(days=365)
-        request.user.save()
-        messages.success(request, "Abbonamento attivato con successo! Grazie per aver scelto 2salti.")
+        from django.contrib import messages
+        
+        user.subscription_status = 'ACTIVE'
+        user.subscription_end_date = timezone.now() + timezone.timedelta(days=365)
+        user.save()
+        
+        from management.utils import log_action
+        log_action(user, None, "ONBOARDING_PAYMENT_COMPLETED", details={"amount": "0.50", "currency": "EUR"}, request=request)
+        
+        messages.success(request, "Abbonamento attivato con successo! Il tuo profilo 2salti PRO è ora attivo per 12 mesi.")
         return redirect('setup_wizard')
         
-    return render(request, 'accounts/onboarding/payment.html')
+    return render(request, 'accounts/onboarding/payment.html', {
+        'seo_title': "Attivazione Profilo PRO | 2salti",
+        'seo_description': "Sostieni la piattaforma e sblocca tutte le funzionalità avanzate di 2salti.",
+    })
+
+@login_required
+def onboarding_membership(request):
+    """Fase 5: Associazione Team / Società (Activation Code o Membership Request)"""
+    user = request.user
+    
+    # Se ha già una membership attiva o un claim approvato/pendente, può passare oltre
+    if user.memberships.filter(is_active=True).exists() or user.profile_links.filter(status__in=['PENDING', 'APPROVED']).exists():
+        return redirect('dashboard')
+    
+    # Se è un fan, questo step è opzionale o saltabile
+    if user.role == 'fan':
+        return redirect('dashboard')
+
+    if request.method == 'POST':
+        action = request.POST.get('action')
+        
+        # 1. Uso di Activation Code
+        activation_code = request.POST.get('activation_code')
+        if activation_code:
+            from management.models import ActivationCode, Membership
+            try:
+                code_obj = ActivationCode.objects.get(code=activation_code, is_active=True)
+                # Verifica usi
+                if code_obj.current_uses < code_obj.max_uses:
+                    # Crea Membership
+                    Membership.objects.create(
+                        user=user,
+                        society=code_obj.society,
+                        team=code_obj.team,
+                        role=code_obj.role,
+                        is_active=True
+                    )
+                    code_obj.current_uses += 1
+                    code_obj.save()
+                    
+                    from management.utils import log_action
+                    log_action(user, code_obj.society, "ONBOARDING_MEMBERSHIP_CODE_REDEEMED", target=code_obj, request=request)
+                    
+                    import django.contrib.messages as messages
+                    messages.success(request, f"Benvenuto in {code_obj.society.name}!")
+                    return redirect('dashboard')
+                else:
+                    import django.contrib.messages as messages
+                    messages.error(request, "Questo codice ha esaurito gli utilizzi disponibili.")
+            except ActivationCode.DoesNotExist:
+                import django.contrib.messages as messages
+                messages.error(request, "Codice di attivazione non valido o scaduto.")
+
+        # 2. Richiesta manuale (senza codice)
+        team_id = request.POST.get('team_id')
+        if team_id:
+            from core.models import Team
+            from management.models import MembershipRequest
+            try:
+                team = Team.objects.get(id=team_id)
+                # Determina il ruolo in base al tipo di utente
+                role = 'PLAYER' if user.role == 'athlete' else 'HEAD_COACH'
+                
+                # Crea richiesta
+                mr, created = MembershipRequest.objects.get_or_create(
+                    user=user,
+                    society=team.society,
+                    team=team,
+                    role=role,
+                    defaults={'status': 'PENDING'}
+                )
+                
+                from management.utils import log_action
+                log_action(user, team.society, "ONBOARDING_MEMBERSHIP_REQUESTED", target=team, request=request)
+                
+                import django.contrib.messages as messages
+                messages.success(request, f"Richiesta inviata alla società {team.society.name}. Ti avviseremo appena sarai approvato.")
+                return redirect('dashboard')
+            except Team.DoesNotExist:
+                import django.contrib.messages as messages
+                messages.error(request, "Squadra non trovata.")
+
+    return render(request, 'accounts/onboarding/membership.html', {
+        'role': user.get_role_display(),
+        'seo_title': "Associa il tuo Profilo | 2salti",
+    })
+
 
 @login_required
 def claim_profile(request):
@@ -178,13 +290,38 @@ def claim_profile(request):
                 import django.contrib.messages as messages
                 messages.error(request, "Errore durante la richiesta di claim.")
                 
-    return render(request, 'accounts/onboarding/claim_profile.html', {'role': user.role})
+    return render(request, 'accounts/onboarding/claim_profile.html', {
+        'role': user.role,
+        'seo_title': "Rivendica il tuo Profilo | 2salti",
+    })
+
+
+@login_required
+def dashboard(request):
+    """Hub centrale per l'utente loggato"""
+    user = request.user
+    context = {
+        'user': user,
+        'title': 'La tua Dashboard',
+        # Recupero info profilo per riepilogo
+        'has_profile': hasattr(user, 'athlete_profile') or hasattr(user, 'coach_profile'),
+    }
+    
+    # Squadre seguite
+    context['followed_teams'] = user.favorite_teams.all().select_related('society', 'league')
+    
+    # Se atleta, aggiungi statistiche e squadra attuale
+    if hasattr(user, 'athlete_profile'):
+        context['athlete_profile'] = user.athlete_profile
+        context['current_team'] = user.athlete_profile.current_team
+        
+    return render(request, 'accounts/dashboard.html', context)
 
 
 @login_required
 def profile_redirect(request):
-    """Reindirizza l'utente loggato al proprio profilo"""
-    return redirect('profile', username=request.user.username)
+    """Reindirizza l'utente loggato alla propria dashboard"""
+    return redirect('dashboard')
 
 
 @login_required
@@ -267,13 +404,18 @@ def profile(request, username):
         'president_profile'
     ), username=username)
     
-    context = {'profile_user': user}
+    context = {
+        'profile_user': user,
+        'seo_title': f"Profilo {user.get_full_name() or user.username} | 2salti",
+        'seo_description': f"Statistiche, squadra e risultati recenti di {user.get_full_name() or user.username}. Scopri il profilo completo dell'atleta su 2salti.",
+    }
     
     # Dati specifici per ruolo
     if user.role == 'athlete':
         profile = user.athlete_profile
         matches = Match.objects.filter(
-            events__player=user
+            events__player=user,
+            reports__status=MatchReport.Status.PUBLISHED
         ).distinct().order_by('-match_date')[:10]
         
         context.update({
@@ -350,6 +492,24 @@ def profile(request, username):
     from seasons.models import SeasonArchive
     archives = SeasonArchive.objects.filter(athlete=user).order_by('-season')
     context['season_archives'] = archives
+    
+    # Inietta Structured Data
+    from core.services.seo_service import SEOService
+    from django.urls import reverse
+    
+    sd = [SEOService.get_user_schema(request, user)]
+    bc_items = [("Atleti", reverse('home'))] # Fallback
+    if user.role == 'athlete' and hasattr(user, 'athlete_profile') and user.athlete_profile.current_team:
+        team = user.athlete_profile.current_team
+        if team.league and team.league.sport:
+            bc_items = [
+                (team.league.sport.name, reverse('sport_detail', args=[team.league.sport.slug])),
+                (team.name, reverse('team_detail', args=[team.slug]))
+            ]
+    bc_items.append((user.get_full_name() or user.username, request.path))
+    sd.append(SEOService.get_breadcrumb_schema(request, bc_items))
+    
+    context['structured_data'] = sd
     
     return render(request, 'accounts/profile.html', context)
 

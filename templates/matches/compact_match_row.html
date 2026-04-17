@@ -20,12 +20,13 @@
 
     <!-- VS/SCORE (Center) -->
     <div class="mx-3 flex items-center justify-center w-12 text-center flex-shrink-0">
-        {% if match.is_finished %}
+        {% if match.is_public %}
         <span class="text-cyan-400 font-mono text-base font-bold">{{ match.home_score }}-{{ match.away_score }}</span>
         {% else %}
         <span class="text-slate-600 font-bold text-xs">VS</span>
         {% endif %}
     </div>
+
 
     <!-- AWAY TEAM (Left aligned) -->
     <div class="flex-1 flex items-center justify-start gap-3 min-w-0">

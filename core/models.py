@@ -8,10 +8,21 @@ User = get_user_model()
 class Sport(models.Model):
     """Sport disponibili sulla piattaforma"""
     name = models.CharField(max_length=100, unique=True)  # "Pallanuoto", "Basket", "Volley"
-    slug = models.SlugField(unique=True)
+    slug = models.SlugField(unique=True, blank=True)
     hex_color = models.CharField(max_length=7, default='#00ffff', help_text="Colore tema (es: #00ffff)")
     icon = models.CharField(max_length=50, blank=True, help_text="Nome icona Heroicons")
     description = models.TextField(blank=True)
+    
+    # Configurazione multi-sport
+    default_periods = models.IntegerField(default=4, help_text="Numero di frazioni di gioco predefinite (es: 4 per WP)")
+    period_label = models.CharField(max_length=50, default='Tempo', help_text="Nome della frazione (es: 'Tempo', 'Set', 'Quarto')")
+    
+    # Esempio: {"win": 3, "draw": 1, "loss": 0}
+    point_system = models.JSONField(
+        default=dict, 
+        blank=True, 
+        help_text="Configurazione punti classifica. Es: {'win': 3, 'draw': 1, 'loss': 0}"
+    )
     
     def save(self, *args, **kwargs):
         if not self.slug:
@@ -23,12 +34,14 @@ class Sport(models.Model):
     
     class Meta:
         ordering = ['name']
+        verbose_name = "Sport"
+        verbose_name_plural = "🏅 Sport"
 
 
 class Society(models.Model):
     """Società sportiva (es: Pro Recco) - CREATA DAL PRESIDENTE"""
     name = models.CharField(max_length=200)
-    slug = models.SlugField(unique=True)
+    slug = models.SlugField(unique=True, blank=True)
     sport = models.ForeignKey(Sport, on_delete=models.CASCADE, related_name='societies')
     
     # Dati compilati dal presidente nel wizard
@@ -110,6 +123,8 @@ class Team(models.Model):
     class Meta:
         unique_together = ['society', 'category']
         ordering = ['society', 'category']
+        verbose_name = "Squadra"
+        verbose_name_plural = "👥 Squadre"
 
 
 class League(models.Model):
@@ -123,6 +138,10 @@ class League(models.Model):
     # Metadati
     level = models.IntegerField(default=1, help_text="1=A1, 2=A2, 3=B, ecc.")
     slug = models.SlugField(unique=True, blank=True)
+    
+    # Standings Deferred Logic
+    needs_rebuild = models.BooleanField(default=False, help_text="Indica se la classifica deve essere ricalcolata")
+    last_rebuild_at = models.DateTimeField(null=True, blank=True)
 
     def save(self, *args, **kwargs):
         if not self.slug:
@@ -136,13 +155,37 @@ class League(models.Model):
         return base
     
     def get_standings(self):
-        """Calcola classifica ordinata per punti"""
+        """Ritorna classifica ordinata. Usa dati persistiti se presenti, altrimenti ricalcola."""
+        persisted = self.persisted_standings.all().select_related('team')
+        if persisted.exists():
+            return [
+                {
+                    'team': ps.team,
+                    'played': ps.played,
+                    'won': ps.won,
+                    'drawn': ps.drawn,
+                    'lost': ps.lost,
+                    'goals_for': ps.goals_for,
+                    'goals_against': ps.goals_against,
+                    'goal_diff': ps.goal_diff,
+                    'points': ps.points,
+                    'rank': ps.rank,
+                } for ps in persisted
+            ]
+            
+        # Fallback logic if no persisted data yet
         from matches.models import Match
         standings_list = []
         
         for team in self.teams.all():
-            matches_home = Match.objects.filter(league=self, is_finished=True, home_team=team)
-            matches_away = Match.objects.filter(league=self, is_finished=True, away_team=team)
+            matches_base = Match.objects.filter(
+                league=self, 
+                is_finished=True, 
+                reports__status='PUBLISHED'
+            ).distinct()
+            
+            matches_home = matches_base.filter(home_team=team)
+            matches_away = matches_base.filter(away_team=team)
             
             played = matches_home.count() + matches_away.count()
             
@@ -186,3 +229,32 @@ class League(models.Model):
     class Meta:
         unique_together = ['name', 'season', 'group_name']
         ordering = ['sport', 'level', 'group_name']
+        verbose_name = "Campionato"
+        verbose_name_plural = "🏆 Campionati"
+
+
+class LeagueStanding(models.Model):
+    """Classifica persistita per evitare ricalcoli costosi"""
+    league = models.ForeignKey(League, on_delete=models.CASCADE, related_name='persisted_standings')
+    team = models.ForeignKey(Team, on_delete=models.CASCADE, related_name='persisted_standings')
+    season = models.CharField(max_length=9, help_text="Es: 2024-2025")
+    
+    played = models.IntegerField(default=0)
+    won = models.IntegerField(default=0)
+    drawn = models.IntegerField(default=0)
+    lost = models.IntegerField(default=0)
+    
+    goals_for = models.IntegerField(default=0)
+    goals_against = models.IntegerField(default=0)
+    goal_diff = models.IntegerField(default=0)
+    points = models.IntegerField(default=0)
+    
+    rank = models.IntegerField(default=0)
+    last_updated = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        unique_together = ['league', 'team', 'season']
+        ordering = ['rank', '-points', '-goal_diff', '-goals_for']
+
+    def __str__(self):
+        return f"{self.team.name} - {self.league.name} ({self.points} pts)"

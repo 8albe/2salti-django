@@ -4,30 +4,32 @@ from django.contrib.auth import get_user_model
 User = get_user_model()
 
 class ClaimFlowTest(TestCase):
-    def test_claim_flow_skip(self):
-        print("\\n1. Creazione Utente")
+    def test_claim_profile_success(self):
+        # 1. Setup User and Onboarding
         user = User.objects.create_user(
-            username='test_claim_user',
-            email='test_claim@example.com',
+            username='real_user',
+            email='real@example.com',
             password='Password123!',
             role='athlete',
-            first_name='Test',
-            last_name='Claim',
-            identity_status='UNVERIFIED',
-            subscription_status='INACTIVE'
+            identity_status='VERIFIED',
+            subscription_status='ACTIVE'
         )
         self.client.force_login(user)
         
-        print("2. Verify Identity")
-        response_id = self.client.post('/accounts/verify-identity/', {'method': 'spid'})
-        self.assertEqual(response_id.status_code, 302)
+        # 2. Setup a "Ghost" Profile to claim
+        ghost_user = User.objects.create_user(username='ghost_player', role='athlete')
+        ghost_profile = ghost_user.athlete_profile # Created by signal
         
-        print("3. Process Payment")
-        response_pay = self.client.post('/accounts/payment/', {'action': 'pay'})
-        self.assertEqual(response_pay.status_code, 302)
+        # 3. POST Claim
+        response = self.client.post('/accounts/claim-profile/', {
+            'action': 'claim',
+            'profile_id': ghost_profile.id,
+            'role': 'athlete'
+        })
         
-        print("4. Claim Profile (Skip)")
-        response_claim = self.client.post('/accounts/claim-profile/', {'action': 'skip'})
-        self.assertEqual(response_claim.status_code, 302)
-        
-        print("Verifica completata con successo!")
+        # 4. Verify
+        self.assertRedirects(response, '/management/team-access/')
+        from .models import AccountProfileLink
+        link = AccountProfileLink.objects.filter(user=user, athlete_profile=ghost_profile).first()
+        self.assertIsNotNone(link)
+        self.assertEqual(link.status, 'PENDING')

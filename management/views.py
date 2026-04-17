@@ -1,4 +1,5 @@
 from django.shortcuts import render, get_object_or_404, redirect
+from django.core.exceptions import PermissionDenied
 from django.contrib.auth.decorators import login_required
 from .models import (
     Training, TrainingOccurrence, TrainingAttendance, 
@@ -7,25 +8,30 @@ from .models import (
 )
 from .forms import TrainingForm, ConvocationForm
 from .logic import generate_occurrences
-from .permissions import role_required
+from .permissions import role_required, get_society_context, get_membership_context
 from .utils import log_action
 from django.utils import timezone
 from django.contrib import messages
 from core.models import Society, Team
-from matches.models import Match
+from core.integrations import INTEGRATION_REGISTRY
 from django.db import models
+from matches.models import Match, MatchReport
+from accounts.models import User
+from accounts.utils import onboarding_required
 
 @login_required
+@onboarding_required
 def training_list(request):
     """
     Visualizza il calendario degli allenamenti per la società.
     PRD: Tutti gli atleti della società vedono il calendario di tutte le categorie.
     """
-    if not request.current_society:
+    society = get_society_context(request)
+    if not society:
         return redirect('home')
         
     occurrences = TrainingOccurrence.objects.filter(
-        training__society=request.current_society,
+        training__society=society,
         start_time__gte=timezone.now() - timezone.timedelta(days=1)
     ).select_related('training', 'training__team').order_by('start_time')
     
@@ -34,16 +40,21 @@ def training_list(request):
     })
 
 @login_required
+@onboarding_required
 @role_required(['PRESIDENT', 'HEAD_COACH'])
 def training_create(request):
     """
     Crea un nuovo piano di allenamento.
     """
+    society = get_society_context(request)
+    if not society:
+        return redirect('home')
+
     if request.method == 'POST':
-        form = TrainingForm(request.POST, request.FILES, society=request.current_society)
+        form = TrainingForm(request.POST, request.FILES, society=society)
         if form.is_valid():
             training = form.save(commit=False)
-            training.society = request.current_society
+            training.society = society
             
             # Gestione ricorrenza (semplificata per il database)
             if training.is_recurring:
@@ -58,20 +69,25 @@ def training_create(request):
             # Genera le istanze
             generate_occurrences(training)
             
-            log_action(request.user, request.current_society, "CREATE_TRAINING", target=training, request=request)
+            log_action(request.user, society, "CREATE_TRAINING", target=training, request=request)
             messages.success(request, "Allenamento creato con successo.")
             return redirect('training_list')
     else:
-        form = TrainingForm(society=request.current_society)
+        form = TrainingForm(society=society)
         
     return render(request, 'management/training_form.html', {'form': form})
 
 @login_required
+@onboarding_required
 def training_rsvp(request, occurrence_id):
     """
     Gestisce l'RSVP con Geofencing.
     """
-    occurrence = get_object_or_404(TrainingOccurrence, id=occurrence_id)
+    # Hardening: verifica che l'allenamento appartenga alla società dell'utente
+    society = get_society_context(request)
+    if not society:
+        raise PermissionDenied
+    occurrence = get_object_or_404(TrainingOccurrence, id=occurrence_id, training__society=society)
     
     if request.method == 'POST':
         lat = request.POST.get('lat')
@@ -102,6 +118,7 @@ def training_rsvp(request, occurrence_id):
     return render(request, 'management/training_rsvp.html', {'occurrence': occurrence})
 
 @login_required
+@onboarding_required
 @role_required(['PRESIDENT', 'HEAD_COACH'])
 def convocation_create(request, match_id):
     """
@@ -109,7 +126,12 @@ def convocation_create(request, match_id):
     Include la logica di riuso del setup precedente.
     """
     match = get_object_or_404(Match, id=match_id)
-    team = match.home_team # Assumiamo sia la squadra dell'utente per ora
+    # Hardening: verifica che la partita riguardi la società dell'utente
+    society = get_society_context(request)
+    if not society or (match.home_team.society != society and match.away_team.society != society):
+        raise PermissionDenied
+    
+    team = match.home_team if match.home_team.society == society else match.away_team
     
     # 1. Recupera la convocazione precedente per il riuso
     previous_conv = Convocation.objects.filter(
@@ -156,6 +178,7 @@ def convocation_create(request, match_id):
     })
 
 @login_required
+@onboarding_required
 def bacheca_view(request, team_slug=None):
     """
     Bacheca della squadra o della società.
@@ -169,7 +192,7 @@ def bacheca_view(request, team_slug=None):
         ).select_related('author', 'team').prefetch_related('comments__author')
     else:
         # Se non c'è team_slug, mostra tutto ciò che l'utente può vedere nella società corrente
-        society = request.current_society
+        society = get_society_context(request)
         
         # Fallback: se accediamo globalmente senza slug, cerchiamo la società tramite membership o profili
         if not society and request.user.is_authenticated:
@@ -197,14 +220,7 @@ def bacheca_view(request, team_slug=None):
         team = None
 
     # Assicuriamoci che user_membership sia disponibile nel contesto anche per URL globali
-    user_membership = getattr(request, 'user_membership', None)
-    if not user_membership and request.user.is_authenticated and (team or society):
-        query_society = team.society if team else society
-        user_membership = Membership.objects.filter(
-            user=request.user,
-            society=query_society,
-            is_active=True
-        ).first()
+    user_membership = get_membership_context(request, team=team, society=society)
 
     # Logica RBAC robusta per il template (considera sia Membership che Profile Fallback)
     can_post = False
@@ -229,6 +245,7 @@ def bacheca_view(request, team_slug=None):
     })
 
 @login_required
+@onboarding_required
 def post_create(request, team_id=None):
     """
     Crea un post in bacheca.
@@ -244,11 +261,7 @@ def post_create(request, team_id=None):
             society = team.society
         else:
             team = None
-            society = request.current_society
-            if not society and request.user.is_authenticated:
-                first_mem = request.user.memberships.filter(is_active=True).first()
-                if first_mem:
-                    society = first_mem.society
+            society = get_society_context(request)
         
         # RBAC Check (PRD 5.2)
         can_post = False
@@ -278,19 +291,22 @@ def post_create(request, team_id=None):
         return redirect(request.META.get('HTTP_REFERER', 'home'))
 
 @login_required
+@onboarding_required
 def chat_view(request, team_slug):
     """
     Chat di squadra.
     """
     team = get_object_or_404(Team, slug=team_slug)
+    membership = get_membership_context(request, team=team)
+    
     # Verifica che l'utente sia membro della squadra o presidente
     can_access = False
     if request.user.is_superuser:
         can_access = True
-    elif request.user_membership:
-        if request.user_membership.role == 'PRESIDENT':
+    elif membership:
+        if membership.role == 'PRESIDENT':
             can_access = True
-        elif request.user_membership.team == team:
+        elif membership.team == team:
             can_access = True
             
     if not can_access:
@@ -305,7 +321,24 @@ def chat_view(request, team_slug):
     })
 
 @login_required
+@onboarding_required
 def chat_message_add(request, team_id):
+    # RBAC Check
+    team = get_object_or_404(Team, id=team_id)
+    membership = get_membership_context(request, team=team)
+    
+    can_access = False
+    if request.user.is_superuser:
+        can_access = True
+    elif membership:
+        if membership.role == 'PRESIDENT':
+            can_access = True
+        elif membership.team == team:
+            can_access = True
+            
+    if not can_access:
+        raise PermissionDenied
+
     if request.method == 'POST':
         team = get_object_or_404(Team, id=team_id)
         content = request.POST.get('content')
@@ -314,6 +347,7 @@ def chat_message_add(request, team_id):
     return redirect(request.META.get('HTTP_REFERER', 'home'))
 
 @login_required
+@onboarding_required
 def team_access(request):
     """Fase 4: Accesso Squadra (Sezione 7)"""
     if request.method == 'POST':
@@ -362,12 +396,7 @@ def team_access(request):
 @role_required(['PRESIDENT'])
 def club_admin_dashboard(request):
     """Pannello essenziale per Club Admin (Sezione 3)"""
-    society = request.current_society
-    if not society:
-        # Fallback per presidenti senza società nel middleware
-        if hasattr(request.user, 'president_profile'):
-            society = request.user.president_profile.managed_society
-            
+    society = get_society_context(request)
     if not society:
         return redirect('home')
 
@@ -383,7 +412,17 @@ def club_admin_dashboard(request):
 @login_required
 @role_required(['PRESIDENT'])
 def approve_membership(request, request_id):
-    req = get_object_or_404(MembershipRequest, id=request_id)
+    # Hardening: verifica che la richiesta appartenga alla società gestita dall'utente
+    if not get_society_context(request):
+         # Fallback per presidenti senza società nel middleware
+        if hasattr(request.user, 'president_profile'):
+            society = request.user.president_profile.managed_society
+        else:
+            raise PermissionDenied
+    else:
+        society = get_society_context(request)
+
+    req = get_object_or_404(MembershipRequest, id=request_id, society=society)
     if request.method == 'POST':
         action = request.POST.get('action')
         if action == 'approve':
@@ -408,11 +447,7 @@ import string
 @role_required(['PRESIDENT'])
 def generate_code(request):
     """View per generare nuovi codici di attivazione (Club Admin)"""
-    society = request.current_society
-    if not society:
-        if hasattr(request.user, 'president_profile'):
-            society = request.user.president_profile.managed_society
-            
+    society = get_society_context(request)
     if not society:
         messages.error(request, "Devi essere associato a una società.")
         return redirect('home')
@@ -448,3 +483,92 @@ def generate_code(request):
     from core.models import Team
     teams = Team.objects.filter(society=society)
     return render(request, 'management/club_admin/generate_code.html', {'teams': teams, 'society': society})
+
+@login_required
+def staff_dashboard(request):
+    """
+    Dashboard operativa per lo staff:
+    - Funnel dei referti
+    - Utenti bloccati in onboarding
+    - Stato integrazioni
+    - Referti bloccati (> 4h)
+    """
+    if not request.user.is_staff and not request.user.is_superuser:
+        raise PermissionDenied
+
+    # 1. Statistiche Referti
+    report_stats = MatchReport.objects.values('status').annotate(count=models.Count('id'))
+    report_stats_dict = {s['status']: s['count'] for s in report_stats}
+    # Ensure all statuses are present
+    for status_code, status_label in MatchReport.Status.choices:
+        report_stats_dict.setdefault(status_code, 0)
+
+    # 2. Utenti bloccati in onboarding
+    # Usiamo la property onboarding_state definita in User model (necessita calcolo Python o annotazione)
+    # Per semplicità in dashboard, facciamo un conteggio rapido:
+    from django.db.models import Count, Q
+    functional_roles = ['athlete', 'coach', 'referee', 'president']
+    onboarding_stats = {
+        'IDENTITY_PENDING': User.objects.filter(role__in=functional_roles, identity_status='UNVERIFIED').count(),
+        'PAYMENT_PENDING': User.objects.filter(role__in=functional_roles, identity_status='VERIFIED', subscription_status='INACTIVE').count(),
+        'SETUP_PENDING': User.objects.filter(role__in=functional_roles, identity_status='VERIFIED', subscription_status='ACTIVE', setup_completed=False).count(),
+    }
+
+    # 4. Republish Rate (Efficienza OCR/Validazione)
+    from .models import AuditLog
+    publish_count = AuditLog.objects.filter(action='PUBLISH_REPORT').count()
+    republish_count = AuditLog.objects.filter(action='REPUBLISH_REPORT').count()
+    total_publishes = publish_count + republish_count
+    republish_rate = int(republish_count / total_publishes * 100) if total_publishes > 0 else 0
+
+    return render(request, 'management/staff_dashboard.html', {
+        'report_stats': report_stats_dict,
+        'onboarding_stats': onboarding_stats,
+        'stuck_reports': stuck_reports,
+        'integrations': INTEGRATION_REGISTRY,
+        'republish_rate': republish_rate,
+        'publish_count': publish_count,
+        'republish_count': republish_count,
+    })
+
+@login_required
+def ops_cockpit(request):
+    """
+    Cockpit Operativo per Admin/Staff.
+    Monitoraggio flussi MatchReport in tempo reale.
+    """
+    if not request.user.is_staff and not request.user.is_superuser:
+        raise PermissionDenied
+
+    now = timezone.now()
+    last_24h = now - timezone.timedelta(hours=24)
+
+    # I KPI richiesti basati sugli stati reali del modello MatchReport
+    # Status.EXTRACTED e Status.VALIDATED sono quelli pronti per la revisione/pubblicazione
+    # Status.UPLOADED e Status.PROCESSING sono quelli ancora in coda tecnica
+    stats = MatchReport.objects.aggregate(
+        pending_review=models.Count('id', filter=models.Q(status__in=[MatchReport.Status.EXTRACTED, MatchReport.Status.VALIDATED])),
+        in_flight=models.Count('id', filter=models.Q(status__in=[MatchReport.Status.UPLOADED, MatchReport.Status.PROCESSING])),
+        needs_review=models.Count('id', filter=models.Q(status=MatchReport.Status.NEEDS_REVIEW)),
+        failed=models.Count('id', filter=models.Q(status=MatchReport.Status.REJECTED)),
+        published_24h=models.Count('id', filter=models.Q(status=MatchReport.Status.PUBLISHED, published_at__gte=last_24h))
+    )
+
+    # Conteggio partite senza alcun referto pubblicato
+    matches_no_report = Match.objects.exclude(reports__status=MatchReport.Status.PUBLISHED).distinct().count()
+
+    # Liste Operative (Oldest Pending e Latest Published)
+    oldest_unpublished = MatchReport.objects.exclude(
+        status=MatchReport.Status.PUBLISHED
+    ).select_related('match', 'match__home_team', 'match__away_team').order_by('created_at')[:10]
+    
+    latest_published = MatchReport.objects.filter(
+        status=MatchReport.Status.PUBLISHED
+    ).select_related('match', 'match__home_team', 'match__away_team', 'published_by').order_by('-published_at')[:10]
+
+    return render(request, 'management/ops_cockpit.html', {
+        'stats': stats,
+        'matches_no_report': matches_no_report,
+        'oldest_unpublished': oldest_unpublished,
+        'latest_published': latest_published,
+    })

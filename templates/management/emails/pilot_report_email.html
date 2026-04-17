@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; color: #333; max-width: 700px; margin: 0 auto; padding: 20px; }
+        .header { padding: 16px; border-radius: 8px; margin-bottom: 24px; }
+        .header-green { background: #d4edda; border-left: 5px solid #28a745; }
+        .header-yellow { background: #fff3cd; border-left: 5px solid #ffc107; }
+        .header-red { background: #f8d7da; border-left: 5px solid #dc3545; }
+        .header-nolog { background: #e2e3e5; border-left: 5px solid #6c757d; }
+        h1 { font-size: 22px; margin: 0 0 8px 0; }
+        h2 { font-size: 16px; color: #495057; margin: 24px 0 12px 0; border-bottom: 1px solid #dee2e6; padding-bottom: 6px; }
+        .metrics { display: flex; flex-wrap: wrap; gap: 12px; margin-bottom: 20px; }
+        .metric { background: #f8f9fa; border: 1px solid #dee2e6; border-radius: 6px; padding: 12px 16px; min-width: 120px; }
+        .metric-value { font-size: 24px; font-weight: bold; }
+        .metric-label { font-size: 12px; color: #6c757d; text-transform: uppercase; }
+        .bug-list, .feedback-list { list-style: none; padding: 0; }
+        .bug-list li, .feedback-list li { padding: 8px 12px; margin-bottom: 4px; border-left: 3px solid #dee2e6; background: #f8f9fa; }
+        .severity-s1 { border-left-color: #dc3545; }
+        .severity-s2 { border-left-color: #fd7e14; }
+        .severity-s3 { border-left-color: #ffc107; }
+        .severity-s4 { border-left-color: #17a2b8; }
+        .section-notes { background: #f8f9fa; padding: 12px 16px; border-radius: 6px; margin: 8px 0; white-space: pre-wrap; }
+        .footer { margin-top: 32px; padding-top: 16px; border-top: 1px solid #dee2e6; font-size: 12px; color: #6c757d; }
+    </style>
+</head>
+<body>
+    <div class="header {% if overall_status == 'GREEN' %}header-green{% elif overall_status == 'YELLOW' %}header-yellow{% elif overall_status == 'RED' %}header-red{% else %}header-nolog{% endif %}">
+        <h1>🏊 2salti Pilot — Daily Report</h1>
+        <p style="margin: 0;"><strong>Date:</strong> {{ report_date }} &nbsp; | &nbsp;
+        <strong>Status:</strong>
+        {% if overall_status == 'GREEN' %}🟢 GREEN{% elif overall_status == 'YELLOW' %}🟡 YELLOW{% elif overall_status == 'RED' %}🔴 RED{% else %}⚪ No log filed{% endif %}
+        </p>
+    </div>
+
+    <!-- KPI Metrics -->
+    <div class="metrics">
+        <div class="metric">
+            <div class="metric-value">{{ kpis.open_blockers_eod }}</div>
+            <div class="metric-label">Open Blockers</div>
+        </div>
+        <div class="metric">
+            <div class="metric-value">{{ kpis.new_bugs_count }}</div>
+            <div class="metric-label">New Bugs Today</div>
+        </div>
+        <div class="metric">
+            <div class="metric-value">{{ kpis.closed_bugs_count }}</div>
+            <div class="metric-label">Closed Today</div>
+        </div>
+        <div class="metric">
+            <div class="metric-value">{{ kpis.recurring_issues_count }}</div>
+            <div class="metric-label">Recurring Issues</div>
+        </div>
+        <div class="metric">
+            <div class="metric-value">{{ kpis.total_open_bugs }}</div>
+            <div class="metric-label">Total Open Bugs</div>
+        </div>
+    </div>
+
+    <!-- Open Blockers -->
+    {% if open_blockers %}
+    <h2>🚫 Open Blockers (S1)</h2>
+    <ul class="bug-list">
+        {% for bug in open_blockers %}
+        <li class="severity-s1">
+            <strong>[{{ bug.severity }}]</strong> {{ bug.title }} — <em>{{ bug.status }}</em>
+            {% if bug.workaround %}<br><small>Workaround: {{ bug.workaround }}</small>{% endif %}
+        </li>
+        {% endfor %}
+    </ul>
+    {% endif %}
+
+    <!-- New Bugs Today -->
+    {% if new_bugs_today %}
+    <h2>🆕 New Bugs Today</h2>
+    <ul class="bug-list">
+        {% for bug in new_bugs_today %}
+        <li class="severity-{{ bug.severity|lower }}">
+            <strong>[{{ bug.severity }}]</strong> {{ bug.title }}
+        </li>
+        {% endfor %}
+    </ul>
+    {% endif %}
+
+    <!-- Recurring Issues -->
+    {% if recurring_issues %}
+    <h2>🔄 Recurring Issues</h2>
+    <ul class="bug-list">
+        {% for bug in recurring_issues %}
+        <li><strong>[{{ bug.severity }}]</strong> {{ bug.title }} — {{ bug.get_reproducibility_display }}</li>
+        {% endfor %}
+    </ul>
+    {% endif %}
+
+    <!-- Feedback Themes -->
+    {% if feedback_by_category %}
+    <h2>💬 Feedback by Category</h2>
+    <ul class="feedback-list">
+        {% for cat, count in feedback_by_category.items %}
+        <li><strong>{{ cat }}</strong>: {{ count }} item{{ count|pluralize }}</li>
+        {% endfor %}
+    </ul>
+    {% endif %}
+
+    <!-- Daily Log Notes -->
+    {% if daily_log %}
+    <h2>📝 Operator Notes</h2>
+    {% if daily_log.blockers %}<p><strong>Blockers:</strong></p><div class="section-notes">{{ daily_log.blockers }}</div>{% endif %}
+    {% if daily_log.workarounds %}<p><strong>Workarounds:</strong></p><div class="section-notes">{{ daily_log.workarounds }}</div>{% endif %}
+    {% if daily_log.notes %}<p><strong>Notes:</strong></p><div class="section-notes">{{ daily_log.notes }}</div>{% endif %}
+    {% endif %}
+
+    <!-- Next Day Decision -->
+    <h2>➡️ Next Day Decision</h2>
+    <div class="section-notes">{{ next_day_decision }}</div>
+
+    <div class="footer">
+        <p>This report was generated automatically by the 2salti Pilot Operations system.<br>
+        Target: albegalbi@gmail.com &nbsp;|&nbsp; Pilot Phase: Active</p>
+    </div>
+</body>
+</html>

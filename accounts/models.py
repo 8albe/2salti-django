@@ -15,7 +15,19 @@ class User(AbstractUser):
     
     # Campi base
     role = models.CharField(max_length=20, choices=ROLE_CHOICES)
+    
+    # RBAC Granulare per Staff
+    STAFF_ROLE_CHOICES = [
+        ('NONE', 'Nessuno'),
+        ('UPLOADER', 'Collaboratore (Solo Upload)'),
+        ('REVIEWER', 'Reviewer (Edit/Validazione)'),
+        ('PUBLISHER', 'Publisher (Pubblicazione)'),
+        ('SUPERADMIN', 'Super Amministratore'),
+    ]
+    staff_role = models.CharField(max_length=20, choices=STAFF_ROLE_CHOICES, default='NONE')
+    
     birth_date = models.DateField(null=True, blank=True)
+
     profile_picture = models.ImageField(upload_to='profiles/', null=True, blank=True)
     bio = models.TextField(blank=True, help_text="Biografia personale")
     phone = models.CharField(max_length=20, blank=True)
@@ -24,9 +36,79 @@ class User(AbstractUser):
     # Setup wizard
     setup_completed = models.BooleanField(default=False, help_text="Ha completato il wizard di setup?")
     
+    @property
+    def can_upload(self):
+        return self.staff_role in ['UPLOADER', 'REVIEWER', 'PUBLISHER', 'SUPERADMIN'] or self.is_superuser
+    
+    @property
+    def can_review(self):
+        return self.staff_role in ['REVIEWER', 'PUBLISHER', 'SUPERADMIN'] or self.is_superuser
+        
+    @property
+    def can_publish(self):
+        return self.staff_role in ['PUBLISHER', 'SUPERADMIN'] or self.is_superuser
+
+    
+    # Stato Onboarding e Pagamenti
+    IDENTITY_STATUS_CHOICES = [
+        ('UNVERIFIED', 'Non verificato'),
+        ('VERIFIED', 'Verificato'),
+    ]
+    SUBSCRIPTION_STATUS_CHOICES = [
+        ('INACTIVE', 'Inattivo'),
+        ('ACTIVE', 'Attivo'),
+    ]
+    identity_status = models.CharField(max_length=20, choices=IDENTITY_STATUS_CHOICES, default='UNVERIFIED')
+    identity_verified_at = models.DateTimeField(null=True, blank=True)
+    subscription_status = models.CharField(max_length=20, choices=SUBSCRIPTION_STATUS_CHOICES, default='INACTIVE')
+    subscription_end_date = models.DateTimeField(null=True, blank=True)
+    
     # Preferenze (per TUTTI i ruoli - anche atleti/allenatori possono seguire altre squadre)
     favorite_teams = models.ManyToManyField('core.Team', blank=True, related_name='followers')
     favorite_players = models.ManyToManyField('self', blank=True, related_name='fans', symmetrical=False)
+    
+    @property
+    def is_verified(self):
+        return self.identity_status == 'VERIFIED'
+    
+    @property
+    def onboarding_state(self):
+        """Ritorna lo stato attuale dell'avanzamento utente (SPID -> Pagamento -> Setup -> Member)"""
+        # Step 1: Identity (SPID/CIE) - Obbligatorio per tutti
+        if self.identity_status != 'VERIFIED':
+            return 'IDENTITY_PENDING'
+        
+        # Step 2: Payment (Subscription)
+        # I Fan sono esenti dall'abbonamento PRO per ora
+        if self.role != 'fan' and self.subscription_status != 'ACTIVE':
+            return 'PAYMENT_PENDING'
+        
+        # Step 3: Profile Setup (Dati anagrafici minimi e foto)
+        if not self.setup_completed:
+            return 'SETUP_PENDING'
+        
+        # Step 4: Membership / Society Association
+        # Solo per atleti, coach e presidenti (i fan sono subito completati)
+        if self.role in ['athlete', 'coach']:
+            # L'utente è a posto se ha ALMENO una di queste:
+            # - Una membership attiva (già parte di una squadra)
+            # - Un claim profilo in attesa di approvazione
+            # - Una richiesta di membership (manuale) in attesa di approvazione
+            has_membership = self.memberships.filter(is_active=True).exists()
+            has_pending_claim = self.profile_links.filter(status='PENDING').exists()
+            has_pending_membership = self.membership_requests.filter(status='PENDING').exists()
+            
+            if not has_membership and not has_pending_claim and not has_pending_membership:
+                return 'MEMBERSHIP_PENDING'
+        
+        if self.role == 'president':
+            # Il presidente deve avere una società associata (creata o assegnata)
+            has_society = hasattr(self, 'president_profile') and self.president_profile.managed_society
+            if not has_society:
+                return 'MEMBERSHIP_PENDING'
+                
+        return 'COMPLETED'
+
     
     def __str__(self):
         return f"{self.username} ({self.get_role_display()})"
@@ -123,6 +205,39 @@ class PresidentProfile(models.Model):
     
     def __str__(self):
         return f"Presidente: {self.user.get_full_name()}"
+
+
+class AccountProfileLink(models.Model):
+    """
+    Collega un account User a un profilo sportivo esistente (Athlete, Coach, Referee).
+    Fase 4 dell'onboarding.
+    """
+    STATUS_CHOICES = [
+        ('PENDING', 'In attesa'),
+        ('APPROVED', 'Approvato'),
+        ('REJECTED', 'Rifiutato'),
+    ]
+    
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='profile_links')
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='PENDING')
+    notes = models.TextField(blank=True, default="", help_text="Note sulla richiesta")
+    
+    # Riferimenti ai profili (uno di questi sarà popolato)
+    athlete_profile = models.ForeignKey(AthleteProfile, on_delete=models.SET_NULL, null=True, blank=True, related_name='account_links')
+    coach_profile = models.ForeignKey(CoachProfile, on_delete=models.SET_NULL, null=True, blank=True, related_name='account_links')
+    referee_profile = models.ForeignKey(RefereeProfile, on_delete=models.SET_NULL, null=True, blank=True, related_name='account_links')
+    
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    def __str__(self):
+        profile = self.athlete_profile or self.coach_profile or self.referee_profile
+        return f"Link: {self.user.username} -> {profile} [{self.get_status_display()}]"
+
+    class Meta:
+        verbose_name = "Collegamento Profilo"
+        verbose_name_plural = "Collegamenti Profilo"
+        unique_together = ['user', 'athlete_profile', 'coach_profile', 'referee_profile']
 
 
 # SIGNALS: Crea automaticamente il profilo specifico quando un utente si registra
