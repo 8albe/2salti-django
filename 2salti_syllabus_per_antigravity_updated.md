@@ -613,7 +613,7 @@ Scopo: evitare duplicati logici e dati incoerenti nel tempo.
 
 ---
 
-## 8.3 AI QUERY INTERFACE
+## 8.3 AI QUERY INTERFACE [✅ FATTO]
 
 Scopo: Permettere agli utenti di interrogare le statistiche usando il linguaggio naturale.
 
@@ -636,7 +636,7 @@ Scopo: Permettere agli utenti di interrogare le statistiche usando il linguaggio
 
 ## 9. API applicative
 
-### 9.1 API ingestion e workflow referti
+### 9.1 API ingestion e workflow referti [✅ FATTO]
 
 Scopo: esporre il workflow referti in modo pulito e riusabile.
 
@@ -699,7 +699,7 @@ Scopo: alimentare il lato pubblico e mobile.
 
 ## 10. Frontend admin
 
-### 10.1 Dashboard operativa
+### 10.1 Dashboard operativa [✅ FATTO]
 
 Scopo: creare il cockpit del workflow referti.
 
@@ -761,7 +761,7 @@ Scopo: dare valore pubblico ai dati pubblicati.
 - mostrare classifica e indicatori base dove utili
 
 
-### 11.2 Distinzione tra area pubblica e area autenticata [PARZIALE]
+### 11.2 Distinzione tra area pubblica e area autenticata [✅ FATTO]
 
 Scopo: chiarire cosa cambia nel sito quando un utente naviga da guest rispetto a quando accede con un account verificato.
 
