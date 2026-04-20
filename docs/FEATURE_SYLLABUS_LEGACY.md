@@ -60,12 +60,11 @@ Il documento va usato in questo modo:
 
 2salti è una piattaforma affidabile multi-sport che:
 - Non è vincolata alla sola pallanuoto: architettura, naming, navigazione e logica di calcolo (punti, periodi, eventi) sono ora multi-sport per design. [Baseline Phase 2 - March 2026]
-- Riceve referti ufficiali automaticamente (via email o WhatsApp). L'upload manuale rimane come fallback solo per gli amministratori. [Baseline Phase 3 - April 2026]
-- Include un'interfaccia di interrogazione AI (AI Query Interface) per l'accesso ai dati in linguaggio naturale.
-- Valida e normalizza i dati.
-- Permette review amministrativa.
-- pubblica risultati e statistiche
-- aggiorna profili di atleti, tecnici, arbitri, squadre e altri ruoli sportivi compatibili con i diversi sport
+- Riceve referti ufficiali automaticamente (via email o WhatsApp) o tramite **Referto Digitale In-App** (fonte primaria). OCR rimane come fallback. [Baseline Phase 4 - April 2026]
+- Include un'interfaccia di interrogazione AI (AI Query Interface) e un **Chatbot AI** operativo (Premium) per risposte e comandi.
+- Valida e normalizza i dati via workflow di review admin.
+- Pubblica risultati, statistiche e gestisce **Media Gallery con AI Tagging**.
+- Modello economico a tre piani: Freemium, Premium Utente, Club Pro.
 
 ### Stato attuale consolidato emerso finora
 
@@ -217,18 +216,26 @@ GOAL: Zero friction for end users.
 - loggare email processata, mittente ed errori
 
 
-### 2.2 Referto digitale compilato in-app [✅ Phase 1 Completa]
+### 2.2 Referto digitale compilato in-app [Phase 1: Backend source-agnostic (COMPLETATA)]
 
-Scopo: permettere ad arbitri e personale di giuria di creare direttamente un referto digitale strutturato, riducendo passaggi manuali e dipendenza dall'OCR.
+Scopo: permettere ad arbitri e personale di giuria di creare direttamente un referto digitale strutturato.
 
 #### Task completati [Phase 1]
 - ✅ Definita architettura source-agnostic per MatchReport
-- ✅ Implementato entry point 'Referto Digitale' (ingresso alternativo equivalente all'OCR)
+- ✅ Implementato entry point 'Referto Digitale'
 - ✅ Allineato contratto dati JSON tra OCR e Digital Entry
 - ✅ Supportata review manuale identica per entrambi i canali
 - ✅ Verifica automatica publish-readiness via schema
 
-### 2.2 Stati del workflow
+### 2.3 Phase 2: Mobile Jury App [ASSENTE]
+- Form mobile compilazione referto (Base + Avanzato)
+- Sistema certificazione giuria (token match-specific, finestra 30min, revoca)
+- Architettura offline-first (Service Worker, IndexedDB, sync queue, conflict resolution)
+- Firma PIN arbitro con immutabilità post-firma
+- Integrazione con Live Alerts push (gated Premium)
+- Validazioni inline (somma parziali == totale, duplicate detection)
+
+### 2.4 Stati del workflow
 
 Scopo: avere una macchina a stati unica, coerente e verificabile.
 
@@ -301,6 +308,8 @@ Scopo: collegare un OCR reale al workflow senza inventare dati, trattandolo come
 - ✅ salvare raw OCR output per debug [FATTO]
 - ✅ introdurre fallback quando l'estrazione fallisce [FATTO]
 - ✅ distinguere estratto ma incerto da non leggibile [FATTO]
+- prosecuzione sviluppo OCR referti cartacei come fallback (NON abbandonato)
+- allineamento schema output OCR con schema Referto Digitale (stesso contratto dati)
 
 #### Task operativi
 - convertire PDF in immagini quando serve
@@ -649,7 +658,15 @@ Scopo: esporre il workflow referti in modo pulito e riusabile.
 - GET /api/referti/{id}/status
 - GET /api/referti/{id}/results
 - PUT /api/referti/{id}/validate
-- POST /ai/query (AI Query Interface)
+- POST /ai/query (AI Query Interface + Chatbot orchestrator)
+- offline-first sync engine (Service Worker, IndexedDB)
+- sistema certificazione giuria (token match-specific)
+- webhook outbound per Shop (HMAC signature, retry policy)
+- push notifications engine (Premium gating)
+- pipeline AI tagging foto (face detection, roster match)
+- seed profili default per ruolo
+- endpoint personalizzazione layout (widget/tema)
+- motore generazione Season Recap
 
 #### Task operativi
 - definire serializer input/output upload
@@ -772,22 +789,22 @@ Scopo: chiarire cosa cambia nel sito quando un utente naviga da guest rispetto a
 
 
 #### Task mancanti
-- definire una mappa completa delle pagine pubbliche visibili senza login
-- definire una mappa delle aree private/personali visibili solo dopo accesso e verifica del ruolo
-- differenziare navigazione, CTA, dashboard e contenuti personalizzati
-- Consolidare la distinzione tra:
-    - Esperienza Pubblica (Guest): Home con CTA di registrazione, Results, Standings, Stats e Profili pubblici (read-only).
-    - Esperienza Autenticata (User/Staff): Dashboard personale dedicata, gestione profili, strumenti operativi per staff, navigazione "Mio Spazio".
-- **Security Hardening**: Audit completo dei permessi e protezione PII (Email, Cellulare).
-- ✅ **Onboarding Flow**: Implementazione tecnica Journey utente (SPID -> Pagamento -> Setup -> Member) [FATTO].
+- layout engine dashboard e pagina società (widget slot)
+- form Referto Digitale mobile (Base/Avanzato)
+- bacheca sdoppiata (Genitori / Atleti)
+- vetrina Shop società
+- pagina Società estesa (Sponsor / Link esterno)
+- Media Gallery partita (upload/tagging)
+- chatbot panel con audit log
+- generator Season Recap (PDF)
 
 #### Task operativi
-- mantenere pubblici risultati, classifiche, pagine sport, match detail, team page e statistiche generali
-- mostrare da utente autenticato una home o dashboard personalizzata con i propri dati, alert, richieste e scorciatoie operative
-- sbloccare solo dopo login e autorizzazione le aree private di squadra, claim profilo, notifiche, strumenti admin e workflow referti
-- differenziare header, menu, CTA e componenti in base a guest, utente autenticato e ruoli interni
-- verificare privacy e permessi sui dati personali e di team
-- progettare un'esperienza coerente multi-sport anche nella personalizzazione post-login
+- definire una mappa completa delle pagine pubbliche visibili senza login
+- definire una mappa delle aree private/personali visibili solo dopo accesso
+- differenziare navigazione, CTA, dashboard e contenuti personalizzati
+- Consolidare la distinzione Guest/User/Staff
+- Security Hardening: Audit permessi e protezione PII
+- season Recap generator (template PDF/infografica per utenti Premium)
 
 ### 11.3 Profili pubblici [PARZIALE]
 
@@ -860,10 +877,11 @@ Scopo: legare account e profilo sportivo in modo verificato.
 Scopo: chiudere il funnel registrazione -> verifica -> pagamento -> membership.
 
 #### Task mancanti
-- ✅ step identita [FATTO]
-- ✅ step pagamento [FATTO]
-- ✅ step membership/team association [FATTO]
-- ✅ attivazione completa post-onboarding [FATTO]
+- pricing definitivo tre piani (Premium Utente, Club Pro)
+- documento proposta federazione (demo Referto Digitale)
+- contratto tipo società ↔ 2salti (Club Pro / Sponsor)
+- policy minori per Media Gallery (opt-in genitore)
+- definizione SLA webhook shop
 
 #### Task operativi
 - definire funnel onboarding reale
@@ -953,6 +971,9 @@ Scopo: vedere backlog, errori e tempi del workflow.
 - contare tempi medi per stato
 - contare referti bloccati o falliti
 - mostrare metriche minime in dashboard/admin
+- monitoring coda sync referti offline (alert sync falliti)
+- monitoring consegna webhook shop (dashboard retry/failure)
+- gestione storage media partite (bucket + CDN + lifecycle policy)
 
 ---
 
@@ -987,7 +1008,7 @@ Scopo: mantenere il progetto comprensibile e gestibile anche fuori dalla singola
 
 1. ✅ MIGLIORARE SCHERMATA REVIEW (Side-by-side, highlight campi incerti, compare originale/estratto/corretto) -> [FATTO]
 2. ✅ COMPLETARE QUEUE ADMIN (Filtri reali interattivi, dashboard KPI e alert blocchi/warning su coda referti) (Section 5.1) -> [FATTO]
-3. ✅ IMPLEMENTARE AUDIT TRAIL E LOG CAMBI STATO (Section 2.3 / 13.2) -> [FATTO]
+3. ✅ IMPLEMENTARE AUDIT TRAIL E LOG CAMBI STATO (Section 2.4 / 13.2) -> [FATTO]
 4. ✅ NOTIFICHE OPERATORI (Email/Telegram quando un report entra in NEEDS_REVIEW) -> [FATTO]
     - Implementato `NotificationService` estendibile.
     - Supporto Email (via `django.core.mail`) e Telegram (via `httpx`).
@@ -1029,3 +1050,16 @@ Antigravity deve usarlo per fare un audit reale del repository e del sito, class
 - FRAGILE
 
 e deve motivare sempre la classificazione con evidenze concrete.
+
+---
+
+### Modifiche applicate in questa revisione (v2.2)
+- **FIX Referto Digitale**: Chiarita Phase 1 (Backend) e Phase 2 (Mobile App) con task Blueprint Cap 8.
+- **FIX Numerazione**: Rinominato duplicato 2.2 in 2.3; verifica assenza duplicati Cap 5/8.3.
+- **FIX Categorizzazione**: Spostate le feature (Referto Mobile, Widget Layout, Gallery, etc.) da "Task operativi" a "Task mancanti" nelle sezioni 9.1, 11.2, 12.3.
+- **Validazione**: Allineate le descrizioni delle feature con il Blueprint v3.2.
+
+### Modifiche applicate in questa revisione (v2.3)
+- **FIX Numerazione residua**: Risolta la duplicazione delle "2.2" rimasta dal fix precedente. La Phase 2 Mobile Jury App è ora correttamente 2.3; "Stati del workflow" è 2.4.
+- **FIX Riferimento crociato**: Aggiornato il riferimento in Fase 2 della sezione "Priorità di esecuzione" da "Section 2.3 / 13.2" a "Section 2.4 / 13.2" (l'audit trail punta ora al nuovo numero di "Stati del workflow").
+- **Allineamento Blueprint**: Il Syllabus è ora coerente con il Blueprint v3.3.

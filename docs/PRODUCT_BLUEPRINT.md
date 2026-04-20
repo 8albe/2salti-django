@@ -12,8 +12,6 @@ Questo file non separa piu in modo rigido "quello che esiste" e "quello che dovr
 
 ## 1. Visione del prodotto e principi non negoziabili
 
-## 1. Visione del prodotto e principi non negoziabili
-
 2salti deve diventare l'hub multi-sport che trasforma un referto ufficiale o un referto compilato nativamente in-app in un archivio sportivo vivo. Il cuore non e la pagina bella da vedere: e la fiducia nel dato. Quando il dato e affidabile, allora classifiche, schede squadra, profili atleta, storico arbitrale e leaderboard acquistano valore reale.
 
 La pallanuoto e il primo sport di rollout, non il limite del prodotto. La direzione corretta e quindi questa: pochi moduli, molto chiari, tutti agganciati allo stesso motore e progettati per essere replicabili anche su altri sport. Il percorso ideale parte dall'ingresso del referto, passa da compilazione digitale nativa oppure da OCR + AI + controlli, finisce nel database e aggiorna in automatico sito pubblico, dashboard e statistiche aggregate.
@@ -21,69 +19,68 @@ La pallanuoto e il primo sport di rollout, non il limite del prodotto. La direzi
 ### Chiarimenti di baseline da tenere fissi
 
 - Pallanuoto = primo sport lanciato e banco di prova principale; architettura, naming e navigazione vanno pero pensati come framework multi-sport.
-- L'ingestione dei dati è automatizzata: i referti arrivano via email o WhatsApp e vengono processati autonomamente. L'upload manuale è un fallback per admin.
+- L'ingestione dei dati è automatizzata: i referti arrivano via email o WhatsApp e vengono processati autonomamente.
+- **Relazione strategica OCR ↔ Referto Digitale**: Il Referto Digitale in-app è la via principale per l'ingestione affidabile del dato; l'OCR resta in sviluppo come fallback per campionati/giurie che non adottano il digitale o per archivio storico. Entrambe le fonti convergono nello stesso contratto dati e workflow di validazione.
 - Include un motore di interrogazione AI (AI Stats Engine) che funge da router intelligente e motore di risposte in linguaggio naturale.
-- Sito pubblico e area autenticata non sono la stessa esperienza: la parte pubblica massimizza scoperta e trasparenza del dato, la parte loggata mostra dati personali, funzioni private, richieste, strumenti di ruolo e workflow autorizzati.
+- Sito pubblico e area autenticata non sono la stessa esperienza: la parte pubblica massimizza scoperta e trasparenza del dato, la parte loggata mostra dati personali, funzioni private e strumenti di ruolo.
 
 ### Principi fissi di progetto
 
 - Null invece di invenzione: se un campo non e leggibile, il sistema lo segnala e non lo indovina.
-
 - Ogni numero mostrato sul sito deve essere tracciabile fino alla partita e, se serve, fino al referto sorgente.
-
 - Le pagine pubbliche devono essere alimentate dallo stesso backend usato dall'admin, non da contenuti duplicati.
-
-- L'esperienza guest e quella autenticata devono essere chiaramente diverse: da pubblico si navigano dati generali, da autenticato si entra in dashboard personali, permessi di ruolo e strumenti operativi.
-
+- L'esperienza guest e quella autenticata devono essere chiaramente diverse: da pubblico si navigano dati generali, da autenticato si entra in dashboard personali e strumenti operativi.
 - Prima affidabilita e usabilita interna, poi profondita pubblica, poi mobile e integrazioni.
-
 - Le correzioni umane devono lasciare audit log, versione precedente e motivazione della modifica.
-
-
-### Chiarimenti di baseline da tenere fissi
-
-- Pallanuoto = primo sport lanciato e banco di prova principale; architettura, naming e navigazione vanno pero pensati come framework multi-sport.
-- L'ingestione dei dati è automatizzata: i referti arrivano via email o WhatsApp e vengono processati autonomamente. L'upload manuale è un fallback per admin.
-- Include un motore di interrogazione AI (AI Stats Engine) che funge da router intelligente e motore di risposte in linguaggio naturale.
-- Sito pubblico e area autenticata non sono la stessa esperienza: la parte pubblica massimizza scoperta e trasparenza del dato, la parte loggata mostra dati personali, funzioni private, richieste, strumenti di ruolo e workflow autorizzati.
 
 ## 2. Ecosistema utenti e valore generato
 
-Il progetto non serve a un solo tipo di utente. La stessa base dati deve generare valore diverso a seconda di chi entra nella piattaforma.
+Il progetto genera valore differenziato in base al ruolo e al piano di abbonamento attivo.
 
-| Utente | Cosa vuole trovare | Valore generato da 2salti |
+| Utente | Valore generato (Freemium) | Valore aggiunto (Premium Utente / Club Pro) |
 | --- | --- | --- |
-| Atleta | Profilo personale, gol, presenze, crescita, storico partite | Identita sportiva persistente e numeri sempre aggiornati |
-| Allenatore | Rendimento squadra, record, storico squadre, indicatori | Lettura rapida della stagione e del percorso tecnico |
-| Arbitro | Partite arbitrate, designazioni, cronologia | Archivio professionale ordinato e consultabile |
-| Societa / Lega | Meno inserimento manuale, meno errori, archivio centrale | Riduzione lavoro operativo e dati coerenti |
-| Pubblico / fan | Scoprire squadre, partite, classifiche e profili | Esperienza semplice, sport piu leggibile, maggiore coinvolgimento |
-| Admin | Caricare, correggere, approvare e pubblicare | Cockpit unico per governare l'intera piattaforma |
+| Atleta | Profilo, gol, presenze, crescita | Media Gallery, Season Recap, Dashboard personalizzata |
+| Genitore / Tifoso | Consultazione bacheca e statistiche | Live Alerts push, Chatbot AI, widget personalizzati |
+| Allenatore | Rendimento squadra, record | Statistiche avanzate, gestione bacheca (via Club Pro) |
+| Arbitro / Giuria | Consultazione cronologia | Referto digitale mobile, firma ufficiale, certificazione |
+| Societa / Lega | Pagina base, roster, calendario | Bacheca push, Shop vetrina, Sponsor, Widget Club |
+| Admin | Cockpit unico di governo | Monitoraggio pipeline, audit log, gestione permessi |
+
+### Matrice servizi per piano
+
+| Servizio | Pagante | Fruizione | Connessione | RBAC |
+| --- | --- | --- | --- | --- |
+| Consultazione Bacheca | Club Pro | Tutti (Gratis) | Web/App | No |
+| Notifiche Push Bacheca | Club Pro | Solo Premium | Push Act. | Si |
+| Referto Digitale | Giuria (Gratis) | Tutti (via API) | Offline-first | Si (Token) |
+| Chatbot AI | Premium | Solo Premium | Web/App | Si (Hard) |
+| Media Gallery / Tagging | Premium | Tutti (Vista) | Cloud/CDN | Si (Opt-in) |
+| Live Alerts (Referto) | Premium | Solo Premium | Push Act. | Si |
+| Season Recap | Premium | Solo Premium | Batch PDF | Si |
+| Shop vetrina (Request) | Club Pro | Tutti (Ordina) | Out. Webhook | Si (Order) |
+| Sponsor & Widget Club | Club Pro | Tutti (Vista) | Web/App | No |
+| Personalizzazione Dash | Premium | Solo Premium | DB Sync | Si |
 
 ## 3. Struttura completa del sito e della navigazione
 
-La piattaforma va pensata in quattro blocchi integrati: sito pubblico, area autenticata personale, area dati/profili e admin/motore. La navigazione visibile all'utente e solo la parte frontale di una macchina piu ampia che deve restare coerente da cima a fondo.
+Mappa del prodotto: pagine pubbliche, superfici post-login, profili e strumenti operativi.
 
-Mappa unica del prodotto: pagine pubbliche, superfici post-login, profili, area admin e motore dati.
+### Inventario pagine core
 
-### Inventario pagine da considerare core
-
-| Area | Pagina | Scopo | Dato principale |
-| --- | --- | --- | --- |
-| Pubblico | Home | Far capire subito cos'e 2salti e dove entrare | sport, match in evidenza, CTA |
-| Pubblico | Landing sport (es. Pallanuoto) | Porta di ingresso allo sport e alla stagione corrente | stagione corrente, partite, classifica |
-| Pubblico | Partite | Calendario, risultati e filtri | match list + stato partita |
-| Pubblico | Match detail | Rendere leggibile il tabellino completo | metadata, score, eventi, officials |
-| Pubblico | Classifiche | Standing del campionato | punti, GF/GS, trend |
-| Pubblico | Statistiche | Leaderboard e ranking | marcatori, espulsioni, filtri |
-| Pubblico | Scheda squadra | Rendere viva una societa o team | rosa, staff, ultime gare, numeri |
-| Autenticato | Dashboard personale | Mostrare dati, azioni e notifiche collegate al proprio ruolo | claim, richieste, alert, preferenze |
-| Autenticato | Area squadra / ruolo | Sbloccare dati privati e funzioni autorizzate | membership, strumenti, dati riservati |
-| Profili | Atleta / coach / arbitro | Creare identita persistente | storico, stagione, record |
-| Servizio | Ricerca | Trovare subito persone, partite e squadre | search globale |
-| Accesso | Login / register | Ingresso ruoli e impostazioni | account, tema, permessi |
-| AI | AI Query | Interrogazione intelligente stats | query, answer/redirect |
-| Admin | Upload / review / publish | Governare l'intero flusso referti | referto, JSON, validazione |
+| Area | Pagina | Scopo |
+| --- | --- | --- |
+| Pubblico | Home / Landing Sport | Hub di ingresso, campionati, classifiche teaser |
+| Pubblico | Partite / Match Detail | Calendario, risultati, tabellini e cronologia eventi |
+| Pubblico | Classifiche / Statistiche | Standing squadre e leaderboard marcatori |
+| Pubblico | Scheda squadra / Società | Rosa, staff, sponsor, bacheca pubblica, link esterno |
+| Autenticato | Dashboard personalizzata | Widget riordinabili (Premium), alert, preferenze |
+| Autenticato | Bacheca (Atleti / Genitori) | Comunicazioni società gated: scrittura Club Pro, lettura tutti |
+| Autenticato | Media Gallery Partita | Upload (Premium) e visualizzazione foto/video taggati |
+| Autenticato | Vetrina Shop Società | Catalogo prodotti con pulsante "Richiesta Materiale" |
+| Autenticato | Chatbot Panel | Interfaccia AI per query e comandi operativi |
+| Profili | Atleta / Coach / Arbitro | Identità sportiva, storico e Season Recap (Premium) |
+| Admin / Giuria | Form Referto Digitale | Compilazione mobile, firma PIN, sync offline |
+| Admin | Cockpit Workflow | Review OCR, validazione, audit log e publishing |
 
 ## 4. Home page: architettura dettagliata
 
@@ -210,23 +207,19 @@ Scopo: Una leaderboard page semplice ma profonda.
 
 Nota mobile: Su mobile la tabella diventa card list con lo stesso ordine logico.
 
-### 5.6 Scheda squadra
+### 5.6 Scheda squadra / Pagina Società
 
-Scopo: Pagina cardine per dare vita ai club.
+Scopo: Pagina cardine per dare vita ai club, con flessibilità tra contenuto nativo ed esterno.
 
 ### Blocchi da prevedere:
-
 - Header squadra con nome, logo, stagione e posizione in classifica.
-
+- **Modello Widget**: Layout a slot fissi riordinabili (non drag&drop) per sponsor, roster, calendario, bacheca pubblica, gallery, staff e storia.
+- **Opzione Sito Esterno**: Se la società ha un proprio sito, può disattivare la pagina 2salti personalizzata. In questo caso, il CTA "Pagina Società" effettua un **redirect diretto** al sito esterno; un badge o una nota "Sito esterno gestito dal Club" viene mostrato nell'elenco società per gestire le aspettative dell'utente. I dati sportivi (partite, classifiche) restano comunque accessibili nelle pagine pubbliche del motore 2salti.
 - Numeri chiave: punti, gol fatti, gol subiti, forma recente.
-
-- Rosa e staff tecnico.
-
 - Ultime partite e prossime gare.
+- Sponsor: Visibili sulla pagina società e in forma ridotta sui profili degli atleti del club.
 
-- Link ai profili dei giocatori quando disponibili.
-
-Nota mobile: La scheda deve funzionare anche se alcuni profili individuali non sono ancora completi.
+Nota mobile: La scheda deve funzionare anche se alcuni moduli (es. Sponsor) non sono attivi per quella specifica società.
 
 ## 6. Profili atleta, coach e arbitro
 
@@ -274,70 +267,95 @@ Questa pagina puo diventare molto distintiva per il progetto.
 
 ## 7. Account, ruoli e impostazioni
 
-In 2salti il profilo sportivo e l'account devono restare separati. Il profilo atleta, coach, arbitro o dirigente nasce dal motore dati; l'account nasce dalla registrazione e governa accesso, pagamento, permessi, notifiche e impostazioni.
+In 2salti il profilo sportivo e l'account sono separati. Il profilo nasce dai dati; l'account governa l'accesso e i permessi.
 
+### 7.1 Profili default per ruolo
+Prima della personalizzazione Premium, ogni utente riceve un setup di default basato sul ruolo verificato:
 
-Differenza esplicita tra esperienza pubblica e esperienza autenticata
+| Ruolo | Dashboard Default (Widget) | Header / Navigazione | Permessi RBAC | Notifiche Default |
+| --- | --- | --- | --- | --- |
+| **Atleta** | Ultime gare, Stats personali, Prossimo match | Mio Profilo, Team | Lettura area team | Risultati, Variazioni orario |
+| **Genitore** | Squadra figlio, Calendario, Bacheca | Figli, Team, Shop | Lettura area team | Alert live match, Bacheca |
+| **Allenatore** | Roster, Registro presenze, Stats team | Gestione Team, Dati | Scrittura area team | Report partita post-match |
+| **Dirigente** | KPI Club, Richieste membership, Sponsor | Club Admin, Shop Admin | Gestione Club | Nuove richieste, Alert Shop |
+| **Arbitro** | Mie designazioni, Storico, Rimborsi | Archivio Arbitrale | Update match assigned | Nuove designazioni |
+| **Giuria (Cert)**| Match corrente (Form Referto) | Live Match Tool | Edit match token-spec | Nessuna |
+| **Admin** | Cockpit completo, System health | Super Admin Panel | Full access | Errori critici pipeline |
 
-- Guest pubblico: home, landing sport, partite, classifiche, statistiche generali, schede squadra e teaser profili.
-- Utente autenticato: dashboard personale, notifiche, claim profilo, richieste membership, preferenze, stato pagamenti e funzioni legate al ruolo.
-- Utente autenticato e autorizzato: accesso ad aree private di squadra, dati non pubblici, workflow operativi e strumenti amministrativi secondo permessi.
-- La grafica deve far percepire questo cambio: header diverso, CTA diverse, moduli personali, alert e scorciatoie contestuali.
+La personalizzazione Premium permette di sovrascrivere questi default riordinando o nascondendo widget e cambiando il tema colore.
 
-Architettura corretta di account e profili
+### 7.2 Onboarding e Claim Profilo
+Esperienza differenziata tra Guest e Autenticato:
+- **Guest**: Navigazione libera dati pubblici (Classifiche, Risultati, Schede Squadra).
+- **Utente Premium**: Sblocca dashboard personalizzata, Live Alerts, Chatbot, Gallery e Season Recap.
+- **Utente Club Pro**: Sblocca per la società la gestione bacheca, shop, sponsor e pagina dedicata.
 
-- Profili sportivi pre-caricati nel sistema: players, coaches, referees, presidenti/dirigenti, club e squadre di stagione.
+**Sequenza di onboarding**:
+1. Registrazione account base (Email/Password).
+2. Verifica identità (SPID/CIE come primario; fallback doc+selfie).
+3. Selezione Piano: Freemium (gratis), Premium o Club Pro.
+4. Claim del profilo sportivo (Ricerca e richiesta possesso).
+5. Autenticazione con la squadra: Tramite codice fornito dal club o richiesta manuale al Club Admin.
+6. Accesso completo post-approvazione.
 
-- Account utente separato: email, credenziali, stato abbonamento, impostazioni, preferenze, log accessi e collegamento al profilo sportivo.
+### 7.3 Regole di verifica e privacy
 
-- Claim del profilo: l'utente non crea il proprio profilo; cerca quello giusto e ne richiede il possesso operativo.
+- Il club admin deve poter controllare il pacchetto di verifica del richiedente, ma in una schermata dedicata e tracciata: dati essenziali sempre visibili, documento completo apribile solo quando serve davvero e con audit log.
+- L'identità personale non basta mai per l'accesso ai dati privati: deve esistere anche un collegamento sportivo valido tra utente, squadra, stagione e ruolo.
+- Per i minorenni: richiesto opt-in esplicito del genitore per Media Gallery e tagging.
+- Tema dark/light, recupero password, sessioni e messaggi di errore restano parte del modulo account, ma non devono alterare la gerarchia di sicurezza.
 
-- Doppio stato di verifica: identita personale verificata e appartenenza sportiva verificata.
+### 7.4 Referto Digitale In-App
 
-Sequenza di onboarding da bloccare
+Strumento dedicato alla giuria e agli arbitri per l'ingestione nativa del dato di partita. Sostituisce il cartaceo come fonte primaria.
 
-- 1) Registrazione account base con email e password o login compatibile.
+#### 7.4.1 Accesso e Certificazione (Giuria)
+- **Utilizzo**: Esclusivamente da smartphone. Gratis per la giuria.
+- **Token Match-Specific**: L'account giuria riceve un token legato a un singolo `match_id` + `user_id`, emesso dalla federazione/lega.
+- **Finestra di validità**: Attivo da 30 minuti prima del match; revoca automatica al fischio finale. Un account senza token attivo non può modificare alcun referto.
+- **Certificazione**: Richiede workflow di sicurezza (emissione token → validazione → scadenza → revoca manuale admin).
 
-- 2) Verifica identita personale: metodo principale SPID/CIE; fallback documento + selfie oppure video-selfie per stranieri, utenti senza SPID/CIE, minorenni o casi particolari.
+#### 7.4.2 Architettura Offline-First
+- Compilazione locale tramite Service Worker + IndexedDB.
+- Salvataggio continuo in locale; sincronizzazione automatica al ritorno della rete.
+- Le Live Alerts push partono solo quando la connessione è attiva; offline il referto resta valido ma muto verso gli abbonati.
 
-- 3) Attivazione del pagamento mensile: solo dopo identita verificata l'utente sblocca il piano account e puo procedere con il claim completo.
+#### 7.4.3 Firma e Statistiche
+- **Firma Arbitro**: Inserimento PIN personale a fine gara. Il referto diventa immutabile; correzioni solo via admin audit log.
+- **Livelli di Statistiche** (scelta giuria, entrambi gratis):
+    - **Base**: Gol, cartellini, espulsioni, timeout, parziali, nomi squadre, luogo, orario.
+    - **Avanzato**: Palombelle, contropiedi, rigori causati, parate, ecc.
+- **Principio del Dato Certo**: Se il dato avanzato non è rilevato, il sistema mostra "non rilevato", mai valori inventati (coerente con il principio "Null invece di invenzione" del Cap. 1).
+- **Form UX**: Mobile-first, validazioni inline (es. somma parziali == totale gol), più veloce del cartaceo. È lo strumento con cui proporre alla federazione il passaggio dal cartaceo al digitale: deve essere più rapido e meno error-prone della compilazione manuale.
 
-- 4) Ricerca del proprio profilo sportivo gia presente nel sistema e invio della richiesta di claim.
+### 7.5 Chatbot AI (L'impiegato virtuale)
 
-- 5) Autenticazione con la squadra: metodo base tramite codice di attivazione fornito dal presidente o dal club admin per squadra, stagione e ruolo.
+Disponibile esclusivamente per **utenti Premium**.
 
-- 6) Se l'utente non possiede il codice, puo comunque inviare richiesta di accesso: il sistema notifica il club admin competente e apre una revisione manuale.
+- **Capacità**: Risponde a query su statistiche (pubbliche e private, queste ultime solo se l'utente ha i permessi RBAC per accedervi), informazioni sulla piattaforma, info squadra (allenamenti, bacheca) se l'utente è iscritto.
+- **Function Calling**: Esegue comandi operativi via chat (spostare widget, cambiare tema, applicare colori squadra, gestire notifiche, nascondere sezioni).
+- **Sicurezza RBAC**: Permission check server-side obbligatorio per ogni chiamata. Il chatbot non deve mai restituire dati che l'utente non avrebbe diritto di vedere navigando manualmente. Nessun bypass via prompt.
+- **Audit Log**: Ogni comando eseguito dal bot è tracciato in un log visibile all'utente per reversibilità e trasparenza.
 
-- 7) Solo dopo verifica identita, pagamento attivo e appartenenza sportiva approvata si sbloccano le aree private della squadra.
+### 7.6 Media Gallery & AI Tagging
 
-Ruoli e permessi da prevedere
+Spazio dedicato ai contenuti multimediali della partita.
 
-- Guest pubblico: navigazione libera della parte aperta del sito.
-
-- Subscriber verificato: account attivo e identita verificata, ma senza area privata squadra finche non completa il claim sportivo.
-
-- Verified player / coach / referee: profilo sportivo rivendicato e verificato per il proprio ruolo.
-
-- Verified club admin: dirigente o presidente con potere di validare i membri del club, generare codici, revocare accessi e gestire richieste.
-
-- Internal editor / publisher / super admin: ruoli interni di piattaforma per ingestione, correzione, pubblicazione e audit.
-
-Regole di verifica e privacy da tenere fisse
-
-Il club admin deve poter controllare il pacchetto di verifica del richiedente, ma in una schermata dedicata e tracciata: dati essenziali sempre visibili, documento completo apribile solo quando serve davvero e con audit log.
-
-L'identita personale non basta mai per l'accesso ai dati privati: deve esistere anche un collegamento sportivo valido tra utente, squadra, stagione e ruolo.
-
-Tema dark/light, recupero password, sessioni e messaggi di errore restano parte del modulo account, ma non devono alterare questa gerarchia di sicurezza.
+- **Fruizione**: Caricamento foto/video riservato a **utenti Premium**. Visualizzazione pubblica sul profilo atleta, salvo opt-out.
+- **AI Pipeline**: Face detection + match automatico con il roster ufficiale della partita.
+- **Tagging**: I tag validati alimentano le gallery personali nei profili atleta. Prevedere una coda di review (almeno inizialmente manuale o semi-automatica) per evitare mis-tagging.
+- **Privacy Minorenni**: Richiesto opt-in esplicito del genitore per upload e tagging. L'atleta può sempre esercitare l'opt-out globale o per singolo contenuto.
 
 ## 8. Dashboard admin e workflow editoriale
 
-L'admin dashboard e il vero cockpit del progetto. Se qui il flusso e confuso, tutta l'automazione perde valore. Va progettata come uno strumento operativo per chi lavora su referti e pubblicazioni, non come una pagina accessoria.
+L'admin dashboard è il vero cockpit del progetto. Se qui il flusso è confuso, tutta l'automazione perde valore. Va progettata come uno strumento operativo per chi lavora su referti e pubblicazioni, non come una pagina accessoria.
+
+### Schermate core dell'admin
 
 | Schermata | Funzione | Elementi chiave |
 | --- | --- | --- |
 | Dashboard | Vista stato sistema | coda referti, alert, ultimi upload, match pubblicati |
-| Upload referto | Ingresso file | drag&drop, tipo file, metadata iniziali, source email |
+| Upload referto | Ingresso file manuale | drag&drop, tipo file, metadata iniziali, source email/WA |
 | Referto digitale | Compilazione nativa in-app | metadata match, roster, score, officials, salvataggio draft |
 | Extraction review | Controllo JSON | preview immagine, campi estratti, confidence, warning |
 | Correction panel | Fix manuali | edit campi, merge persone/squadre, note revisione |
@@ -345,352 +363,257 @@ L'admin dashboard e il vero cockpit del progetto. Se qui il flusso e confuso, tu
 | Publish step | Chiusura workflow | approva, rimanda in revisione, rifiuta, audit log |
 | Logs / storico | Traccia operativa | chi ha fatto cosa, quando e su quale referto |
 
-Stati di lavorazione consigliati
+### Stati di lavorazione del workflow
 
-- UPLOADED - file ricevuto e salvato.
+- UPLOADED → EXTRACTED → NEEDS_REVIEW → VERIFIED → PUBLISHED
+- Stato parallelo di rifiuto: REJECTED (con motivazione obbligatoria)
+- Ogni transizione lascia audit log con utente, timestamp, diff dati e motivo
+- Il gate di pubblicazione (standings, profili) è legato allo stato PUBLISHED
 
-- EXTRACTED - OCR/AI completato con JSON grezzo disponibile.
+### Principi UX dell'admin cockpit
 
-- NEEDS_REVIEW - presenti warning, campi null critici o incoerenze.
+- Tutto deve essere leggibile in una schermata principale: quanti referti pendenti, quanti in errore, quanti pronti al publish.
+- La review side-by-side (originale / estratto / corretto) è il cuore operativo e deve restare sempre a massimo due click di distanza.
+- Ogni azione irreversibile (publish, reject, depublish) richiede conferma con riepilogo impatti.
+- I filtri della coda devono essere veri, persistenti e condivisibili via URL.
 
-- VERIFIED - controlli completati e dato pronto.
+## 9. OCR, ingestione e validazione
 
-- PUBLISHED - dati scritti sul database pubblico e cache aggiornate.
+L'OCR funge da fallback strategico per i referti cartacei. Il Referto Digitale in-app resta la via principale; l'OCR continua a essere sviluppato per campionati che non adottano il digitale e per l'archivio storico.
 
-- REJECTED - file scartato, con motivazione tracciata.
+### Canali di ingresso
 
-Moduli operativi da aggiungere alla dashboard
+- Email dedicata con estrazione allegati automatica.
+- WhatsApp con bot di ingestione e deduplica.
+- Upload manuale da admin come fallback.
+- Foto da smartphone, scansioni, PDF multipagina.
 
-- Inbox richieste profilo e membership: elenco di utenti che hanno completato identita e pagamento e chiedono accesso alla squadra.
+### Comportamento del modulo OCR
 
-- Pannello codici di attivazione: creazione, scadenza, revoca, riemissione e tracciamento per club, squadra, stagione e ruolo.
+- **Pre-processing** (OpenCV/PIL): rotazione automatica, correzione contrasto, split multipagina, normalizzazione dimensioni.
+- **Estrazione** via provider LLM Vision con prompt strutturato che forza output JSON rigido.
+- **Confidence score** per campo e per sezione; soglia configurabile sotto la quale il referto va in NEEDS_REVIEW.
+- **Raw evidence** salvata per ogni campo dubbio (snippet immagine o testo grezzo).
+- **Fallback obbligatorio** a review umana se confidence < soglia o se validazione strutturale fallisce.
+- **File originali conservati** insieme all'hash per duplicate detection e audit.
 
-- Centro notifiche club admin: avvisi automatici quando un utente tenta il claim senza codice, quando un documento richiede revisione o quando un accesso va revocato.
+### Validazioni automatiche post-estrazione
 
-- Audit log leggibile: chi ha approvato chi, quale documento e stato aperto, quando e con quale esito.
+- Somma parziali periodi == score finale.
+- Goal events totali == score finale per squadra.
+- Roster senza duplicati nello stesso team.
+- Home team ≠ Away team.
+- Match lookup fuzzy contro anagrafiche esistenti (squadre, atleti, arbitri).
+- Deduplica: stesso match non può essere pubblicato due volte; proposta merge manuale.
 
-## 9. OCR, ingestione, validazione e pubblicazione
+### Convergenza con il Referto Digitale
 
-L'OCR non va pensato come una scatola magica. Deve essere un processo completo: ingresso file, normalizzazione, lettura, parsing in JSON strutturato, controlli e solo dopo eventuale pubblicazione.
+OCR e Referto Digitale producono lo stesso contratto dati JSON e passano per lo stesso workflow di validazione. Un match con referto digitale nativo NON rifà OCR; un match con solo cartaceo passa per OCR e poi per review umana come sempre.
 
-Workflow dall'ingresso del referto alla statistica pubblicata.
+## 9.1 AI Stats Engine
 
-Canali di ingresso
+Scopo: fornire un'interfaccia di ricerca e analisi basata su AI che integri la navigazione esistente con risposte dinamiche in linguaggio naturale.
 
-- Foto da smartphone.
+### Funzionamento HYBRID MODE
 
-- Scansione singola o multipagina.
+1. **Existing Page Match (Redirect)**: se la query mappa su una pagina esistente (classifiche, profilo atleta, top scorer, scheda squadra), il sistema restituisce un breve riepilogo e un link diretto alla pagina.
+   - Esempio: "top scorer this season" → "Marco Rossi è il miglior marcatore con 42 gol" + CTA "Vedi classifica completa marcatori".
 
-- PDF generato da scanner o da sistemi esterni.
+2. **AI Response Mode (Direct Answer)**: se nessuna pagina soddisfa la query, il sistema interroga direttamente il DB e genera una risposta testuale.
+   - Esempio: "gol di Rossi nelle ultime 5 partite" → "Rossi ha segnato 7 gol nelle ultime 5 partite."
 
-- Email ingest con allegato referto (Automatico).
-- WhatsApp ingest (Automatico).
-- Referto digitale compilato direttamente in-app da arbitri o personale di giuria.
-- Upload manuale (Solo per Admin come fallback).
+### Regole di sicurezza
 
-Comportamento del modulo OCR/AI
-
-- Pre-processing: rotazione, ordine pagine, controllo qualita minima, eventuale cropping.
-
-- Prompt strutturato orientato al dominio sportivo e al referto ufficiale.
-
-- Output obbligatorio in JSON rigido; nessun testo libero come risposta finale.
-
-- Confidence per campo o gruppo di campi.
-
-- Null esplicito se il dato non e leggibile.
-
-- Conservazione di file originale, risposta grezza del modello, JSON normalizzato e versione post-revisione.
-
-Il referto digitale nativo deve produrre lo stesso contratto dati finale, saltando OCR ma non review, validazione, audit e publish.
-
-Campi da estrarre come base minima
-
-| Blocco | Campi | Note |
-| --- | --- | --- |
-| Match metadata | data, ora, competizione, round/fase, girone, venue, home team, away team, score finale | senza questi campi il match non si pubblica |
-| Giocatori per team | nome, numero, gol, espulsioni, carte, presenza/convocazione | gestire null e grafie sporche |
-| Officials | arbitro/i, allenatore casa, allenatore trasferta | fondamentale per profili coach e arbitro |
-| Referto file | path file, tipo file, pagina/e, hash, source | serve per audit e duplicate check |
-| Confidence e warning | campo, score fiducia, warning logico | visibili nell'admin |
-
-Validazioni automatiche indispensabili
-
-- Campi obbligatori presenti prima della pubblicazione.
-
-- Coerenza tra punteggio finale e somma eventi, quando gli eventi sono completi.
-
-- Riconciliazione nomi squadra e persone con database esistente.
-
-- Controllo duplicato per data + squadre + competizione + punteggio.
-
-- Valori impossibili o sospetti segnalati, non pubblicati in silenzio.
-
-- Eventuali conflitti di identita messi in review umana.
-
-Regola di sicurezza da tenere fissa
-
-L'OCR crea e aggiorna solo dati sportivi: partite, eventi, persone, squadre, statistiche e warning. Non deve mai creare account utente, concedere permessi o approvare accessi alle aree private.
-
-> Se i controlli non passano, il match non va live. Il sistema deve privilegiare l'affidabilita rispetto alla velocita.
-
----
-
-## 9.1 AI STATS ENGINE
-
-Scopo: Fornire un'interfaccia di ricerca e analisi basata su AI che integri la navigazione esistente con risposte dinamiche.
-
-### Architettura
-User Input -> AI Parser -> Intent -> Query Builder -> DB -> Response Generator
-
-### Componenti Core
-
-1. **QUERY PARSER**
-   - Input: linguaggio naturale.
-   - Output: `{ entity, metric, filters, time_range }`.
-
-2. **PAGE RESOLVER**
-   - Rileva se la query mappa su una pagina esistente.
-   - Output: `{ type: "page", target_url, summary }`.
-
-3. **QUERY BUILDER**
-   - Converte l'intent in query ORM (Django).
-   - Utilizza i modelli: Match, MatchEvent, Athlete, Team.
-
-4. **STATS ENGINE**
-   - Esegue aggregazioni (count, sum) filtrate per match, date o team.
-
-5. **RESPONSE GENERATOR**
-   - Produce l'output finale in formato JSON per il frontend.
-
-### Safety & Guardrails
-- **Zero Hallucination**: Risposte basate solo sui dati certi del database.
-- **Validazione Entità**: Verifica che atleti e squadre esistano prima di rispondere.
-- **Ambiguity Handling**: Se la query è ambigua, il sistema chiede chiarimenti invece di indovinare.
-
----
+- **Zero Hallucination**: solo dati reali dal database, mai inventati.
+- **Explicit fallback**: se il dato non esiste, messaggio esplicito all'utente.
+- **Ambiguity handling**: se la query è ambigua, il sistema chiede chiarimenti invece di indovinare.
+- **RBAC enforcement**: stesso principio del Chatbot AI — mai restituire dati che l'utente non avrebbe diritto di vedere.
 
 ## 10. Modello dati e motore statistiche
 
-Per evitare caos, il database deve riflettere entita reali e relazioni chiare. Statistiche e profili non vanno salvati come testo libero: devono nascere da match, persone, team, stagioni ed eventi partita.
+Per evitare caos, il database deve riflettere entità reali e relazioni chiare.
 
-Entita minime e relazioni da cui devono derivare profili e statistiche.
+### Entità core
 
-Entita chiave
+- **Matches**: metadata (data, luogo, competizione, round, girone), stato workflow, link referto sorgente, score finale, score per periodo.
+- **Teams**: anagrafica squadre, alias, storico per stagione.
+- **Players**: anagrafiche atleti, storico appartenenza team per stagione.
+- **Coaches**: anagrafica tecnici, storico squadre allenate.
+- **Referees**: anagrafica arbitri, designazioni storiche.
+- **Match_Events**: riga per ogni evento (gol, espulsione, cartellino, timeout, rigore), con timestamp/periodo, atleta, team.
+- **Competitions / Seasons / Venues**: entità di contesto per aggregare correttamente i dati.
+- **Validation_Logs**: storico di tutte le correzioni e revisioni manuali.
 
-- matches - una riga per partita, con metadata, stato workflow e collegamento al referto o al referto digitale nativo.
+### Entità business
 
-- teams - club o squadra in una specifica stagione/categoria.
+- **User_Accounts**: account applicativi con stato identità/subscription.
+- **Subscriptions**: piani attivi (Freemium / Premium / Club Pro) con date e metodo pagamento.
+- **Claim_Requests**: richieste di rivendica profilo sportivo.
+- **Activation_Codes**: codici società per membership sportiva.
+- **Shop_Orders**: log ordini intermediati dai webhook verso gli shop delle società.
+- **Sponsor_Assets**: sponsor caricati dalle società, con placement (pagina società, profili atleti).
+- **User_Preferences**: layout widget, tema colore, notifiche opt-in per ciascun utente Premium.
+- **Jury_Tokens**: token match-specific emessi per i giurati certificati, con scadenza e stato revoca.
 
-- players - identita atleta, ruolo, legami con team e storico.
+### Principi di integrità
 
-- coaches - identita allenatore e storico squadre.
-
-- referees - identita arbitro e storico designazioni.
-
-- match_events - layer piu prezioso per gol, espulsioni, carte, presenze.
-
-- seasons / competitions - contesto di campionato, girone, round.
-
-- cached_stats - aggregati veloci per homepage, classifiche e profili.
-
-- report_sources / match_reports - origine del dato sportivo: upload esterno, email ingest oppure compilazione digitale in-app.
-
-Entita applicative per account, pagamenti e accessi privati
-
-- user_accounts - identita applicativa con email, credenziali, stato verifica e preferenze.
-
-- subscriptions - piano attivo, storico rinnovi, stato pagamento e grace period.
-
-- account_profile_links - collegamento tra account e profilo sportivo rivendicato.
-
-- claim_requests - richieste di possesso profilo con stato, note e revisore.
-
-- team_activation_codes - codici temporanei o permanenti emessi dal club admin, legati a squadra, stagione e ruolo.
-
-- membership_requests - richieste di accesso squadra, con o senza codice, e relativo esito.
-
-- verification_events - traccia delle verifiche SPID/CIE o fallback documento + selfie/video-selfie.
-
-- permission_scopes - matrice finale di cio che un utente puo vedere: pubblico, profilo verificato, area privata squadra, gestione club.
-
-Motore statistiche: regole operative
-
-- Le classifiche di campionato derivano da matches verificati, non da inserimenti manuali separati.
-
-- Le leaderboard giocatori derivano da match_events o, in fallback controllato, dai tabellini verificati.
-
-- Il profilo rapido puo usare cache, ma la fonte di verita resta il dato normalizzato.
-
-- Ogni ricalcolo deve essere idempotente: rigenerare lo stesso match non deve creare doppioni.
+- Ogni statistica aggregata (top scorer, classifica, profilo atleta) deve poter essere ricalcolata da zero partendo dai Match_Events pubblicati.
+- Nessun campo aggregato va scritto a mano senza che esista un job che lo può rigenerare.
+- Unique constraints forti per evitare duplicati logici: un atleta non può comparire due volte nello stesso roster match; due squadre quasi uguali vanno riconciliate.
 
 ## 11. API, backend, infrastruttura e operations
 
-L'architettura deve rimanere semplice da capire. Sopra c'e l'interfaccia, in mezzo il layer applicativo, sotto il motore OCR/AI, il database e l'infrastruttura.
+Sopra l'interfaccia, in mezzo il layer applicativo, sotto il motore OCR/AI e il DB. Le API sono l'ossatura che alimenta sia il sito pubblico sia la futura app mobile.
 
-Vista a layer: esperienza utente, application layer, AI processing, data e operations.
-
-Struttura logica consigliata del backend
-
-- Frontend pubblico per home, partite, classifiche, squadre, profili e accesso.
-
-- Dashboard admin separata ma coerente visivamente.
-
-- API applicative per upload, process, status, profili, partite e classifiche.
-
-- OCR service che riceve file, costruisce prompt e restituisce JSON.
-
-- Rules engine per coerenza, duplicate detection e normalizzazione.
-
-- DB relazionale con storage file e log di elaborazione.
-
-- Cache o materialized layer per rendere veloci le pagine pubbliche.
-
-Endpoint MVP da prevedere
-
-- POST /auth/register, POST /auth/verify-identity, POST /auth/payment/activate - apertura account, verifica identita e attivazione del piano.
-
-- GET /profiles/search e POST /profiles/{id}/claim - ricerca del profilo sportivo e richiesta di claim.
-
-- POST /teams/access-by-code e POST /teams/request-access - accesso tramite codice oppure richiesta manuale con notifica al club admin.
-
-- GET /club-admin/requests, POST /club-admin/requests/{id}/approve, POST /club-admin/requests/{id}/reject - workflow di approvazione membership.
-
-- POST /club-admin/codes e POST /club-admin/codes/{id}/revoke - gestione dei codici di attivazione.
+### Endpoint principali
 
 | Metodo + path | Funzione | Output |
 | --- | --- | --- |
-| POST /ai/query | AI Query Interface endpoint | answer/redirect + data |
-| POST /api/referti/upload | Carica il file e crea il job | job id + stato iniziale |
+| POST /ai/query | AI Stats Engine (query linguaggio naturale) | answer/redirect + data |
+| POST /api/referti/upload | Carica file cartaceo e crea job OCR | job_id + stato iniziale |
 | POST /api/referti/process | Lancia OCR/AI sul job | stato elaborazione |
-| POST /api/referti/digital/start | Crea un referto digitale nativo | id referto + draft iniziale |
-| PUT /api/referti/digital/{id} | Aggiorna il draft digitale | bozza salvata |
-| POST /api/referti/digital/{id}/close | Chiude il referto digitale e lo manda a review/validate | stato workflow |
-| GET /api/referti/{id}/status | Restituisce stato workflow | UPLOADED/EXTRACTED/... |
-| GET /api/referti/{id}/results | Mostra JSON estratto e warning | payload per admin |
-| PUT /api/referti/{id}/validate | Correzione + approvazione | stato aggiornato |
-| GET /api/matches | Lista partite e filtri | match list |
+| POST /api/referti/digital/start | Crea un referto digitale nativo (giuria) | id referto + draft iniziale |
+| PUT /api/referti/digital/{id} | Aggiorna il draft digitale (sync offline) | bozza salvata |
+| POST /api/referti/digital/{id}/close | Firma PIN arbitro e chiude il referto | stato workflow + immutabilità |
+| GET /api/referti/{id}/status | Stato workflow del referto | UPLOADED / EXTRACTED / ... |
+| GET /api/referti/{id}/results | JSON estratto e warning (supporto Base/Avanzato) | payload per admin |
+| PUT /api/referti/{id}/validate | Correzione e approvazione admin | stato aggiornato |
+| GET /api/matches | Lista partite con filtri | match list |
 | GET /api/players/{id} | Profilo atleta | bio + season stats |
 | GET /api/coaches/{id} | Profilo coach | record + storico |
 | GET /api/referees/{id} | Profilo arbitro | designazioni + partite |
 | GET /api/teams/{id} | Scheda squadra | rosa, stats, ultime gare |
+| POST /api/media/upload | Caricamento foto/video Media Gallery (Premium) | media_id + tagging job |
+| GET /api/ai/chatbot | Interfaccia Chatbot con function calling | bot_response + eventuali azioni |
+| POST /api/jury/token/issue | Emissione token giuria match-specific | token + finestra validità |
+| POST /api/shop/webhook | Outbound firmato HMAC verso shop società | delivery status |
+| GET/PUT /api/user/preferences | Layout widget e tema utente Premium | preferenze persistenti |
 
-Infrastruttura e operations
+### Infrastruttura e operations
 
-La base tecnica gia impostata su server Hetzner puo restare il punto di partenza, ma va ordinata in moduli stabili: app backend, ocr module, email ingest, scripts, storage referti, database, log e deploy GitHub.
+La base tecnica già impostata su server Hetzner può restare il punto di partenza, ma va ordinata in moduli stabili:
 
-- Project root unico e leggibile, con separazione chiara fra backend, OCR, ingest e utility.
-
-- Log per ogni job di referto, con errori, warning e tempi di esecuzione.
-
-- Storage originale dei file e hash per duplicate detection.
-
-- Deploy disciplinato via GitHub, con ambiente di test prima del live.
+- **Project root unico** e leggibile, con separazione chiara tra backend, modulo OCR, ingest email/WhatsApp e utility.
+- **Log per ogni job di referto**, con errori, warning e tempi di esecuzione.
+- **Storage originale dei file** con hash per duplicate detection.
+- **Deploy disciplinato via GitHub**, con ambiente di test/staging prima del live.
+- **Monitoring** code di sync offline, webhook shop, push notifications e pipeline OCR.
+- **Storage media** (foto/video gallery) su bucket con CDN e lifecycle policy per archiviazione.
+- **Backup** DB e media automatici, con procedura di restore testata.
 
 ## 12. Grafica del sito e regole UX
 
-La grafica di 2salti deve sembrare sportiva ma non caotica, moderna ma non giocattolo. La sensazione giusta e quella di una piattaforma dati affidabile, con energia sportiva e leggibilita prima di tutto.
+La grafica di 2salti deve sembrare sportiva ma non caotica, moderna ma non giocattolo. La sensazione giusta è quella di una piattaforma dati affidabile, con energia sportiva e leggibilità prima di tutto.
 
-Palette, tipografia, componenti base, tema dark/light e regole UX.
+### Direzione visiva
 
-Direzione visiva
+- **Palette**: primaria basata su blue + navy, con teal, orange e green come colori funzionali.
+- **Card**: arrotondate, sfondi molto puliti, ampio respiro tra moduli.
+- **Tipografia**: titoli grandi e netti; testo secondario più morbido, mai grigio troppo scarico.
+- **Grafici**: pochi ma chiari; tabelle pulite, con varianti card su mobile.
+- **Dark mode**: coerente, non improvvisata — contrasto alto, stessi componenti, stessi spazi.
 
-- Palette primaria basata su blue + navy, con teal, orange e green come colori funzionali.
+### Widget Layout System
 
-- Card arrotondate, sfondi molto puliti, ampio respiro tra moduli.
+Dashboard utente e Pagina Società sono costruite su un sistema a **slot fissi riordinabili**, NON drag&drop libero stile Canva. Ogni utente Premium e ogni società Club Pro può:
 
-- Titoli grandi e netti; testo secondario piu morbido, mai grigio troppo scarico.
+- Riordinare l'ordine dei widget disponibili.
+- Nascondere i widget non interessanti.
+- Applicare un tema colore (default 2salti + varianti con i colori della squadra seguita).
 
-- Grafici pochi ma chiari; tabelle pulite, con varianti card su mobile.
+Le preferenze sono persistite per utente in `user_preferences`. La personalizzazione Premium è un override dei profili default per ruolo definiti al Cap. 7.1 — non un disegno da foglio bianco.
 
-- Dark mode coerente, non improvvisata: contrasto alto, stessi componenti, stessi spazi.
+### Regole UX da tenere fisse
 
-Regole UX da tenere fisse
-
-- Ricerca e cambio tema sempre accessibili.
+- Ricerca e cambio tema sempre accessibili nell'header.
 - Da guest e da utente loggato il sito deve essere riconoscibile come la stessa piattaforma, ma con gerarchie e moduli diversi: da pubblico scoperta e consultazione; da autenticato azione, personalizzazione e strumenti.
-
 - Ogni pagina dati deve mostrare contesto: stagione, competizione, data ultimo aggiornamento.
-
 - Nessuna pagina pubblica deve sembrare rotta quando il dato manca: usare stati vuoti curati e copy chiaro.
-
 - Filtri semplici, visibili e coerenti tra partite, classifiche e statistiche.
+- AI search bar sempre visibile nell'header o nella sidebar.
+- Risposte AI con breakdown opzionale dei dati sorgente.
 
-- AI search bar sempre visibile nell'header o sidebar.
-- Risposte AI con breakdown opzionale dei dati.
+## 13. Modello di business (Three-Tier)
+
+Il modello economico si basa su tre piani paralleli che sbloccano diverse profondità di utilizzo. Sostituisce il precedente piano unico a ~0,50 EUR/mese.
+
+| Piano | Prezzo Guida | Target | Feature Chiave |
+| --- | --- | --- | --- |
+| **Freemium** | Gratis | Utente base | Pagine pubbliche, claim profilo, lettura bacheca società |
+| **Premium Utente** | Mensile (TBD) | Famiglie, Atleti, Tifosi | Chatbot AI, Live Alerts push, Media Gallery upload, Season Recap, Dashboard widget personalizzata |
+| **Club Pro** | Mensile (TBD) | Società / Club | Scrittura Bacheca + push a iscritti, Shop vetrina, gestione Sponsor, Pagina Club personalizzata |
+
+### Chi paga cosa / chi riceve cosa
+
+- **Utente Premium**: paga per servizi avanzati personali (Alerts, Chatbot, Gallery, Season Recap, personalizzazione).
+- **Società (Club Pro)**: paga per visibilità (Sponsor, pagina società), gestione operativa (Shop vetrina) e comunicazione diretta (Bacheca push).
+- **Giuria certificata**: utilizzo del Referto Digitale sempre gratuito, via token match-specific emesso dalla federazione/lega.
+- **Fruizione contenuti**: la lettura della bacheca e la consultazione dati base restano gratis per tutti gli utenti iscritti alla società (anche Freemium). Le notifiche push sulla bacheca arrivano solo ai Premium.
+
+### Funnel di attivazione
+
+1. Registrazione account base (email + password o OAuth).
+2. Verifica identità personale (SPID/CIE primario; fallback documento + selfie per stranieri, minorenni, casi speciali).
+3. Selezione piano: Freemium (gratis) attivato subito; Premium o Club Pro richiedono pagamento.
+4. Claim del profilo sportivo (ricerca profilo e richiesta di possesso).
+5. Accesso squadra tramite codice fornito dal club o richiesta manuale notificata al club admin.
+6. Approvazione finale e sblocco delle aree private.
+
+### Priorità di esecuzione
+
+1. **Nucleo affidabile del dato**: Referto Digitale (form mobile, offline, PIN), OCR fallback, validazione, database e profili sportivi pre-caricati.
+2. **Modulo account**: registrazione, SPID/CIE, fallback documento, pagamento tre piani.
+3. **Claim e membership**: ricerca profilo, codici di attivazione, notifiche al club admin, approvazioni e revoche.
+4. **Area pubblica robusta e dashboard private** per ruoli verificati, con distinzione netta tra guest, Freemium, Premium e Club Pro.
+5. **Crescita**: nuovi sport oltre la pallanuoto, mobile/PWA, analytics più profonde, integrazioni future.
+
+## 14. Decisioni immediate da bloccare (Baseline v3)
+
+- **Referto Digitale**: via principale di ingestione. OCR come fallback per cartaceo e archivio storico.
+- **Three-Tier Pricing**: Freemium / Premium Utente / Club Pro. Prezzi puntuali TBD, da validare con campione di famiglie e società.
+- **Widget Layout**: sistema a slot fissi riordinabili per dashboard utente e pagine club. Niente drag&drop libero in v1.
+- **Chatbot AI**: esclusiva Premium, con function calling e RBAC server-side obbligatorio.
+- **Bacheca mista**: scrittura gated Club Pro, lettura gratis per tutti gli iscritti, notifiche push solo Premium.
+- **Shop vetrina**: webhook outbound firmato HMAC o email strutturata verso lo shop società. Nessun checkout diretto in-app. 2salti è intermediario, non venditore.
+- **Certificazione giuria**: token match-specific con finestra 30 minuti pre-match, revoca automatica al fischio finale, revoca manuale admin disponibile.
+- **Firma referto**: PIN arbitro rende il referto immutabile post-firma; correzioni successive solo via admin con audit log completo.
+- **AI Tagging Media Gallery**: detection automatica + coda di review manuale; opt-in esplicito per minorenni, opt-out disponibile per ogni atleta.
+- **Profili sportivi creati dal sistema**: gli utenti non creano da zero il proprio profilo sportivo, lo rivendicano.
+- **Verifica identità**: SPID/CIE primario; fallback documento + selfie / video-selfie per casi eccezionali.
+- **Accesso dati privati**: richiede SEMPRE entrambe le condizioni — identità verificata + membership sportiva approvata.
+- **Multi-sport by design**: pallanuoto è il primo rollout, non il limite. Naming, navigazione, design system, dominio devono restare estendibili ad altri sport.
 
 ---
 
-## 13. Modello di business e priorita di esecuzione
+## Punti da validare con il product owner
 
-Il modello economico da bloccare e un micro-abbonamento mensile per account. L'obiettivo non e far pagare la creazione del profilo sportivo, ma l'accesso verificato alla piattaforma, alle funzioni personali e alle aree private autorizzate.
+- **[Federazione]** Chi è l'autorità che emette i token giuria? (Nazionale / Lega / Club?)
+- **[Conflitti]** Policy di conflict resolution per sync simultaneo di più dispositivi sullo stesso match.
+- **[Shop]** SLA del webhook verso società: quante ore di retry? Notifica admin club in caso di failure?
+- **[UX]** Opzione "sito esterno": Redirect diretto (Opzione A) vs Pagina teaser con badge (Opzione B).
+- **[Gallery]** Moderazione contenuti: Segnalazione automatica o dashboard manuale Club Admin?
+- **[Chatbot]** Function calling aperto (Opzione A) vs Lista chiusa whitelist comandi (Opzione B).
+- **[Privacy]** Season Recap minorenni: Opt-in richiesto per generazione PDF o solo per condivisione?
+- **[Identity]** Chi valida manualmente i documenti nel fallback SPID (Documento+Selfie)? (2salti Staff / Club Admin?)
 
-Struttura economica consigliata
+---
 
-- Prezzo guida iniziale: circa 0,50 EUR al mese per account.
+### Modifiche applicate in questa revisione (v3.3)
 
-- Pagano atleti, allenatori, arbitri, presidenti/dirigenti e utenti premium che vogliono usare davvero la piattaforma.
+- **FIX 7.3**: Rimossa duplicazione interna delle regole di verifica e privacy; contenuto consolidato in un unico elenco puntato.
+- **FIX 7.4 / 7.5 / 7.6**: Ripristinato il dettaglio operativo completo delle sotto-sezioni Referto Digitale (certificazione token, offline-first, PIN, livelli Base/Avanzato, form UX), Chatbot AI (function calling, RBAC server-side, audit log) e Media Gallery (pipeline AI, coda review, opt-in minorenni, opt-out atleti).
+- **FIX Cap. 8**: Ripristinato dettaglio workflow editoriale (schermate, stati completi con transizioni, principi UX cockpit).
+- **FIX Cap. 9**: Ripristinato dettaglio OCR (canali ingresso, pre-processing, confidence, raw evidence, validazioni automatiche) e convergenza con il Referto Digitale.
+- **FIX Cap. 9.1**: Ripristinato dettaglio AI Stats Engine (hybrid mode, redirect/direct answer, regole sicurezza).
+- **FIX Cap. 10**: Ripristinato inventario completo entità core e aggiunte entità business nuove (Subscriptions, Shop_Orders, Sponsor_Assets, User_Preferences, Jury_Tokens).
+- **FIX Cap. 11**: Ripristinata tabella completa endpoint (15+ API) integrando i nuovi: media upload, chatbot, jury token issue, shop webhook, user preferences. Ripristinato paragrafo infrastruttura/operations con monitoring e backup.
+- **FIX Cap. 12**: Ripristinato dettaglio direzione visiva (palette, card, tipografia, grafici, dark mode) + Widget Layout System + regole UX.
+- **FIX Cap. 13**: Modello economico esteso con "Chi paga cosa", funnel attivazione e priorità di esecuzione.
+- **FIX Cap. 14**: Decisioni bloccate ampliate con certificazione giuria, firma PIN, AI tagging, profili sportivi, verifica identità, multi-sport by design.
 
-- Il profilo sportivo puo esistere anche senza account; il pagamento serve a trasformare quel profilo in esperienza personale, verificata e operativa.
+### Cronologia revisioni
 
-- Il valore pagato dall'utente comprende: verifica identita, claim del profilo, dashboard personale, notifiche, accesso riservato e strumenti coerenti con il ruolo.
-
-Ordine logico del funnel
-
-- 1) Registrazione account.
-
-- 2) Verifica identita personale.
-
-- 3) Attivazione del pagamento.
-
-- 4) Claim del profilo sportivo.
-
-- 5) Accesso squadra tramite codice o richiesta manuale notificata al club admin.
-
-- 6) Approvazione finale e sblocco delle aree private.
-
-Equilibrio tra pubblico e riservato
-
-La piattaforma puo mantenere una superficie pubblica utile per scoperta, SEO e reputazione del dato - home, partite, classifiche, teaser profili - ma il vero valore operativo vive dietro account verificato e pagamento attivo.
-
-Priorita di esecuzione aggiornata
-
-- 1) Nucleo affidabile del dato: upload, referto digitale nativo, OCR strutturato, validazione, database e profili sportivi pre-caricati.
-
-- 2) Modulo account: registrazione, SPID/CIE, fallback documento + selfie/video-selfie e pagamento.
-
-- 3) Claim e membership: ricerca profilo, codici di attivazione, notifiche al club admin, approvazioni e revoche.
-
-- 4) Area pubblica robusta e dashboard private per ruoli verificati, con distinzione netta tra guest e autenticato.
-
-- 5) Crescita: nuovi sport oltre la pallanuoto, email ingest, mobile/PWA, analytics piu profonde e integrazioni future.
-
-## 14. Decisioni immediate da bloccare
-
-Per evitare dispersione, le scelte da usare come baseline del progetto sono queste.
-
-- Profili sportivi creati dal sistema; gli utenti non creano da zero il proprio profilo sportivo.
-
-- Verifica identita personale con SPID/CIE come metodo principale.
-
-- Fallback documento + selfie oppure video-selfie per stranieri, utenti senza SPID/CIE, minorenni o casi eccezionali.
-
-- Sequenza funnel: registrazione -> verifica identita -> pagamento -> claim profilo -> accesso squadra.
-
-- Metodo base di appartenenza sportiva: codice di attivazione fornito dal club.
-
-- Se il codice manca, il sistema deve permettere richiesta manuale e notificare automaticamente il club admin competente.
-
-- Il club admin puo validare i membri e aprire il documento completo solo in una vista protetta e tracciata.
-
-- L'accesso ai dati privati di squadra richiede sempre entrambe le condizioni: identita verificata e membership sportiva approvata.
-
-- Il dato sportivo puo entrare sia da OCR sia da referto digitale compilato nativamente in-app; entrambi devono convergere nello stesso contratto dati e nello stesso workflow di controllo.
-
-- L'OCR aggiorna il mondo sportivo ma non crea account e non assegna permessi.
-
-- La pallanuoto e il primo sport di rollout, ma repository, navigazione, design system e dominio devono restare estendibili ad altri sport.
-
-- Il sito deve avere una superficie pubblica chiara e una superficie autenticata/personale distinta, con permessi e contenuti coerenti con il ruolo.
-
-- Modello economico base: micro-abbonamento mensile per account, con prezzo guida intorno a 0,50 EUR.
+- **v3**: Versione iniziale unificata (prodotto, pagine, OCR, dati, design system, architettura, roadmap).
+- **v3.1**: Introdotti modello three-tier, Referto Digitale, Chatbot, Media Gallery, profili default per ruolo. Capitoli 8-14 inavvertitamente compressi a stub.
+- **v3.2**: Ripristinata numerazione capitoli originale; aggiunto blocco "Punti da validare"; capitoli 8-14 parzialmente ricostruiti ma ancora incompleti.
+- **v3.3**: Ripristino chirurgico completo dei capitoli 7.4-7.6 e 8-14 con contenuto operativo pieno. Consolidata sezione 7.3.
