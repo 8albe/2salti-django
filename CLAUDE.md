@@ -107,6 +107,8 @@ IDENTITY_PENDING → PAYMENT_PENDING → SETUP_PENDING → MEMBERSHIP_PENDING �
 
 Fan role skips payment. Each state redirects to its own wizard step until `setup_completed=True`.
 
+> **Important:** `onboarding_state` is a **computed property** on `User`, not a DB field — never assign to it. It derives its value from three real fields: `identity_status`, `subscription_status`, and `setup_completed`. See `accounts/models.py` for the full logic.
+
 ### RBAC (Staff Roles)
 
 Custom `staff_role` field on `User`, separate from Django's `is_staff`:
@@ -122,7 +124,14 @@ Used to gate report upload, validation, and publishing. Check via `user.staff_ro
 `MatchReport` follows this status flow:
 
 ```
-DRAFT → UPLOADED → PROCESSING → EXTRACTED → VALIDATED → PUBLISHED
+DRAFT         — bozza referto digitale (entry: source_channel=DIGITAL)
+UPLOADED      — file caricato, in coda OCR (entry: source_channel=FILE, default)
+PROCESSING    — OCR in esecuzione
+EXTRACTED     — OCR completato, in attesa revisione umana
+NEEDS_REVIEW  — quality gate non superato o errore OCR (può tornare a PROCESSING)
+VALIDATED     — approvato manualmente da reviewer
+PUBLISHED     — pubblicato, standings e stats aggiornate (finale stabile)
+REJECTED      — errore terminale, file assente o irrecuperabile (finale)
 ```
 
 Services in `matches/services/`:
@@ -134,7 +143,7 @@ Services in `matches/services/`:
 - `integrity_service.py` — data validation guardrails before publish
 - `hash_service.py` — SHA256 deduplication of uploaded files
 
-Reports track `source` (FILE/DIGITAL), `origin` (MANUAL/EMAIL), and full audit trail via `MatchReportAuditLog`.
+Reports track `source_channel` (FILE/DIGITAL), `source_type` (MANUAL/EMAIL), and full audit trail via `MatchReportAuditLog`.
 
 ### OCR Output Contract
 
