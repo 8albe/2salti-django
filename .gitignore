@@ -49,8 +49,6 @@ Varie/
 temp/
 2salti/
 2salti-legacy/
-matches/
-seasons/
 accounts/test_claim_flow.py
 create_sports.py
 test_routes_real.py
