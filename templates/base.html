@@ -344,7 +344,7 @@
                         {% if sport %}
                         <a href="{% url 'sport_matches' sport.slug %}" class="nav-link-premium text-sm font-bold uppercase tracking-widest {% if request.resolver_match.url_name == 'sport_matches' %}text-cyan-400{% else %}text-slate-400 hover:text-white{% endif %}">Risultati</a>
                         <a href="{% url 'sport_detail' sport.slug %}" class="nav-link-premium text-sm font-bold uppercase tracking-widest {% if request.resolver_match.url_name == 'sport_detail' %}text-cyan-400{% else %}text-slate-400 hover:text-white{% endif %}">Classifiche</a>
-                        <a href="{% url 'league_statistics' league.slug|default:sport.leagues.first.slug %}" class="nav-link-premium text-sm font-bold uppercase tracking-widest {% if 'statistics' in request.path %}text-cyan-400{% else %}text-slate-400 hover:text-white{% endif %}">Statistiche</a>
+                        <a href="{% url 'league_stats' league.slug|default:sport.leagues.first.slug %}" class="nav-link-premium text-sm font-bold uppercase tracking-widest {% if 'statistics' in request.path %}text-cyan-400{% else %}text-slate-400 hover:text-white{% endif %}">Statistiche</a>
                         {% endif %}
                     </nav>
                 </div>
