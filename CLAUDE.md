@@ -16,14 +16,20 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - Project language: Italian for UI, user-facing messages, and commit messages. English for code, comments, and technical errors.
 - Always use `Europe/Rome` timezone-aware datetimes — never naive datetimes.
 
-## Sources of Truth
+## Documentation Map
 
-Two project documents take precedence over anything else in this file for architectural decisions and feature scope:
+Prima di iniziare qualunque task, identifica quale documento consultare.
 
-1. **[docs/PRODUCT_BLUEPRINT.md](docs/PRODUCT_BLUEPRINT.md)** — architectural blueprint, domain model, and design rationale. Written in Italian. Authoritative for *why* things are built the way they are.
-2. **[docs/FEATURE_SYLLABUS_LEGACY.md](docs/FEATURE_SYLLABUS_LEGACY.md)** — feature inventory with completion status and roadmap. Authoritative for *what* exists and *what's next*.
+| Tipo di task | Documento autoritativo | Contiene |
+|---|---|---|
+| Modifiche a stati/transizioni di un modello | [docs/STATE_MACHINES.md](docs/STATE_MACHINES.md) | 9 macchine a stati verificate sul codice |
+| Cercare il modello Django da un termine italiano | [docs/DOMAIN_GLOSSARY.md](docs/DOMAIN_GLOSSARY.md) | mapping blueprint ↔ codice, 30+ entità |
+| Capire se una feature esiste, dove sta, quali test la coprono | [docs/FEATURE_STATUS.md](docs/FEATURE_STATUS.md) | 21 feature operative, gap vs blueprint |
+| Capire il "perché" di una decisione di prodotto | [docs/PRODUCT_BLUEPRINT.md](docs/PRODUCT_BLUEPRINT.md) | visione, UX, business model (italiano) |
+| Roadmap e priorità feature | [docs/FEATURE_SYLLABUS_LEGACY.md](docs/FEATURE_SYLLABUS_LEGACY.md) | ex syllabus Antigravity, in revisione |
+| Regole, comandi, convenzioni di sviluppo | CLAUDE.md (questo file) | regole operative |
 
-When in doubt, read these two before acting. If they contradict this `CLAUDE.md`, they win — and flag the inconsistency so we can fix it.
+In caso di contraddizione tra documenti: `STATE_MACHINES > DOMAIN_GLOSSARY > FEATURE_STATUS > CLAUDE.md > PRODUCT_BLUEPRINT` per questioni di codice; `PRODUCT_BLUEPRINT` vince sulla visione di prodotto.
 
 ## Protected Files — Ask Before Modifying
 
@@ -64,7 +70,7 @@ python manage.py send_pilot_report
 python manage.py run_scheduler
 ```
 
-## Architecture
+## Architecture at a Glance
 
 ### Django Apps
 
@@ -77,14 +83,31 @@ python manage.py run_scheduler
 | `seasons` | Season archives and historical stats |
 | `config` | Django settings, root URL conf, WSGI |
 
-### Settings & Config
+### Key paths
 
-- Settings: [config/settings.py](config/settings.py)
-- Root URLs: [config/urls.py](config/urls.py)
-- Env vars loaded from `.env` via `python-dotenv`
-- `AUTH_USER_MODEL = 'accounts.User'` (custom user, always use `get_user_model()`)
-- Language: Italian (`it`), timezone: `Europe/Rome`
+- Settings: [config/settings.py](config/settings.py) — Root URLs: [config/urls.py](config/urls.py)
+- User model: `accounts.User` (`AUTH_USER_MODEL`) — always use `get_user_model()`
+- Env vars loaded from `.env` via `python-dotenv`. Language: `it`, timezone: `Europe/Rome`
 - SQLite in dev, configurable for PostgreSQL in production
+- URL prefixes: `/` → core, `/accounts/` → accounts, `/matches/` → matches, `/api/` → matches REST v1, `/management/` → management, `/admin/` → custom op_admin_site
+
+### State machines
+
+Le 9 macchine a stati del progetto (MatchReport, User onboarding, RBAC, AccountProfileLink, MembershipRequest, Convocation, TrainingAttendance, PilotBug, PilotFeedback) sono documentate in [docs/STATE_MACHINES.md](docs/STATE_MACHINES.md). Non duplicare qui.
+
+### Domain model
+
+Mapping tra termini italiani del blueprint e modelli Django: [docs/DOMAIN_GLOSSARY.md](docs/DOMAIN_GLOSSARY.md). Usare quel file quando si legge PRODUCT_BLUEPRINT.md e non si riconosce un'entità nel codice.
+
+### Feature inventory
+
+Per sapere se una feature esiste, dove sta, e quali test la coprono: [docs/FEATURE_STATUS.md](docs/FEATURE_STATUS.md). Aggiornato al 2026-04-20.
+
+### OCR edge cases
+
+- Multi-page PDFs: concatenate pages before extraction.
+- Rotated or skewed photos: the provider handles orientation — do not pre-process.
+- Near-duplicates (different scans of same report): **not** deduplicated automatically — reviewer must decide.
 
 ### Key Environment Variables
 
@@ -95,90 +118,6 @@ OCR_PROVIDER            # gpt4o | mock
 EMAIL_HOST_USER / EMAIL_HOST_PASSWORD
 TELEGRAM_BOT_TOKEN / TELEGRAM_CHAT_ID  # optional ops notifications
 ENVIRONMENT_NAME        # production
-```
-
-### User Onboarding State Machine
-
-`accounts/middleware.py` (`OnboardingMiddleware`) enforces this flow for every authenticated request:
-
-```
-IDENTITY_PENDING → PAYMENT_PENDING → SETUP_PENDING → MEMBERSHIP_PENDING → COMPLETED
-```
-
-Fan role skips payment. Each state redirects to its own wizard step until `setup_completed=True`.
-
-> **Important:** `onboarding_state` is a **computed property** on `User`, not a DB field — never assign to it. It derives its value from three real fields: `identity_status`, `subscription_status`, and `setup_completed`. See `accounts/models.py` for the full logic.
-
-### RBAC (Staff Roles)
-
-Custom `staff_role` field on `User`, separate from Django's `is_staff`:
-
-```
-NONE → UPLOADER → REVIEWER → PUBLISHER → SUPERADMIN
-```
-
-Used to gate report upload, validation, and publishing. Check via `user.staff_role` against constants in `accounts/models.py`.
-
-### Match Report Pipeline
-
-`MatchReport` follows this status flow:
-
-```
-DRAFT         — bozza referto digitale (entry: source_channel=DIGITAL)
-UPLOADED      — file caricato, in coda OCR (entry: source_channel=FILE, default)
-PROCESSING    — OCR in esecuzione
-EXTRACTED     — OCR completato, in attesa revisione umana
-NEEDS_REVIEW  — quality gate non superato o errore OCR (può tornare a PROCESSING)
-VALIDATED     — approvato manualmente da reviewer
-PUBLISHED     — pubblicato, standings e stats aggiornate (finale stabile)
-REJECTED      — errore terminale, file assente o irrecuperabile (finale)
-```
-
-Services in `matches/services/`:
-- `ocr_service.py` — extracts data from PDFs/images via OpenAI or mock provider
-- `schema.py` — validates OCR output against expected JSON shape
-- `converters.py` — normalizes raw OCR → structured match data
-- `standings_service.py` — deferred standings rebuild (triggered on publish)
-- `publishing_service.py` — publishes report, updates player stats
-- `integrity_service.py` — data validation guardrails before publish
-- `hash_service.py` — SHA256 deduplication of uploaded files
-
-Reports track `source_channel` (FILE/DIGITAL), `source_type` (MANUAL/EMAIL), and full audit trail via `MatchReportAuditLog`.
-
-### OCR Output Contract
-
-`ocr_service.py` returns a JSON object validated by `schema.py`. Consumers downstream (`converters.py`) rely on this exact shape — **do not change keys or nesting without updating the schema, converters, and fixtures together**.
-
-Expected top-level keys:
-- `match_metadata` — date, teams, league, referee
-- `events` — list of ordered match events (goals, cards, substitutions)
-- `players_home`, `players_away` — rosters with jersey numbers and minutes
-- `raw_confidence` — per-field confidence scores from the provider
-
-Known edge cases to preserve:
-- Multi-page PDFs: concatenate pages before extraction.
-- Rotated or skewed photos: the provider handles orientation, do not pre-process.
-- Duplicate uploads: `hash_service.sha256_of_file()` blocks re-ingestion of identical files; near-duplicates (different scans of same report) are **not** deduplicated automatically — reviewer must decide.
-
-When extending the OCR pipeline, update in this order:
-1. `schema.py` (contract)
-2. `ocr_service.py` (extraction)
-3. `converters.py` (normalization)
-4. Tests and fixtures in `matches/tests_ocr_service.py`
-
-### Standings
-
-`LeagueStanding` is a **persistent denormalized table** (not computed on the fly). After publishing a match report, `standings_service.rebuild_league_standings(league)` recalculates the full table. The `League` model has a `needs_rebuild` flag for deferred/scheduled rebuilds.
-
-### URL Structure
-
-```
-/               → core.urls      (home, sport, society, team, player, league)
-/accounts/      → accounts.urls  (signup, setup wizard, profile, claim)
-/matches/       → matches.urls   (match detail, report upload/digital, queue)
-/api/           → matches.api_urls (v1 REST: standings, matches, athlete, digital report CRUD)
-/management/    → management.urls (trainings, club admin, ops cockpit)
-/admin/         → custom op_admin_site
 ```
 
 ### Frontend
@@ -231,19 +170,7 @@ When extending the OCR pipeline, update in this order:
 
 ## Test Layout
 
-Tests live alongside their app code:
-
-```
-matches/tests_ocr_service.py        # OCR extraction
-matches/tests_publish_guardrails.py # publish logic
-matches/tests_status_semantics.py   # report state machine
-matches/tests_stats_integrity.py    # stats calculation
-matches/tests_email_ingestion.py    # email-received reports
-matches/tests_reconciliation_logic.py
-accounts/tests_onboarding.py        # onboarding flow
-management/test_rbac.py             # role-based access
-management/tests_cockpit.py         # ops cockpit
-```
+I test vivono accanto al codice delle rispettive app, con nomi `tests_*.py` o `test_*.py`. L'inventario completo dei test per feature, incluse le aree senza copertura dedicata, è in [docs/FEATURE_STATUS.md](docs/FEATURE_STATUS.md).
 
 Mock the OCR provider via `OCR_PROVIDER=mock` or by patching `vision_providers.py` — never call OpenAI in tests.
 
