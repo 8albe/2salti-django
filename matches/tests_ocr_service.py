@@ -330,7 +330,17 @@ class PublishReadinessTestCase(TestCase):
                     {"number": i, "name": f"Opponent {i}"} for i in range(1, 14)
                 ]}
             },
-            "events": []
+            "events": [
+                {"type": "GOAL", "team": "home", "player_name": f"Player {i}", "minute": i, "quarter": ((i-1) // 2) + 1}
+                for i in range(1, 9)
+            ] + [
+                {"type": "GOAL", "team": "away", "player_name": f"Opponent {i}", "minute": i, "quarter": ((i-1) // 2) + 1}
+                for i in range(1, 7)
+            ],
+            "reconciliation": {
+                "home_players": {f"Player {i}": i for i in range(1, 9)},
+                "away_players": {f"Opponent {i}": 100 + i for i in range(1, 7)},
+            },
         }
 
     def test_good_data_is_publishable(self):
@@ -349,13 +359,14 @@ class PublishReadinessTestCase(TestCase):
         self.assertTrue(any("Punteggio" in b for b in blockers))
 
     def test_empty_rosters_block_publish(self):
-        """Roster vuoti bloccano la pubblicazione."""
+        """Roster vuoti generano un warning (non un blocker): la pubblicazione è ancora consentita."""
         data = self._make_publishable_data()
         data["teams"]["home"]["players"] = []
         data["teams"]["away"]["players"] = []
         safe, blockers, warnings = OCRSchemaValidator.assess_publish_readiness(data)
-        self.assertFalse(safe)
-        self.assertTrue(any("roster" in b.lower() for b in blockers))
+        # Il guardrail "roster vuoti" emette un warning, non un blocker (schema.py:301).
+        self.assertTrue(safe)
+        self.assertTrue(any("roster" in w.lower() for w in warnings))
 
     def test_very_low_confidence_blocks_publish(self):
         """Confidenza < 0.3 blocca la pubblicazione."""
