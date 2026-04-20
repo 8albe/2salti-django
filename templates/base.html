@@ -68,12 +68,13 @@
     <style>
         :root {
             --bg-dark: #020617;
-            --text-main: #e2e8f0;
+            --text-main: #f1f5f9;
             --text-muted: #94a3b8;
-            --glass-bg: rgba(15, 23, 42, 0.8);
-            --glass-border: rgba(255, 255, 255, 0.05);
+            --glass-bg: rgba(15, 23, 42, 0.7);
+            --glass-border: rgba(255, 255, 255, 0.08);
             --sidebar-bg: rgba(15, 23, 42, 0.9);
             --sport-color: {{ sport_color|default:"#06b6d4" }};
+            --accent-glow: rgba(6, 182, 212, 0.3);
         }
 
         [data-theme="light"] {
@@ -89,18 +90,49 @@
             background-color: var(--bg-dark);
             color: var(--text-main);
             transition: background-color 0.3s ease, color 0.3s ease;
+            background-image: 
+                radial-gradient(at 0% 0%, rgba(6, 182, 212, 0.05) 0px, transparent 50%),
+                radial-gradient(at 100% 0%, rgba(139, 92, 246, 0.05) 0px, transparent 50%);
+            background-attachment: fixed;
         }
 
         .glass {
             background: var(--glass-bg);
-            backdrop-filter: blur(12px);
-            border-color: var(--glass-border);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid var(--glass-border);
+        }
+
+        .glass-premium {
+            background: linear-gradient(135deg, rgba(255,255,255,0.05) 0%, rgba(255,255,255,0) 100%);
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(255,255,255,0.1);
+            box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
         }
 
         .sport-text { color: var(--sport-color); }
         .sport-bg-glow {
             background-color: var(--sport-color);
-            box-shadow: 0 0 20px var(--sport-color) 40;
+            box-shadow: 0 0 25px var(--sport-color);
+        }
+
+        /* Nav hover effects */
+        .nav-link-premium {
+            position: relative;
+            transition: all 0.3s ease;
+        }
+        .nav-link-premium::after {
+            content: '';
+            position: absolute;
+            bottom: -4px;
+            left: 0;
+            width: 0;
+            height: 2px;
+            background: var(--sport-color);
+            transition: width 0.3s ease;
+        }
+        .nav-link-premium:hover::after {
+            width: 100%;
         }
 
         /* Mobile Fixes */
@@ -108,10 +140,7 @@
             html { font-size: 14px; }
             .container { padding-left: 1rem; padding-right: 1rem; }
             h1 { font-size: 1.5rem !important; }
-            .text-4xl { font-size: 1.75rem !important; }
-            .grid-cols-3 { gap: 0.5rem !important; }
-            .p-8 { padding: 1rem !important; }
-            .p-6 { padding: 0.75rem !important; }
+            .p-8 { padding: 1.5rem !important; }
         }
     </style>
     <script>
@@ -307,8 +336,29 @@
         <!-- MAIN CONTENT WRAPPER -->
         <div class="flex-1 flex flex-col h-full overflow-hidden relative">
 
+            <!-- TOP SPORTS NAVBAR (Desktop) -->
+            <header class="hidden lg:flex h-20 glass sticky top-0 z-40 px-12 items-center justify-between border-b border-white/5">
+                <div class="flex items-center gap-10">
+                    <nav class="flex items-center gap-8">
+                        <a href="/" class="nav-link-premium text-sm font-bold uppercase tracking-widest {% if request.resolver_match.url_name == 'home' %}text-cyan-400{% else %}text-slate-400 hover:text-white{% endif %}">Home</a>
+                        {% if sport %}
+                        <a href="{% url 'sport_matches' sport.slug %}" class="nav-link-premium text-sm font-bold uppercase tracking-widest {% if request.resolver_match.url_name == 'sport_matches' %}text-cyan-400{% else %}text-slate-400 hover:text-white{% endif %}">Risultati</a>
+                        <a href="{% url 'sport_detail' sport.slug %}" class="nav-link-premium text-sm font-bold uppercase tracking-widest {% if request.resolver_match.url_name == 'sport_detail' %}text-cyan-400{% else %}text-slate-400 hover:text-white{% endif %}">Classifiche</a>
+                        <a href="{% url 'league_statistics' league.slug|default:sport.leagues.first.slug %}" class="nav-link-premium text-sm font-bold uppercase tracking-widest {% if 'statistics' in request.path %}text-cyan-400{% else %}text-slate-400 hover:text-white{% endif %}">Statistiche</a>
+                        {% endif %}
+                    </nav>
+                </div>
+                <div class="flex items-center gap-6">
+                    <!-- Global Search Placeholder in Nav -->
+                    <div class="relative w-64">
+                        <input type="text" placeholder="Cerca atleti, club..." class="w-full bg-white/5 border border-white/10 rounded-full py-2 px-4 text-xs focus:outline-none focus:ring-1 focus:ring-cyan-500/50 text-white">
+                        <span class="absolute right-3 top-2 text-slate-500">🔍</span>
+                    </div>
+                </div>
+            </header>
+
             <!-- MOBILE HEADER -->
-            <header class="lg:hidden h-16 glass flex items-center justify-between px-4 z-30">
+            <header class="lg:hidden h-16 glass sticky top-0 flex items-center justify-between px-4 z-40 border-b border-white/5">
                 <a href="/" class="flex items-center gap-2">
                     <img src="{% static 'img/logo.png' %}" alt="2salti" class="h-8 w-auto">
                     <span class="text-xl font-display font-bold text-white">2salti</span>
