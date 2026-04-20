@@ -71,6 +71,19 @@ node_modules/
 .antigravity_cockpit/
 .agent/
 Antigravity/
+.claude/
+.claude.json
+.copilot/
+.dotnet/
+.vscode-server/
+
+# Ops logs and backups
+logs/ops/
+matches_seasons_backup_*.tar.gz
+
+# Shell user files
+.bash_history
+.wget-hsts
 
 # Dart / Flutter
 .pub-cache/
