@@ -44,39 +44,39 @@ class OCRQualityGateTest(TestCase):
         }
 
     def test_valid_data(self):
-        is_valid, blockers, warnings = OCRQualityGate.evaluate(self.valid_data)
+        is_valid, blockers, warnings, _ = OCRQualityGate.evaluate(self.valid_data)
         self.assertTrue(is_valid)
         self.assertEqual(len(blockers), 0)
         self.assertEqual(len(warnings), 0)
 
     def test_missing_root_sections(self):
         del self.valid_data["scores"]
-        is_valid, blockers, warnings = OCRQualityGate.evaluate(self.valid_data)
+        is_valid, blockers, warnings, _ = OCRQualityGate.evaluate(self.valid_data)
         self.assertFalse(is_valid)
         self.assertIn("Sezioni base mancanti dal risultato OCR: scores", blockers)
 
     def test_missing_team_name(self):
         self.valid_data["match_info"]["home_team"] = ""
-        is_valid, blockers, warnings = OCRQualityGate.evaluate(self.valid_data)
+        is_valid, blockers, warnings, _ = OCRQualityGate.evaluate(self.valid_data)
         self.assertFalse(is_valid)
         self.assertTrue(any("Nomi squadre mancanti" in b for b in blockers))
 
     def test_teams_play_itself(self):
         self.valid_data["match_info"]["home_team"] = "Team A"
         self.valid_data["match_info"]["away_team"] = "team a"
-        is_valid, blockers, warnings = OCRQualityGate.evaluate(self.valid_data)
+        is_valid, blockers, warnings, _ = OCRQualityGate.evaluate(self.valid_data)
         self.assertFalse(is_valid)
         self.assertTrue(any("coincidono" in b for b in blockers))
 
     def test_malformed_final_score(self):
         self.valid_data["scores"]["final_score"] = "5 to 3"
-        is_valid, blockers, warnings = OCRQualityGate.evaluate(self.valid_data)
+        is_valid, blockers, warnings, _ = OCRQualityGate.evaluate(self.valid_data)
         self.assertFalse(is_valid)
         self.assertTrue(any("in formato non valido" in b for b in blockers))
 
     def test_quarter_totals_mismatch(self):
         self.valid_data["scores"]["quarters"]["q1"] = [5, 5]
-        is_valid, blockers, warnings = OCRQualityGate.evaluate(self.valid_data)
+        is_valid, blockers, warnings, _ = OCRQualityGate.evaluate(self.valid_data)
         # Should be invalid based on current hardening (blocker)
         self.assertFalse(is_valid)
         self.assertTrue(any("Incoerenza punteggio" in b for b in blockers))
@@ -84,7 +84,7 @@ class OCRQualityGateTest(TestCase):
 
     def test_event_totals_mismatch(self):
         self.valid_data["events"].append({"type": "GOAL", "team": "home", "player": "Extra"})
-        is_valid, blockers, warnings = OCRQualityGate.evaluate(self.valid_data)
+        is_valid, blockers, warnings, _ = OCRQualityGate.evaluate(self.valid_data)
         # Now a blocker for data integrity
         self.assertFalse(is_valid)
         self.assertTrue(any("Incoerenza eventi" in b for b in blockers))
@@ -92,16 +92,25 @@ class OCRQualityGateTest(TestCase):
 
     def test_garbage_values(self):
         self.valid_data["match_info"]["home_team"] = "TBD"
-        is_valid, blockers, warnings = OCRQualityGate.evaluate(self.valid_data)
+        is_valid, blockers, warnings, _ = OCRQualityGate.evaluate(self.valid_data)
         self.assertFalse(is_valid)
         self.assertTrue(any("inaccettabile" in b for b in blockers))
 
     def test_low_confidence(self):
         self.valid_data["metadata"]["confidence"] = 0.15
-        is_valid, blockers, warnings = OCRQualityGate.evaluate(self.valid_data)
+        is_valid, blockers, warnings, _ = OCRQualityGate.evaluate(self.valid_data)
         self.assertFalse(is_valid)
         self.assertTrue(any("troppo bassa" in b for b in blockers))
 
+    def test_none_data_returns_four_tuple(self):
+        ok, blockers, warnings, info = OCRQualityGate.evaluate(None)
+        self.assertFalse(ok)
+        self.assertGreater(len(blockers), 0)
+
+    def test_empty_dict_data_returns_four_tuple(self):
+        ok, blockers, warnings, info = OCRQualityGate.evaluate({})
+        self.assertFalse(ok)
+        self.assertGreater(len(blockers), 0)
 
 
 class OCRQualityGateIntegrationTest(TestCase):

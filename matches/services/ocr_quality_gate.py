@@ -39,7 +39,7 @@ class OCRQualityGate:
         context = context or {}
 
         if not data or not isinstance(data, dict):
-            return False, ["Il payload OCR non è un oggetto JSON valido o è vuoto."], []
+            return False, ["Il payload OCR non è un oggetto JSON valido o è vuoto."], [], []
 
         # 1. Required root sections
         required_roots = ["metadata", "match_info", "scores", "teams", "events"]
