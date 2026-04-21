@@ -204,7 +204,7 @@
                     <div class="flex items-center justify-between p-2 rounded-lg hover:bg-white/5 transition-colors group">
                         <div class="flex items-center gap-3">
                             <span class="w-6 h-6 rounded bg-slate-800 flex items-center justify-center text-[10px] font-bold text-slate-400 group-hover:bg-cyan-500 group-hover:text-white transition-colors">#{{ athlete.jersey_number|default:"-" }}</span>
-                            <span class="text-sm text-slate-300 group-hover:text-white">{{ athlete.user.get_full_name }}</span>
+                            <a href="{% url 'profile' athlete.user.username %}" class="text-sm text-slate-300 group-hover:text-white hover:text-cyan-400 transition-colors">{{ athlete.user.get_full_name }}</a>
                         </div>
                         <span class="text-[9px] text-slate-600 uppercase font-bold">{{ athlete.position|default:"-" }}</span>
                     </div>
@@ -223,7 +223,7 @@
                     <div class="flex items-center justify-between p-2 rounded-lg hover:bg-white/5 transition-colors group">
                         <div class="flex items-center gap-3">
                             <span class="w-6 h-6 rounded bg-slate-800 flex items-center justify-center text-[10px] font-bold text-slate-400 group-hover:bg-purple-500 group-hover:text-white transition-colors">#{{ athlete.jersey_number|default:"-" }}</span>
-                            <span class="text-sm text-slate-300 group-hover:text-white">{{ athlete.user.get_full_name }}</span>
+                            <a href="{% url 'profile' athlete.user.username %}" class="text-sm text-slate-300 group-hover:text-white hover:text-purple-400 transition-colors">{{ athlete.user.get_full_name }}</a>
                         </div>
                         <span class="text-[9px] text-slate-600 uppercase font-bold">{{ athlete.position|default:"-" }}</span>
                     </div>

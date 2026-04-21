@@ -24,9 +24,15 @@
             </div>
 
             <div class="pt-6 border-t border-slate-700/50 flex gap-4">
+                {% if match %}
                 <a href="{% url 'match_detail' match.id %}" class="flex-1 py-3 px-6 rounded-xl bg-slate-800 text-white font-bold text-center hover:bg-slate-700 transition duration-300 text-sm md:text-base border border-slate-700">
                     Annulla
                 </a>
+                {% else %}
+                <a href="{% url 'dashboard' %}" class="flex-1 py-3 px-6 rounded-xl bg-slate-800 text-white font-bold text-center hover:bg-slate-700 transition duration-300 text-sm md:text-base border border-slate-700">
+                    Annulla
+                </a>
+                {% endif %}
                 <button type="submit" class="flex-1 py-3 px-6 rounded-xl text-white font-bold text-center transition duration-300 text-sm md:text-base" style="background-color: {{ sport_color }}; filter: brightness(1.1); box-shadow: 0 4px 15px {{ sport_color }}40;">
                     Carica & Estrai Dati <i class="fas fa-magic ml-2"></i>
                 </button>
