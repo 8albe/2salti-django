@@ -1,300 +1,267 @@
 {% extends 'base.html' %}
+{% load static %}
+
+{% block extra_head %}
+<!-- Font Awesome for icons -->
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+{% endblock %}
 
 {% block content %}
-<!-- MATCH HEADER -->
-<div class="relative w-full rounded-3xl overflow-hidden mb-8 glass border-0 shadow-2xl">
-    <!-- Background Gradient -->
-    <div class="absolute inset-0 bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 opacity-90"></div>
-    <div class="absolute inset-0 bg-[url('/static/img/pattern.png')] opacity-10"></div>
+<div class="animate-fade-in">
+    <!-- 1. HEADER HERO: Scoreboard & Context -->
+    <section class="relative overflow-hidden rounded-[2rem] glass-premium mb-8">
+        <!-- Abstract Background -->
+        <div class="absolute inset-0 bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 opacity-90"></div>
+        <div class="absolute inset-0 opacity-10 bg-[radial-gradient(circle_at_center,var(--sport-color),transparent_70%)]"></div>
+        
+        <div class="relative z-10 p-6 md:p-12">
+            <!-- Top Metadata -->
+            <div class="flex flex-col items-center mb-10">
+                <span class="px-4 py-1 rounded-full bg-white/5 border border-white/10 text-[10px] font-bold tracking-[0.3em] uppercase text-cyan-400 mb-4">
+                    {{ match.league.name }} • {{ match.league.season }}
+                </span>
+                <div class="flex items-center gap-4 text-slate-400 text-xs font-medium">
+                    <span class="flex items-center gap-1.5"><i class="far fa-calendar"></i> {{ match.match_date|date:"d M Y" }}</span>
+                    <span class="flex items-center gap-1.5"><i class="far fa-clock"></i> {{ match.match_date|date:"H:i" }}</span>
+                    {% if match.location %}
+                    <a href="{{ match.google_maps_url }}" target="_blank" class="flex items-center gap-1.5 hover:text-cyan-400 transition-colors">
+                        <i class="fas fa-location-dot"></i> {{ match.location }}
+                    </a>
+                    {% endif %}
+                </div>
+            </div>
 
-    <div class="relative z-10 p-8 md:p-12">
-        <!-- Info Bar -->
-        <div class="text-center mb-8">
-            <span
-                class="px-4 py-1 rounded-full bg-white/5 border border-white/10 text-xs font-mono text-cyan-300 uppercase tracking-widest">
-                {{ match.league.name }}
-            </span>
-            <div class="mt-4 text-slate-400 flex items-center justify-center gap-2 text-sm">
-                <span>📅 {{ match.match_date|date:"d/m/Y" }}</span>
-                <span>⏰ {{ match.match_date|date:"H:i" }}</span>
-                {% if match.location %}<a href="{{ match.google_maps_url }}" target="_blank"
-                    class="hover:text-cyan-400 transition-colors hover:underline">📍 {{ match.location }}</a>{% endif %}
+            <!-- Main Scoreboard -->
+            <div class="flex items-center justify-between max-w-5xl mx-auto gap-2 md:gap-8">
+                <!-- Home Team -->
+                <a href="{% url 'team_detail' match.home_team.slug %}" class="flex-1 group flex flex-col items-center text-center">
+                    <div class="w-24 h-24 md:w-40 md:h-40 rounded-full bg-white/5 p-4 md:p-6 mb-6 border border-white/10 group-hover:border-cyan-500/50 group-hover:bg-cyan-500/5 transition-all duration-500 shadow-2xl relative">
+                        <div class="absolute inset-0 rounded-full bg-cyan-500/10 blur-2xl opacity-0 group-hover:opacity-100 transition-opacity"></div>
+                        {% if match.home_team.society.logo %}
+                        <img src="{{ match.home_team.society.logo.url }}" class="w-full h-full object-contain relative z-10">
+                        {% else %}
+                        <span class="text-5xl relative z-10">🏠</span>
+                        {% endif %}
+                    </div>
+                    <h2 class="text-xl md:text-4xl font-display font-black text-white uppercase tracking-tight group-hover:text-cyan-400 transition-colors">{{ match.home_team.name }}</h2>
+                    <p class="text-[10px] text-slate-500 font-bold uppercase tracking-widest mt-2">CASA</p>
+                </a>
+
+                <!-- Score Center -->
+                <div class="flex flex-col items-center justify-center min-w-[120px] md:min-w-[200px]">
+                    {% if match.is_finished %}
+                    <div class="text-6xl md:text-8xl font-display font-black text-white tracking-tighter flex items-center gap-2 md:gap-4">
+                        <span class="text-glow">{{ match.home_score }}</span>
+                        <span class="text-white/10 text-4xl md:text-6xl">-</span>
+                        <span class="text-glow">{{ match.away_score }}</span>
+                    </div>
+                    <div class="mt-4 px-4 py-1.5 rounded-full bg-green-500/10 border border-green-500/30 text-green-400 text-[10px] font-black uppercase tracking-[0.2em]">
+                        Partita Conclusa
+                    </div>
+                    {% else %}
+                    <div class="text-4xl md:text-6xl font-display font-black text-slate-700 tracking-widest">
+                        VS
+                    </div>
+                    <div class="mt-4 px-4 py-1.5 rounded-full bg-amber-500/10 border border-amber-500/30 text-amber-500 text-[10px] font-black uppercase tracking-[0.2em] animate-pulse-soft">
+                        PROSSIMAMENTE
+                    </div>
+                    {% endif %}
+                </div>
+
+                <!-- Away Team -->
+                <a href="{% url 'team_detail' match.away_team.slug %}" class="flex-1 group flex flex-col items-center text-center">
+                    <div class="w-24 h-24 md:w-40 md:h-40 rounded-full bg-white/5 p-4 md:p-6 mb-6 border border-white/10 group-hover:border-purple-500/50 group-hover:bg-purple-500/5 transition-all duration-500 shadow-2xl relative">
+                        <div class="absolute inset-0 rounded-full bg-purple-500/10 blur-2xl opacity-0 group-hover:opacity-100 transition-opacity"></div>
+                        {% if match.away_team.society.logo %}
+                        <img src="{{ match.away_team.society.logo.url }}" class="w-full h-full object-contain relative z-10">
+                        {% else %}
+                        <span class="text-5xl relative z-10">✈️</span>
+                        {% endif %}
+                    </div>
+                    <h2 class="text-xl md:text-4xl font-display font-black text-white uppercase tracking-tight group-hover:text-purple-400 transition-colors">{{ match.away_team.name }}</h2>
+                    <p class="text-[10px] text-slate-500 font-bold uppercase tracking-widest mt-2">OSPITE</p>
+                </a>
             </div>
             
-            <!-- CONTROLLI REFERTO -->
-            {% if user.is_authenticated %}
-            <div class="mt-6 flex flex-col items-center justify-center gap-2">
-                {% if reports %}
-                    {% for report in reports %}
-                        <div class="px-4 py-2 rounded-lg text-sm flex items-center gap-3 border
-                             {% if report.status == 'UPLOADED' or report.status == 'PROCESSING' %} bg-amber-500/10 border-amber-500/30 text-amber-300
-                             {% elif report.status == 'EXTRACTED' %} bg-blue-500/10 border-blue-500/30 text-blue-300
-                             {% elif report.status == 'VALIDATED' or report.status == 'PUBLISHED' %} bg-green-500/10 border-green-500/30 text-green-300
-                             {% else %} bg-red-500/10 border-red-500/30 text-red-300 {% endif %}">
-                            <i class="fas {% if report.status == 'PUBLISHED' %}fa-check-circle{% elif report.status == 'REJECTED' %}fa-times-circle{% else %}fa-spinner fa-spin{% endif %}"></i>
-                            <span>Referto: <strong>{{ report.get_status_display }}</strong></span>
-                            {% if request.user.is_staff or request.user.is_superuser %}
-                                <a href="{% url 'admin:matches_matchreport_review' report.id %}" class="px-3 py-1 bg-cyan-600 hover:bg-cyan-500 text-white text-[10px] font-bold rounded-full ml-3 transition-colors">Review</a>
-                                <a href="{% url 'admin:matches_matchreport_change' report.id %}" target="_blank" class="text-[10px] underline ml-2 opacity-60 hover:opacity-100">Admin</a>
-                            {% endif %}
+            <!-- ADMIN TOOLS (Compact) -->
+            {% if reports and user.is_authenticated %}
+            <div class="mt-12 pt-8 border-t border-white/5 flex flex-wrap justify-center gap-4">
+                {% for report in reports %}
+                <div class="flex items-center gap-3 px-4 py-2 rounded-xl bg-white/5 border border-white/10 text-xs">
+                    <span class="w-2 h-2 rounded-full 
+                        {% if report.status == 'PUBLISHED' %}bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.6)]
+                        {% elif report.status == 'UPLOADED' %}bg-amber-500 animate-pulse
+                        {% else %}bg-slate-500{% endif %}"></span>
+                    <span class="text-slate-400">Referto: <strong class="text-white">{{ report.get_status_display }}</strong></span>
+                    {% if request.user.is_staff or request.user.is_superuser %}
+                    <a href="{% url 'report_review' report.id %}" class="text-cyan-400 font-bold hover:underline ml-2">Review →</a>
+                    {% endif %}
+                </div>
+                {% endfor %}
+            </div>
+            {% endif %}
+        </div>
+    </section>
+
+    {% if match.is_finished %}
+    <!-- 2. SCORE BREAKDOWN: Timing Grid -->
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+        {% for q in qs_processed %}
+        <div class="glass-panel p-4 flex items-center justify-between hover-lift">
+            <div class="flex flex-col">
+                <span class="text-[10px] font-bold text-slate-500 uppercase tracking-widest">{{ q.q }}° Tempo</span>
+                <span class="text-lg font-display font-black text-white">Breakdown</span>
+            </div>
+            <div class="flex items-baseline gap-2">
+                <span class="text-2xl font-black text-white">{{ q.home }}</span>
+                <span class="text-slate-600 font-bold">:</span>
+                <span class="text-2xl font-black text-slate-400">{{ q.away }}</span>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+
+    <!-- 3. DETTAGLI PARTITA: Timeline & Rosters -->
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        
+        <!-- LEFT: Timeline di Gara -->
+        <div class="lg:col-span-2 glass-panel p-6 md:p-8">
+            <h3 class="text-sm font-bold text-slate-500 uppercase tracking-[0.3em] mb-10 flex items-center gap-3">
+                <span class="w-10 h-10 rounded-xl bg-cyan-500/10 flex items-center justify-center text-cyan-400"><i class="fas fa-clock-rotate-left"></i></span>
+                Timeline di Gara
+            </h3>
+
+            <div class="relative pl-6 md:pl-10 space-y-12">
+                <!-- Vertical Line -->
+                <div class="absolute left-[19px] md:left-[39px] top-0 bottom-0 w-px bg-gradient-to-b from-cyan-500/50 via-white/5 to-transparent"></div>
+
+                {% for event in goals %}
+                <div class="relative group">
+                    <!-- Dot -->
+                    <div class="absolute -left-[32px] md:-left-[52px] top-0 w-6 h-6 md:w-8 md:h-8 rounded-full bg-slate-900 border-2 border-cyan-500 flex items-center justify-center text-[10px] font-black text-white z-10 group-hover:scale-110 transition-transform shadow-[0_0_15px_rgba(6,182,212,0.4)]">
+                        {{ event.minute }}'
+                    </div>
+                    
+                    <!-- Event Content -->
+                    <div class="glass-premium p-5 rounded-2xl flex items-center justify-between hover:bg-white/5 transition-all group-hover:border-white/20">
+                        <div class="flex items-center gap-5">
+                            <div class="text-3xl">⚽</div>
+                            <div>
+                                <p class="text-white font-black text-lg">
+                                    {% if event.player %}
+                                    <a href="{% url 'profile' event.player.username %}" class="hover:text-cyan-400 transition-colors uppercase italic">{{ event.player.get_full_name }}</a>
+                                    {% else %}
+                                    SQUADRA
+                                    {% endif %}
+                                </p>
+                                <p class="text-[10px] font-bold text-slate-500 uppercase tracking-widest mt-1">
+                                    {{ event.team.name }} • {{ event.display_label }}
+                                    {% if event.is_superiority %}<span class="text-green-400 ml-2">[+1]</span>{% endif %}
+                                </p>
+                            </div>
                         </div>
+                        <div class="text-right">
+                            <span class="text-[10px] font-black text-slate-600 border border-white/5 px-2 py-1 rounded bg-black/20 uppercase tracking-tighter">{{ event.quarter }}° Q</span>
+                        </div>
+                    </div>
+                </div>
+                {% empty %}
+                <div class="text-center py-20 opacity-30 italic">
+                    <p>Nessun evento principale registrato.</p>
+                </div>
+                {% endfor %}
+
+                <!-- Sanzioni (Expulsions) -->
+                {% for event in expulsions %}
+                 <div class="relative group">
+                    <div class="absolute -left-[32px] md:-left-[52px] top-0 w-6 h-6 md:w-8 md:h-8 rounded-full bg-slate-900 border-2 border-red-500 flex items-center justify-center text-[10px] font-black text-white z-10 group-hover:scale-110 transition-transform shadow-[0_0_15px_rgba(239,68,68,0.4)]">
+                        {{ event.minute }}'
+                    </div>
+                    <div class="glass-premium p-5 rounded-2xl flex items-center justify-between border-l-4 border-red-500/50">
+                        <div class="flex items-center gap-5">
+                            <div class="text-3xl">🟥</div>
+                            <div>
+                                <p class="text-white font-black text-lg">{{ event.player.get_full_name|default:"SQUADRA" }}</p>
+                                <p class="text-[10px] font-bold text-red-400 uppercase tracking-widest mt-1">{{ event.display_label }}</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+
+        <!-- RIGHT: Roster Side-by-Side -->
+        <div class="space-y-8">
+            <!-- Home Roster -->
+            <div class="glass-panel p-6 border-t-2 border-cyan-500/50">
+                <div class="flex items-center justify-between mb-6">
+                    <h4 class="text-xs font-black text-white uppercase tracking-widest">{{ match.home_team.name|truncatechars:20 }}</h4>
+                    <span class="text-[10px] text-cyan-400 font-bold uppercase tracking-widest">Roster</span>
+                </div>
+                <div class="space-y-2">
+                    {% for athlete in home_roster %}
+                    <div class="flex items-center justify-between p-2 rounded-lg hover:bg-white/5 transition-colors group">
+                        <div class="flex items-center gap-3">
+                            <span class="w-6 h-6 rounded bg-slate-800 flex items-center justify-center text-[10px] font-bold text-slate-400 group-hover:bg-cyan-500 group-hover:text-white transition-colors">#{{ athlete.jersey_number|default:"-" }}</span>
+                            <span class="text-sm text-slate-300 group-hover:text-white">{{ athlete.user.get_full_name }}</span>
+                        </div>
+                        <span class="text-[9px] text-slate-600 uppercase font-bold">{{ athlete.position|default:"-" }}</span>
+                    </div>
                     {% endfor %}
-                {% endif %}
-                
-                <div class="flex flex-wrap items-center justify-center gap-3 mt-2">
-                    <a href="{% url 'upload_report' match.id %}" 
-                       class="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-slate-800 hover:bg-slate-700 border border-slate-600 text-slate-300 transition-colors text-sm font-medium">
-                       <i class="fas fa-file-upload"></i> Carica Referto
-                    </a>
-                    <a href="{% url 'create_digital_report' match.id %}" 
-                       class="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-cyan-600/20 hover:bg-cyan-600/30 border border-cyan-500/30 text-cyan-400 transition-colors text-sm font-medium">
-                       <i class="fas fa-pen-nib"></i> Referto Digitale
-                    </a>
+                </div>
+            </div>
+
+            <!-- Away Roster -->
+            <div class="glass-panel p-6 border-t-2 border-purple-500/50">
+                <div class="flex items-center justify-between mb-6">
+                    <h4 class="text-xs font-black text-white uppercase tracking-widest">{{ match.away_team.name|truncatechars:20 }}</h4>
+                    <span class="text-[10px] text-purple-400 font-bold uppercase tracking-widest">Roster</span>
+                </div>
+                <div class="space-y-2">
+                    {% for athlete in away_roster %}
+                    <div class="flex items-center justify-between p-2 rounded-lg hover:bg-white/5 transition-colors group">
+                        <div class="flex items-center gap-3">
+                            <span class="w-6 h-6 rounded bg-slate-800 flex items-center justify-center text-[10px] font-bold text-slate-400 group-hover:bg-purple-500 group-hover:text-white transition-colors">#{{ athlete.jersey_number|default:"-" }}</span>
+                            <span class="text-sm text-slate-300 group-hover:text-white">{{ athlete.user.get_full_name }}</span>
+                        </div>
+                        <span class="text-[9px] text-slate-600 uppercase font-bold">{{ athlete.position|default:"-" }}</span>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+
+            <!-- Referees -->
+            {% if match.referees.exists %}
+            <div class="glass-panel p-6">
+                <h4 class="text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] mb-4 text-center">Ufficiali di Gara</h4>
+                <div class="flex flex-wrap justify-center gap-2">
+                    {% for ref in match.referees.all %}
+                    <span class="px-3 py-1 rounded bg-white/5 text-xs text-slate-400 border border-white/5">{{ ref.get_full_name }}</span>
+                    {% endfor %}
                 </div>
             </div>
             {% endif %}
         </div>
 
-        <!-- SCOREBOARD -->
-        <div class="flex items-center justify-between max-w-4xl mx-auto gap-4">
-            <!-- HOME -->
-            <a href="{% url 'team_detail' match.home_team.slug %}" class="flex-1 text-center group">
-                <div
-                    class="w-24 h-24 md:w-32 md:h-32 rounded-full bg-slate-800/80 p-4 mx-auto mb-4 border border-white/10 group-hover:border-cyan-500 shadow-2xl transition-all">
-                    {% if match.home_team.society.logo %}
-                    <img src="{{ match.home_team.society.logo.url }}" class="w-full h-full object-contain">
-                    {% else %}
-                    <span class="text-4xl">🏠</span>
-                    {% endif %}
-                </div>
-                <h2
-                    class="text-xl md:text-3xl font-display font-bold text-white mb-1 group-hover:text-cyan-400 transition-colors">
-                    {{ match.home_team.name }}</h2>
-                <p class="text-slate-500 text-sm md:text-base hidden sm:block">Casa</p>
-            </a>
-
-            <!-- CENTER -->
-            <div
-                class="px-4 md:px-12 py-6 rounded-2xl bg-black/20 backdrop-blur-sm border border-white/5 text-center min-w-[120px]">
-                {% if match.is_finished %}
-                <div
-                    class="text-5xl md:text-7xl font-display font-bold text-white tracking-widest bg-clip-text text-transparent bg-gradient-to-b from-white to-slate-400">
-                    {{ match.home_score }}-{{ match.away_score }}
-                </div>
-                <div
-                    class="mt-2 text-green-400 font-bold text-xs uppercase tracking-widest border border-green-500/20 bg-green-500/10 px-2 py-1 rounded inline-block">
-                    Conclusa
-                </div>
-                {% else %}
-                <div class="text-4xl md:text-6xl font-display font-bold text-slate-600">VS</div>
-                <div class="mt-2 text-slate-500 font-mono text-xs uppercase tracking-widest">
-                    Preview
-                </div>
-                {% endif %}
-            </div>
-
-            <!-- AWAY -->
-            <a href="{% url 'team_detail' match.away_team.slug %}" class="flex-1 text-center group">
-                <div
-                    class="w-24 h-24 md:w-32 md:h-32 rounded-full bg-slate-800/80 p-4 mx-auto mb-4 border border-white/10 group-hover:border-purple-500 shadow-2xl transition-all">
-                    {% if match.away_team.society.logo %}
-                    <img src="{{ match.away_team.society.logo.url }}" class="w-full h-full object-contain">
-                    {% else %}
-                    <span class="text-4xl">✈️</span>
-                    {% endif %}
-                </div>
-                <h2
-                    class="text-xl md:text-3xl font-display font-bold text-white mb-1 group-hover:text-purple-400 transition-colors">
-                    {{ match.away_team.name }}</h2>
-                <p class="text-slate-500 text-sm md:text-base hidden sm:block">Ospite</p>
-            </a>
-        </div>
-
-        {% if match.referees.exists %}
-        <div class="mt-8 text-center pt-8 border-t border-white/5">
-            <p class="text-sm text-slate-500">
-                <span class="font-bold text-slate-400">Arbitri:</span>
-                {{ match.referees.all|join:", " }}
-            </p>
-        </div>
-        {% endif %}
     </div>
-</div>
+    {% endif %}
 
-{% if match.is_finished %}
-<!-- BOX SCORE PER QUARTERS -->
-<div class="glass-panel p-6 mb-8 overflow-x-auto">
-    <h3 class="text-sm font-bold text-slate-500 uppercase tracking-widest mb-4 flex items-center gap-2">
-        <span>📊</span> Box Score
-    </h3>
-    <table class="w-full text-center border-collapse">
-        <thead>
-            <tr class="text-xs text-slate-500 uppercase">
-                <th class="p-2 text-left">Squadra</th>
-                {% for q in qs_processed %}
-                <th class="p-2">Q{{ q.q }}</th>
-                {% endfor %}
-                <th class="p-2 font-bold text-white">TOT</th>
-            </tr>
-        </thead>
-        <tbody class="text-lg font-display font-bold text-white">
-            <tr class="border-t border-white/5">
-                <td class="p-2 text-left text-sm font-sans text-slate-400">{{ match.home_team.name }}</td>
-                {% for q in qs_processed %}
-                <td class="p-2">{{ q.home }}</td>
-                {% endfor %}
-                <td class="p-2 text-cyan-400">{{ match.home_score }}</td>
-            </tr>
-            <tr class="border-t border-white/5">
-                <td class="p-2 text-left text-sm font-sans text-slate-400">{{ match.away_team.name }}</td>
-                {% for q in qs_processed %}
-                <td class="p-2">{{ q.away }}</td>
-                {% endfor %}
-                <td class="p-2 text-purple-400">{{ match.away_score }}</td>
-            </tr>
-        </tbody>
-    </table>
-</div>
-
-<div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
-
-    <!-- MATCH EVENTS (GOALS & PLAYS) -->
-    <div class="glass-panel p-6">
-        <h3 class="text-xl font-bold text-white mb-6 flex items-center gap-2">
-            <span>🥅</span> Tabellino
-        </h3>
-
-        <div
-            class="relative space-y-8 before:absolute before:inset-0 before:ml-5 before:-translate-x-px md:before:mx-auto md:before:translate-x-0 before:h-full before:w-0.5 before:bg-gradient-to-b before:from-transparent before:via-slate-600 before:to-transparent">
-            {% for goal in goals %}
-            <div class="relative flex items-center justify-between md:justify-normal md:odd:flex-row-reverse group">
-                <!-- Icon -->
-                <div
-                    class="flex items-center justify-center w-10 h-10 rounded-full border border-slate-600 bg-slate-900 group-hover:bg-cyan-900/50 group-hover:border-cyan-500 shadow-[0_0_10px_rgba(0,0,0,0.5)] shrink-0 z-10 md:order-1 md:group-odd:-translate-x-1/2 md:group-even:translate-x-1/2 transition-all duration-300">
-                    {% if goal.event_type == 'PENALTY_GOAL' %}
-                    <span class="text-xs font-bold text-amber-400 group-hover:text-amber-300">🎯</span>
-                    {% else %}
-                    <span class="text-xs font-bold text-cyan-400 group-hover:text-cyan-300">{{ goal.minute }}'</span>
-                    {% endif %}
-                </div>
-
-                <!-- Card -->
-                <div
-                    class="w-[calc(100%-4rem)] md:w-[calc(50%-2.5rem)] p-4 rounded-xl border border-white/5 bg-white/5 backdrop-blur-sm shadow-lg hover:shadow-cyan-500/10 hover:border-cyan-500/30 transition-all duration-300">
-                    <div class="flex items-center justify-between mb-2">
-                        <div class="font-bold text-white text-lg">
-                            {% if goal.player %}
-                            <a href="{% url 'profile' goal.player.username %}" class="hover:text-cyan-400 transition-colors">
-                                {{ goal.player.get_full_name }}
-                            </a>
-                            {% else %}
-                            Squadra
-                            {% endif %}
-                        </div>
-                        <div
-                            class="px-2 py-0.5 rounded bg-black/30 border border-white/5 text-xs text-slate-400 font-mono">
-                            {{ goal.quarter }}° Q</div>
-                    </div>
-                    <div class="flex items-center justify-between">
-                        <a href="{% url 'team_detail' goal.team.slug %}"
-                            class="text-sm text-cyan-400 font-medium hover:underline">{{ goal.team.name }}</a>
-                        <div class="text-xs text-slate-500">
-                            {{ goal.display_label }}
-
-                            {% if goal.is_superiority %}<span class="text-green-500 ml-1">(SN)</span>{% endif %}
-                        </div>
-                    </div>
-                </div>
-            </div>
-            {% empty %}
-            <div class="text-center py-12 text-slate-500 italic flex flex-col items-center">
-                <i class="fas fa-wind text-3xl mb-3 opacity-50"></i>
-                <p>Nessun gol registrato in questo match.</p>
-            </div>
-            {% endfor %}
+    <!-- PREVIEW FOR UPCOMING MATCH -->
+    {% if not match.is_finished %}
+    <div class="glass-panel p-12 text-center">
+        <div class="w-20 h-20 rounded-full bg-cyan-500/10 flex items-center justify-center mx-auto mb-6 text-3xl text-cyan-400 animate-bounce">
+            <i class="fas fa-ticket"></i>
+        </div>
+        <h3 class="text-2xl font-display font-black text-white mb-4 italic uppercase">Match in Programma</h3>
+        <p class="text-slate-400 max-w-lg mx-auto leading-relaxed">
+            Questo incontro non è ancora iniziato. Torna dopo il fischio d'inizio per seguire il live o vedere il tabellino finale caricato dai nostri ufficiali di gara.
+        </p>
+        <div class="mt-8 flex justify-center gap-4">
+            <button class="px-6 py-2 rounded-full bg-white/5 border border-white/10 text-xs font-bold uppercase tracking-widest text-slate-400 hover:text-white hover:bg-white/10 transition-all">Segui Squadra</button>
+            <button class="px-6 py-2 rounded-full bg-cyan-600 text-white text-xs font-bold uppercase tracking-widest hover:shadow-[0_0_20px_rgba(6,182,212,0.5)] transition-all">Aggiungi a Calendario</button>
         </div>
     </div>
-
-    <!-- SANZIONI & ALTRO -->
-    <div class="space-y-6">
-        <!-- Expulsions -->
-        {% if expulsions %}
-        <div class="glass-panel p-6 border-l-4 border-red-500">
-            <h3 class="text-xl font-bold text-white mb-6 flex items-center gap-2">
-                <span class="text-2xl">🛑</span> Sanzioni
-            </h3>
-            <div class="space-y-4">
-                {% for exp in expulsions %}
-                <div
-                    class="flex items-center justify-between p-4 rounded-xl bg-gradient-to-r from-red-500/10 to-transparent border border-red-500/20 hover:border-red-500/40 transition-all">
-                    <div class="flex items-center gap-4">
-                        <div
-                            class="w-10 h-10 rounded-full bg-red-900/50 flex items-center justify-center text-red-500 font-bold border border-red-500/30">
-                            {{ exp.minute }}'
-                        </div>
-                        <div>
-                            <div class="font-bold text-red-100 text-lg">
-                                <a href="{% url 'profile' exp.player.username %}" class="hover:text-red-400 transition-colors">
-                                    {{ exp.player.get_full_name }}
-                                </a>
-                            </div>
-                            <div class="flex items-center gap-2">
-                                <a href="{% url 'team_detail' exp.team.slug %}"
-                                    class="text-sm text-red-300 hover:underline">{{ exp.team.name }}</a>
-                                <span class="text-[10px] text-slate-500 px-1 border border-slate-700 rounded">{{ exp.display_label }}</span>
-
-                            </div>
-                        </div>
-                    </div>
-                    <span
-                        class="text-xs font-mono font-bold text-red-400 bg-black/40 px-3 py-1 rounded-full border border-red-500/20">{{ exp.quarter }}° Q</span>
-                </div>
-                {% endfor %}
-            </div>
-        </div>
-        {% endif %}
-
-        <!-- Saves -->
-        {% if saves %}
-        <div class="glass-panel p-6 border-l-4 border-cyan-500">
-            <h3 class="text-xl font-bold text-white mb-6 flex items-center gap-2">
-                <span class="text-2xl">🧤</span> Parate
-            </h3>
-            <div class="grid grid-cols-1 gap-3">
-                {% for save in saves %}
-                <div class="flex items-center justify-between p-3 rounded-lg bg-slate-800/30 border border-white/5">
-                    <div class="flex items-center gap-3">
-                        <span class="text-cyan-500 font-mono text-sm">{{ save.minute }}'</span>
-                        <span class="font-medium text-slate-200">{{ save.player.get_full_name }}</span>
-                    </div>
-                    <span class="text-[10px] uppercase text-slate-500">{{ save.team.name }}</span>
-                </div>
-                {% endfor %}
-            </div>
-        </div>
-        {% endif %}
-
-        <!-- Timeouts -->
-        {% if timeouts %}
-        <div class="glass-panel p-6 border-l-4 border-amber-500">
-            <h3 class="text-xl font-bold text-white mb-6 flex items-center gap-2">
-                <span class="text-2xl">⏱️</span> Timeout
-            </h3>
-            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                {% for timeout in timeouts %}
-                <div
-                    class="p-4 rounded-xl bg-slate-800/50 border border-slate-700 hover:border-amber-500/50 transition-all flex justify-between items-center group">
-                    <a href="{% url 'team_detail' timeout.team.slug %}"
-                        class="font-bold text-slate-300 group-hover:text-amber-400 transition-colors hover:underline">{{ timeout.team.name }}</a>
-                    <span class="text-xs font-mono text-slate-500 bg-black/30 px-2 py-1 rounded">{{ timeout.minute }}'
-                        ({{ timeout.quarter }}° Q)</span>
-                </div>
-                {% endfor %}
-            </div>
-        </div>
-        {% endif %}
-    </div>
+    {% endif %}
 </div>
-{% endif %}
-
 {% endblock %}

@@ -62,6 +62,10 @@ def match_detail(request, match_id):
     from core.services.seo_service import SEOService
     from django.urls import reverse
     
+    # Recupera rose squadre per il roster side-by-side
+    home_roster = match.home_team.get_roster() if match.home_team else []
+    away_roster = match.away_team.get_roster() if match.away_team else []
+
     context = {
         'match': match,
         'goals': goals,
@@ -69,6 +73,8 @@ def match_detail(request, match_id):
         'timeouts': timeouts,
         'saves': saves,
         'qs_processed': qs_processed,
+        'home_roster': home_roster,
+        'away_roster': away_roster,
         'sport': match.league.sport,
         'sport_color': match.league.sport.hex_color,
         'reports': match.reports.all(),

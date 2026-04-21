@@ -1,14 +1,15 @@
+from django.shortcuts import render, get_object_or_404
+from django.utils import timezone
 from django.http import JsonResponse
 from django.contrib.auth.decorators import login_required
 from .services.dashboard_service import DashboardService
 from .models import Sport, Society, Team, League
 from matches.models import Match, MatchReport
+from accounts.models import User
 from .forms import SocietySetupForm
 
 def home(request):
     """Homepage con lista sport e partite filtrate per data"""
-    from django.utils import timezone
-    from matches.models import Match
     from .utils import get_calendar_dates
     import datetime
     
@@ -29,7 +30,6 @@ def home(request):
     calendar_dates = get_calendar_dates(center_date=selected_date)
     
     # Filtra partite per la data selezionata (00:00 - 23:59)
-    # Match.match_date è DateTimeField, quindi usiamo __date
     matches = Match.objects.filter(
         match_date__date=selected_date
     ).select_related(
@@ -37,6 +37,29 @@ def home(request):
         'away_team__society', 
         'league'
     ).order_by('match_date')
+    
+    # --- NEW PREMIUM HOME CONTEXT ---
+    # 1. Featured Match: L'ultima partita pubblicata
+    featured_match = Match.objects.filter(
+        is_finished=True, 
+        reports__status=MatchReport.Status.PUBLISHED
+    ).select_related('home_team__society', 'away_team__society', 'league').order_by('-match_date').first()
+    
+    # 2. Featured League: Prendi la prima lega che ha partite e genera classifica
+    featured_league_data = None
+    featured_league = League.objects.filter(matches__isnull=False).first()
+    if featured_league:
+        featured_league_data = {
+            'league': featured_league,
+            'standings': featured_league.get_standings()[:5] # Top 5
+        }
+    
+    # 3. Global Stats: Numeri chiave della piattaforma
+    global_stats = {
+        'teams_count': Team.objects.count(),
+        'athletes_count': User.objects.filter(role='athlete').count(),
+        'matches_count': Match.objects.filter(is_finished=True).count(),
+    }
     
     from core.services.seo_service import SEOService
     
@@ -46,6 +69,9 @@ def home(request):
         'calendar_dates': calendar_dates,
         'selected_date': selected_date,
         'today': today,
+        'featured_match': featured_match,
+        'featured_league_data': featured_league_data,
+        'global_stats': global_stats,
         'seo_title': f"Risultati e Classifiche del {selected_date.strftime('%d/%m/%Y')}",
         'seo_description': f"Segui i risultati di pallanuoto, volley e altri sport del {selected_date.strftime('%d/%m/%Y')}. Classifiche e tabellini live su 2salti.",
         'structured_data': [

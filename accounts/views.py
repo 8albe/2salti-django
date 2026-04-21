@@ -511,6 +511,10 @@ def profile(request, username):
     
     context['structured_data'] = sd
     
+    # Template personalizzato per Atleta (Premium)
+    if user.role == 'athlete':
+        return render(request, 'accounts/athlete_profile.html', context)
+        
     return render(request, 'accounts/profile.html', context)
 
 
