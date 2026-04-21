@@ -135,9 +135,22 @@ class AthleteProfile(models.Model):
     def update_stats(self):
         """Metodo chiamato dopo inserimento match events"""
         from matches.models import MatchEvent
-        self.total_goals = MatchEvent.objects.filter(player=self.user, event_type='GOAL').count()
-        self.total_expulsions = MatchEvent.objects.filter(player=self.user, event_type='EXPULSION').count()
-        self.total_matches = MatchEvent.objects.filter(player=self.user).values('match').distinct().count()
+        from matches.event_types import EVENT_TYPE_GOAL, EVENT_TYPE_PENALTY_GOAL, EVENT_TYPE_EXCLUSION_20, EVENT_TYPE_EXCLUSION_DEF
+        
+        self.total_goals = MatchEvent.objects.filter(
+            player=self.user, 
+            event_type__in=[EVENT_TYPE_GOAL, EVENT_TYPE_PENALTY_GOAL]
+        ).count()
+        
+        self.total_expulsions = MatchEvent.objects.filter(
+            player=self.user, 
+            event_type__in=[EVENT_TYPE_EXCLUSION_20, EVENT_TYPE_EXCLUSION_DEF]
+        ).count()
+        
+        self.total_matches = MatchEvent.objects.filter(
+            player=self.user
+        ).values('match').distinct().count()
+        
         self.save()
     
     def __str__(self):
