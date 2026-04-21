@@ -1,14 +1,16 @@
 import os
+from dotenv import load_dotenv
 from pathlib import Path
+load_dotenv(Path(__file__).resolve().parent.parent / '.env')
 
 # Base
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-SECRET_KEY = 'dev-secret-key'
+SECRET_KEY = os.environ['SECRET_KEY']
 
-DEBUG = True
+DEBUG = os.getenv('DEBUG', 'False').lower() == 'true'
 
-ALLOWED_HOSTS = ['*']
+ALLOWED_HOSTS = [h.strip() for h in os.getenv('ALLOWED_HOSTS', '').split(',') if h.strip()]
 
 # Apps
 INSTALLED_APPS = [
