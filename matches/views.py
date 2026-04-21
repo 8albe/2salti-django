@@ -95,22 +95,22 @@ def match_detail(request, match_id):
 
 @login_required
 @onboarding_required
-def upload_report(request, match_id):
-    """View per caricare un referto PDF/Immagine per una partita"""
-    match = get_object_or_404(Match, id=match_id)
+def upload_report(request, match_id=None):
+    """View per caricare un referto PDF/Immagine (con o senza partita pre-selezionata)"""
+    match = None
+    if match_id:
+        match = get_object_or_404(Match, id=match_id)
     
-    # RBAC Check: Solo arbitro o staff delle squadre coinvolte
+    # RBAC Check: Se c'e' un match, logica specifica. Altrimenti Staff/Referee.
     can_upload = False
-    membership_h = get_membership_context(request, team=match.home_team)
-    membership_a = get_membership_context(request, team=match.away_team)
-
-    if request.user.is_superuser:
+    if request.user.is_superuser or request.user.role == 'referee':
         can_upload = True
-    elif request.user.role == 'referee':
-        can_upload = True
-    elif (membership_h and membership_h.role in ['PRESIDENT', 'HEAD_COACH']) or \
-         (membership_a and membership_a.role in ['PRESIDENT', 'HEAD_COACH']):
-        can_upload = True
+    elif match:
+        membership_h = get_membership_context(request, team=match.home_team)
+        membership_a = get_membership_context(request, team=match.away_team)
+        if (membership_h and membership_h.role in ['PRESIDENT', 'HEAD_COACH']) or \
+           (membership_a and membership_a.role in ['PRESIDENT', 'HEAD_COACH']):
+            can_upload = True
             
     if not can_upload:
         raise PermissionDenied
@@ -124,22 +124,25 @@ def upload_report(request, match_id):
             report.status = 'UPLOADED'
             report.save()
             
-            from management.utils import log_action
-            log_action(request.user, match.home_team.society, "REPORT_UPLOADED", target=report)
+            # --- AUTO-OCR TRIGGER ---
+            from .services.ocr_service import OCRService
+            OCRService.process_and_update(report)
             
-            # Retrocompatibilità flag (aggiornato a has_report)
-            match.has_report = True
-            match.save()
+            if match:
+                match.has_report = True
+                match.save()
+                from management.utils import log_action
+                log_action(request.user, match.home_team.society, "REPORT_UPLOADED", target=report)
             
-            messages.success(request, "Referto caricato con successo. In attesa di elaborazione OCR.")
-            return redirect('match_detail', match_id=match.id)
+            messages.success(request, "Referto caricato ed elaborato con successo.")
+            return redirect('report_review', report_id=report.id)
     else:
         form = MatchReportUploadForm()
 
     return render(request, 'matches/upload_report.html', {
         'match': match,
         'form': form,
-        'sport_color': match.league.sport.hex_color if match.league else '#000000',
+        'sport_color': match.league.sport.hex_color if match and match.league else '#0366d6',
     })
 
 
@@ -253,41 +256,179 @@ def report_review(request, report_id):
         
     report = get_object_or_404(MatchReport.objects.select_related('match__home_team', 'match__away_team'), id=report_id)
     match = report.match
-    home_roster = match.home_team.get_roster() if match.home_team else []
-    away_roster = match.away_team.get_roster() if match.away_team else []
+    
+    # Candidate Discovery for unlinked reports
+    potential_matches = []
+    if not match and report.normalized_data:
+        from core.models import Team
+        from .services.ocr_service import resolve_team_entity
+        from django.db.models import Q
+        info = report.normalized_data.get('match_info', {})
+        all_teams = Team.objects.all()
+        h_team = resolve_team_entity(info.get('home_team'), all_teams)
+        a_team = resolve_team_entity(info.get('away_team'), all_teams)
+        if h_team or a_team:
+            q = Q()
+            if h_team: q |= Q(home_team=h_team) | Q(away_team=h_team)
+            if a_team: q |= Q(home_team=a_team) | Q(away_team=a_team)
+            potential_matches = Match.objects.filter(q).order_by('-match_date')[:5]
+
+    home_roster = match.home_team.get_roster() if match and match.home_team else []
+    away_roster = match.away_team.get_roster() if match and match.away_team else []
     
     if request.method == 'POST':
-        messages.error(request, "Questo percorso di revisione è deprecato. Per salvare modifiche ai dati OCR, usa l'Operational Dashboard (Admin).")
-        return redirect('report_review', report_id=report.id)
+        action = request.POST.get('_action')
+        
+        # --- NEW: Match Discovery Actions ---
+        if action == 'link_match':
+            m_id = request.POST.get('selected_match_id')
+            if m_id:
+                new_match = get_object_or_404(Match, id=m_id)
+                report.match = new_match
+                report.save()
+                messages.success(request, f"Referto collegato con successo: {new_match}")
+                return redirect('report_review', report_id=report.pk)
+        
+        if action == 'create_match':
+            # Relying on a helper or same logic as admin
+            success, msg = _handle_match_creation_logic(report, request)
+            if success:
+                messages.success(request, msg)
+            else:
+                messages.error(request, msg)
+            return redirect('report_review', report_id=report.pk)
+        # -----------------------------------
+
+        form = MatchReportReviewForm(request.POST, home_roster=home_roster, away_roster=away_roster)
+        if form.is_valid():
+            # 1. Update Match Scores & Quarters
+            match.home_score = form.cleaned_data['home_score']
+            match.away_score = form.cleaned_data['away_score']
+            match.is_finished = form.cleaned_data['is_finished']
+            
+            qs = {}
+            for i in range(1, 5):
+                qs[str(i)] = [form.cleaned_data[f'home_q{i}'], form.cleaned_data[f'away_q{i}']]
+            match.quarter_scores = qs
+            match.save()
+            
+            # 2. Update Report Metadata
+            report.status = form.cleaned_data['report_status']
+            report.validation_notes = form.cleaned_data['validation_notes']
+            report.internal_notes = form.cleaned_data['internal_notes']
+            report.validated_by = request.user
+            report.validated_at = timezone.now()
+            report.save()
+            
+            # 3. Create/Update MatchEvents (Goals)
+            # This is a basic implementation for manual review/digital reports
+            # If it's an OCR report, we might want to sync normalized_data instead,
+            # but for MVP, manual override on the form is the priority.
+            from .models import MatchEvent
+            from .event_types import EVENT_TYPE_GOAL
+            
+            # Delete old manual events to re-sync
+            match.events.filter(event_type=EVENT_TYPE_GOAL).delete()
+            
+            for athlete in home_roster:
+                count = form.cleaned_data.get(f'player_goals_home_{athlete.user.id}', 0)
+                for _ in range(count):
+                    MatchEvent.objects.create(
+                        match=match,
+                        player=athlete.user,
+                        team=match.home_team,
+                        event_type=EVENT_TYPE_GOAL,
+                        minute=0, # Manual review doesn't track minutes yet
+                        quarter=1
+                    )
+            
+            for athlete in away_roster:
+                count = form.cleaned_data.get(f'player_goals_away_{athlete.user.id}', 0)
+                for _ in range(count):
+                    MatchEvent.objects.create(
+                        match=match,
+                        player=athlete.user,
+                        team=match.away_team,
+                        event_type=EVENT_TYPE_GOAL,
+                        minute=0,
+                        quarter=1
+                    )
+            
+            # 4. Finalize Publish if requested
+            if report.status == MatchReport.Status.PUBLISHED:
+                from .services.publishing_service import PublishingService
+                # If we have normalized_data from OCR, keep it in sync if possible,
+                # but for manual form submission, we rely on the form data.
+                # PublishingService usually takes normalized_data, so we should update it if it exists.
+                if report.normalized_data:
+                    # Update normalized_data with form values to keep it as Source of Truth
+                    report.normalized_data['match_info'] = {
+                        'home_score': match.home_score,
+                        'away_score': match.away_score,
+                    }
+                    report.save()
+                
+                success, msg = PublishingService.publish_report(report, user=request.user)
+                if success:
+                    messages.success(request, f"Referto pubblicato con successo! {msg}")
+                else:
+                    messages.warning(request, f"Dati salvati, ma pubblicazione fallita: {msg}")
+            else:
+                messages.success(request, "Modifiche salvate con successo.")
+                
+            return redirect('match_detail', match_id=match.id)
+
     else:
-        # Warning for read-only mode in deprecation
-        messages.warning(request, "MODALITÀ SOLA LETTURA: Questo percorso di revisione è deprecato per garantire l'integrità dei dati OCR. Usa l'Operational Dashboard nell'Admin per modificare o validare il referto.")
-        
-        # Pre-populate quarter scores from JSON if they exist
-        qs = match.quarter_scores or {}
-        
+        # 1. Base initial data from Match
         initial_data = {
             'home_score': match.home_score or 0,
             'away_score': match.away_score or 0,
             'is_finished': match.is_finished,
-            'report_status': report.status,
+            'report_status': report.status if report.status != 'PROCESSING' else 'EXTRACTED',
             'validation_notes': report.validation_notes,
             'internal_notes': report.internal_notes,
         }
         
+        # 2. Quarter scores
+        qs = match.quarter_scores or {}
+        # If match has no scores but report has normalized_data, try to use converter
+        if not qs and report.normalized_data:
+            from .services.converters import MatchDataConverter
+            match_data = MatchDataConverter.get_match_scores(report.normalized_data)
+            initial_data['home_score'] = match_data['home_score']
+            initial_data['away_score'] = match_data['away_score']
+            qs = match_data['quarter_scores']
+            
         for i in range(1, 5):
             q_data = qs.get(str(i), [0, 0])
             initial_data[f'home_q{i}'] = q_data[0]
             initial_data[f'away_q{i}'] = q_data[1]
         
-        # Initial goals from MatchEvents if any
+        # 3. Player Goals (Initial from MatchEvents or OCR normalized_data)
+        # Priority 1: MatchEvents (previously saved)
+        # Priority 2: normalized_data (extracted by AI and reconciled)
+        
+        # Mapping for OCR data pre-fill
+        ocr_goals = {}
+        if report.normalized_data:
+            from .services.converters import MatchDataConverter
+            from .event_types import EVENT_TYPE_GOAL
+            events = MatchDataConverter.get_events_data(report.normalized_data)
+            for e in events:
+                if e['event_type'] == EVENT_TYPE_GOAL and e['player_id']:
+                    ocr_goals[e['player_id']] = ocr_goals.get(e['player_id'], 0) + 1
+
         for athlete in home_roster:
             count = MatchEvent.objects.filter(match=match, player=athlete.user, event_type=EVENT_TYPE_GOAL).count()
+            if count == 0 and athlete.user.id in ocr_goals:
+                count = ocr_goals[athlete.user.id]
             initial_data[f'player_goals_home_{athlete.user.id}'] = count
+            
         for athlete in away_roster:
             count = MatchEvent.objects.filter(match=match, player=athlete.user, event_type=EVENT_TYPE_GOAL).count()
+            if count == 0 and athlete.user.id in ocr_goals:
+                count = ocr_goals[athlete.user.id]
             initial_data[f'player_goals_away_{athlete.user.id}'] = count
-
 
         form = MatchReportReviewForm(initial=initial_data, home_roster=home_roster, away_roster=away_roster)
         
@@ -297,18 +438,31 @@ def report_review(request, report_id):
         'form': form,
         'home_roster': home_roster,
         'away_roster': away_roster,
-        'sport_color': match.league.sport.hex_color if match.league else '#000000',
+        'potential_matches': potential_matches,
+        'sport_color': match.league.sport.hex_color if match and match.league else '#0366d6',
     })
 
 @login_required
 def report_queue(request):
-    """Coda di validazione per staff/admin."""
-    if not request.user.is_staff and not request.user.is_superuser:
+    """Dashboard operativa per arbitri e staff."""
+    # RBAC: Arbitri possono vedere i propri, Staff vede tutto
+    is_staff = request.user.is_staff or request.user.is_superuser
+    
+    if is_staff:
+        reports = MatchReport.objects.all()
+    elif request.user.role == 'referee':
+        # Arbitro vede i referti che ha caricato o i match che arbitra
+        reports = MatchReport.objects.filter(
+            models.Q(uploader=request.user) | 
+            models.Q(match__referees=request.user)
+        ).distinct()
+    else:
+        # Altri ruoli vedono solo se legati a societa? Per ora blocchiamo
         raise PermissionDenied
         
-    status_filter = request.GET.get('status')
-    reports = MatchReport.objects.select_related('match', 'uploader').order_by('-created_at')
+    reports = reports.select_related('match', 'uploader', 'validated_by').order_by('-created_at')
     
+    status_filter = request.GET.get('status')
     if status_filter:
         reports = reports.filter(status=status_filter)
         
@@ -353,3 +507,59 @@ def create_digital_report(request, match_id):
     
     messages.success(request, "Referto digitale inizializzato. Puoi procedere alla compilazione dei dati.")
     return redirect('report_review', report_id=report.id)
+
+def _handle_match_creation_logic(report, request):
+    """Logica condivisa per creare un match dai dati OCR (Dashboard)."""
+    from core.models import Team, League
+    from .services.ocr_service import resolve_team_entity
+    from .models import Match
+    from datetime import datetime
+    
+    data = report.normalized_data or {}
+    info = data.get('match_info', {})
+    
+    home_name = info.get('home_team')
+    away_name = info.get('away_team')
+    league_name = info.get('league')
+    date_str = info.get('date')
+    
+    # 1. Resolve Date
+    target_date = None
+    if date_str:
+        for fmt in ['%Y-%m-%d', '%d/%m/%Y', '%d/%m/%y']:
+            try:
+                target_date = datetime.strptime(date_str, fmt).date()
+                break
+            except ValueError:
+                continue
+    if not target_date:
+        return False, "Data mancante o non valida nell'OCR."
+        
+    # 2. Resolve Teams
+    all_teams = Team.objects.all()
+    home_team = resolve_team_entity(home_name, all_teams)
+    away_team = resolve_team_entity(away_name, all_teams)
+    if not home_team or not away_team:
+        return False, f"Squadre non risolte ({home_name} vs {away_name}). Crea le entità prima."
+        
+    # 3. Resolve League
+    league = None
+    if league_name:
+        league = League.objects.filter(name__icontains=league_name).first()
+    
+    # 4. Create Match
+    score_h, score_a = 0, 0
+    try:
+        score_h = int(data.get('teams', {}).get('home', {}).get('score', 0))
+        score_a = int(data.get('teams', {}).get('away', {}).get('score', 0))
+    except: pass
+    
+    match = Match.objects.create(
+        home_team=home_team, away_team=away_team,
+        match_date=datetime.combine(target_date, datetime.min.time()),
+        league=league, home_score=score_h, away_score=score_a,
+        is_finished=True, has_report=True
+    )
+    report.match = match
+    report.save()
+    return True, f"Match creato e collegato: {match}"

@@ -1,0 +1,280 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="max-w-7xl mx-auto px-4 py-8">
+    <div class="flex flex-col lg:flex-row gap-8">
+        <!-- LEFT: File Viewer (Only if not DIGITAL) -->
+        {% if report.source_channel != 'DIGITAL' %}
+        <div class="lg:w-2/3">
+            <div class="glass-panel p-4 min-h-[600px] lg:h-[85vh] flex flex-col">
+                <div class="flex justify-between items-center mb-4">
+                    <h3 class="text-white font-display font-bold flex items-center gap-2">
+                        <i class="fas fa-file-alt text-cyan-400"></i>
+                        <span>Referto Originale</span>
+                    </h3>
+                    <a href="{{ report.file.url }}" target="_blank" 
+                       class="text-xs bg-slate-800 hover:bg-slate-700 text-slate-300 px-3 py-1.5 rounded-full border border-slate-700 transition-all">
+                        <i class="fas fa-external-link-alt mr-1"></i> Apri Originale
+                    </a>
+                </div>
+                
+                <div class="flex-grow bg-slate-900/50 rounded-2xl border border-white/5 overflow-hidden relative">
+                    {% with file_ext=report.file.url|lower %}
+                    {% if ".pdf" in file_ext %}
+                        <iframe src="{{ report.file.url }}" class="w-full h-full border-0"></iframe>
+                    {% else %}
+                        <div class="w-full h-full overflow-auto p-4 flex items-center justify-center bg-[url('/static/img/pattern.png')] bg-repeat">
+                            <img src="{{ report.file.url }}" class="max-w-full h-auto shadow-2xl rounded-lg">
+                        </div>
+                    {% endif %}
+                    {% endwith %}
+                </div>
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- RIGHT: Revision Form -->
+        <div class="{% if report.source_channel == 'DIGITAL' %}lg:w-1/2 mx-auto{% else %}lg:w-1/3{% endif %}">
+            <div class="glass-panel p-6 sticky top-8">
+                {% if report.status == 'NEEDS_REVIEW' %}
+                <div class="mb-8 p-4 rounded-2xl bg-amber-500/10 border border-amber-500/20">
+                    <div class="flex items-center gap-3 text-amber-500 mb-2">
+                        <i class="fas fa-magic"></i>
+                        <span class="text-xs font-bold uppercase tracking-widest">Supporto AI / OCR</span>
+                    </div>
+                    <p class="text-[11px] text-amber-200/70 leading-relaxed">
+                        L'AI ha rilevato dei dati. Verifica i valori pre-inseriti confrontandoli con l'immagine a lato prima di confermare.
+                    </p>
+                </div>
+                {% endif %}
+
+                <div class="mb-8">
+                    <h2 class="text-2xl font-display font-bold text-white mb-2">
+                        {% if report.source_channel == 'DIGITAL' %}Compilazione Referto Digitale{% else %}Revisione Manuale{% endif %}
+                    </h2>
+                    <p class="text-slate-400 text-sm">
+                        {% if report.source_channel == 'DIGITAL' %}Inserisci i dati ufficiali della partita.{% else %}Inserisci i dati ufficiali dal referto cartaceo.{% endif %}
+                    </p>
+                </div>
+
+                {% if match %}
+                <div class="p-4 rounded-2xl bg-white/5 border border-white/10 mb-8">
+                    <div class="text-[10px] text-cyan-400 font-mono uppercase tracking-widest mb-1">{{ match.league.name }}</div>
+                    <div class="text-base font-bold text-white mb-1">{{ match.home_team.name }} <span class="text-slate-500 mx-1">vs</span> {{ match.away_team.name }}</div>
+                    <div class="text-xs text-slate-500 flex items-center gap-2">
+                        <i class="far fa-calendar"></i> {{ match.match_date|date:"d/m/Y H:i" }}
+                    </div>
+                </div>
+                {% else %}
+                <div class="p-6 rounded-2xl bg-cyan-500/5 border-2 border-cyan-500/20 mb-8">
+                    <div class="flex items-center gap-2 text-cyan-400 mb-4">
+                        <i class="fas fa-search"></i>
+                        <span class="text-xs font-bold uppercase tracking-widest">Identificazione Partita</span>
+                    </div>
+                    
+                    <p class="text-xs text-slate-400 mb-4">
+                        Questo referto non è collegato a nessuna partita. Scegline una esistente o creane una nuova dai dati OCR.
+                    </p>
+
+                    {% if potential_matches %}
+                    <div class="space-y-2 mb-6">
+                        <div class="text-[10px] text-slate-500 font-bold uppercase tracking-tight">Match Potenziali:</div>
+                        {% for m in potential_matches %}
+                        <form method="post" class="flex items-center justify-between p-3 rounded-xl bg-slate-900/50 border border-white/5 hover:border-cyan-500/30 transition-all group">
+                            {% csrf_token %}
+                            <input type="hidden" name="selected_match_id" value="{{ m.id }}">
+                            <div class="flex flex-col">
+                                <span class="text-xs font-bold text-white">{{ m.home_team.name }} vs {{ m.away_team.name }}</span>
+                                <span class="text-[9px] text-slate-500">{{ m.match_date|date:"d/m/Y H:i" }}</span>
+                            </div>
+                            <button type="submit" name="_action" value="link_match" class="text-[10px] bg-cyan-500/10 text-cyan-400 px-3 py-1 rounded-lg border border-cyan-500/20 group-hover:bg-cyan-500 group-hover:text-black transition-all font-bold">
+                                Collega
+                            </button>
+                        </form>
+                        {% endfor %}
+                    </div>
+                    {% endif %}
+
+                    <form method="post" class="pt-4 border-t border-white/5">
+                        {% csrf_token %}
+                        <button type="submit" name="_action" value="create_match" class="w-full py-3 rounded-xl bg-slate-800 text-white text-xs font-bold border border-slate-700 hover:bg-slate-700 transition-all flex items-center justify-center gap-2">
+                            <i class="fas fa-plus-circle"></i> Crea Nuova Partita da OCR
+                        </button>
+                    </form>
+                </div>
+                {% endif %}
+
+                <form method="post" class="space-y-6">
+                    {% csrf_token %}
+                    
+                    <div class="space-y-4">
+                        <h4 class="text-xs font-bold text-slate-500 uppercase tracking-widest border-b border-white/5 pb-2">Risultato & Parziali</h4>
+                        
+                        {% if form.non_field_errors or form.home_score.errors or form.away_score.errors %}
+                        <div class="p-3 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 text-xs animate-pulse">
+                            {{ form.non_field_errors }}
+                            {{ form.home_score.errors }}
+                            {{ form.away_score.errors }}
+                        </div>
+                        {% endif %}
+
+                        <div class="grid grid-cols-2 gap-8 p-4 rounded-2xl bg-slate-900/30 border border-white/5">
+                            <!-- HOME -->
+                            <div class="space-y-4">
+                                <div class="text-center pb-2 border-b border-white/5">
+                                    <div class="text-[10px] text-cyan-400 font-mono uppercase tracking-widest">Casa</div>
+                                    <div class="text-2xl font-bold text-white">{{ form.home_score }}</div>
+                                </div>
+                                <div class="grid grid-cols-2 gap-2">
+                                    <div class="space-y-1">
+                                        <label class="text-[10px] text-slate-500 uppercase">Q1</label>
+                                        {{ form.home_q1 }}
+                                    </div>
+                                    <div class="space-y-1">
+                                        <label class="text-[10px] text-slate-500 uppercase">Q2</label>
+                                        {{ form.home_q2 }}
+                                    </div>
+                                    <div class="space-y-1">
+                                        <label class="text-[10px] text-slate-500 uppercase">Q3</label>
+                                        {{ form.home_q3 }}
+                                    </div>
+                                    <div class="space-y-1">
+                                        <label class="text-[10px] text-slate-500 uppercase">Q4</label>
+                                        {{ form.home_q4 }}
+                                    </div>
+                                </div>
+                            </div>
+                            <!-- AWAY -->
+                            <div class="space-y-4">
+                                <div class="text-center pb-2 border-b border-white/5">
+                                    <div class="text-[10px] text-purple-400 font-mono uppercase tracking-widest">Ospite</div>
+                                    <div class="text-2xl font-bold text-white">{{ form.away_score }}</div>
+                                </div>
+                                <div class="grid grid-cols-2 gap-2">
+                                    <div class="space-y-1">
+                                        <label class="text-[10px] text-slate-500 uppercase">Q1</label>
+                                        {{ form.away_q1 }}
+                                    </div>
+                                    <div class="space-y-1">
+                                        <label class="text-[10px] text-slate-500 uppercase">Q2</label>
+                                        {{ form.away_q2 }}
+                                    </div>
+                                    <div class="space-y-1">
+                                        <label class="text-[10px] text-slate-500 uppercase">Q3</label>
+                                        {{ form.away_q3 }}
+                                    </div>
+                                    <div class="space-y-1">
+                                        <label class="text-[10px] text-slate-500 uppercase">Q4</label>
+                                        {{ form.away_q4 }}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="flex items-center gap-3 p-4 rounded-xl bg-slate-900/50 border border-slate-800 hover:border-cyan-500/30 transition-all cursor-pointer group">
+                            {{ form.is_finished }}
+                            <label for="{{ form.is_finished.id_for_label }}" class="text-sm font-medium text-slate-300 group-hover:text-white transition-colors cursor-pointer">
+                                {{ form.is_finished.label }}
+                            </label>
+                        </div>
+                    </div>
+
+                    <!-- ROSTERS & GOALS -->
+                    <div class="space-y-4 pt-4">
+                        <h4 class="text-xs font-bold text-slate-500 uppercase tracking-widest border-b border-white/5 pb-2">Marcatori (Home)</h4>
+                        <div class="max-h-60 overflow-y-auto pr-2 space-y-2 custom-scrollbar">
+                            {% for athlete in home_roster %}
+                            <div class="flex items-center justify-between p-2 rounded-lg bg-white/5 border border-white/5 hover:border-cyan-500/30 transition-all">
+                                <div class="flex flex-col">
+                                    <span class="text-xs font-bold text-white">{{ athlete.user.get_full_name }}</span>
+                                    <span class="text-[10px] text-slate-500">#{{ athlete.jersey_number|default:"-" }} • {{ athlete.get_position_display|default:athlete.position }}</span>
+                                </div>
+                                <div class="w-16">
+                                    {% with uid=athlete.user.id|stringformat:"s" %}
+                                    {% with target_fname='player_goals_home_'|add:uid %}
+                                        {% for field in form %}
+                                            {% if field.name == target_fname %}
+                                                {{ field }}
+                                            {% endif %}
+                                        {% endfor %}
+                                    {% endwith %}
+                                    {% endwith %}
+                                </div>
+                            </div>
+                            {% endfor %}
+                        </div>
+
+                        <h4 class="text-xs font-bold text-slate-500 uppercase tracking-widest border-b border-white/5 pb-2 pt-4">Marcatori (Away)</h4>
+                        <div class="max-h-60 overflow-y-auto pr-2 space-y-2 custom-scrollbar">
+                            {% for athlete in away_roster %}
+                            <div class="flex items-center justify-between p-2 rounded-lg bg-white/5 border border-white/5 hover:border-purple-500/30 transition-all">
+                                <div class="flex flex-col">
+                                    <span class="text-xs font-bold text-white">{{ athlete.user.get_full_name }}</span>
+                                    <span class="text-[10px] text-slate-500">#{{ athlete.jersey_number|default:"-" }} • {{ athlete.get_position_display|default:athlete.position }}</span>
+                                </div>
+                                <div class="w-16">
+                                    {% with uid=athlete.user.id|stringformat:"s" %}
+                                    {% with target_fname='player_goals_away_'|add:uid %}
+                                        {% for field in form %}
+                                            {% if field.name == target_fname %}
+                                                {{ field }}
+                                            {% endif %}
+                                        {% endfor %}
+                                    {% endwith %}
+                                    {% endwith %}
+                                </div>
+                            </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+
+                    <div class="space-y-4 pt-4">
+                        <h4 class="text-xs font-bold text-slate-500 uppercase tracking-widest border-b border-white/5 pb-2">Stato & Workflow</h4>
+                        <div class="space-y-2">
+                            <label class="text-xs font-medium text-slate-400">{{ form.report_status.label }}</label>
+                            {{ form.report_status }}
+                        </div>
+
+                        <div class="space-y-2">
+                            <label class="text-xs font-medium text-slate-400">{{ form.validation_notes.label }}</label>
+                            {{ form.validation_notes }}
+                            <p class="text-[10px] text-slate-500">{{ form.validation_notes.help_text }}</p>
+                        </div>
+
+                        <div class="space-y-2">
+                            <label class="text-xs font-medium text-slate-400 font-bold text-cyan-400">{{ form.internal_notes.label }}</label>
+                            {{ form.internal_notes }}
+                            <p class="text-[10px] text-slate-500">{{ form.internal_notes.help_text }}</p>
+                        </div>
+
+                        {% if report.validated_by %}
+                        <div class="p-3 rounded-xl bg-cyan-500/5 border border-cyan-500/10 mt-4">
+                            <div class="text-[10px] text-cyan-500 uppercase tracking-widest font-bold mb-1">Ultima Revisione</div>
+                            <div class="text-xs text-white">
+                                <span class="font-bold">{{ report.validated_by.username }}</span>
+                                <span class="text-slate-500 mx-1">•</span>
+                                <span class="text-slate-400">{{ report.validated_at|date:"d/m/Y H:i" }}</span>
+                            </div>
+                        </div>
+                        {% endif %}
+                    </div>
+
+                    <div class="pt-6 space-y-3">
+                        <button type="submit" 
+                                class="w-full py-4 rounded-xl font-bold text-black shadow-lg transition-all flex items-center justify-center gap-2 bg-cyan-500 hover:bg-cyan-400 hover:scale-[1.02] active:scale-[0.98]">
+                            <i class="fas fa-check-circle"></i> Conferma e Pubblica Dati
+                        </button>
+                        <p class="text-center text-[10px] text-slate-500 uppercase tracking-widest font-bold">
+                            I dati verranno sincronizzati immediatamente
+                        </p>
+                        <a href="{% url 'match_detail' match.id %}" 
+                           class="block w-full py-3 text-center text-slate-500 hover:text-slate-300 transition-colors text-sm font-medium">
+                            Esci e torna al match
+                        </a>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

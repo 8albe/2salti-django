@@ -1,0 +1,1345 @@
+{% extends "admin/base_site.html" %}
+{% load i18n admin_urls static admin_modify %}
+
+{% block extrahead %}{{ block.super }}
+<script src="{% url 'admin:jsi18n' %}"></script>
+{{ media }}
+<style>
+    :root {
+        --primary: #0366d6;
+        --success: #16a34a;
+        --warning: #d97706;
+        --danger: #dc2626;
+        --gray-light: #f8fafc;
+        --border-color: #e2e8f0;
+    }
+
+    .review-view-wrapper {
+        display: flex;
+        flex-direction: column;
+        height: calc(100vh - 120px);
+        margin: -10px -20px;
+    }
+
+    /* Sticky Action Bar */
+    .sticky-header {
+        position: sticky;
+        top: 0;
+        z-index: 1001;
+        background: #fff;
+        border-bottom: 1px solid var(--border-color);
+        padding: 8px 20px; /* Calmer padding */
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+    }
+
+    .status-capsule {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+    }
+
+    .badge {
+        padding: 4px 10px;
+        border-radius: 4px;
+        font-size: 11px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.3px;
+    }
+    .badge-status { background: #f1f5f9; color: #64748b; border: 1px solid #e2e8f0; }
+    .badge-review { background: #fffbeb; color: #b45309; border: 1px solid #fde68a; }
+    .badge-ready { background: #f0fdf4; color: #16a34a; border: 1px solid #bbf7d0; }
+    .badge-blocked { background: #fef2f2; color: #dc2626; border: 1px solid #fecaca; }
+
+    #dirty-indicator {
+        font-size: 11px;
+        color: var(--warning);
+        font-weight: bold;
+        display: none;
+    }
+
+    .header-actions {
+        display: flex;
+        gap: 10px;
+    }
+
+    /* Main Container */
+    .review-container {
+        display: flex;
+        flex-direction: row; /* Explicitly ensure form is on the left if it's the first child */
+        flex: 1;
+        overflow: hidden;
+        background: #f8fafc;
+    }
+
+    .review-file {
+        flex: 1.3;
+        order: 2; /* Explicit order: 2 for the image */
+        background: #1e293b;
+        display: flex;
+        align-items: flex-start;
+        justify-content: center;
+        padding: 0;
+        border-left: 1px solid var(--border-color);
+        overflow: auto;
+        position: relative;
+    }
+
+    .file-preview {
+        max-width: 100%;
+        transition: transform 0.2s ease-out;
+        transform-origin: top center;
+    }
+
+    .review-form-panel {
+        flex: 1;
+        order: 1; /* Explicit order: 1 for the form */
+        overflow-y: auto;
+        padding: 32px 24px;
+        background: #f8fafc;
+        border-right: 1px solid var(--border-color);
+    }
+
+    /* Cards */
+    .review-card {
+        background: #fff;
+        border: 1px solid #e2e8f0;
+        border-radius: 8px;
+        padding: 24px;
+        margin-bottom: 32px;
+        box-shadow: 0 1px 2px rgba(0,0,0,0.03);
+    }
+
+    .review-card h3 {
+        margin-top: 0;
+        margin-bottom: 20px;
+        font-size: 16px;
+        border-bottom: 1px solid #f1f5f9;
+        padding-bottom: 12px;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        color: #334155;
+        font-weight: 600;
+    }
+
+    /* Problems Section */
+    .problems-box {
+        border-radius: 8px;
+        padding: 20px;
+        margin-bottom: 32px;
+        border: 1px solid transparent;
+    }
+    .problems-box.has-blockers { background: #fef2f2; border-color: #fecaca; }
+    .problems-box.has-warnings { background: #fffaf0; border-color: #fbd38d; }
+    .problems-box.is-clean { background: transparent; border-color: #f1f5f9; padding: 12px 20px; }
+
+    .problem-list {
+        margin: 12px 0 0 0;
+        padding-left: 0;
+        list-style: none;
+        font-size: 13.5px;
+        line-height: 1.6;
+    }
+    .problem-list li { margin-bottom: 8px; display: flex; align-items: start; gap: 8px; }
+    .text-danger { color: #dc2626; font-weight: 500; }
+    .text-warning { color: #d97706; font-weight: 500; }
+
+    /* Technical details */
+    details {
+        margin-top: 32px;
+        border: 1px solid #e2e8f0;
+        border-radius: 8px;
+        background: #fff;
+    }
+    details summary {
+        cursor: pointer;
+        padding: 12px 20px;
+        background: #f8fafc;
+        border-radius: 8px;
+        font-weight: 500;
+        font-size: 13px;
+        color: #64748b;
+    }
+    details[open] summary {
+        border-bottom: 1px solid #e2e8f0;
+        border-radius: 8px 8px 0 0;
+    }
+
+    .json-textarea {
+        width: 100%;
+        font-family: 'Fira Code', monospace;
+        height: 300px;
+        font-size: 13px;
+        border: 1px solid var(--border-color);
+        border-radius: 6px;
+        padding: 12px;
+        background: #fff;
+    }
+
+    .raw-data-box {
+        background: #1e293b;
+        color: #e2e8f0;
+        padding: 18px;
+        border-radius: 6px;
+        font-family: 'Fira Code', monospace;
+        font-size: 12px;
+        max-height: 350px;
+        overflow-y: auto;
+    }
+
+    .recon-widget { width: 100%; border-collapse: collapse; margin-top: 12px; font-size: 0.9em; }
+    .recon-widget th, .recon-widget td { padding: 12px 10px; border-bottom: 1px solid #f1f5f9; text-align: left; vertical-align: middle; }
+    .recon-widget tr:last-child td { border-bottom: none; }
+    .recon-widget tr:hover { background: #f8fafc; }
+    .status-badge { padding: 4px 8px; border-radius: 12px; font-size: 0.8em; font-weight: bold; display: inline-block; }
+    .status-ok { background: #c6f6d5; color: #22543d; }
+    .status-warn { background: #feebc8; color: #744210; }
+    .status-none { background: #f1f5f9; color: #64748b; }
+
+    #json-error-banner {
+        background: #dc2626;
+        color: #fff;
+        padding: 8px 12px;
+        border-radius: 4px;
+        font-size: 12px;
+        margin-top: 10px;
+        display: none;
+    }
+
+    .btn-header {
+        padding: 8px 16px;
+        font-weight: 600;
+        border-radius: 6px;
+        cursor: pointer;
+        border: 1px solid transparent;
+        transition: all 0.15s ease-in-out;
+        font-size: 13px;
+        position: relative;
+    }
+    .btn-header:hover { transform: translateY(-1px); }
+    .btn-save { background: #fff; color: #475569; border-color: #cbd5e1; }
+    .btn-save:hover { background: #f8fafc; border-color: #94a3b8; }
+    .btn-validate { background: #0366d6; color: white; }
+    .btn-publish { background: #16a34a; color: white; }
+    .btn-publish:disabled { background: #f1f5f9; color: #94a3b8; border-color: #e2e8f0; cursor: not-allowed; transform: none; }
+
+    .btn-header.is-loading {
+        color: transparent !important;
+        pointer-events: none;
+    }
+    .btn-header.is-loading::after {
+        content: "";
+        position: absolute;
+        width: 16px;
+        height: 16px;
+        top: 50%;
+        left: 50%;
+        margin-top: -8px;
+        margin-left: -8px;
+        border: 2px solid rgba(255,255,255,0.3);
+        border-radius: 50%;
+        border-top-color: #fff;
+        animation: spin 0.8s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    
+    /* FAST REVIEW UI */
+    .review-summary-bar {
+        background: #fff;
+        border: 2px solid #e2e8f0;
+        border-radius: 12px;
+        padding: 16px 20px;
+        margin-bottom: 24px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);
+        position: sticky;
+        top: 60px; /* Under sticky header */
+        z-index: 999;
+    }
+    .summary-stat {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+        padding: 0 16px;
+        border-right: 1px solid #f1f5f9;
+    }
+    .summary-stat:last-child { border-right: none; }
+    .summary-stat label { font-size: 11px; font-weight: 600; color: #64748b; text-transform: uppercase; letter-spacing: 0.5px; }
+    .summary-stat b { font-size: 20px; color: #1e293b; }
+    .summary-stat b.has-count { color: #dc2626; }
+
+    .recon-widget tr.is-unresolved { background: #fff1f2 !important; border-left: 3px solid #dc2626; }
+    .recon-widget tr.is-unresolved:hover { background: #ffe4e6 !important; }
+    
+    [data-fast-step] { scroll-margin-top: 140px; transition: box-shadow 0.3s ease; }
+    [data-fast-step].is-current-target { box-shadow: 0 0 0 3px rgba(3, 102, 214, 0.4); border-radius: 6px; }
+
+    .jump-btn {
+        background: #f1f5f9;
+        color: #475569;
+        border: 1px solid #cbd5e1;
+        padding: 6px 12px;
+        border-radius: 6px;
+        font-size: 12px;
+        font-weight: 600;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+    }
+    .jump-btn:hover { background: #e2e8f0; }
+    .jump-btn kbd { font-size: 10px; background: #fff; padding: 2px 4px; border-radius: 3px; border: 1px solid #cbd5e1; }
+
+    /* Comparison & Uncertainty Styles */
+    .ocr-value-hint {
+        display: block;
+        font-size: 10px;
+        color: #64748b;
+        margin-top: 2px;
+        font-style: italic;
+    }
+    .field-uncertain {
+        border-color: #f59e0b !important;
+        background-color: #fffbeb !important;
+        box-shadow: 0 0 0 2px rgba(245, 158, 11, 0.2) !important;
+    }
+    .field-differs {
+        border-color: #3b82f6 !important;
+        background-color: #eff6ff !important;
+    }
+    .ocr-label {
+        font-size: 9px;
+        font-weight: bold;
+        color: #94a3b8;
+        background: #f1f5f9;
+        padding: 1px 4px;
+        border-radius: 3px;
+        margin-right: 4px;
+        text-transform: uppercase;
+    }
+    .td-ocr-found {
+        background-color: #f8fafc;
+        color: #64748b;
+        font-size: 11px;
+        font-family: monospace;
+    }
+    /* Audit Trail */
+    .audit-trail-row {
+        display: flex;
+        padding: 10px 0;
+        border-bottom: 1px solid #e2e8f0;
+        font-size: 12px;
+        gap: 12px;
+        align-items: flex-start;
+    }
+    .audit-trail-row:last-child { border-bottom: none; }
+    .audit-action-badge {
+        padding: 3px 8px;
+        border-radius: 4px;
+        font-weight: 600;
+        font-size: 10px;
+        text-transform: uppercase;
+        letter-spacing: 0.3px;
+        white-space: nowrap;
+    }
+    .audit-action-badge.publish { background: #dcfce7; color: #166534; }
+    .audit-action-badge.validate { background: #dbeafe; color: #1e40af; }
+    .audit-action-badge.save_draft { background: #f1f5f9; color: #475569; }
+    .audit-action-badge.review_opened { background: #fef3c7; color: #92400e; }
+    .audit-action-badge.depublish { background: #fef2f2; color: #991b1b; }
+    .audit-action-badge.publish_now { background: #dcfce7; color: #166534; }
+    .audit-action-badge.publish_force { background: #fef2f2; color: #991b1b; border: 1px solid #fca5a5; }
+    .audit-action-badge.republish { background: #e0e7ff; color: #3730a3; }
+    .audit-status-change {
+        font-size: 11px;
+        color: #64748b;
+        font-family: monospace;
+    }
+    .audit-reason {
+        font-size: 11px;
+        color: #475569;
+        font-style: italic;
+        background: #f8fafc;
+        padding: 4px 8px;
+        border-radius: 4px;
+        border-left: 3px solid #cbd5e1;
+        margin-top: 4px;
+    }
+    .reason-input-row {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 6px 20px;
+        background: #f8fafc;
+        border-bottom: 1px solid var(--border-color);
+    }
+    .reason-input-row label {
+        font-size: 11px;
+        font-weight: 600;
+        color: #64748b;
+        white-space: nowrap;
+    }
+    .reason-input-row input {
+        flex: 1;
+        border: 1px solid #e2e8f0;
+        border-radius: 4px;
+        padding: 5px 10px;
+        font-size: 12px;
+        outline: none;
+        transition: border-color 0.15s;
+    }
+    .reason-input-row input:focus {
+        border-color: #0366d6;
+        box-shadow: 0 0 0 2px rgba(3,102,214,0.15);
+    }
+
+</style>
+{% endblock %}
+
+{% block breadcrumbs %}
+<div class="breadcrumbs">
+<a href="{% url 'admin:index' %}">{% translate 'Home' %}</a>
+&rsaquo; <a href="{% url 'admin:app_list' app_label=opts.app_label %}">{{ opts.app_config.verbose_name }}</a>
+&rsaquo; <a href="{% url 'admin:matches_matchreport_changelist' %}">{{ opts.verbose_name_plural }}</a>
+&rsaquo; <a href="{% url 'admin:matches_matchreport_change' original.pk|admin_urlquote %}">{{ original }}</a>
+&rsaquo; {% translate 'Review OCR' %}
+</div>
+{% endblock %}
+
+{% block content %}
+<div id="content-main">
+    <form method="post" id="matchreport_form" novalidate>
+        {% csrf_token %}
+        
+        <div class="review-view-wrapper">
+            <!-- Sticky Action Bar -->
+            <div class="sticky-header">
+                <div class="status-capsule">
+                    <span class="badge {% if original.status == 'NEEDS_REVIEW' %}badge-review{% else %}badge-status{% endif %} text-uppercase">{{ original.get_status_display }}</span>
+                    {% if publish_safe %}
+                        <span class="badge badge-ready">✓ pronto</span>
+                    {% else %}
+                        <span class="badge badge-blocked">✖ da correggere</span>
+                    {% endif %}
+                    <span style="font-size: 13px; color: #64748b;">
+                        <strong>{{ publish_blockers|length }}</strong> blocchi | <strong>{{ publish_warnings|length }}</strong> avvisi
+                    </span>
+                    <span id="dirty-indicator">⚠️ modifiche non salvate</span>
+                    
+                    {% if original.in_review_by %}
+                    <span class="badge {% if original.in_review_by == user %}badge-ready{% else %}badge-review{% endif %}" style="margin-left: 10px;">
+                        👤 Preso in carico: {% if original.in_review_by == user %}tu{% else %}{{ original.in_review_by.username }}{% endif %}
+                    </span>
+                    {% endif %}
+
+                    <span id="shortcut-hint" style="font-size: 10px; color: #94a3b8; margin-left: 10px;">Shortcut: ^S Salva | ^↵ Valida</span>
+                </div>
+                <div class="header-actions">
+                    <button type="submit" id="btn-save-draft" name="_action" value="save_draft" class="btn-header btn-save">Salva Bozza</button>
+                    <button type="submit" id="btn-validate" name="_action" value="validate" class="btn-header btn-validate">Valida</button>
+                    
+                    {% if publish_safe %}
+                        <button type="submit" id="btn-publish-now" name="_action" value="publish_now" class="btn-header btn-publish">Valida & Pubblica Ora</button>
+                    {% else %}
+                        <button type="button" class="btn-header btn-publish" disabled title="Risolvi i blocchi per pubblicare">Valida & Pubblica Ora</button>
+                    {% endif %}
+                </div>
+            </div>
+            <!-- Reason/Motivation Input Row -->
+            <div class="reason-input-row">
+                <label for="reason_message">📝 Motivazione:</label>
+                <input type="text" name="reason_message" id="reason_message" placeholder="Inserisci la ragione della modifica (obbligatorio per validazione/pubblicazione)" maxlength="500">
+            </div>
+
+            <div class="review-container">
+                <div class="review-form-panel">
+                    
+                    <!-- FAST REVIEW DASHBOARD -->
+                    <div class="review-summary-bar">
+                        <div style="display: flex; align-items: center;">
+                            <div class="summary-stat">
+                                <label>Blocchi</label>
+                                <b class="{% if publish_blockers %}has-count{% endif %}">{{ publish_blockers|length }}</b>
+                            </div>
+                            <div class="summary-stat">
+                                <label>Unresolved</label>
+                                <b class="{% if unresolved_count %}has-count{% endif %}">{{ unresolved_count }}</b>
+                            </div>
+                            <div class="summary-stat">
+                                <label>Avvisi</label>
+                                <b>{{ publish_warnings|length }}</b>
+                            </div>
+                        </div>
+                        
+                        <div style="display: flex; gap: 8px;">
+                            <button type="button" onclick="goToNextIssue()" class="jump-btn">
+                                <span>Prossima Anomalia</span>
+                                <kbd>TAB</kbd>
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <!-- Discovery & Linking Card (Standalone Upload Flow) -->
+                    {% if not original.match %}
+                    <div class="review-card" style="border: 2px solid #0366d6; background: #f0f7ff;">
+                        <h3 style="color: #0366d6; border-bottom-color: #dbeafe;"><span>🔍</span> Identificazione Partita</h3>
+                        <p style="font-size: 13px; color: #475569; margin-bottom: 20px;">
+                            Questo referto non è ancora collegato a nessuna partita nel database.
+                        </p>
+
+                        {% if potential_matches %}
+                        <div style="margin-bottom: 24px;">
+                            <h4 style="font-size: 11px; font-weight: 700; color: #64748b; text-transform: uppercase; letter-spacing: 0.5px;">Possibili Corrispondenze:</h4>
+                            <div style="display: flex; flex-direction: column; gap: 8px; margin-top: 10px;">
+                                {% for m in potential_matches %}
+                                <div style="display: flex; align-items: center; justify-content: space-between; background: #fff; padding: 10px 15px; border-radius: 6px; border: 1px solid #cbd5e1; box-shadow: 0 1px 2px rgba(0,0,0,0.05);">
+                                    <div>
+                                        <div style="font-weight: 600; font-size: 13px; color: #1e293b;">{{ m.home_team.name }} vs {{ m.away_team.name }}</div>
+                                        <div style="font-size: 11px; color: #64748b;">{{ m.match_date|date:"d/m/Y H:i" }} | {{ m.league.name|default:"—" }}</div>
+                                    </div>
+                                    <button type="submit" name="_action" value="link_match" 
+                                            onclick="document.getElementById('selected_match_id').value='{{ m.id }}'" 
+                                            class="btn-header btn-validate" style="padding: 4px 12px; font-size: 11px;">Collega</button>
+                                </div>
+                                {% endfor %}
+                            </div>
+                            <input type="hidden" name="selected_match_id" id="selected_match_id">
+                        </div>
+                        {% else %}
+                        <div style="background: #fff; border: 1px solid #cbd5e1; padding: 15px; border-radius: 6px; font-size: 12px; color: #64748b; margin-bottom: 20px; text-align: center; border-style: dashed;">
+                            Nessun match trovato nel database per queste squadre.
+                        </div>
+                        {% endif %}
+
+                        <div style="border-top: 1px solid #dbeafe; padding-top: 15px; display: flex; align-items: center; justify-content: space-between;">
+                            <div style="font-size: 12px; color: #0366d6; font-weight: 500;">
+                                <strong>Non trovi quella giusta?</strong> Crea un nuovo match dai dati OCR.
+                            </div>
+                            <button type="submit" name="_action" value="create_match" class="btn-header btn-validate" style="background: #0366d6; border: none; padding: 8px 16px;">🏗️ Crea & Collega Nuovo Match</button>
+                        </div>
+                    </div>
+                    {% endif %}
+
+                    <!-- 0. OCR Quality Gate -->
+                    {% if not ocr_is_valid or ocr_warnings %}
+                    <div class="problems-box {% if not ocr_is_valid %}has-blockers{% else %}has-warnings{% endif %}" style="margin-bottom: 15px;">
+                        <h3 style="margin: 0; border: none; padding: 0; font-size: 15px; display: flex; align-items: center; gap: 8px;">
+                            {% if not ocr_is_valid %}💀 Qualità OCR Critica{% else %}⚠️ Avvisi Qualità OCR{% endif %}
+                        </h3>
+                        {% if not ocr_is_valid %}
+                            <p style="margin: 8px 0 0 0; font-size: 12px; color: #7f1d1d; font-weight: bold;">L'estrazione OCR è fallita qualitativamente e richiede un profondo controllo manuale.</p>
+                            <ul class="problem-list">
+                                {% for b in ocr_blockers %}<li><span class="text-danger">🔴 {{ b }}</span></li>{% endfor %}
+                            </ul>
+                        {% endif %}
+                        {% if ocr_warnings %}
+                            <ul class="problem-list">
+                                {% for w in ocr_warnings %}<li><span class="text-warning">🟠 {{ w }}</span></li>{% endfor %}
+                            </ul>
+                        {% endif %}
+                    </div>
+                    {% endif %}
+
+                    <!-- 1. Problems -->
+                    <div class="problems-box {% if publish_blockers %}has-blockers{% elif publish_warnings %}has-warnings{% else %}is-clean{% endif %}">
+                        <h3 style="margin: 0; border: none; padding: 0; font-size: 15px; display: flex; align-items: center; gap: 8px;">
+                            {% if publish_blockers %}🛑 Blocchi Pubblicazione{% elif publish_warnings %}⚠️ Avvisi Coerenza{% else %}✅ Dati Verificati{% endif %}
+                        </h3>
+                        {% if publish_blockers %}
+                            <ul class="problem-list">
+                                {% for b in publish_blockers %}<li><span class="text-danger">🔴 {{ b }}</span></li>{% endfor %}
+                            </ul>
+                            <div style="margin-top: 20px; padding-top: 15px; border-top: 1px solid #fecaca; display: flex; align-items: center; justify-content: space-between;">
+                                <div style="font-size: 11px; color: #991b1b; max-width: 70%;">
+                                    <strong>Override Admin:</strong> La pubblicazione forzata ignora questi blocchi e verrà loggata nell'audit trail.
+                                </div>
+                                <button type="submit" name="_action" value="publish_force" class="btn-header" style="background: #dc2626; color: white; padding: 6px 14px; font-size: 11px; font-weight: bold; border-radius: 4px; cursor: pointer;">🚀 Forza Pubblicazione</button>
+                            </div>
+                        {% endif %}
+                        {% if publish_warnings %}
+                            <ul class="problem-list">
+                                {% for w in publish_warnings %}<li><span class="text-warning">🟠 {{ w }}</span></li>{% endfor %}
+                            </ul>
+                        {% endif %}
+                        {% if not publish_blockers and not publish_warnings %}
+                            <p style="margin: 8px 0 0 0; font-size: 13px; color: #64748b;">Tutti i controlli automatici sono stati superati.</p>
+                        {% endif %}
+                    </div>
+
+                    <!-- 1b. Entity Bootstrap -->
+                    {% if bootstrap.has_issues %}
+                    <div class="review-card" style="border-left: 4px solid {% if bootstrap.blocked %}#dc2626{% else %}#d97706{% endif %};">
+                        <h3><span>🏗️</span> Entità Mancanti</h3>
+                        <div style="font-size: 13px; color: #475569; margin-bottom: 16px;">
+                            L'OCR ha rilevato squadre diverse da quelle associate al match corrente.
+                        </div>
+                        <table style="width: 100%; font-size: 13px; border-collapse: collapse; margin-bottom: 16px;">
+                            <thead>
+                                <tr style="color: #64748b; font-size: 12px;">
+                                    <th style="text-align: left; padding: 6px 10px;">Lato</th>
+                                    <th style="text-align: left; padding: 6px 10px;">Da OCR</th>
+                                    <th style="text-align: left; padding: 6px 10px;">Match attuale</th>
+                                    <th style="text-align: left; padding: 6px 10px;">Azione</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr style="border-top: 1px solid #f1f5f9;">
+                                    <td style="padding: 8px 10px; font-weight: 600;">🏠 Casa</td>
+                                    <td style="padding: 8px 10px;">{{ bootstrap.detection.ocr_home_name|default:"—" }}</td>
+                                    <td style="padding: 8px 10px;">{{ bootstrap.detection.current_home }}</td>
+                                    <td style="padding: 8px 10px;">
+                                        {% if bootstrap.detection.home_needs_update %}
+                                            {% if bootstrap.detection.home_ambiguous %}
+                                                <span class="status-badge status-warn">⚠️ Ambiguo</span>
+                                            {% elif bootstrap.detection.home_candidates %}
+                                                <span class="status-badge status-ok">Riutilizzo</span>
+                                            {% else %}
+                                                <span class="status-badge" style="background: #dbeafe; color: #1e40af;">+ Nuovo</span>
+                                            {% endif %}
+                                        {% else %}
+                                            <span class="status-badge status-ok">✓ OK</span>
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                                <tr style="border-top: 1px solid #f1f5f9;">
+                                    <td style="padding: 8px 10px; font-weight: 600;">✈️ Ospite</td>
+                                    <td style="padding: 8px 10px;">{{ bootstrap.detection.ocr_away_name|default:"—" }}</td>
+                                    <td style="padding: 8px 10px;">{{ bootstrap.detection.current_away }}</td>
+                                    <td style="padding: 8px 10px;">
+                                        {% if bootstrap.detection.away_needs_update %}
+                                            {% if bootstrap.detection.away_ambiguous %}
+                                                <span class="status-badge status-warn">⚠️ Ambiguo</span>
+                                            {% elif bootstrap.detection.away_candidates %}
+                                                <span class="status-badge status-ok">Riutilizzo</span>
+                                            {% else %}
+                                                <span class="status-badge" style="background: #dbeafe; color: #1e40af;">+ Nuovo</span>
+                                            {% endif %}
+                                        {% else %}
+                                            <span class="status-badge status-ok">✓ OK</span>
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+
+                        {% if bootstrap.will_create_teams %}
+                        <div style="background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 6px; padding: 12px; margin-bottom: 12px; font-size: 12px;">
+                            <strong>Verranno creati:</strong>
+                            <ul style="margin: 6px 0 0 16px; padding: 0;">
+                                {% for t in bootstrap.will_create_teams %}
+                                <li>Società + Team "<strong>{{ t.name }}</strong>" ({{ t.side|upper }}) — Sport: {{ t.sport }}</li>
+                                {% endfor %}
+                            </ul>
+                        </div>
+                        {% endif %}
+
+                        {% if bootstrap.will_reuse_teams %}
+                        <div style="background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 6px; padding: 12px; margin-bottom: 12px; font-size: 12px;">
+                            <strong>Verranno riutilizzati:</strong>
+                            <ul style="margin: 6px 0 0 16px; padding: 0;">
+                                {% for t in bootstrap.will_reuse_teams %}
+                                <li>"<strong>{{ t.name }}</strong>" ({{ t.side|upper }}) → Team ID {{ t.existing_team.id }}</li>
+                                {% endfor %}
+                            </ul>
+                        </div>
+                        {% endif %}
+
+                        {% if bootstrap.warnings %}
+                        <div style="background: #fef2f2; border: 1px solid #fecaca; border-radius: 6px; padding: 12px; margin-bottom: 12px; font-size: 12px; color: #991b1b;">
+                            {% for w in bootstrap.warnings %}
+                            <div>⚠️ {{ w }}</div>
+                            {% endfor %}
+                        </div>
+                        {% endif %}
+
+                        {% if not bootstrap.blocked %}
+                        <button type="submit" name="_action" value="bootstrap_entities"
+                                class="btn-header btn-save"
+                                style="background: #1e40af; color: #fff; border-color: #1e40af;"
+                                onclick="return confirm('Confermi la creazione delle entità mancanti? Verifica l\'anteprima sopra.');">
+                            🏗️ Crea Entità Mancanti
+                        </button>
+                        {% else %}
+                        <div style="font-size: 12px; color: #991b1b; font-weight: 600;">
+                            ⛔ Bootstrap bloccato: risolvi le ambiguità manualmente prima di procedere.
+                        </div>
+                        {% endif %}
+                    </div>
+                    {% endif %}
+
+                    <!-- 2. Scores -->
+                    <div class="review-card">
+                        <h3><span>🏆</span> Risultati Partita</h3>
+                        <table class="recon-widget" style="margin-bottom: 12px;">
+                            <thead>
+                                <tr style="font-size: 0.85em; color: #64748b;">
+                                    <th style="width: 30%;">Squadra</th>
+                                    <th style="width: 15%; text-align: center;">OCR (FIN)</th>
+                                    <th style="width: 15%;">FINALE</th>
+                                    <th>1°T</th><th>2°T</th><th>3°T</th><th>4°T</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td><strong>{{ original.match.home_team|default:"CASA" }}</strong></td>
+                                    <td class="td-ocr-found" style="text-align: center;">{{ original.raw_extracted_data.teams.home.score|default:"?" }}</td>
+                                    <td><input type="number" id="input-home-final" class="vIntegerField" style="width: 60px; font-weight: bold; border: 1px solid #cbd5e1; padding: 6px; border-radius: 4px;" value="{{ original.normalized_data.teams.home.score|default:0 }}"></td>
+                                    <td><input type="number" id="input-home-q1" class="vIntegerField" style="width: 45px; padding: 6px; border: 1px solid #e2e8f0; border-radius: 4px;" value="{{ original.normalized_data.teams.home.period_scores.1|default:0 }}"></td>
+                                    <td><input type="number" id="input-home-q2" class="vIntegerField" style="width: 45px; padding: 6px; border: 1px solid #e2e8f0; border-radius: 4px;" value="{{ original.normalized_data.teams.home.period_scores.2|default:0 }}"></td>
+                                    <td><input type="number" id="input-home-q3" class="vIntegerField" style="width: 45px; padding: 6px; border: 1px solid #e2e8f0; border-radius: 4px;" value="{{ original.normalized_data.teams.home.period_scores.3|default:0 }}"></td>
+                                    <td><input type="number" id="input-home-q4" class="vIntegerField" style="width: 45px; padding: 6px; border: 1px solid #e2e8f0; border-radius: 4px;" value="{{ original.normalized_data.teams.home.period_scores.4|default:0 }}"></td>
+                                </tr>
+                                <tr>
+                                    <td><strong>{{ original.match.away_team|default:"OSPITE" }}</strong></td>
+                                    <td class="td-ocr-found" style="text-align: center;">{{ original.raw_extracted_data.teams.away.score|default:"?" }}</td>
+                                    <td><input type="number" id="input-away-final" class="vIntegerField" style="width: 60px; font-weight: bold; border: 1px solid #cbd5e1; padding: 6px; border-radius: 4px;" value="{{ original.normalized_data.teams.away.score|default:0 }}"></td>
+                                    <td><input type="number" id="input-away-q1" class="vIntegerField" style="width: 45px; padding: 6px; border: 1px solid #e2e8f0; border-radius: 4px;" value="{{ original.normalized_data.teams.away.period_scores.1|default:0 }}"></td>
+                                    <td><input type="number" id="input-away-q2" class="vIntegerField" style="width: 45px; padding: 6px; border: 1px solid #e2e8f0; border-radius: 4px;" value="{{ original.normalized_data.teams.away.period_scores.2|default:0 }}"></td>
+                                    <td><input type="number" id="input-away-q3" class="vIntegerField" style="width: 45px; padding: 6px; border: 1px solid #e2e8f0; border-radius: 4px;" value="{{ original.normalized_data.teams.away.period_scores.3|default:0 }}"></td>
+                                    <td><input type="number" id="input-away-q4" class="vIntegerField" style="width: 45px; padding: 6px; border: 1px solid #e2e8f0; border-radius: 4px;" value="{{ original.normalized_data.teams.away.period_scores.4|default:0 }}"></td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <!-- 3. Reconciliation -->
+                    <div class="review-card">
+                        <h3><span>🔗</span> Hub Riconciliazione</h3>
+                        <div style="background: #f8fafc; border: 1px solid #e2e8f0; padding: 20px; border-radius: 6px;">
+                            <div style="display: flex; gap: 24px;">
+                                <div style="flex: 1;">
+                                    <h4 style="margin: 0 0 12px 0; font-size: 13px; color: #64748b; font-weight: 600;">SQUADRA CASA</h4>
+                                    <table class="recon-widget" id="recon-home">
+                                        <tbody>
+                                            {# First show unresolved #}
+                                            {% for item in reconciliation_data.home %}{% if item.is_unresolved %}
+                                            <tr data-name="{{ item.extracted_name }}" data-side="home" class="is-unresolved" data-fast-step="atleta-unresolved">
+                                                <td style="width: 45%;">
+                                                    <div style="display: flex; align-items: center; gap: 6px;">
+                                                        <div style="font-weight: 700; font-size: 12px; color: #dc2626;">{{ item.extracted_name }}</div>
+                                                        <button type="button" onclick="createInlineAthlete('{{ item.extracted_name|escapejs }}', 'home')" title="Crea Atleta" style="background: #dc2626; border: none; cursor: pointer; padding: 2px 6px; color: #fff; font-size: 10px; border-radius: 4px;">CREA ➕</button>
+                                                    </div>
+                                                </td>
+                                                <td>
+                                                    <select onchange="applyRecon('home', '{{ item.extracted_name|escapejs }}', this.value, 'badge-home-{{ item.extracted_name|slugify }}')" style="width: 100%; font-size: 12px; padding: 6px; border: 2px solid #dc2626; border-radius: 4px; background: #fff;">
+                                                        <option value="">-- Seleziona Atleta --</option>
+                                                        {% for db_a in item.db_athletes %}
+                                                            <option value="{{ db_a.id }}" {% if db_a.id == item.current_id %}selected{% endif %}>{{ db_a.name }}</option>
+                                                        {% endfor %}
+                                                    </select>
+                                                </td>
+                                            </tr>
+                                            {% endif %}{% endfor %}
+                                            {# Then show resolved #}
+                                            {% for item in reconciliation_data.home %}{% if not item.is_unresolved %}
+                                            <tr data-name="{{ item.extracted_name }}" data-side="home">
+                                                <td style="width: 45%;">
+                                                    <div style="display: flex; align-items: center; gap: 6px;">
+                                                        <div style="font-weight: 600; font-size: 12px; color: #334155;">{{ item.extracted_name }}</div>
+                                                    </div>
+                                                </td>
+                                                <td>
+                                                    <select onchange="applyRecon('home', '{{ item.extracted_name|escapejs }}', this.value, 'badge-home-{{ item.extracted_name|slugify }}')" style="width: 100%; font-size: 11px; padding: 4px; border: 1px solid #cbd5e1; border-radius: 4px; opacity: 0.8;">
+                                                        <option value="">-- seleziona --</option>
+                                                        {% for db_a in item.db_athletes %}
+                                                            <option value="{{ db_a.id }}" {% if db_a.id == item.current_id %}selected{% endif %}>{{ db_a.name }}</option>
+                                                        {% endfor %}
+                                                    </select>
+                                                </td>
+                                            </tr>
+                                            {% endif %}{% endfor %}
+                                        </tbody>
+                                    </table>
+                                </div>
+                                <div style="flex: 1;">
+                                    <h4 style="margin: 0 0 12px 0; font-size: 13px; color: #64748b; font-weight: 600;">SQUADRA OSPITE</h4>
+                                    <table class="recon-widget" id="recon-away">
+                                        <tbody>
+                                            {# First show unresolved #}
+                                            {% for item in reconciliation_data.away %}{% if item.is_unresolved %}
+                                            <tr data-name="{{ item.extracted_name }}" data-side="away" class="is-unresolved" data-fast-step="atleta-unresolved">
+                                                <td style="width: 45%;">
+                                                    <div style="display: flex; align-items: center; gap: 6px;">
+                                                        <div style="font-weight: 700; font-size: 12px; color: #dc2626;">{{ item.extracted_name }}</div>
+                                                        <button type="button" onclick="createInlineAthlete('{{ item.extracted_name|escapejs }}', 'away')" title="Crea Atleta" style="background: #dc2626; border: none; cursor: pointer; padding: 2px 6px; color: #fff; font-size: 10px; border-radius: 4px;">CREA ➕</button>
+                                                    </div>
+                                                </td>
+                                                <td>
+                                                    <select onchange="applyRecon('away', '{{ item.extracted_name|escapejs }}', this.value, 'badge-away-{{ item.extracted_name|slugify }}')" style="width: 100%; font-size: 12px; padding: 6px; border: 2px solid #dc2626; border-radius: 4px; background: #fff;">
+                                                        <option value="">-- Seleziona Atleta --</option>
+                                                        {% for db_a in item.db_athletes %}
+                                                            <option value="{{ db_a.id }}" {% if db_a.id == item.current_id %}selected{% endif %}>{{ db_a.name }}</option>
+                                                        {% endfor %}
+                                                    </select>
+                                                </td>
+                                            </tr>
+                                            {% endif %}{% endfor %}
+                                            {# Then show resolved #}
+                                            {% for item in reconciliation_data.away %}{% if not item.is_unresolved %}
+                                            <tr data-name="{{ item.extracted_name }}" data-side="away">
+                                                <td style="width: 45%;">
+                                                    <div style="display: flex; align-items: center; gap: 6px;">
+                                                        <div style="font-weight: 600; font-size: 12px; color: #334155;">{{ item.extracted_name }}</div>
+                                                    </div>
+                                                </td>
+                                                <td>
+                                                    <select onchange="applyRecon('away', '{{ item.extracted_name|escapejs }}', this.value, 'badge-away-{{ item.extracted_name|slugify }}')" style="width: 100%; font-size: 11px; padding: 4px; border: 1px solid #cbd5e1; border-radius: 4px; opacity: 0.8;">
+                                                        <option value="">-- seleziona --</option>
+                                                        {% for db_a in item.db_athletes %}
+                                                            <option value="{{ db_a.id }}" {% if db_a.id == item.current_id %}selected{% endif %}>{{ db_a.name }}</option>
+                                                        {% endfor %}
+                                                    </select>
+                                                </td>
+                                            </tr>
+                                            {% endif %}{% endfor %}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 4. Events -->
+                    <div class="review-card">
+                        <div class="flex items-center justify-between mb-4 border-b border-f1f5f9 pb-3">
+                            <h3 style="margin: 0; border: none; padding: 0;"><span>⏱️</span> Eventi della Gara</h3>
+                            <button type="button" onclick="addEventRow()" class="btn-header btn-save" style="padding: 4px 10px; font-size: 11px;">+ Aggiungi Evento</button>
+                        </div>
+                        <div class="overflow-x-auto">
+                            <table class="recon-widget" id="events-table">
+                                <thead class="bg-slate-50 text-[10px] text-slate-500 uppercase">
+                                    <tr>
+                                        <th style="width: 15%;">Team</th>
+                                        <th style="width: 10%;">T/M</th>
+                                        <th style="width: 25%;">Tipo</th>
+                                        <th style="width: 35%;">Atleta (da Roster)</th>
+                                        <th style="width: 15%;">Az.</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="events-tbody">
+                                    <!-- Dinamicamente popolato da JS -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <!-- 5. Notes / Problems Box JSON -->
+                    <div class="review-card">
+                        <h3><span>📋</span> Problemi da controllare (Sistema)</h3>
+                        <div id="validation-notes-raw-data" style="display: none;">{{ original.validation_notes|escape }}</div>
+                        <div id="parsed-notes-box">
+                            <!-- JS populated -->
+                        </div>
+                    </div>
+
+                    <!-- 4b. Full Audit Trail -->
+                    {% if report_audit_logs %}
+                    <div class="review-card" style="background: #f1f5f9; border-color: #cbd5e1;">
+                        <h3 style="border-bottom-color: #cbd5e1;"><span>📜</span> Audit Trail Completo <span style="font-size: 11px; font-weight: normal; color: #64748b;">({{ report_audit_logs|length }} voci)</span></h3>
+                        <div style="max-height: 400px; overflow-y: auto;">
+                            {% for log in report_audit_logs %}
+                            <div class="audit-trail-row">
+                                <div style="flex-shrink: 0;">
+                                    <span class="audit-action-badge {{ log.action }}">{{ log.action }}</span>
+                                </div>
+                                <div style="flex: 1; min-width: 0;">
+                                    <div>
+                                        <span style="color: #0366d6; font-weight: 600;">{{ log.user.username|default:"Sistema" }}</span>
+                                        {% if log.old_status and log.new_status %}
+                                            <span class="audit-status-change">{{ log.old_status }} → {{ log.new_status }}</span>
+                                        {% endif %}
+                                    </div>
+                                    {% if log.reason %}
+                                        <div class="audit-reason">💬 {{ log.reason }}</div>
+                                    {% endif %}
+                                    {% if log.before or log.after %}
+                                        <details style="margin-top: 4px; border: none; background: transparent;">
+                                            <summary style="font-size: 10px; color: #94a3b8; padding: 2px 0; background: transparent;">Mostra diff dati</summary>
+                                            <div style="font-size: 10px; font-family: monospace; padding: 6px; background: #fff; border-radius: 4px; margin-top: 4px; max-height: 150px; overflow-y: auto;">
+                                                {% if log.before %}<div style="color: #dc2626;">- {{ log.before }}</div>{% endif %}
+                                                {% if log.after %}<div style="color: #16a34a;">+ {{ log.after }}</div>{% endif %}
+                                            </div>
+                                        </details>
+                                    {% endif %}
+                                </div>
+                                <div style="flex-shrink: 0; text-align: right; color: #94a3b8; font-size: 11px; white-space: nowrap;">
+                                    {{ log.created_at|date:"d M H:i" }}
+                                </div>
+                            </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                    {% endif %}
+
+                    <!-- 4c. Publishing History (Legacy AuditLog) -->
+                    {% if publish_history %}
+                    <div class="review-card" style="background: #f1f5f9; border-color: #cbd5e1;">
+                        <h3 style="border-bottom-color: #cbd5e1;"><span>⏳</span> Cronologia Pubblicazione</h3>
+                        <div style="font-size: 11.5px; line-height: 1.5;">
+                            {% for log in publish_history %}
+                            <div style="display: flex; justify-content: space-between; padding: 6px 0; border-bottom: 1px solid #e2e8f0;">
+                                <div>
+                                    <strong>{{ log.action }}</strong> da 
+                                    <span style="color: #0366d6;">{{ log.user.username|default:"System" }}</span>
+                                    <div style="color: #64748b; font-size: 10px;">
+                                        Eventi: -{{ log.details.events_deleted|default:0 }} / +{{ log.details.events_created|default:0 }}
+                                    </div>
+                                </div>
+                                <div style="text-align: right; color: #64748b;">
+                                    {{ log.timestamp|date:"d M H:i" }}
+                                </div>
+                            </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                    {% endif %}
+
+                    <!-- 5. Technical -->
+                    <details>
+                        <summary>🛠️ Dettagli Tecnici</summary>
+                        <div style="padding: 24px; background: #fff;">
+                            <div style="margin-bottom: 24px;">
+                                <h4 style="margin-top: 0; font-size: 13px; color: #64748b;">JSON Normalizzato</h4>
+                                {{ form.normalized_data.errors }}
+                                {{ form.normalized_data }}
+                                <div id="json-error-banner">JSON non valido! Controlla la sintassi.</div>
+                            </div>
+                            
+                            <div style="margin-bottom: 24px;">
+                                <h4 style="font-size: 13px; color: #64748b;">Evidence Raw Data</h4>
+                                <div class="raw-data-box">
+                                    <pre id="raw-json-display">{{ raw_data_json }}</pre>
+                                </div>
+                            </div>
+
+                            <div>
+                                <h4 style="margin-bottom: 12px; font-size: 13px; color: #64748b;">Metadati OCR</h4>
+                                <span class="status-badge {% if confidence > 0.8 %}status-ok{% else %}status-warn{% endif %}">Confidenza: {{ confidence_percent }}%</span>
+                            </div>
+                        </div>
+                    </details>
+                </div>
+
+                <div class="review-file">
+                    {% if original.file and original.file_exists %}
+                        <div style="position: sticky; top: 10px; right: 10px; z-index: 10; align-self: flex-start; margin-left: auto; margin-right: 10px; margin-top: 10px; display: flex; gap: 5px; background: rgba(0,0,0,0.5); padding: 5px; border-radius: 5px;">
+                            <button type="button" onclick="zoomPreview(0.2)" style="background:#fff;border:none;border-radius:3px;padding:2px 8px;cursor:pointer;font-weight:bold;">+</button>
+                            <button type="button" onclick="zoomPreview(-0.2)" style="background:#fff;border:none;border-radius:3px;padding:2px 8px;cursor:pointer;font-weight:bold;">-</button>
+                            <button type="button" onclick="resetZoom()" style="background:#fff;border:none;border-radius:3px;padding:2px 8px;cursor:pointer;font-weight:bold;">O</button>
+                        </div>
+                        <div id="preview-wrapper" style="width: 100%; display: flex; justify-content: center; min-height: min-content;">
+                        {% if is_image %}
+                            <img src="{{ original.file.url }}" class="file-preview" id="file-img" alt="Referto Cartaceo">
+                        {% else %}
+                            <iframe src="{{ original.file.url }}" class="file-preview" id="file-img" style="border:none; width: 100%; height: 800px;"></iframe>
+                        {% endif %}
+                        </div>
+                    {% else %}
+                        <div style="color: #cbd5e1; text-align: center; padding: 40px;">
+                            <div style="font-size: 48px; margin-bottom: 15px;">🔍</div>
+                            <h3 style="color: #f8fafc; border: none; padding: 0;">File non trovato</h3>
+                            <p style="font-size: 14px; max-width: 300px; margin: 0 auto;">Il referto fisico non è presente sul server o il percorso è errato.</p>
+                            <div style="margin-top: 20px; font-family: monospace; font-size: 12px; background: rgba(0,0,0,0.3); padding: 8px; border-radius: 4px;">
+                                Path: {{ original.file.name|default:"(nessun file associato)" }}
+                            </div>
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </form>
+</div>
+
+<script>
+    const jsonTextarea = document.querySelector('.json-textarea');
+    const dirtyIndicator = document.getElementById('dirty-indicator');
+    const jsonErrorBanner = document.getElementById('json-error-banner');
+    const mainForm = document.getElementById('matchreport_form');
+    
+    // Comparison Data
+    const rawExtractedData = {{ original.raw_extracted_data|safe }};
+    const confidenceFields = {{ confidence_fields|safe }};
+
+    window.previewZoomLevel = 1;
+    function zoomPreview(delta) {
+        window.previewZoomLevel += delta;
+        if(window.previewZoomLevel < 0.2) window.previewZoomLevel = 0.2;
+        const img = document.getElementById('file-img');
+        if(img) img.style.transform = `scale(${window.previewZoomLevel})`;
+    }
+    function resetZoom() {
+        window.previewZoomLevel = 1;
+        const img = document.getElementById('file-img');
+        if(img) img.style.transform = `scale(1)`;
+    }
+
+    function renderValidationNotes() {
+        const valBox = document.getElementById('parsed-notes-box');
+        const rawDataBox = document.getElementById('validation-notes-raw-data');
+        if(!valBox || !rawDataBox) return;
+        
+        const rawContent = rawDataBox.textContent || rawDataBox.innerText || '';
+        try {
+            const data = JSON.parse(rawContent || '{}');
+            let html = '';
+            if (data.blocking && data.blocking.length > 0) {
+                html += `<div style="background: #fef2f2; border: 1px solid #fecaca; padding: 12px; border-radius: 6px; margin-bottom: 10px;"><h4 style="margin:0 0 8px 0; color: #dc2626; font-size: 13px;">🔴 Blocking</h4><ul style="margin:0; padding-left: 20px; font-size: 12px; color: #991b1b;">${data.blocking.map(b => `<li style="margin-bottom: 4px;">${b}</li>`).join('')}</ul></div>`;
+            }
+            if (data.warnings && data.warnings.length > 0) {
+                html += `<div style="background: #fffaf0; border: 1px solid #fbd38d; padding: 12px; border-radius: 6px; margin-bottom: 10px;"><h4 style="margin:0 0 8px 0; color: #d97706; font-size: 13px;">🟠 Warnings</h4><ul style="margin:0; padding-left: 20px; font-size: 12px; color: #9c4221;">${data.warnings.map(w => `<li style="margin-bottom: 4px;">${w}</li>`).join('')}</ul></div>`;
+            }
+            if (data.info && data.info.length > 0) {
+                html += `<div style="background: #f8fafc; border: 1px solid #e2e8f0; padding: 12px; border-radius: 6px; margin-bottom: 10px;"><h4 style="margin:0 0 8px 0; color: #64748b; font-size: 13px;">⚪ Info</h4><ul style="margin:0; padding-left: 20px; font-size: 12px; color: #475569;">${data.info.map(i => `<li style="margin-bottom: 4px;">${i}</li>`).join('')}</ul></div>`;
+            }
+            if (html === '') html = `<div style="padding: 12px; color: #64748b; font-size: 12px;">Nessun problema rilevato.</div>`;
+            valBox.innerHTML = html;
+        } catch (e) {
+            valBox.innerHTML = `<div style="background: #f8fafc; padding: 12px; border: 1px solid #e2e8f0; font-family: monospace; font-size: 12px; white-space: pre-wrap;">${rawContent}</div>`;
+        }
+    }
+
+    function markDirty() { if (dirtyIndicator) dirtyIndicator.style.display = 'inline'; }
+
+    // 1. Keyboard Shortcuts
+    document.addEventListener('keydown', function(e) {
+        if (e.ctrlKey || e.metaKey) {
+            if (e.key === 's') { e.preventDefault(); submitWithAction('save_draft'); } 
+            else if (e.key === 'Enter') {
+                e.preventDefault();
+                if (e.shiftKey) {
+                    const btn = document.getElementById('btn-publish-now');
+                    if (btn && !btn.disabled) submitWithAction('publish_now');
+                } else { submitWithAction('validate'); }
+            }
+        }
+        // Jump between issues with TAB (if not in input)
+        if (e.key === 'Tab' && !['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement.tagName)) {
+            e.preventDefault();
+            goToNextIssue();
+        }
+    });
+
+    function submitWithAction(actionValue) {
+        let actionInput = mainForm.querySelector('input[name="_action"][type="hidden"]');
+        if (!actionInput) {
+            actionInput = document.createElement('input');
+            actionInput.type = 'hidden'; actionInput.name = '_action';
+            mainForm.appendChild(actionInput);
+        }
+        actionInput.value = actionValue;
+        const event = new Event('submit', { cancelable: true, bubbles: true });
+        mainForm.dispatchEvent(event);
+        if (!event.defaultPrevented) { mainForm.submit(); }
+    }
+
+    // 2. Protection & Feedback
+    if (mainForm) {
+        mainForm.addEventListener('submit', function(e) {
+            if (this.getAttribute('data-submitted')) { e.preventDefault(); return; }
+            this.setAttribute('data-submitted', 'true');
+            document.querySelectorAll('.btn-header').forEach(btn => {
+                btn.classList.add('is-loading');
+                btn.style.opacity = '0.7';
+            });
+            window.onbeforeunload = null; 
+        });
+    }
+
+    // 3. Fast Navigation Logic
+    let currentIssueIndex = -1;
+    function goToNextIssue() {
+        const issues = document.querySelectorAll('[data-fast-step]');
+        if (issues.length === 0) return;
+        
+        // Remove previous highlight
+        issues.forEach(el => el.classList.remove('is-current-target'));
+        
+        currentIssueIndex = (currentIssueIndex + 1) % issues.length;
+        const target = issues[currentIssueIndex];
+        
+        target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        target.classList.add('is-current-target');
+        
+        // Try to focus sub-elements (like select)
+        const focusable = target.querySelector('select, input');
+        if (focusable) focusable.focus();
+    }
+
+    function autoFocusFirstProblem() {
+        // Se ci sono problemi evidenziati dal sistema (data-fast-step), vai lì
+        if (document.querySelectorAll('[data-fast-step]').length > 0) {
+            goToNextIssue();
+            return;
+        }
+        
+        const homeFinal = document.getElementById('input-home-final');
+        const awayFinal = document.getElementById('input-away-final');
+        if (homeFinal && (homeFinal.value === "0" || homeFinal.value === "")) { homeFinal.focus(); return; }
+        if (awayFinal && (awayFinal.value === "0" || awayFinal.value === "")) { awayFinal.focus(); return; }
+    }
+
+    function createInlineAthlete(name, side) {
+        if (confirm(`Vuoi creare un nuovo profilo atleta per "${name}" ed associarlo a questa squadra?`)) {
+            let nameInput = mainForm.querySelector('input[name="player_name_to_create"]');
+            if (!nameInput) {
+                nameInput = document.createElement('input');
+                nameInput.type = 'hidden'; nameInput.name = 'player_name_to_create';
+                mainForm.appendChild(nameInput);
+            }
+            let sideInput = mainForm.querySelector('input[name="team_side_to_create"]');
+            if (!sideInput) {
+                sideInput = document.createElement('input');
+                sideInput.type = 'hidden'; sideInput.name = 'team_side_to_create';
+                mainForm.appendChild(sideInput);
+            }
+            nameInput.value = name;
+            sideInput.value = side;
+            submitWithAction('create_athlete');
+        }
+    }
+
+    // Reconciliation Logic
+    function applyRecon(side, extractedName, athleteId, badgeId) {
+        try {
+            const data = JSON.parse(jsonTextarea.value);
+            if (!data.reconciliation) data.reconciliation = {};
+            const sideKey = side + '_players';
+            if (!data.reconciliation[sideKey]) data.reconciliation[sideKey] = {};
+            const badge = document.getElementById(badgeId);
+            if (athleteId) {
+                data.reconciliation[sideKey][extractedName] = parseInt(athleteId);
+                if (badge) { badge.innerText = "OK (" + athleteId + ")"; badge.className = "status-badge status-ok"; }
+            } else {
+                delete data.reconciliation[sideKey][extractedName];
+                if (badge) { badge.innerText = "?"; badge.className = "status-badge status-none"; }
+            }
+            jsonTextarea.value = JSON.stringify(data, null, 4);
+            markDirty();
+        } catch (e) {}
+    }
+
+    // Score Sync
+    const scoreInputs = {
+        home: { final: document.getElementById('input-home-final'), q1: document.getElementById('input-home-q1'), q2: document.getElementById('input-home-q2'), q3: document.getElementById('input-home-q3'), q4: document.getElementById('input-home-q4') },
+        away: { final: document.getElementById('input-away-final'), q1: document.getElementById('input-away-q1'), q2: document.getElementById('input-away-q2'), q3: document.getElementById('input-away-q3'), q4: document.getElementById('input-away-q4') }
+    };
+
+    function syncStructuredToJson() {
+        try {
+            const data = JSON.parse(jsonTextarea.value);
+            if (!data.scores) data.scores = {};
+            if (!data.scores.quarters) data.scores.quarters = {};
+            data.scores.final_score = `${scoreInputs.home.final.value || 0}-${scoreInputs.away.final.value || 0}`;
+            ["1", "2", "3", "4"].forEach(k => {
+                data.scores.quarters[k] = [parseInt(scoreInputs.home['q'+k].value||0, 10), parseInt(scoreInputs.away['q'+k].value||0, 10)];
+            });
+            jsonTextarea.value = JSON.stringify(data, null, 4);
+            markDirty();
+            applyUncertaintyHighlights();
+        } catch (e) {}
+    }
+
+    function syncJsonToStructured() {
+        try {
+            const data = JSON.parse(jsonTextarea.value);
+            const s = data.scores || {};
+            const q = s.quarters || {};
+            const scoreStr = s.final_score || "0-0";
+            const [hf, af] = scoreStr.split("-").map(p => parseInt(p.trim(), 10) || 0);
+            if (scoreInputs.home.final) scoreInputs.home.final.value = hf;
+            if (scoreInputs.away.final) scoreInputs.away.final.value = af;
+            ["1", "2", "3", "4"].forEach(k => {
+                const hInput = scoreInputs.home['q'+k], aInput = scoreInputs.away['q'+k];
+                if (q[k] && Array.isArray(q[k]) && q[k].length === 2) {
+                    if (hInput) hInput.value = q[k][0]; if (aInput) aInput.value = q[k][1];
+                }
+            });
+            applyUncertaintyHighlights();
+        } catch (e) {}
+    }
+
+    function applyUncertaintyHighlights() {
+        // 1. Confidence Highlights
+        for (const [field, conf] of Object.entries(confidenceFields)) {
+            let inputId = null;
+            if (field === 'home_score') inputId = 'input-home-final';
+            else if (field === 'away_score') inputId = 'input-away-final';
+            else if (field.startsWith('home_q')) inputId = 'input-home-q' + field.replace('home_q', '');
+            else if (field.startsWith('away_q')) inputId = 'input-away-q' + field.replace('away_q', '');
+            
+            const el = document.getElementById(inputId);
+            if (el && conf < 0.7) {
+                el.classList.add('field-uncertain');
+                if (!el.parentNode.querySelector('.uncertain-hint')) {
+                    const hint = document.createElement('div');
+                    hint.className = 'ocr-value-hint uncertain-hint';
+                    hint.innerHTML = `<span class="ocr-label" style="background:#fef3c7;color:#92400e;">Low Conf</span> ${Math.round(conf*100)}%`;
+                    el.parentNode.appendChild(hint);
+                }
+            }
+        }
+
+        // 2. Difference Highlights (vs Raw OCR)
+        try {
+            const current = JSON.parse(jsonTextarea.value);
+            const checkDiff = (inputId, currentVal, ocrVal) => {
+                const el = document.getElementById(inputId);
+                if (!el) return;
+                if (currentVal != ocrVal && ocrVal !== undefined) {
+                    el.classList.add('field-differs');
+                    if (!el.parentNode.querySelector('.diff-hint')) {
+                        const hint = document.createElement('div');
+                        hint.className = 'ocr-value-hint diff-hint';
+                        hint.innerHTML = `<span class="ocr-label">OCR</span> ${ocrVal}`;
+                        el.parentNode.appendChild(hint);
+                    }
+                } else {
+                    el.classList.remove('field-differs');
+                    el.parentNode.querySelector('.diff-hint')?.remove();
+                }
+            };
+
+            // Home
+            checkDiff('input-home-final', current.teams?.home?.score, rawExtractedData.teams?.home?.score);
+            for(let i=1; i<=4; i++) {
+                checkDiff(`input-home-q${i}`, current.teams?.home?.period_scores?.[i], rawExtractedData.teams?.home?.period_scores?.[i]);
+            }
+            // Away
+            checkDiff('input-away-final', current.teams?.away?.score, rawExtractedData.teams?.away?.score);
+            for(let i=1; i<=4; i++) {
+                checkDiff(`input-away-q${i}`, current.teams?.away?.period_scores?.[i], rawExtractedData.teams?.away?.period_scores?.[i]);
+            }
+
+        } catch(e) { console.error("Highlight sync error:", e); }
+    }
+
+    Object.values(scoreInputs).forEach(side => { Object.values(side).forEach(input => { if (input) input.addEventListener('input', syncStructuredToJson); }); });
+
+    // Events Sync Logic
+    const rosterNames = {{ roster_names|safe }};
+    const eventTypes = {{ event_types|safe }};
+
+    function addEventRow(data = {}) {
+        const tbody = document.getElementById('events-tbody');
+        const tr = document.createElement('tr');
+        
+        const sideOptions = `
+            <option value="home" ${data.team === 'home' ? 'selected' : ''}>CASA</option>
+            <option value="away" ${data.team === 'away' ? 'selected' : ''}>OSPITE</option>
+        `;
+
+        const typeOptions = eventTypes.map(t => 
+            `<option value="${t.code}" ${data.type === t.code ? 'selected' : ''}>${t.label}</option>`
+        ).join('');
+
+        const updatePlayerOptions = (side, currentName) => {
+            const names = rosterNames[side] || [];
+            return `<option value="">-- Squadra --</option>` + 
+                   names.map(name => `<option value="${name}" ${currentName === name ? 'selected' : ''}>${name}</option>`).join('');
+        };
+
+        tr.innerHTML = `
+            <td>
+                <select class="event-side" style="width: 100%; font-size: 10px; padding: 2px;">
+                    ${sideOptions}
+                </select>
+            </td>
+            <td>
+                <div class="flex flex-col gap-1">
+                    <input type="number" class="event-quarter" value="${data.quarter || 1}" min="1" max="4" style="width: 35px; font-size: 10px; padding: 2px;">
+                    <input type="number" class="event-minute" value="${data.minute || 0}" min="0" max="32" style="width: 35px; font-size: 10px; padding: 2px;">
+                </div>
+            </td>
+            <td>
+                <select class="event-type" style="width: 100%; font-size: 10px; padding: 2px;">
+                    ${typeOptions}
+                </select>
+            </td>
+            <td>
+                <select class="event-player" style="width: 100%; font-size: 10px; padding: 2px;">
+                    ${updatePlayerOptions(data.team || 'home', data.player_name || data.player)}
+                </select>
+            </td>
+            <td>
+                <button type="button" onclick="this.closest('tr').remove(); syncEventsToJson();" class="text-danger" style="background:none; border:none; cursor:pointer; font-size: 12px;">🗑️</button>
+            </td>
+        `;
+
+        const sideSelect = tr.querySelector('.event-side');
+        const playerSelect = tr.querySelector('.event-player');
+        sideSelect.addEventListener('change', (e) => {
+            playerSelect.innerHTML = updatePlayerOptions(e.target.value, '');
+            syncEventsToJson();
+        });
+
+        tr.querySelectorAll('input, select').forEach(el => el.addEventListener('change', syncEventsToJson));
+        
+        tbody.appendChild(tr);
+        if (!data.type) markDirty();
+    }
+
+    function syncEventsToJson() {
+        try {
+            const data = JSON.parse(jsonTextarea.value);
+            const events = [];
+            document.querySelectorAll('#events-tbody tr').forEach(tr => {
+                events.push({
+                    team: tr.querySelector('.event-side').value,
+                    quarter: parseInt(tr.querySelector('.event-quarter').value, 10),
+                    minute: parseInt(tr.querySelector('.event-minute').value, 10),
+                    type: tr.querySelector('.event-type').value,
+                    player_name: tr.querySelector('.event-player').value
+                });
+            });
+            data.events = events;
+            jsonTextarea.value = JSON.stringify(data, null, 4);
+            markDirty();
+        } catch (e) {}
+    }
+
+    function syncJsonToEvents() {
+        try {
+            const data = JSON.parse(jsonTextarea.value);
+            const tbody = document.getElementById('events-tbody');
+            tbody.innerHTML = '';
+            (data.events || []).forEach(e => addEventRow(e));
+        } catch (e) {}
+    }
+
+    if (jsonTextarea) {
+        jsonTextarea.addEventListener('input', () => { markDirty(); });
+        jsonTextarea.addEventListener('blur', () => {
+            syncJsonToStructured();
+            syncJsonToEvents();
+        });
+    }
+
+    window.onload = function() {
+        syncJsonToStructured();
+        syncJsonToEvents();
+        applyUncertaintyHighlights();
+        autoFocusFirstProblem();
+        renderValidationNotes();
+        try {
+            const data = JSON.parse(jsonTextarea.value);
+            const recon = data.reconciliation || {};
+            document.querySelectorAll('.recon-widget tr[data-name]').forEach((tr) => {
+                const name = tr.getAttribute('data-name'), side = tr.getAttribute('data-side');
+                const sideKey = side + '_players', id = recon[sideKey] ? recon[sideKey][name] : null;
+                const badge = tr.querySelector('.status-badge');
+                if (id && badge) { badge.innerText = "OK (" + id + ")"; badge.className = "status-badge status-ok"; }
+            });
+        } catch (e) {}
+    };
+
+    window.onbeforeunload = function() { if (dirtyIndicator && dirtyIndicator.style.display === 'inline') return "Hai modifiche non salvate."; };
+    if (mainForm) { mainForm.onsubmit = () => { window.onbeforeunload = null; }; }
+
+</script>
+{% endblock %}

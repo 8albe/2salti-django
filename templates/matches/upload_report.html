@@ -1,0 +1,37 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="max-w-2xl mx-auto mt-12">
+    <div class="glass-panel p-8 md:p-12">
+        <div class="text-center mb-8">
+            <h1 class="text-3xl font-display font-bold text-white mb-2">Carica Referto OCR</h1>
+            <p class="text-slate-400 font-sans">
+                Referto per <strong>{{ match.home_team.name }} vs {{ match.away_team.name }}</strong>
+            </p>
+        </div>
+
+        <form method="post" enctype="multipart/form-data" class="space-y-6">
+            {% csrf_token %}
+            
+            <div class="space-y-2">
+                <label class="block text-sm font-bold text-slate-300 uppercase tracking-wide">
+                    File Referto (PDF/Immagine)
+                </label>
+                {{ form.file }}
+                <p class="text-xs text-slate-500 mt-2">
+                    Il file verrà inviato all'engine OCR per l'estrazione automatica dei dati.
+                </p>
+            </div>
+
+            <div class="pt-6 border-t border-slate-700/50 flex gap-4">
+                <a href="{% url 'match_detail' match.id %}" class="flex-1 py-3 px-6 rounded-xl bg-slate-800 text-white font-bold text-center hover:bg-slate-700 transition duration-300 text-sm md:text-base border border-slate-700">
+                    Annulla
+                </a>
+                <button type="submit" class="flex-1 py-3 px-6 rounded-xl text-white font-bold text-center transition duration-300 text-sm md:text-base" style="background-color: {{ sport_color }}; filter: brightness(1.1); box-shadow: 0 4px 15px {{ sport_color }}40;">
+                    Carica & Estrai Dati <i class="fas fa-magic ml-2"></i>
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}

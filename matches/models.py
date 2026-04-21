@@ -157,7 +157,7 @@ class MatchReport(models.Model):
         NEEDS_REVIEW = 'NEEDS_REVIEW', 'Revisione Tecnica Necessaria'
         REJECTED = 'REJECTED', 'Rifiutato/Errore'
 
-    match = models.ForeignKey(Match, on_delete=models.CASCADE, related_name='reports')
+    match = models.ForeignKey(Match, on_delete=models.CASCADE, related_name='reports', null=True, blank=True)
     uploader = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, related_name='uploaded_reports')
     
     # File originale (opzionale per referti digitali nativi)

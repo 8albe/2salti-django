@@ -172,6 +172,25 @@
                 {% endif %}
             </section>
 
+            <!-- AI DISCOVERY QUICK UPLOAD -->
+            {% if user.is_staff or user.role == 'referee' %}
+            <section class="p-6 rounded-3xl bg-cyan-500/5 border border-cyan-500/20 mb-8">
+                <div class="flex items-center justify-between mb-4">
+                    <div class="flex items-center gap-3">
+                        <span class="text-xl">📄</span>
+                        <h2 class="text-xl font-display font-bold text-white">Caricamento Rapido</h2>
+                    </div>
+                    <span class="px-3 py-1 rounded-full bg-cyan-500/10 text-[10px] text-cyan-400 font-bold uppercase tracking-widest">AI Engine v2</span>
+                </div>
+                <p class="text-xs text-slate-400 mb-6 font-sans">
+                    Carica un referto senza selezionare la partita. L'AI identificherà automaticamente squadre, data e campionato dal contenuto.
+                </p>
+                <a href="{% url 'upload_report_standalone' %}" class="block w-full text-center py-4 rounded-2xl bg-cyan-600 text-white font-bold hover:bg-cyan-500 transition-all shadow-lg shadow-cyan-900/40">
+                    <i class="fas fa-magic mr-2"></i> Inizia Discovery Referto
+                </a>
+            </section>
+            {% endif %}
+
             {% if user.is_staff %}
             <!-- STAFF QUICK ACTIONS -->
             <section class="p-6 rounded-3xl bg-yellow-500/5 border border-yellow-500/20">
