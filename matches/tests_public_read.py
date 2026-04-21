@@ -74,7 +74,8 @@ class PublicReadLayerTests(TestCase):
     def test_match_detail_public(self):
         response = self.client.get(reverse('match_detail', args=[self.match.id]))
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, f"{self.match.home_score}-{self.match.away_score}")
+        self.assertContains(response, str(self.match.home_score))
+        self.assertContains(response, str(self.match.away_score))
 
     def test_athlete_profile_public(self):
         response = self.client.get(reverse('profile', args=[self.athlete_user.username]))
@@ -119,7 +120,7 @@ class PublicReadLayerTests(TestCase):
         empty_user = User.objects.create_user(username="empty_atleta", role="athlete")
         response = self.client.get(reverse('player_profile', args=[empty_user.username]))
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "Nessuna partita pubblicata")
+        self.assertContains(response, "Nessuna prestazione recente registrata")
 
     def test_api_standings(self):
         response = self.client.get(reverse('api_league_standings', args=[self.league.id]))

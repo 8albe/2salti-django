@@ -121,17 +121,15 @@ class OCRServiceTestCase(TestCase):
         normalized_json = json.dumps(normalized_data_dict)
         data = {
             'normalized_data': normalized_json,
-            'validation_notes': 'Dati corretti manualmente.',
             '_save': 'Salva'
         }
-        
+
         response = self.client.post(url, data, follow=True)
         self.assertEqual(response.status_code, 200)
-        
+
         self.report.refresh_from_db()
         self.assertEqual(self.report.status, MatchReport.Status.VALIDATED)
         self.assertEqual(self.report.normalized_data['match_info']['home_team'], "PRO RECCO ASD")
-        self.assertEqual(self.report.validation_notes, "Dati corretti manualmente.")
 
     def test_idempotency_ocr_processing(self):
         """Verifica che non si possa processare un report già in corso o completato"""

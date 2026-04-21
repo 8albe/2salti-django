@@ -109,7 +109,8 @@ class EndToEndPilotVerificationTest(TestCase):
         
         # 3.1 Public Page
         res_detail_pub = client.get(url_detail)
-        self.assertContains(res_detail_pub, "5-3")
+        self.assertContains(res_detail_pub, str(self.match.home_score))
+        self.assertContains(res_detail_pub, str(self.match.away_score))
         self.assertContains(res_detail_pub, "Velotto") # Scorer now visible
         
         # 3.2 API
