@@ -90,3 +90,17 @@ matches_seasons_backup_*.tar.gz
 .flutter/
 .dart-tool/
 .dartServer/
+
+# === Aggiunte sessione 2026-04-22 (post filter-repo) ===
+.env.backup.*
+.env.*.local
+.python_history
+.sqlite_history
+.zshrc
+.zsh_history
+homepage.png
+debug_error.html
+config/settings.py.bak*
+admin_ocr_sim.py
+*.service
+*.timer
