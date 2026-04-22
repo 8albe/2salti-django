@@ -645,3 +645,4 @@ Elenco features descritte nel blueprint ma assenti nel codice. Per la roadmap ve
 ## Domande per Alberto
 
 Nessuna domanda aperta.
+
