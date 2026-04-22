@@ -21,27 +21,22 @@ wheels/
 .installed.cfg
 *.egg
 MANIFEST
-
 # Django
 *.log
 local_settings.py
 db.sqlite3*
 media/
-
 # Virtual Environment
 .venv/
 venv/
 ENV/
 env/
-
 # Environment Variables
 .env
 psw.env
-
 # IDE
 *.idea/
 *.vscode/
-
 # Project Specific
 backups/
 archive_flutter_nextjs_20260213/
@@ -54,7 +49,6 @@ create_sports.py
 test_routes_real.py
 verify_claim_flow.py
 verify_phase1.py
-
 # System, Cache and Browser automation
 .cache/
 .config/
@@ -64,7 +58,6 @@ verify_phase1.py
 snap/
 .ssh/
 node_modules/
-
 # Agent
 .gemini/
 .antigravity-server/
@@ -76,21 +69,17 @@ Antigravity/
 .copilot/
 .dotnet/
 .vscode-server/
-
 # Ops logs and backups
 logs/ops/
 matches_seasons_backup_*.tar.gz
-
 # Shell user files
 .bash_history
 .wget-hsts
-
 # Dart / Flutter
 .pub-cache/
 .flutter/
 .dart-tool/
 .dartServer/
-
 # === Aggiunte sessione 2026-04-22 (post filter-repo) ===
 .env.backup.*
 .env.*.local
@@ -106,3 +95,4 @@ admin_ocr_sim.py
 *.timer
 .git-credentials
 .gitconfig
+# Credenziali e config locali (mai versionare)
