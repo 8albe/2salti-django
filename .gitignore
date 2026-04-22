@@ -104,3 +104,4 @@ config/settings.py.bak*
 admin_ocr_sim.py
 *.service
 *.timer
+.git-credentials
