@@ -105,3 +105,4 @@ admin_ocr_sim.py
 *.service
 *.timer
 .git-credentials
+.gitconfig
