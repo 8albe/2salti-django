@@ -96,3 +96,13 @@ admin_ocr_sim.py
 .git-credentials
 .gitconfig
 # Credenziali e config locali (mai versionare)
+# Pulizia working tree 2026-04-23
+# Build artifacts Django
+staticfiles/
+# Backup files
+*.bak
+*.backup-*
+# Debug scripts
+debug_*.py
+# Session notes (tenute fuori dal repo in /home/alberto/_session_notes/)
+_session_notes/
