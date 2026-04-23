@@ -106,3 +106,15 @@ staticfiles/
 debug_*.py
 # Session notes (tenute fuori dal repo in /home/alberto/_session_notes/)
 _session_notes/
+
+# Scratch scripts in root home (aggiunti 2026-04-23, chiusura #7-bis)
+/verify_*.py
+/test_*.py
+
+# Config files in root home (versioni dev/obsolete, non committare)
+/gunicorn_config.py
+/2salti_nginx_config
+/nginx_config
+
+# One-off tools
+/git-filter-repo
