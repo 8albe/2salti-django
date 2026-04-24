@@ -347,20 +347,27 @@ Le seguenti funzionalità sono descritte in `PRODUCT_BLUEPRINT.md` ma **non hann
 
 In ordine di priorità:
 
-1. **[ALTA] Aggiornare `CLAUDE.md` — sezione "Match Report Pipeline":**
-   Aggiungere `NEEDS_REVIEW` e `REJECTED` al grafo degli stati. Correggere i nomi dei campi: `source_channel` (non `source`), `source_type` (non `origin`). Rendere esplicito che il flusso non è lineare (es. `NEEDS_REVIEW → PROCESSING` per riprocessamento).
+1. ~~**[ALTA] Aggiornare `CLAUDE.md` — sezione "Match Report Pipeline":**
+   Aggiungere `NEEDS_REVIEW` e `REJECTED` al grafo degli stati. Correggere i nomi dei campi: `source_channel` (non `source`), `source_type` (non `origin`). Rendere esplicito che il flusso non è lineare (es. `NEEDS_REVIEW → PROCESSING` per riprocessamento).~~
+   **CHIUSO il 24-apr-2026** — Risolto indirettamente: la sezione dedicata in `CLAUDE.md` è stata sostituita da un puntatore a questo documento (vedi §"State machines" in `CLAUDE.md`, con istruzione esplicita "Non duplicare qui"). La divergenza è eliminata alla radice: non c'è più nulla da allineare.
 
 2. **[ALTA] Aggiornare `docs/PRODUCT_BLUEPRINT.md` §8 — rinominare `VERIFIED` → `VALIDATED`:**
    Il blueprint usa `VERIFIED` per lo stato di approvazione admin; il codice usa `VALIDATED`. Divergenza di nomenclatura che può causare confusione durante sviluppo e code review.
+   *Nota (verifica 24-apr-2026):* il Blueprint è stato aggiornato di recente a v3.3 (ripristino capitoli 7.4-7.6 e 8-14). Verifica fatta su [`PRODUCT_BLUEPRINT.md`](PRODUCT_BLUEPRINT.md) §8: la revisione v3.3 **non** ha risolto la divergenza — la riga `UPLOADED → EXTRACTED → NEEDS_REVIEW → VERIFIED → PUBLISHED` usa ancora `VERIFIED`. L'azione resta aperta.
 
 3. **[MEDIA] Aggiornare `docs/PRODUCT_BLUEPRINT.md` §8 — aggiungere `PROCESSING` e `DRAFT`:**
    Il flusso nel blueprint parte da `UPLOADED` direttamente a `EXTRACTED`, saltando `PROCESSING`. E ignora `DRAFT` (usato per referti digitali). Il blueprint è incompleto rispetto all'implementazione reale.
 
-4. **[MEDIA] Aggiornare `CLAUDE.md` — chiarire la natura della property `onboarding_state`:**
-   La sezione "Onboarding State Machine" implica l'esistenza di un campo `status` sull'utente. In realtà è una property calcolata. Aggiungere una nota che spiega i tre campi reali sottostanti e la logica di composizione.
+4. ~~**[MEDIA] Aggiornare `CLAUDE.md` — chiarire la natura della property `onboarding_state`:**
+   La sezione "Onboarding State Machine" implica l'esistenza di un campo `status` sull'utente. In realtà è una property calcolata. Aggiungere una nota che spiega i tre campi reali sottostanti e la logica di composizione.~~
+   **CHIUSO il 24-apr-2026** — Risolto indirettamente: la sezione "Onboarding State Machine" in `CLAUDE.md` non esiste più come blocco autonomo; la descrizione del modello è delegata a questo documento (vedi §"State machines" in `CLAUDE.md`). La property calcolata è già documentata qui, quindi non c'è più rischio di fraintendimento su un presunto campo `status`.
 
 5. **[BASSA] Documentare le transizioni di `AccountProfileLink` lato admin:**
    L'approvazione/rifiuto del claim avviene via Django admin senza servizio dedicato. Valutare se aggiungere un servizio esplicito con audit trail (come per `MembershipRequest`).
 
 6. **[BASSA] Decidere il futuro di Jury token e firma arbitro:**
    Aggiornare il Blueprint §7.4.1 e §7.4.3 con una nota esplicita che segnala queste funzionalità come "non implementate — roadmap futura", per evitare che chi legge il blueprint si aspetti di trovare codice corrispondente.
+
+---
+
+*Convenzione di questa lista:* i fix marcati **CHIUSO** non vengono rimossi, ma restano come storico delle decisioni risolte. La regola è: fix chiuso = testo barrato + annotazione con data e modalità di risoluzione; fix aperto = testo invariato.
