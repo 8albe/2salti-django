@@ -40,7 +40,7 @@ The following files require explicit confirmation before any change:
 - `accounts/middleware.py` — the onboarding state machine is fragile and coupled to wizard redirects.
 - `matches/services/standings_service.py` — ranking logic; any change risks corrupting historical standings.
 - Any migration already applied in production.
-- `.env` and `.env.production` — credentials, never commit or overwrite.    
+- `.env` — credentials, never commit or overwrite.
 
 ## Common Commands
 
