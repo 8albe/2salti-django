@@ -10,6 +10,8 @@ Il service systemd si chiama `2salti` e viene servito da Gunicorn con socket uni
 
 Gli ambienti di staging e dev-remote non sono attualmente attivi; il loro ripristino è tracciato dal problema #10 nel backlog della roadmap residua. Qualsiasi procedura descritta in questo runbook assume i path elencati sopra come stato attuale; se cambiano — per migrazione, per introduzione di staging, per riconfigurazione del deploy — aggiornare prima di tutto questa sezione, perché tutte le sezioni successive vi fanno riferimento implicito.
 
+Un dettaglio importante sulla topologia dei remote git, che va ricordato perché la sua implicazione non è ovvia. La home `/home/alberto/` ha `origin` puntato a `github.com/8albe/2salti-django.git`: è il repo che parla direttamente con GitHub. Il deploy `/opt/2salti-new/` invece ha `origin` puntato al path locale della home (`/home/alberto`), non a GitHub. La topologia è quindi a due salti: `deploy → home → GitHub`, e il deploy non parla direttamente con GitHub. Questo significa che il `git pull origin dev` sul deploy, menzionato nella sezione 2, tira dalla home locale, non da GitHub. Nello scenario ordinario — lavoro da una sola macchina, home sempre allineata a GitHub — la cosa è trasparente. Ma genera due rischi conosciuti da tenere presenti. Primo: se si commette nella home e si dimentica il push a GitHub, un successivo pull sul deploy porta comunque il commit in produzione, e GitHub resta indietro — l'inverso del caso documentato nella sezione 5. Secondo: se un commit atterra su GitHub senza passare dalla home (PR merged via web, push da un'altra macchina, commit fatto da un CI bot futuro), il deploy non lo vedrà finché qualcuno non lo tira prima nella home. Oggi entrambi gli scenari sono teorici perché si lavora solo dal server, ma sono dipendenze fragili — se il workflow cambia, vanno rivalutate, probabilmente aggiungendo un secondo remote `github` al deploy per permettere verifica diretta contro GitHub.
+
 ## 2. Asimmetria home ↔ deploy
 
 Il deploy `/opt/2salti-new/` non si autoallinea con `/home/alberto/`. Non esiste automazione, non esiste alert, non esiste monitoring che segnali la divergenza fra i due repo. Il 23 aprile 2026 abbiamo scoperto per caso che il deploy era tre commit indietro rispetto alla home, senza che nessuno se ne fosse accorto — asimmetria accumulata in meno di 24 ore attraverso commit fatti nella home e mai propagati al deploy. Non si era rotto nulla solo perché i commit riguardavano pulizia di artefatti non importati a runtime, ma l'assenza di visibilità sulla divergenza è il problema di fondo.
@@ -91,11 +93,12 @@ Questa è una regola metodologica che riguarda la redazione delle note di sessio
 
 - La home `/home/alberto/` come repo di sviluppo
 - Il deploy `/opt/2salti-new/` come repo di produzione
+- Il remote GitHub come repo pubblico — perché, come spiegato in sezione 1, il deploy non parla direttamente con GitHub e la home potrebbe essere allineata a uno dei due ma non all'altro
 - Dove esistano, anche staging e dev-remote (oggi non attivi)
 
 Il contro-esempio storico è esattamente il caso che ha generato questa regola. Il 22 aprile 2026 il problema #7 è stato marcato come CHIUSO in nota di sessione dopo aver ripulito la history con `git-filter-repo`. Era chiuso solo a metà: la history era stata pulita correttamente, ma l'indice della home si era silenziosamente ripopolato attraverso commit successivi nella stessa giornata, e il deploy era tre commit indietro rispetto alla home. La chiusura vera è arrivata solo il 23 aprile, quando abbiamo verificato home più deploy end-to-end e aggiunto i pattern generici al `.gitignore`.
 
-In pratica, prima di scrivere "CHIUSO" in una nota, fare il check esplicito sull'altro ambiente (o sugli altri ambienti, quando ci saranno). Costa due minuti di comandi — un `git status`, un `git log -1`, un confronto di HEAD — e previene scoperte imbarazzanti una settimana o un mese dopo, quando il problema riemerge e costringe a ricostruire il contesto da zero.
+In pratica, prima di scrivere "CHIUSO" in una nota, fare il check esplicito sugli altri ambienti. Costa due minuti di comandi — un `git status`, un `git log -1`, un confronto di HEAD — e previene scoperte imbarazzanti una settimana o un mese dopo, quando il problema riemerge e costringe a ricostruire il contesto da zero.
 
 ## 6. Regole operative trasversali
 
