@@ -46,9 +46,6 @@ temp/
 2salti-legacy/
 accounts/test_claim_flow.py
 create_sports.py
-test_routes_real.py
-verify_claim_flow.py
-verify_phase1.py
 # System, Cache and Browser automation
 .cache/
 .config/
