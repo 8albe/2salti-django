@@ -140,16 +140,17 @@ class Command(BaseCommand):
             with transaction.atomic():
                 for m in matches:
                     n_ev = MatchEvent.objects.filter(match_id=m.id).count()
+                    match_id = m.id
                     home = m.home_team.name
                     away = m.away_team.name
                     score = f"{m.home_score}-{m.away_score}"
                     m.delete()
                     logger.info(
                         "Deleted Match id=%s home=%s away=%s score=%s events=%d",
-                        m.id, home, away, score, n_ev,
+                        match_id, home, away, score, n_ev,
                     )
                     self.stdout.write(
-                        f"  cancellato Match id={m.id} ({home} vs {away} "
+                        f"  cancellato Match id={match_id} ({home} vs {away} "
                         f"{score}, {n_ev} eventi)"
                     )
 
