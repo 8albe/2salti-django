@@ -1,0 +1,13 @@
+[Unit]
+Description=gunicorn daemon for 2salti
+After=network.target
+
+[Service]
+User=alberto
+Group=www-data
+WorkingDirectory=/opt/2salti-new
+ExecStart=/opt/2salti-new/.venv/bin/gunicorn --config /opt/2salti-new/gunicorn_config.py config.wsgi:application
+
+
+[Install]
+WantedBy=multi-user.target

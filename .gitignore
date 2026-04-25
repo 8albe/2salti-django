@@ -90,6 +90,8 @@ config/settings.py.bak*
 admin_ocr_sim.py
 *.service
 *.timer
+!deploy/systemd/*.service
+!deploy/systemd/*.timer
 .git-credentials
 .gitconfig
 # Credenziali e config locali (mai versionare)
