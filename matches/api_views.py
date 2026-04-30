@@ -46,7 +46,10 @@ def api_league_standings(request, league_id):
 def api_league_matches(request, league_id):
     """Returns matches for a league in JSON format"""
     league = get_object_or_404(League, id=league_id)
-    matches = league.matches.all().select_related('home_team', 'away_team')
+    matches = league.matches.filter(
+        is_finished=True,
+        reports__status=MatchReport.Status.PUBLISHED,
+    ).distinct().select_related('home_team', 'away_team')
     
     data = []
     for m in matches:
