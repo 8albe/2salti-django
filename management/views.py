@@ -11,6 +11,7 @@ from .logic import generate_occurrences
 from .permissions import role_required, get_society_context, get_membership_context
 from .utils import log_action
 from django.utils import timezone
+from datetime import timedelta
 from django.contrib import messages
 from core.models import Society, Team
 from core.integrations import INTEGRATION_REGISTRY
@@ -513,6 +514,17 @@ def staff_dashboard(request):
         'PAYMENT_PENDING': User.objects.filter(role__in=functional_roles, identity_status='VERIFIED', subscription_status='INACTIVE').count(),
         'SETUP_PENDING': User.objects.filter(role__in=functional_roles, identity_status='VERIFIED', subscription_status='ACTIVE', setup_completed=False).count(),
     }
+
+    # 3. Referti bloccati (> 4h)
+    stuck_threshold = timezone.now() - timedelta(hours=4)
+    stuck_reports = MatchReport.objects.filter(
+        created_at__lt=stuck_threshold,
+    ).exclude(
+        status__in=[
+            MatchReport.Status.PUBLISHED,
+            MatchReport.Status.REJECTED,
+        ],
+    ).order_by('created_at')
 
     # 4. Republish Rate (Efficienza OCR/Validazione)
     from .models import AuditLog
