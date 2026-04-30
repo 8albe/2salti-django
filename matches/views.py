@@ -324,9 +324,7 @@ def report_review(request, report_id):
             # This is a basic implementation for manual review/digital reports
             # If it's an OCR report, we might want to sync normalized_data instead,
             # but for MVP, manual override on the form is the priority.
-            from .models import MatchEvent
-            from .event_types import EVENT_TYPE_GOAL
-            
+
             # Delete old manual events to re-sync
             match.events.filter(event_type=EVENT_TYPE_GOAL).delete()
             
@@ -412,7 +410,6 @@ def report_review(request, report_id):
         ocr_goals = {}
         if report.normalized_data:
             from .services.converters import MatchDataConverter
-            from .event_types import EVENT_TYPE_GOAL
             events = MatchDataConverter.get_events_data(report.normalized_data)
             for e in events:
                 if e['event_type'] == EVENT_TYPE_GOAL and e['player_id']:
