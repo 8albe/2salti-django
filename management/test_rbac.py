@@ -14,7 +14,7 @@ class RBACTest(TestCase):
         self.soc_b = Society.objects.create(name="Soc B", slug="soc-b", sport=self.sport)
         
         # User in Soc A
-        self.user_a = User.objects.create_user(username='user_a', identity_status='VERIFIED', subscription_status='ACTIVE')
+        self.user_a = User.objects.create_user(username='user_a', role='athlete', identity_status='VERIFIED', subscription_status='ACTIVE', setup_completed=True)
         Membership.objects.create(user=self.user_a, society=self.soc_a, role='PLAYER', is_active=True)
         
         # Training in Soc B

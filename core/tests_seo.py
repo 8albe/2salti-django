@@ -28,7 +28,7 @@ class SEOTestCase(TestCase):
         response = self.client.get(reverse('robots_txt'))
         self.assertEqual(response.status_code, 200)
         self.assertIn(b"User-agent: *", response.content)
-        self.assertIn(b"Disallow: /  # Prevent indexing in dev/staging", response.content)
+        self.assertIn(b"Disallow: /", response.content)
 
     def test_sitemap_xml(self):
         response = self.client.get(reverse('sitemap_xml'))
