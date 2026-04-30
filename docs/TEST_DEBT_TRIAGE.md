@@ -86,3 +86,93 @@ matches/tests_openai_provider.py      (R — spostato da tests/)
 
 **Nota:** il refactor di appiattimento dei test è applicato al filesystem e staged, ma NON committato.
 Prossimo step concordato: triage → fix/skip dei 41 fallimenti → commit unico con messaggio descrittivo.
+
+---
+
+## Stato 28 aprile 2026 sera
+
+**Suite KO: 30 → 14** dopo 8 commit della giornata. Tutti e 3 i `BUG-PROD` originali risolti.
+
+### Commit della sessione (8)
+
+Mattina (3):
+- `6e5736d` fix(staff_dashboard): calcola stuck_reports mancante
+- `df32885` fix(admin): esponi 8 ModelAdmin orfani su op_admin_site
+- `d62c89f` test(ocr): allinea unpacking a 4-tuple in tests_ocr_hardening
+
+Pomeriggio (5):
+- `94d55ea` fix(middleware): whitelist claim_profile e team_access nel flusso onboarding
+- `e7c18f3` test: aggiorna 4 setUp/assertion obsoleti rispetto al design corrente
+- `f3179c1` fix(forms): persisti file_hash su MatchReport via form save() override (BUG-PROD #28)
+- `9b3673e` fix(api): filtra match non PUBLISHED in api_league_matches (BUG-PROD #26)
+- `ce4df80` fix(views): rimuovi 3 re-import locali in report_review (BUG-PROD #1)
+
+### KO residui (14)
+
+Riferimenti `#N` puntano alle voci della tabella del 20-aprile sopra.
+
+| # orig | Test | Sintomo | Cluster |
+|--------|------|---------|---------|
+| 2  | `tests_api.PublicAPITestCase.test_api_athlete_privacy` | `KeyError: 'name'` (chiave rinominata `full_name`) | A — Public API legacy |
+| 3  | `tests_api.PublicAPITestCase.test_api_league_list` | `NoReverseMatch: 'api_league_list'` | A — Public API legacy |
+| 4  | `tests_api.PublicAPITestCase.test_api_team_detail_roster` | `NoReverseMatch: 'api_team_detail'` | A — Public API legacy |
+| 12 | `tests_ocr_quality_gate.OCRQualityGateIntegrationTest.test_review_page_shows_quality_gate` | `KeyError: 'ocr_is_valid'` nel context | B — Admin review context keys |
+| 22 | `tests_ocr_service.ReviewUXTestCase.test_review_view_context_reliability` | `KeyError: 'confidence'` nel context | B — Admin review context keys |
+| 25 | `test_manual_review.ManualReviewTest.test_non_staff_cannot_review` | `302 != 403` (onboarding redirect prima di `PermissionDenied`) | C — Onboarding redirect vs 403 |
+| 27 | `tests_deduplication.MatchReportDeduplicationTest.test_duplicate_file_upload_is_blocked` | `True is not false` (secondo upload non bloccato) | D — Dedup logica check |
+| 30 | `tests_ocr_provider_toggle.OCRProviderToggleTest.test_process_and_update_handles_init_failure_safely` | `'REJECTED' != NEEDS_REVIEW` | E — `ocr_service` guardia no-file |
+| 31 | `tests_ocr_provider_toggle.OCRProviderToggleTest.test_process_and_update_with_mock_runs_quality_gate` | `False is not true` (stessa guardia no-file) | E — `ocr_service` guardia no-file |
+| 32 | `tests_ocr_service.FullFlowRegressionTest.test_full_flow_mock_extraction_to_publish` | `False is not true` (Zero Events guardrail blocca mock) | F — Schema Zero Events |
+| 33 | `tests_ocr_service.OCRServiceTestCase.test_admin_action_ocr` | Stringa cambiata: "Estraiti: X, In Review: Y, Errori: Z" | G — Admin message stringa |
+| 39 | `tests_standings.StandingsVerificationTest.test_rebuild_command` | "Ricalcolate 1 classifiche" non trovato (comando incrementale) | H — `rebuild_standings` incrementale |
+| 40 | `tests_standings.StandingsVerificationTest.test_standings_updated_on_publish` | `False is not true` (Zero Events blocca `publish_report`) | F — Schema Zero Events |
+| 41 | `tests_status_semantics.StatusSemanticsTestCase.test_ocr_failure_moves_to_needs_review` | `'REJECTED' != NEEDS_REVIEW` + typo `source_type=` nel test | E — `ocr_service` guardia no-file |
+
+### Composizione per categoria
+
+| Categoria | 20 aprile | 28 aprile sera |
+|-----------|-----------|----------------|
+| REFACTOR-INCOMPLETO | 36 | 14 |
+| BUG-PROD            | 3  | 0  |
+| INCERTO             | 1  | 0  |
+| TEST-OBSOLETO       | 0  | 0  |
+| **Totale**          | **41** | **14** |
+
+I 14 residui sono **tutti REFACTOR-INCOMPLETO**: codice di produzione evoluto senza aggiornare i test corrispondenti. Nessun bug funzionale residuo bloccante.
+
+### Cluster residui per la prossima sessione
+
+**Cluster A — Public API legacy** (3 KO: 2, 3, 4)
+File: `matches/api_urls.py`, `matches/api_views.py`. Endpoint `api_league_list` e `api_team_detail` rimossi; chiave `name` rinominata `full_name`. Decisione richiesta: aggiornare i test al nuovo schema URL/serializer o ripristinare gli endpoint pubblici.
+
+**Cluster B — Admin review context keys** (2 KO: 12, 22)
+File: `matches/admin.py` (review_view). Chiavi context `ocr_is_valid` e `confidence` non più presenti. Aggiornare i test alle nuove chiavi (`publish_safe`, …).
+
+**Cluster C — Onboarding redirect vs 403** (1 KO: 25)
+File: `matches/test_manual_review.py`. Il middleware `@onboarding_required` redirige (302) prima che `PermissionDenied` produca 403. Fix probabile: completare il `setUp` di `player_user` con `identity_status='VERIFIED'` e profilo onboarding completo per arrivare al check di permessi.
+
+**Cluster D — Dedup logica check** (1 KO: 27)
+File: `matches/forms.py` + `matches/views.py`. Dopo `f3179c1` il primo upload salva l'hash; verificare che `MatchReportUploadForm.clean()` interroghi davvero `MatchReport.objects.filter(file_hash=…)` per bloccare il duplicato.
+
+**Cluster E — `ocr_service` guardia no-file** (3 KO: 30, 31, 41)
+File: `matches/services/ocr_service.py:254`. La guardia early-return su `report.file` mancante cortocircuita prima dell'exception path che dovrebbe produrre `NEEDS_REVIEW`. Decidere se rimuovere la guardia o aggiornare lo status atteso nei test. Voce 41 ha anche un typo `source_type=` (deve essere `source_channel=`).
+
+**Cluster F — Schema Zero Events** (2 KO: 32, 40)
+File: `matches/services/schema.py`. Il guardrail Zero Events blocca `publish_report` per payload mock senza eventi. Opzioni: arricchire i fixture mock con almeno un evento, o relaxare il guardrail ad un warning con dati di test.
+
+**Cluster G — Admin message stringa** (1 KO: 33)
+File: `matches/tests_ocr_service.py`. Aggiornare l'assert: il messaggio admin è ora "Estraiti: X, In Review: Y, Errori: Z" (non più "Processati con successo 1 referti.").
+
+**Cluster H — `rebuild_standings` incrementale** (1 KO: 39)
+File: `matches/tests_standings.py`. Il management command è ora incrementale e processa solo `Match.needs_rebuild=True`. Il test deve settare il flag o esercitare la modalità full-rebuild.
+
+### Quick wins ordinati per costo/beneficio
+
+1. **Cluster G** (1 riga, aggiorna stringa)
+2. **Cluster H** (1-2 righe nel setUp)
+3. **Cluster C** (completa setUp utente)
+4. **Cluster B** (rinomina 2 chiavi nei test)
+5. **Cluster A** (decisione di prodotto + sostituzione URL/chiavi)
+6. **Cluster F** (decisione di prodotto su guardrail)
+7. **Cluster E** (richiede analisi del flusso OCR + decisione su guardia)
+8. **Cluster D** (richiede analisi della clean() del form)
