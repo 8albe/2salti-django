@@ -57,28 +57,28 @@ class OCRHardeningTest(TestCase):
 
     def test_clean_pass(self):
         """Clean data matching context should pass."""
-        is_valid, blockers, warnings = OCRQualityGate.evaluate(self.valid_data, context=self.context)
+        is_valid, blockers, warnings, _ = OCRQualityGate.evaluate(self.valid_data, context=self.context)
         self.assertTrue(is_valid, f"Expected valid, got blockers: {blockers}")
         self.assertEqual(len(blockers), 0)
 
     def test_team_mismatch_fails(self):
         """Team name completely different should block."""
         self.valid_data["match_info"]["home_team"] = "Villa York"
-        is_valid, blockers, warnings = OCRQualityGate.evaluate(self.valid_data, context=self.context)
+        is_valid, blockers, warnings, _ = OCRQualityGate.evaluate(self.valid_data, context=self.context)
         self.assertFalse(is_valid)
         self.assertTrue(any("non corrisponde alla partita selezionata" in b for b in blockers))
 
     def test_score_inconsistency_fails(self):
         """Sum of quarters mismatching final score should block (used to be warning)."""
         self.valid_data["scores"]["quarters"]["1"] = [10, 10]
-        is_valid, blockers, warnings = OCRQualityGate.evaluate(self.valid_data, context=self.context)
+        is_valid, blockers, warnings, _ = OCRQualityGate.evaluate(self.valid_data, context=self.context)
         self.assertFalse(is_valid)
         self.assertTrue(any("Incoerenza punteggio" in b for b in blockers))
 
     def test_low_field_confidence_fails(self):
         """Low confidence in header fields should block."""
         self.valid_data["metadata"]["confidence_fields"]["final_score"] = 0.4
-        is_valid, blockers, warnings = OCRQualityGate.evaluate(self.valid_data, context=self.context)
+        is_valid, blockers, warnings, _ = OCRQualityGate.evaluate(self.valid_data, context=self.context)
         self.assertFalse(is_valid)
         self.assertTrue(any("Bassa affidabilità nel campo intestazione" in b for b in blockers))
 
@@ -87,13 +87,13 @@ class OCRHardeningTest(TestCase):
         for _ in range(20):
              self.valid_data["events"].append({"type": "GOAL", "team": "home", "quarter": 4})
         
-        is_valid, blockers, warnings = OCRQualityGate.evaluate(self.valid_data, context=self.context)
+        is_valid, blockers, warnings, _ = OCRQualityGate.evaluate(self.valid_data, context=self.context)
         self.assertFalse(is_valid)
         self.assertTrue(any("Incoerenza eventi" in b for b in blockers))
 
     def test_wrong_location_warns(self):
         """Location mismatch should only warn (as it might be city vs venue)."""
         self.valid_data["match_info"]["city"] = "Milan"
-        is_valid, blockers, warnings = OCRQualityGate.evaluate(self.valid_data, context=self.context)
+        is_valid, blockers, warnings, _ = OCRQualityGate.evaluate(self.valid_data, context=self.context)
         self.assertTrue(is_valid)
         self.assertTrue(any("Località OCR 'Milan' sospetta" in w for w in warnings))
