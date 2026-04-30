@@ -30,6 +30,13 @@ class MatchReportUploadForm(forms.ModelForm):
             self.cleaned_data['file_hash'] = file_hash
         return file
 
+    def save(self, commit=True):
+        instance = super().save(commit=False)
+        instance.file_hash = self.cleaned_data.get('file_hash', '')
+        if commit:
+            instance.save()
+        return instance
+
 class MatchReportAdminForm(forms.ModelForm):
     """Form dedicato all'admin per includere la deduplica."""
     class Meta:
