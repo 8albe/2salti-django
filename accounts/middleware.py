@@ -17,6 +17,8 @@ class OnboardingMiddleware(MiddlewareMixin):
             reverse('process_payment'),
             reverse('setup_wizard'),
             reverse('onboarding_membership'),
+            reverse('claim_profile'),
+            reverse('team_access'),
             reverse('logout'),
             # Aggiungere altri se necessario (es: static, media, api di ricerca)
         ]
