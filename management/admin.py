@@ -124,3 +124,61 @@ class PilotReviewAdmin(admin.ModelAdmin):
             'fields': ('what_worked', 'blockers_summary', 'recurring_issues', 'staff_load', 'notes'),
         }),
     )
+
+
+# === Registrazioni su op_admin_site ===
+# I ModelAdmin sopra hanno has_module_permission=False per nasconderli dal
+# default admin.site. Le sottoclassi *OpAdmin sotto sovrascrivono quel
+# metodo per essere visibili sull'op_admin_site (l'unico admin esposto
+# in produzione, vedi matches/admin.py).
+from matches.admin import op_admin_site
+
+
+class MembershipOpAdmin(MembershipAdmin):
+    def has_module_permission(self, request):
+        return request.user.is_active and request.user.is_staff
+
+
+class ActivationCodeOpAdmin(ActivationCodeAdmin):
+    def has_module_permission(self, request):
+        return request.user.is_active and request.user.is_staff
+
+
+class MembershipRequestOpAdmin(MembershipRequestAdmin):
+    def has_module_permission(self, request):
+        return request.user.is_active and request.user.is_staff
+
+
+class AuditLogOpAdmin(AuditLogAdmin):
+    def has_module_permission(self, request):
+        return request.user.is_active and request.user.is_staff
+
+
+class PilotDailyLogOpAdmin(PilotDailyLogAdmin):
+    def has_module_permission(self, request):
+        return request.user.is_active and request.user.is_staff
+
+
+class PilotBugOpAdmin(PilotBugAdmin):
+    def has_module_permission(self, request):
+        return request.user.is_active and request.user.is_staff
+
+
+class PilotFeedbackOpAdmin(PilotFeedbackAdmin):
+    def has_module_permission(self, request):
+        return request.user.is_active and request.user.is_staff
+
+
+class PilotReviewOpAdmin(PilotReviewAdmin):
+    def has_module_permission(self, request):
+        return request.user.is_active and request.user.is_staff
+
+
+op_admin_site.register(Membership, MembershipOpAdmin)
+op_admin_site.register(ActivationCode, ActivationCodeOpAdmin)
+op_admin_site.register(MembershipRequest, MembershipRequestOpAdmin)
+op_admin_site.register(AuditLog, AuditLogOpAdmin)
+op_admin_site.register(PilotDailyLog, PilotDailyLogOpAdmin)
+op_admin_site.register(PilotBug, PilotBugOpAdmin)
+op_admin_site.register(PilotFeedback, PilotFeedbackOpAdmin)
+op_admin_site.register(PilotReview, PilotReviewOpAdmin)

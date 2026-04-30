@@ -4,7 +4,6 @@ from .event_types import DEFAULT_EVENT_TYPES
 
 from .forms import MatchReportAdminForm
 from core.models import Team, League, Sport
-from management.models import AuditLog
 from .services.ocr_service import OCRService
 from .services.publishing_service import PublishingService
 from .services.schema import OCRSchemaValidator
@@ -53,15 +52,44 @@ class OpAdminSite(admin.AdminSite):
 
     def get_app_list(self, request, app_label=None):
         app_list = super().get_app_list(request, app_label)
-        operational_models = []
-        for app in app_list:
-            for model in app['models']:
-                if model['object_name'] in ['MatchReport', 'Match', 'Team', 'League', 'Sport']:
-                    operational_models.append(model)
-        order_map = {'MatchReport': 0, 'Match': 1, 'Team': 2, 'League': 3, 'Sport': 4}
-        operational_models.sort(key=lambda x: order_map.get(x['object_name'], 999))
-        if not operational_models: return []
-        return [{'name': 'Operazioni Principali', 'app_label': 'operations', 'models': operational_models, 'has_module_permission': True}]
+
+        groups = {
+            'Operazioni Principali': {
+                'app_label': 'operations',
+                'models': ['MatchReport', 'Match', 'Team', 'League', 'Sport'],
+                'order': {'MatchReport': 0, 'Match': 1, 'Team': 2, 'League': 3, 'Sport': 4},
+            },
+            'Gestione Membership': {
+                'app_label': 'membership',
+                'models': ['Membership', 'MembershipRequest', 'ActivationCode', 'AuditLog'],
+                'order': {'Membership': 0, 'MembershipRequest': 1, 'ActivationCode': 2, 'AuditLog': 3},
+            },
+            'Pilot Operations': {
+                'app_label': 'pilot',
+                'models': ['PilotDailyLog', 'PilotBug', 'PilotFeedback', 'PilotReview'],
+                'order': {'PilotDailyLog': 0, 'PilotBug': 1, 'PilotFeedback': 2, 'PilotReview': 3},
+            },
+        }
+
+        # TODO: refactor con attributo di classe op_admin_group sui ModelAdmin
+        # per evitare lista hardcoded.
+
+        result = []
+        for group_name, config in groups.items():
+            group_models = []
+            for app in app_list:
+                for model in app['models']:
+                    if model['object_name'] in config['models']:
+                        group_models.append(model)
+            group_models.sort(key=lambda x: config['order'].get(x['object_name'], 999))
+            if group_models:
+                result.append({
+                    'name': group_name,
+                    'app_label': config['app_label'],
+                    'models': group_models,
+                    'has_module_permission': True,
+                })
+        return result
 
 op_admin_site = OpAdminSite(name='op_admin')
 
