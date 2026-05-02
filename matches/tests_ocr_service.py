@@ -484,16 +484,43 @@ class FullFlowRegressionTest(TestCase):
         self.team_home = Team.objects.create(society=self.soc_home, category="SENIOR", league=self.league)
         self.team_away = Team.objects.create(society=self.soc_away, category="SENIOR", league=self.league)
         self.user = User.objects.create_superuser(username="admin_ff", email="ff@test.com", password="password")
-        
+
+        # Atleti per coprire i nomi citati negli eventi del MockVisionProvider
+        # ("Capitano Mock" home GOAL, "Difensore Mock" away EXCLUSION_20).
+        # Servono per far popolare reconciliation a process_and_update via get_roster()+resolve_athlete.
+        # Il signal post_save su User crea automaticamente AthleteProfile: lo recuperiamo e settiamo current_team.
+        self.athlete_home_user = User.objects.create_user(
+            username='capitano_mock', first_name='Capitano', last_name='Mock',
+            role='athlete',
+            identity_status='VERIFIED',
+            subscription_status='ACTIVE',
+            setup_completed=True,
+        )
+        self.athlete_home = self.athlete_home_user.athlete_profile
+        self.athlete_home.current_team = self.team_home
+        self.athlete_home.save()
+
+        self.athlete_away_user = User.objects.create_user(
+            username='difensore_mock', first_name='Difensore', last_name='Mock',
+            role='athlete',
+            identity_status='VERIFIED',
+            subscription_status='ACTIVE',
+            setup_completed=True,
+        )
+        self.athlete_away = self.athlete_away_user.athlete_profile
+        self.athlete_away.current_team = self.team_away
+        self.athlete_away.save()
+
+        # Score 1-0 allineato agli eventi del MockVisionProvider (1 GOAL home, 0 GOAL away).
         self.match = Match.objects.create(
             league=self.league,
             home_team=self.team_home,
             away_team=self.team_away,
             match_date=timezone.now(),
-            home_score=8,
-            away_score=6
+            home_score=1,
+            away_score=0
         )
-        
+
         self.report = MatchReport.objects.create(
             match=self.match,
             uploader=self.user,
@@ -514,7 +541,7 @@ class FullFlowRegressionTest(TestCase):
         self.assertEqual(self.report.status, MatchReport.Status.EXTRACTED)
 
         # 2. Schema validation
-        data = self.report.raw_extracted_data
+        data = self.report.normalized_data
         ok, msg = OCRSchemaValidator.validate(data)
         self.assertTrue(ok, f"Schema validation failed: {msg}")
 
@@ -540,8 +567,8 @@ class FullFlowRegressionTest(TestCase):
         self.assertEqual(self.report.status, MatchReport.Status.PUBLISHED)
         self.match.refresh_from_db()
         self.assertTrue(self.match.is_finished)
-        self.assertEqual(self.match.home_score, 8)
-        self.assertEqual(self.match.away_score, 6)
+        self.assertEqual(self.match.home_score, 1)
+        self.assertEqual(self.match.away_score, 0)
 
 class ReviewUXTestCase(TestCase):
     """Test per la UX di revisione e la preservazione delle evidenze."""
