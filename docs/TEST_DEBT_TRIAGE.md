@@ -176,3 +176,51 @@ File: `matches/tests_standings.py`. Il management command è ora incrementale e 
 6. **Cluster F** (decisione di prodotto su guardrail)
 7. **Cluster E** (richiede analisi del flusso OCR + decisione su guardia)
 8. **Cluster D** (richiede analisi della clean() del form)
+
+## Stato 2 maggio 2026
+
+Suite KO 14 → 10 dopo 4 commit della sessione. Cluster G, H, C chiusi completamente. Cluster B chiuso parzialmente: il fix wire ha sbloccato 1 dei 2 test target e ha esposto un'asserzione pre-esistente latente, registrata sotto come Cluster I.
+
+### Commit della sessione (5)
+
+- `b6cb35e` docs: promuovi lezioni 28-apr al runbook (igiene runbook, fuori test debt)
+- `41df3f9` test(ocr): allinea stringa attesa al messaggio admin telegrafico — Cluster G chiuso
+- `78ec40f` test(standings): allinea test_rebuild_command al ramo incrementale — Cluster H chiuso
+- `855da7d` test(review): porta player_user a COMPLETED per testare RBAC della view — Cluster C chiuso
+- `193436b` feat(admin): wire OCRQualityGate in MatchReportAdmin.review_view — Cluster B parziale
+
+### KO residui (10) — tabella
+
+| # orig | Test | Sintomo | Cluster |
+|---|---|---|---|
+| 2 | tests_api.PublicAPITestCase.test_api_athlete_privacy | KeyError: 'name' | A — Public API legacy |
+| 3 | tests_api.PublicAPITestCase.test_api_league_list | NoReverseMatch: 'api_league_list' | A |
+| 4 | tests_api.PublicAPITestCase.test_api_team_detail_roster | NoReverseMatch: 'api_team_detail' | A |
+| 22 | tests_ocr_service.ReviewUXTestCase.test_review_view_context_reliability | publish_blockers non contiene "roster" | I — Schema validator roster blocker |
+| 27 | tests_deduplication.test_duplicate_file_upload_is_blocked | True is not false | D — Dedup logica check |
+| 30 | tests_ocr_provider_toggle.test_process_and_update_handles_init_failure_safely | 'REJECTED' != NEEDS_REVIEW | E — ocr_service guardia no-file |
+| 31 | tests_ocr_provider_toggle.test_process_and_update_with_mock_runs_quality_gate | False is not true | E |
+| 32 | tests_ocr_service.FullFlowRegressionTest.test_full_flow_mock_extraction_to_publish | False is not true (Zero Events) | F — Schema Zero Events |
+| 40 | tests_standings.test_standings_updated_on_publish | False is not true (Zero Events) | F |
+| 41 | tests_status_semantics.test_ocr_failure_moves_to_needs_review | 'REJECTED' != NEEDS_REVIEW + typo source_type= | E |
+
+### Cluster I (nuovo) — Schema validator roster blocker mancante
+
+- **File:** `matches/tests_ocr_service.py:622-628` (test_review_view_context_reliability)
+- **Sintomo:** Il test attende che `publish_blockers` contenga la parola "roster". `OCRSchemaValidator.assess_publish_readiness` non genera questo blocker su roster vuoti.
+- **Esposto da:** commit `193436b` (wire OCRQualityGate). Prima del wire il test falliva su KeyError 'confidence' (Cluster B), nascondendo l'asserzione successiva.
+- **Decisione richiesta:** se il quality gate deve produrre blocker espliciti su roster vuoti (cambia comportamento produzione: alert nuovi su referti con roster vuoto in admin) oppure se il test va rilassato a una keyword effettivamente prodotta dal validator.
+
+### Quick wins residui ordinati per costo/beneficio
+
+1. Cluster I (nuovo) — decisione di prodotto su schema validator (15 min conversazione + 5 min fix)
+2. Cluster B (rinomina chiavi) — completato per il primo test, residuo è solo Cluster I
+3. Cluster A — decisione prodotto API + URL/chiavi (~45 min)
+4. Cluster F — decisione prodotto guardrail Zero Events (~30 min)
+5. Cluster E — analisi flusso OCR no-file (~1h)
+6. Cluster D — analisi clean() form vs save() (~1h, collegato a `f3179c1` del 28-apr)
+
+### Pattern emerso
+
+Per la quarta volta consecutiva nella sessione 2-mag, la stima triage del cluster ha sotto-rappresentato il costo reale di un fattore 1.5-2x. Pattern stabile: triage rapido stima il "fix meccanico" visibile, diagnosi a freddo trova un sotto-problema collegato. Da incorporare nelle stime delle prossime sessioni.
+
