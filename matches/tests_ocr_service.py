@@ -93,7 +93,7 @@ class OCRServiceTestCase(TestCase):
         self.report.refresh_from_db()
         self.assertEqual(self.report.status, 'EXTRACTED')
         self.assertIsNotNone(self.report.raw_extracted_data)
-        self.assertContains(response, "Processati con successo 1 referti.")
+        self.assertContains(response, "Estraiti: 1, In Review: 0, Errori: 0.")
 
     def test_review_view_flow(self):
         """Verifica che la vista di revisione aggiorni i dati e lo stato a VALIDATED"""
