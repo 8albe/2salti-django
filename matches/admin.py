@@ -7,6 +7,7 @@ from core.models import Team, League, Sport
 from .services.ocr_service import OCRService
 from .services.publishing_service import PublishingService
 from .services.schema import OCRSchemaValidator
+from .services.ocr_quality_gate import OCRQualityGate
 from .services.entity_bootstrap import EntityBootstrapService
 from django.contrib import messages
 from django.urls import reverse, path
@@ -362,8 +363,21 @@ class MatchReportAdmin(admin.ModelAdmin):
                 recon_ui[side].append({"extracted_name": n, "suggestions": suggestions(n, db_list), "current_id": c_id, "is_unresolved": not c_id, "db_athletes": [{"id": a.id, "name": a.get_full_name()} for a in db_list]})
         
         safe, blockers, p_w = OCRSchemaValidator.assess_publish_readiness(obj.normalized_data)
+        gate_ctx = {}
+        if match:
+            if home_team:
+                gate_ctx['home_team'] = home_team.society.name
+            if away_team:
+                gate_ctx['away_team'] = away_team.society.name
+            if match.location:
+                gate_ctx['location'] = match.location
+        ocr_is_valid, ocr_blockers, ocr_warnings, _ = OCRQualityGate.evaluate(
+            obj.normalized_data or {}, context=gate_ctx
+        )
+        meta = (obj.normalized_data or {}).get('metadata', {}) if isinstance(obj.normalized_data, dict) else {}
+        confidence = meta.get('confidence', 0.0) or 0.0
         context = self.admin_site.each_context(request)
-        context.update({'opts': self.model._meta, 'original': obj, 'title': f"Review: {obj}", 'potential_matches': potential_matches, 'form': form, 'is_image': obj.file.name.lower().endswith(('.png', '.jpg', '.jpeg')) if obj.file else False, 'reconciliation_data': recon_ui, 'publish_safe': safe, 'publish_blockers': blockers, 'unresolved_count': sum(1 for s in ["home", "away"] for item in recon_ui[s] if item["is_unresolved"]), 'bootstrap': EntityBootstrapService.preview_creation(obj.normalized_data, obj.match) if obj.match else None})
+        context.update({'opts': self.model._meta, 'original': obj, 'title': f"Review: {obj}", 'potential_matches': potential_matches, 'form': form, 'is_image': obj.file.name.lower().endswith(('.png', '.jpg', '.jpeg')) if obj.file else False, 'reconciliation_data': recon_ui, 'publish_safe': safe, 'publish_blockers': blockers, 'unresolved_count': sum(1 for s in ["home", "away"] for item in recon_ui[s] if item["is_unresolved"]), 'bootstrap': EntityBootstrapService.preview_creation(obj.normalized_data, obj.match) if obj.match else None, 'ocr_is_valid': ocr_is_valid, 'ocr_blockers': ocr_blockers, 'ocr_warnings': ocr_warnings, 'confidence': confidence, 'confidence_percent': round(confidence * 100), 'extraction_warnings': meta.get('extraction_warnings', [])})
         return TemplateResponse(request, 'admin/matches/matchreport/review.html', context)
 
 op_admin_site.register(Match, MatchAdmin)
