@@ -268,3 +268,27 @@ La verifica post-deploy della unit include `systemctl cat 2salti` per leggere la
 C'è una direzione di drift inversa che merita menzione esplicita perché è il caso più subdolo. Modifiche fatte direttamente in `/etc/systemd/system/2salti.service` o via `systemctl edit` (che crea o modifica drop-in in `/etc/systemd/system/2salti.service.d/`) non vengono mai propagate indietro in repo automaticamente. Se serve fare una modifica veloce in produzione e il tempo non c'è per il ciclo completo (modifica in repo, copia nel sistema, daemon-reload), va comunque ricordato di tornare in repo dopo l'emergenza e portare la modifica in `deploy/systemd/`, altrimenti il prossimo deploy "pulito" dal repo cancellerà la modifica di emergenza senza che nessuno se ne accorga. Per drift check rapido, `xxd /etc/systemd/system/2salti.service | diff - <(xxd /home/alberto/deploy/systemd/2salti.service)` confronta byte-by-byte le due copie: output vuoto significa allineate, output non vuoto rivela esattamente la divergenza.
 
 Il punto strutturale, simmetrico alla sezione 2, è che il versionamento del 25 aprile non ha eliminato la classe di problemi del drift — ha solo creato l'infrastruttura per gestirlo. Finché la sincronizzazione resta manuale, la disciplina operativa è l'unico meccanismo. Un eventuale meccanismo di allineamento automatico — file watcher su `/etc/systemd/system/2salti.service` che alerti su divergenza dalla copia in repo, o pre-commit hook che blocchi commit della unit se il sistema ha una copia diversa — vive nel backlog come side-quest aperta, accanto al meccanismo simmetrico per il drift home ↔ deploy.
+
+## 10. Debiti aperti
+
+Registro vivo di problemi noti che richiedono follow-up. Non sono trappole (§3) né bug attivi: sono incoerenze scoperte ma non risolte, da affrontare in sessioni dedicate.
+
+### 10.1 Report PUBLISHED con blocker quality gate (debito dati storico)
+
+Scoperto il 2-mag durante la verifica live del wire OCRQualityGate (commit `193436b`). Il referto `MatchReport id=8` è in stato `PUBLISHED` ma il quality gate appena cablato lo blocca: i nomi squadra estratti dall'OCR ("ME", "NAUTILUS ROMA") non corrispondono ai nomi DB ("Nautilus Nuoto Roma", "Unime pallanuoto"), e c'è un'inversione home/away fra cartaceo e DB.
+
+**Causa root:** referti pubblicati prima del wire, quando il quality gate era implementato e testato ma non chiamato dalla view admin. Pattern "feature half-shipped" — la pubblicazione è andata avanti senza il check di coerenza nomi.
+
+**Domande aperte:**
+- Quanti report `PUBLISHED` falliscono ora il quality gate? Censimento da fare.
+- I match collegati hanno standings/stats coerenti, o l'inversione home/away ha contaminato i conteggi?
+- I referti vanno re-validati manualmente, oppure depubblicati e riprocessati?
+- Il quality gate va reso *advisory* per report `PUBLISHED` (mostra ma non blocca operazioni successive)?
+
+**Cosa NON fare ora:** non depubblicare in massa, non re-runnare OCR sui PUBLISHED, non modificare gli standings derivati. Ogni intervento richiede analisi dell'impatto sul dato pubblico.
+
+**Prossimi passi candidati:**
+1. Censimento: query su `MatchReport.objects.filter(status='PUBLISHED')` con esecuzione di `OCRQualityGate.evaluate()` post-hoc per contare quanti hanno `is_valid=False`.
+2. Per i casi rilevati, verifica caso per caso se l'inversione home/away ha effetto sui conteggi standings.
+3. Decisione di prodotto: gate strict su PUBLISHED (forza re-review) oppure gate advisory (segnala ma non blocca).
+
