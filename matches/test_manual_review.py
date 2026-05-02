@@ -30,7 +30,7 @@ class ManualReviewTest(TestCase):
         )
         
         self.staff_user = User.objects.create_user(username='staff', is_staff=True, identity_status='VERIFIED', subscription_status='ACTIVE')
-        self.player_user = User.objects.create_user(username='player', role='athlete', identity_status='VERIFIED', subscription_status='ACTIVE')
+        self.player_user = User.objects.create_user(username='player', role='fan', identity_status='VERIFIED', subscription_status='ACTIVE', setup_completed=True)
 
         # Create athletes for rosters to avoid "Empty roster" errors in form
         from accounts.models import AthleteProfile
