@@ -116,6 +116,18 @@ for match in matches_to_delete:
 
 La regola di review è esplicita: per ogni campo che il logger legge dopo l'operazione che invalida l'oggetto, verificare che sia stato catturato in variabile locale prima. La verifica va fatta su tutti i campi loggati, non solo su quelli più "ovviamente fragili" — è facile dimenticare proprio `id` perché è il PK e si dà per scontato che ci sia sempre. Dopo `delete()` non c'è più. La stessa logica vale, in misura minore, per altre operazioni che invalidano lo stato dell'oggetto: `bulk_delete`, `cascade`, `clear()` su relation manager. In dubbio, cattura.
 
+### 3.5 `from X import Y` dentro una funzione = scoping locale per tutta la funzione
+
+Python è static-scoped: `from X import Y` *all'interno* di una funzione assegna `Y` come nome locale per l'**intera** funzione, non solo dalla riga del re-import in poi. Questo maschera l'import globale anche nei rami che non eseguono mai il re-import, causando `UnboundLocalError` in branch apparentemente non correlati.
+
+Sintomo classico: una vista Django con un re-import locale in un branch (es. POST handler) che rompe il branch GET con `UnboundLocalError: local variable 'X' referenced before assignment`, anche se GET non passa mai per il re-import.
+
+Diagnosi: `grep -n "^\s*from .* import .*" <file>` filtrato sul nome simbolo sospetto. Cercare *tutte* le occorrenze nel file, non fermarsi alla prima. Una funzione lunga può avere re-import nascosti in branch poco esercitati.
+
+Cosa fare: rimuovere tutti i re-import locali, lasciare solo l'import globale a inizio file. Se serve davvero shadowing locale (raro), rinominare la variabile.
+
+Caso reale: fix `ce4df80` su `report_review` — tre re-import di `MatchEvent` in branch diversi, ricognizione iniziale ne aveva trovati solo due, il terzo è emerso dall'estensione del check al resto del file.
+
 ## 4. Pulizia repo: history vs indice corrente
 
 Sono due operazioni distinte che affrontano due problemi distinti, e confonderle è un errore di categoria. È esattamente l'errore commesso il 22 aprile 2026 sulla chiusura del problema #7 e corretto il 23 aprile; la lezione merita di vivere in un posto stabile.
@@ -162,6 +174,22 @@ Il beneficio è asimmetrico rispetto al costo: cinque minuti spesi prima evitano
 Per le operazioni reset-then-restore, per le modifiche distruttive con rollback previsto, e per qualsiasi operazione in cui "mi serve il contenuto attuale anche se l'operazione va storta" è una preoccupazione legittima, fare un backup safety esterno. Il backup va in `/var/tmp/`, fuori dal percorso dell'operazione, fuori dal deploy, fuori dal repo, con naming datato e contestualizzato nello stile `/var/tmp/<file>.<context>-YYYYMMDD`. Va cestinato quando l'operazione è stabilmente verificata, tipicamente entro fine settimana, e la cestinatura va tracciata come side-quest nella nota di sessione corrente.
 
 Il punto sottile è che il backup safety resta utile anche se l'operazione va a buon fine. Nel caso del 23 aprile 2026 il backup di `gunicorn_config.py` non è stato usato per rollback d'emergenza: è stato usato esattamente come previsto dal piano, come sorgente della `cp` finale per restaurare il contenuto dirty come untracked+ignored dopo il pull. Senza quel backup la manovra reset-then-restore non sarebbe stata possibile in modo sicuro. L'abitudine di metterlo a prescindere — anche quando "probabilmente non serve" — è un'assicurazione che si paga una volta e che abilita manovre che altrimenti sarebbero rischiose o impossibili.
+
+### 6.3 Output troncato di Claude Code: chiedere il completo, non assumere
+
+Quando un messaggio inoltrato da Claude Code contiene riferimenti tipo "vedi sopra" o "come confermato prima" senza essere stato preceduto da output completo nella stessa finestra, è probabile che sia arrivata solo la coda del messaggio. Non assumere, chiedere esplicitamente il completo.
+
+Sintomo: Claude in chat riferisce a contenuto che non è in contesto. Manca un blocco a monte.
+
+Cosa fare: chiedere all'utente di reinoltrare l'output completo dell'ultimo turno di Claude Code, non interpretare a vuoto.
+
+### 6.4 Verificare la struttura del documento prima di scrivere riferimenti numerici
+
+Prima di scrivere un prompt che dice "modifica §3.2 del file X", verificare che §3.2 esista davvero nel file e che la sotto-numerazione corrisponda alle attese. Documenti che evolvono nel tempo possono avere sotto-sezioni rinumerate, accorpate o assenti.
+
+Sintomo: prompt rifiutato da Claude Code con "la struttura non corrisponde", oppure modifica applicata in punto sbagliato.
+
+Cosa fare: prima di scrivere riferimenti numerici, chiedere a Claude Code `grep -n "^#" <file>` per mappare l'indice header attuale.
 
 ## 7. Convenzioni di lavoro
 
