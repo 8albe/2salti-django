@@ -11,7 +11,7 @@ EXTENDED_EVENT_TYPES = {
     "PENALTY_MISSED",
     # Exclusions / Fouls
     "EXCLUSION_20",
-    "EXCLUSION_BRUTAL",
+    "EXCLUSION_DEF",
     "RED_CARD",
     "YELLOW_CARD",
     # Timeouts
