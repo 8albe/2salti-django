@@ -37,6 +37,8 @@ class StandingsVerificationTest(TestCase):
             match=self.m1, status='VALIDATED', 
             normalized_data=valid_data
         )
+        self.league.needs_rebuild = True
+        self.league.save(update_fields=['needs_rebuild'])
 
     def test_standings_updated_on_publish(self):
         # Initial: no persisted standings
@@ -71,7 +73,7 @@ class StandingsVerificationTest(TestCase):
         out = StringIO()
         call_command('rebuild_standings', stdout=out)
         
-        self.assertIn("Ricalcolate 1 classifiche", out.getvalue())
+        self.assertIn("Trovate 1 leghe con ricalcolo richiesto", out.getvalue())
         self.assertTrue(LeagueStanding.objects.filter(league=self.league).exists())
         s1 = LeagueStanding.objects.get(team=self.t1)
         self.assertEqual(s1.points, 3)
