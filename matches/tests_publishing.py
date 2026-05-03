@@ -6,8 +6,14 @@ from matches.services.publishing_service import PublishingService
 from matches.services.standings_service import StandingsService
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.contrib.auth import get_user_model
+from accounts.models import AthleteProfile
 
 User = get_user_model()
+
+# Numero di GOAL events per side nel normalized_data del setUp (final_score 12-8)
+HOME_GOALS = 12
+AWAY_GOALS = 8
+
 
 class PublishingServiceTestCase(TestCase):
     def setUp(self):
@@ -18,7 +24,7 @@ class PublishingServiceTestCase(TestCase):
         self.team_home = Team.objects.create(society=self.soc_home, category="SENIOR", league=self.league)
         self.team_away = Team.objects.create(society=self.soc_away, category="SENIOR", league=self.league)
         self.user = User.objects.create_superuser(username="admin", email="admin@test.com", password="password")
-        
+
         self.match = Match.objects.create(
             league=self.league,
             home_team=self.team_home,
@@ -28,7 +34,55 @@ class PublishingServiceTestCase(TestCase):
             away_score=0,
             is_finished=False
         )
-        
+
+        # Roster reconciliable: un atleta verificato per ogni GOAL event,
+        # iscritto al team corrispondente. AthleteProfile è auto-creato dal
+        # signal post_save su User; lo recuperiamo e impostiamo current_team.
+        self.home_athletes = []
+        for i in range(HOME_GOALS):
+            u = User.objects.create_user(
+                username=f'home_player_{i}',
+                first_name=f'HomePlayer{i}',
+                last_name='Test',
+                role='athlete',
+                identity_status='VERIFIED',
+                subscription_status='ACTIVE',
+                setup_completed=True,
+            )
+            profile = u.athlete_profile
+            profile.current_team = self.team_home
+            profile.save(update_fields=['current_team'])
+            self.home_athletes.append((u, profile))
+
+        self.away_athletes = []
+        for i in range(AWAY_GOALS):
+            u = User.objects.create_user(
+                username=f'away_player_{i}',
+                first_name=f'AwayPlayer{i}',
+                last_name='Test',
+                role='athlete',
+                identity_status='VERIFIED',
+                subscription_status='ACTIVE',
+                setup_completed=True,
+            )
+            profile = u.athlete_profile
+            profile.current_team = self.team_away
+            profile.save(update_fields=['current_team'])
+            self.away_athletes.append((u, profile))
+
+        # Eventi GOAL con player_name riconciliabile (un atleta dedicato per evento)
+        events = []
+        for i in range(HOME_GOALS):
+            events.append({
+                "type": "GOAL", "team": "home", "minute": i + 1,
+                "player_name": f"HomePlayer{i} Test",
+            })
+        for i in range(AWAY_GOALS):
+            events.append({
+                "type": "GOAL", "team": "away", "minute": HOME_GOALS + i + 1,
+                "player_name": f"AwayPlayer{i} Test",
+            })
+
         self.report = MatchReport.objects.create(
             match=self.match,
             uploader=self.user,
@@ -49,28 +103,19 @@ class PublishingServiceTestCase(TestCase):
                         {"number": i, "name": f"Player A{i}"} for i in range(1, 14)
                     ]}
                 },
-                "events": [
-                    {"type": "GOAL", "team": "home", "minute": 1, "player_name": None},
-                    {"type": "GOAL", "team": "home", "minute": 2, "player_name": None},
-                    {"type": "GOAL", "team": "home", "minute": 3, "player_name": None},
-                    {"type": "GOAL", "team": "home", "minute": 4, "player_name": None},
-                    {"type": "GOAL", "team": "home", "minute": 5, "player_name": None},
-                    {"type": "GOAL", "team": "home", "minute": 6, "player_name": None},
-                    {"type": "GOAL", "team": "home", "minute": 7, "player_name": None},
-                    {"type": "GOAL", "team": "home", "minute": 8, "player_name": None},
-                    {"type": "GOAL", "team": "home", "minute": 9, "player_name": None},
-                    {"type": "GOAL", "team": "home", "minute": 10, "player_name": None},
-                    {"type": "GOAL", "team": "home", "minute": 11, "player_name": None},
-                    {"type": "GOAL", "team": "home", "minute": 12, "player_name": None},
-                    {"type": "GOAL", "team": "away", "minute": 13, "player_name": None},
-                    {"type": "GOAL", "team": "away", "minute": 14, "player_name": None},
-                    {"type": "GOAL", "team": "away", "minute": 15, "player_name": None},
-                    {"type": "GOAL", "team": "away", "minute": 16, "player_name": None},
-                    {"type": "GOAL", "team": "away", "minute": 17, "player_name": None},
-                    {"type": "GOAL", "team": "away", "minute": 18, "player_name": None},
-                    {"type": "GOAL", "team": "away", "minute": 19, "player_name": None},
-                    {"type": "GOAL", "team": "away", "minute": 20, "player_name": None},
-                ]
+                "events": events,
+                "reconciliation": {
+                    "home_team_id": self.team_home.id,
+                    "away_team_id": self.team_away.id,
+                    "home_players": {
+                        f"HomePlayer{i} Test": self.home_athletes[i][0].id
+                        for i in range(HOME_GOALS)
+                    },
+                    "away_players": {
+                        f"AwayPlayer{i} Test": self.away_athletes[i][0].id
+                        for i in range(AWAY_GOALS)
+                    },
+                },
             }
         )
 
@@ -249,4 +294,73 @@ class PublishingServiceTestCase(TestCase):
             count_after_first, count_after_second,
             "Il re-publish non deve duplicare i record LeagueStanding."
         )
+
+    # ------------------------------------------------------------------
+    # GUARDRAIL Policy A — Zero eventi creati con score>0 deve abortire
+    # anche con force=True (drift su statistiche atleti).
+    # ------------------------------------------------------------------
+
+    def test_publish_aborts_with_zero_events_and_positive_score(self):
+        """
+        Policy A: anche con force=True, il publishing service deve abortire
+        se created_events_count==0 e score>0, fare rollback completo (match
+        e report invariati) e persistere un MatchReportAuditLog
+        action='abort_zero_events' in transazione separata.
+        """
+        from matches.models import MatchReportAuditLog
+
+        # Sabotare la riconciliazione: rimuovendola, gli eventi hanno
+        # player_name ma nessun player_id risolvibile → 0 eventi creati
+        # nel converter, pur avendo score 12-8 nei dati.
+        data = dict(self.report.normalized_data)
+        data.pop('reconciliation', None)
+        self.report.normalized_data = data
+        self.report.save()
+
+        # Snapshot pre-publish: deve restare invariato dopo il rollback
+        pre_status = self.report.status
+        pre_home_score = self.match.home_score
+        pre_away_score = self.match.away_score
+        pre_is_finished = self.match.is_finished
+
+        # force=True bypassa il gate schema (Riconciliazione incompleta)
+        # ma NON deve bypassare il guardrail Policy A.
+        success, msg = PublishingService.publish_report(
+            self.report, user=self.user, force=True, reason='Test guardrail Policy A'
+        )
+
+        # Esito: abort
+        self.assertFalse(success, "Il publish doveva essere abortito dal guardrail Policy A")
+        self.assertIn('0 eventi creati', msg)
+        self.assertIn('12-8', msg)
+
+        # Stato DB invariato (rollback transazionale ha funzionato)
+        self.report.refresh_from_db()
+        self.assertEqual(self.report.status, pre_status,
+                         "Il report deve restare nello stato pre-publish dopo il rollback")
+        self.match.refresh_from_db()
+        self.assertEqual(self.match.home_score, pre_home_score,
+                         "match.home_score deve essere ripristinato dal rollback")
+        self.assertEqual(self.match.away_score, pre_away_score,
+                         "match.away_score deve essere ripristinato dal rollback")
+        self.assertEqual(self.match.is_finished, pre_is_finished,
+                         "match.is_finished deve essere ripristinato dal rollback")
+
+        # Audit log persistente (transazione separata post-rollback)
+        audit_logs = MatchReportAuditLog.objects.filter(
+            report=self.report, action='abort_zero_events'
+        )
+        self.assertEqual(audit_logs.count(), 1,
+                         "Audit log abort_zero_events deve essere stato creato")
+        audit = audit_logs.first()
+        self.assertEqual(audit.user, self.user)
+        self.assertEqual(audit.old_status, pre_status)
+        self.assertEqual(audit.new_status, pre_status)
+        self.assertIsNotNone(audit.after)
+        # Il payload after cattura lo stato post-conversione (pre-rollback):
+        # score derivati dai dati (12-8) e flag force.
+        self.assertEqual(audit.after.get('force'), True)
+        self.assertEqual(audit.after.get('home_score'), 12)
+        self.assertEqual(audit.after.get('away_score'), 8)
+        self.assertEqual(audit.after.get('events_data_count'), HOME_GOALS + AWAY_GOALS)
 

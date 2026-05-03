@@ -327,9 +327,13 @@ class OCRSchemaValidator:
         except (ValueError, AttributeError):
             h_total, a_total = 0, 0
         
-        goal_events = [e for e in events if e.get("type") in SCORE_EVENT_CODES]
+        goal_events = [
+            e for e in events
+            if e.get("type") in SCORE_EVENT_CODES
+            and (e.get("player_name") or e.get("player"))
+        ]
         if (h_total > 0 or a_total > 0) and len(goal_events) == 0:
-            blockers.append("Zero Eventi: Risultato positivo rilevato ma nessun evento goal estratto. Il publish è bloccato.")
+            blockers.append("Zero Eventi: Risultato positivo rilevato ma nessun evento goal con autore identificato. Il publish è bloccato per evitare drift sulle statistiche atleti.")
 
         # 2. Entity Completeness (Warning)
         teams = data.get("teams", {})
