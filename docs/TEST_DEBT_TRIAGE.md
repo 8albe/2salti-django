@@ -224,3 +224,52 @@ Suite KO 14 → 10 dopo 4 commit della sessione. Cluster G, H, C chiusi completa
 
 Per la quarta volta consecutiva nella sessione 2-mag, la stima triage del cluster ha sotto-rappresentato il costo reale di un fattore 1.5-2x. Pattern stabile: triage rapido stima il "fix meccanico" visibile, diagnosi a freddo trova un sotto-problema collegato. Da incorporare nelle stime delle prossime sessioni.
 
+
+## Stato 2 maggio 2026 sera
+
+Suite KO 10 → 8 dopo 5 commit aggiuntivi della sessione pomeridiana (Cluster F chiuso). Cluster F nominale del triage del 28-apr completamente risolto: i 2 sintomi originali (test_full_flow_mock_extraction_to_publish, test_standings_updated_on_publish) chiusi rispettivamente in 8be9e15 e c787b11. Cluster I aperto stamattina dimostrato non più riproducibile dopo Policy A (asserzione su publish_blockers contenente "roster" ora soddisfatta dal blocker reconciliation).
+
+### Commit della sessione pomeridiana (5)
+
+- `8be9e15` test(ocr): allinea FullFlowRegressionTest al gate corrente — Cluster F #3 chiuso
+- `0ad0b16` fix(ocr): rinomina EXCLUSION_BRUTAL → EXCLUSION_DEF — Cluster F #2 chiuso
+- `c787b11` fix(publishing): chiudi Policy A strict su drift statistiche atleti — Cluster F #1 chiuso (A+C entrambi)
+- `71055b2` fix(templates): collassa tag Django spezzato in league_standings — bug visivo collateral scoperto via Antigravity
+- `9e53d00` docs(runbook): chiudi §10.1 e aggiungi §10.2 / §10.3 — igiene runbook
+
+Inoltre: revert in produzione dei 4 referti PUBLISHED con created_events_count=0 (id=7,8,10,11) eseguito via script con autorizzazione esplicita di Alberto. Tutti transitati a NEEDS_REVIEW con audit log action='revert_to_review' persistente. Match score preservati, classifiche pubbliche invariate.
+
+### KO residui (8) — tabella
+
+| # orig | Test | Sintomo | Cluster |
+|---|---|---|---|
+| 2 | tests_api.PublicAPITestCase.test_api_athlete_privacy | KeyError: 'name' | A — Public API legacy |
+| 3 | tests_api.PublicAPITestCase.test_api_league_list | NoReverseMatch: 'api_league_list' | A |
+| 4 | tests_api.PublicAPITestCase.test_api_team_detail_roster | NoReverseMatch: 'api_team_detail' | A |
+| 27 | tests_deduplication.test_duplicate_file_upload_is_blocked | True is not false | D — Dedup logica check |
+| 30 | tests_ocr_provider_toggle.test_process_and_update_handles_init_failure_safely | 'REJECTED' != NEEDS_REVIEW | E — ocr_service guardia no-file |
+| 31 | tests_ocr_provider_toggle.test_process_and_update_with_mock_runs_quality_gate | False is not true | E |
+| 41 | tests_status_semantics.test_ocr_failure_moves_to_needs_review | 'REJECTED' != NEEDS_REVIEW + typo source_type= | E |
+| 22 | tests_ocr_service.ReviewUXTestCase.test_review_view_context_reliability | publish_blockers (Cluster I, vedi nota) | I — verificare se ancora KO |
+
+Nota su Cluster I (riga 22): la chiusura del fix #1 Policy A ha cambiato il comportamento del blocker reconciliation (ora il messaggio contiene "Riconciliazione incompleta per: ..."). Il test asseriva `any("roster" in b.lower() for b in publish_blockers)` — possibile che ora passi grazie al nuovo blocker o resti KO. Da verificare con un singolo run prima della prossima sessione.
+
+### Quick wins residui ordinati per costo/beneficio
+
+1. Cluster I (verifica) — 5 minuti se passa, 30 minuti se serve modifica
+2. Cluster A (3 KO) — decisione di prodotto API + URL/chiavi (~45 min)
+3. Cluster E (3 KO) — analisi flusso OCR no-file (~1h)
+4. Cluster D (1 KO) — analisi clean() form vs save() (~1h, collegato a fix f3179c1 del 28-apr)
+
+### Pattern emerso (sessione 2-mag completa)
+
+Cinque cluster lavorati in sequenza (G+H+C+B+F): la stima triage del costo è stata sotto di un fattore 2-3x, sistematicamente. Cluster F era marcato "decisione di prodotto" da 30 min e si è rivelato un fix architetturale di 90 min con tre sotto-fix coordinati e revert dati live.
+
+Conferma del pattern già annotato il 28-apr: il triage rapido stima il "fix meccanico visibile", la diagnosi a freddo trova un sotto-problema collegato. Da incorporare nel framework di stima di tutte le sessioni future.
+
+### Debiti collegati (non test) annotati in §10 OPS_RUNBOOK
+
+- §10.1 CHIUSO: report PUBLISHED con blocker quality gate (Policy A applicata + revert dei 4 referti)
+- §10.2 APERTO: audit trail UI non visibile nella review page admin
+- §10.3 APERTO: EXTENDED_EVENT_TYPES (schema.py) non derivata da event_types.py — divergenza strutturale
+
