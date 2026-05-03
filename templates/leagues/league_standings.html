@@ -134,8 +134,7 @@
                     <td class="px-6 py-4 text-center text-red-400 hidden md:table-cell">{{ entry.lost }}</td>
                     <td class="px-6 py-4 text-center text-slate-400 text-xs hidden md:table-cell">{{ entry.goals_for }}
                     </td>
-                    <td class="px-6 py-4 text-center text-slate-400 text-xs hidden md:table-cell">{{ entry.goals_against
-                        }}</td>
+                    <td class="px-6 py-4 text-center text-slate-400 text-xs hidden md:table-cell">{{ entry.goals_against }}</td>
                     <td
                         class="px-6 py-4 text-center font-mono text-xs {% if entry.goal_diff > 0 %}text-green-500{% elif entry.goal_diff < 0 %}text-red-500{% else %}text-slate-500{% endif %} hidden md:table-cell">
                         {% if entry.goal_diff > 0 %}+{% endif %}{{ entry.goal_diff }}
