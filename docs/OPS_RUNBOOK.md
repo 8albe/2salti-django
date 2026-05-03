@@ -273,22 +273,44 @@ Il punto strutturale, simmetrico alla sezione 2, è che il versionamento del 25 
 
 Registro vivo di problemi noti che richiedono follow-up. Non sono trappole (§3) né bug attivi: sono incoerenze scoperte ma non risolte, da affrontare in sessioni dedicate.
 
-### 10.1 Report PUBLISHED con blocker quality gate (debito dati storico)
+### 10.1 Report PUBLISHED con blocker quality gate (debito dati storico) — CHIUSO 2-mag
 
-Scoperto il 2-mag durante la verifica live del wire OCRQualityGate (commit `193436b`). Il referto `MatchReport id=8` è in stato `PUBLISHED` ma il quality gate appena cablato lo blocca: i nomi squadra estratti dall'OCR ("ME", "NAUTILUS ROMA") non corrispondono ai nomi DB ("Nautilus Nuoto Roma", "Unime pallanuoto"), e c'è un'inversione home/away fra cartaceo e DB.
+Scoperto il 2-mag durante la verifica live del wire OCRQualityGate (commit `193436b`). 4 referti `MatchReport` in stato `PUBLISHED` con `created_events_count=0` e `score>0`: la conseguenza era statistiche atleti a zero (nessun `MatchEvent` salvato) mentre le classifiche erano corrette (calcolate da `match.home_score`/`away_score`, non da events).
 
-**Causa root:** referti pubblicati prima del wire, quando il quality gate era implementato e testato ma non chiamato dalla view admin. Pattern "feature half-shipped" — la pubblicazione è andata avanti senza il check di coerenza nomi.
+**Causa root:** feature `OCRQualityGate` half-shipped (gate testato e template-ready ma non cablato in admin) combinata con un drop silenzioso in `publishing_service.py` che scartava eventi senza `player_id` riconciliato. La promozione a `PUBLISHED` proseguiva anche con 0 events creati.
 
-**Domande aperte:**
-- Quanti report `PUBLISHED` falliscono ora il quality gate? Censimento da fare.
-- I match collegati hanno standings/stats coerenti, o l'inversione home/away ha contaminato i conteggi?
-- I referti vanno re-validati manualmente, oppure depubblicati e riprocessati?
-- Il quality gate va reso *advisory* per report `PUBLISHED` (mostra ma non blocca operazioni successive)?
+**Censimento (commit `c787b11` di analisi):** 4 referti `PUBLISHED` su 4 totali con normalized_data popolato. Pattern dei blocker: 2 con mismatch nomi squadra (id=8, id=7 parzialmente), 2 con incoerenza eventi/score (id=7, id=8).
 
-**Cosa NON fare ora:** non depubblicare in massa, non re-runnare OCR sui PUBLISHED, non modificare gli standings derivati. Ogni intervento richiede analisi dell'impatto sul dato pubblico.
+**Risoluzione (commit `c787b11`):** Policy A strict implementata su due livelli.
 
-**Prossimi passi candidati:**
-1. Censimento: query su `MatchReport.objects.filter(status='PUBLISHED')` con esecuzione di `OCRQualityGate.evaluate()` post-hoc per contare quanti hanno `is_valid=False`.
-2. Per i casi rilevati, verifica caso per caso se l'inversione home/away ha effetto sui conteggi standings.
-3. Decisione di prodotto: gate strict su PUBLISHED (forza re-review) oppure gate advisory (segnala ma non blocca).
+- **Livello schema (`schema.py`):** il blocker "Zero Eventi" ora conta solo events con `player_name` o `player` valorizzato. Un GOAL anonimo non passa più il gate.
+- **Livello service (`publishing_service.py`):** nuovo guardrail post-loop con `transaction.set_rollback(True)` se `created_events_count == 0` e score>0, anche con `force=True`. Audit log persistente (`action='abort_zero_events'`) in transazione separata fuori-atomic.
 
+**Revert dei 4 PUBLISHED esistenti (script eseguito da Alberto su deploy il 2-mag):** transizione `PUBLISHED → NEEDS_REVIEW` per id=7,8,10,11. `MatchEvent` cancellati (erano già 0 di fatto). `Match.home_score`/`away_score` preservati. Audit log `action='revert_to_review'` con riferimento a §10.1 e commit `c787b11`. Verifica live Antigravity confermata: 4 referti riappaiono in NEEDS_REVIEW nella queue, classifiche pubbliche invariate.
+
+**Debito residuo:** la classifica calcolata da `match.score` resta coerente con il revert, ma se in futuro decidiamo "match revertato a NEEDS_REVIEW perde anche il punteggio dalla classifica", richiede modifica al `standings_service` (rebuild deve filtrare match con report attivi non `PUBLISHED`). Decisione di prodotto rinviata.
+
+### 10.2 Audit trail UI non visibile nella review page admin
+
+Scoperto il 2-mag durante verifica live Antigravity post-revert §10.1.
+
+**Sintomo:** la review page admin (`/admin/matches/matchreport/<id>/review/`) non mostra la sezione `MatchReportAuditLog` esistente nel DB. Per i 4 referti revertati, la query SQL conferma la presenza dell'entry `action='revert_to_review'` con `count=1` ciascuno, ma la review page non la rende visibile al reviewer.
+
+**Impatto:** zero impatto funzionale, audit log persistito correttamente. Impatto operativo: il reviewer non ha visibilità sulla cronologia del referto direttamente dalla review page e deve interrogare `MatchReportAuditLog` via shell o admin Django dedicato.
+
+**Prossimi passi:** verificare se esiste un blocco template per audit trail (probabile `{% for log in report.auditlog_set.all %}` mai aggiunto), oppure se è una feature mai implementata. Da decidere se aggiungere un widget "Cronologia" nella review page.
+
+### 10.3 EXTENDED_EVENT_TYPES non allineato a event_types.py
+
+Scoperto il 2-mag durante diagnosi fix #2 Cluster F (commit `0ad0b16`).
+
+**Sintomo:** `matches/services/schema.py` definisce `EXTENDED_EVENT_TYPES` come whitelist parallela usata dal validator OCR. Il set non è derivato da `event_types.py` (autorità centrale) e differisce per:
+
+- Include: `PENALTY_MISSED`, `OTHER`, `EXCLUSION_BRUTAL` (rimosso in `0ad0b16`).
+- Manca: `EXCLUSION_DEF`, `SAVE`.
+
+**Impatto pre-fix `0ad0b16`:** un evento OCR con `type='EXCLUSION_BRUTAL'` passava il validator schema ma `event_types.py`, `stats_services`, e `views.py` filtravano solo `EXCLUSION_DEF` → l'espulsione non veniva conteggiata in stats e match detail. Risolto rinominando `EXCLUSION_BRUTAL → EXCLUSION_DEF` in schema + prompt OCR (3 stringhe).
+
+**Debito residuo:** la divergenza strutturale resta — `EXTENDED_EVENT_TYPES` non è ancora derivato da `event_types.py`. Un futuro evento aggiunto in un solo file ricreerà lo stesso pattern. Da consolidare in source-of-truth unica: `EXTENDED_EVENT_TYPES = {e['code'] for e in DEFAULT_EVENT_TYPES}` (o equivalente), in `schema.py` con import da `event_types.py`.
+
+**Prossimi passi:** sessione dedicata di consolidamento. Includere anche allineamento prompt OCR (`vision_providers.py` riga 217 e `ocr_providers/openai.py` riga 155) che oggi enumera codici hardcoded, dovrebbero essere generati programmaticamente dalla source-of-truth.
