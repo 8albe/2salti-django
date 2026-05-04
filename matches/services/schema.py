@@ -294,12 +294,14 @@ class OCRSchemaValidator:
         if not match_info.get("home_team") and not match_info.get("away_team"):
             blockers.append("Nomi squadre mancanti.")
 
-        # --- WARNINGS ---
-        
+        # --- BLOCKERS ---
+
         # Rosters empty
         teams = data.get("teams", {})
         if not teams.get("home", {}).get("players", []) and not teams.get("away", {}).get("players", []):
-            warnings.append("Entrambi i roster sono vuoti.")
+            blockers.append("Entrambi i roster sono vuoti.")
+
+        # --- WARNINGS ---
 
         # Low (but not critically low) confidence
         if isinstance(confidence, (int, float)) and 0.3 <= confidence < 0.6:
@@ -369,11 +371,6 @@ class OCRSchemaValidator:
             blockers.append(f"Riconciliazione incompleta per: {', '.join(unique_unreconciled)}. Il publish è bloccato per evitare drift nelle statistiche.")
 
         # --- WARNINGS ---
-        
-        # Rosters empty
-        teams = data.get("teams", {})
-        if not teams.get("home", {}).get("players", []) and not teams.get("away", {}).get("players", []):
-            warnings.append("Entrambi i roster sono vuoti.")
 
         # Low (but not critically low) confidence
         if isinstance(confidence, (int, float)) and 0.3 <= confidence < 0.6:
