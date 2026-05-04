@@ -105,6 +105,7 @@ staticfiles/
 debug_*.py
 # Session notes (tenute fuori dal repo in /home/alberto/_session_notes/)
 _session_notes/
+SESSION_NOTE_*.md
 
 # Scratch scripts in root home (aggiunti 2026-04-23, chiusura #7-bis)
 /verify_*.py
