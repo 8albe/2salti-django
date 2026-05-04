@@ -8,8 +8,10 @@ if __name__ == "__main__":
     django.setup()
 
 from django.test import TestCase
+from django.core.files.uploadedfile import SimpleUploadedFile
 from matches.models import MatchReport, Match
 from matches.services.ocr_service import OCRService
+from matches.services.vision_providers import BaseVisionProvider
 from core.models import Sport, League, Society, Team
 from django.utils import timezone
 
@@ -28,7 +30,12 @@ class StatusSemanticsTestCase(TestCase):
         self.report = MatchReport.objects.create(
             match=self.match,
             status=MatchReport.Status.UPLOADED,
-            source_type='MANUAL'
+            source_type='MANUAL',
+            file=SimpleUploadedFile(
+                name='test_referto.pdf',
+                content=b'%PDF-1.4 dummy content',
+                content_type='application/pdf',
+            ),
         )
 
     def test_ocr_failure_moves_to_needs_review(self):
@@ -37,7 +44,7 @@ class StatusSemanticsTestCase(TestCase):
         not REJECTED.
         """
         with patch('matches.services.ocr_service.OCRService.get_provider') as mock_get:
-            provider = MagicMock()
+            provider = MagicMock(spec=BaseVisionProvider)
             provider.extract_data.side_effect = Exception("OpenAI API Timeout")
             mock_get.return_value = provider
             

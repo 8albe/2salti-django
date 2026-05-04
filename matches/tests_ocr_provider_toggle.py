@@ -1,4 +1,5 @@
 from django.test import TestCase, override_settings
+from django.core.files.uploadedfile import SimpleUploadedFile
 from matches.services.ocr_service import OCRService
 from matches.services.vision_providers import MockVisionProvider, GPT4oVisionProvider
 from matches.models import Match, MatchReport
@@ -19,6 +20,11 @@ class OCRProviderToggleTest(TestCase):
         self.report = MatchReport.objects.create(
             match=self.match,
             status=MatchReport.Status.UPLOADED,
+            file=SimpleUploadedFile(
+                name='test_referto.pdf',
+                content=b'%PDF-1.4 dummy content',
+                content_type='application/pdf',
+            ),
         )
         OCRService._provider = None
 
