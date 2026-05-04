@@ -43,20 +43,22 @@ class MatchReportDeduplicationTest(TestCase):
     def test_duplicate_file_upload_is_blocked(self):
         """Caricare lo stesso file due volte deve fallire la validazione del form."""
         file_content = b"content of same file"
-        
-        # Primo caricamento
-        MatchReport.objects.create(
-            match=self.match,
-            uploader=self.user,
-            file=SimpleUploadedFile("first.pdf", file_content, content_type="application/pdf")
-        )
-        
-        # Secondo caricamento (stesso contenuto)
-        uploaded_file = SimpleUploadedFile("duplicate.pdf", file_content, content_type="application/pdf")
-        form = MatchReportUploadForm(data={}, files={'file': uploaded_file})
-        
-        self.assertFalse(form.is_valid())
-        self.assertIn("già stato caricato", form.errors['file'][0])
+
+        # Primo caricamento via form (calcola e salva file_hash)
+        first_upload = SimpleUploadedFile("first.pdf", file_content, content_type="application/pdf")
+        first_form = MatchReportUploadForm(data={}, files={'file': first_upload})
+        self.assertTrue(first_form.is_valid())
+        first_report = first_form.save(commit=False)
+        first_report.match = self.match
+        first_report.uploader = self.user
+        first_report.save()
+
+        # Secondo caricamento (stesso contenuto) — deve fallire validazione
+        second_upload = SimpleUploadedFile("duplicate.pdf", file_content, content_type="application/pdf")
+        second_form = MatchReportUploadForm(data={}, files={'file': second_upload})
+
+        self.assertFalse(second_form.is_valid())
+        self.assertIn("già stato caricato", second_form.errors['file'][0])
 
     def test_different_files_allowed(self):
         """File diversi devono essere caricati senza problemi."""
