@@ -1,3 +1,4 @@
+import json
 import logging
 import time
 from typing import Dict, Any
@@ -328,8 +329,7 @@ class OCRService:
             
             # Valutazione Qualità OCR Gate (Header Trust Hardening)
             from .ocr_quality_gate import OCRQualityGate
-            import json
-            
+
             context = {}
             if match_report.match:
                 context = {
