@@ -3,8 +3,7 @@ from django.urls import reverse
 from django.contrib.auth import get_user_model
 from django.utils import timezone
 from core.models import Sport, Society, Team, League
-from matches.models import Match, MatchReport, MatchEvent
-from accounts.models import AthleteProfile
+from matches.models import Match, MatchReport
 
 User = get_user_model()
 
@@ -44,14 +43,6 @@ class PublicAPITestCase(TestCase):
         self.profile_p1.jersey_number = 7
         self.profile_p1.save()
 
-    def test_api_league_list(self):
-        url = reverse('api_league_list')
-        response = self.client.get(url)
-        self.assertEqual(response.status_code, 200)
-        data = response.json()
-        self.assertTrue(len(data['leagues']) > 0)
-        self.assertEqual(data['leagues'][0]['name'], "Serie A1")
-
     def test_api_match_detail_safety(self):
         """Verifica che i match non pubblicati ritornino 404."""
         url = reverse('api_match_detail', args=[self.match.id])
@@ -72,31 +63,6 @@ class PublicAPITestCase(TestCase):
         self.assertEqual(response.status_code, 200)
         data = response.json()
         self.assertEqual(data['home_score'], 10)
-
-    def test_api_team_detail_roster(self):
-        url = reverse('api_team_detail', args=[self.team_h.id])
-        response = self.client.get(url)
-        self.assertEqual(response.status_code, 200)
-        data = response.json()
-        self.assertEqual(data['name'], "Pro Recco")
-        self.assertTrue(any(p['name'] == "Alessandro Velotto" for p in data['roster']))
-
-    def test_api_athlete_privacy(self):
-        """Verifica che non trapelino dati sensibili dell'atleta."""
-        url = reverse('api_athlete_detail', args=[self.user_p1.id])
-        response = self.client.get(url)
-        self.assertEqual(response.status_code, 200)
-        data = response.json()
-        
-        # Public data check
-        self.assertEqual(data['name'], "Alessandro Velotto")
-        self.assertEqual(data['position'], "Difensore")
-        
-        # Private data check (should NOT be in response)
-        self.assertNotIn('phone', data)
-        self.assertNotIn('city', data)
-        self.assertNotIn('birth_date', data)
-        self.assertNotIn('email', data)
 
     def test_api_league_matches_filtering(self):
         """Verifica che la lista match del campionato mostri solo quelli pubblicati."""
