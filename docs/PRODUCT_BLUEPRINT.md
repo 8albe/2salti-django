@@ -365,10 +365,16 @@ L'admin dashboard è il vero cockpit del progetto. Se qui il flusso è confuso, 
 
 ### Stati di lavorazione del workflow
 
-- UPLOADED → EXTRACTED → NEEDS_REVIEW → VERIFIED → PUBLISHED
-- Stato parallelo di rifiuto: REJECTED (con motivazione obbligatoria)
+Lo stato di partenza dipende dal `source_channel` del referto. I referti cartacei (FILE) entrano come UPLOADED e attraversano OCR; i referti digitali nativi (DIGITAL) partono da DRAFT senza OCR. I due flussi confluiscono su VALIDATED → PUBLISHED.
+
+- **Flusso cartaceo (FILE):** UPLOADED → PROCESSING → EXTRACTED → VALIDATED → PUBLISHED
+- **Flusso digitale (DIGITAL):** DRAFT → VALIDATED → PUBLISHED
+- **Branch di revisione:** PROCESSING → NEEDS_REVIEW (quality gate bloccante o errore OCR); il reviewer può promuovere NEEDS_REVIEW → VALIDATED o ri-qualificarlo a EXTRACTED, oppure ri-processarlo riportandolo a PROCESSING
+- **Stato parallelo di rifiuto:** REJECTED (con motivazione obbligatoria); ri-processabile con ritorno a PROCESSING
 - Ogni transizione lascia audit log con utente, timestamp, diff dati e motivo
 - Il gate di pubblicazione (standings, profili) è legato allo stato PUBLISHED
+
+> Per la fonte di verità completa con transizioni e side effects vedi [docs/STATE_MACHINES.md](../docs/STATE_MACHINES.md) §1.
 
 ### Principi UX dell'admin cockpit
 

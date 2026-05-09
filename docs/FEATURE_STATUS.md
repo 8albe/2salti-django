@@ -127,6 +127,9 @@ In caso di contraddizione: vince il documento più specifico. STATE_MACHINES vin
 ### State machine correlata
 - Nessuna
 
+### Known data states
+- **Falsi positivi strutturali del monitor di integrità.** `DataIntegrityService.check_league_standings(league)` confronta la classifica persistita con quella attesa, dove "attesa" è calcolata da `_calculate_expected_standings(league)` che produce un placeholder a zero per ogni squadra in `league.teams.all()`, **indipendentemente dai match giocati**. Conseguenza: una lega con N squadre iscritte e zero `MatchReport` in stato `PUBLISHED` produce sempre N segnalazioni `MISSING_RECORD` finché non viene eseguito un rebuild che popoli i placeholder. Non è un bug — è il comportamento atteso del check, ma genera mail dal monitor che sembrano allarmi e non lo sono. Prima di trattare un alert come problema, verificare quanti match `PUBLISHED` ha la lega segnalata: se sono zero, l'alert è strutturale.
+
 ### Gap rispetto al blueprint
 - Nessun gap identificato rispetto al blueprint.
 

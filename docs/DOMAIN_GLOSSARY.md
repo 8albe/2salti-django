@@ -20,7 +20,7 @@ Questo documento è il ponte tra il linguaggio di prodotto usato nel blueprint (
 
 | Termine blueprint | Modello Django | App | File | Status | Note |
 |---|---|---|---|---|---|
-| Partita / Match | `Match` | matches | matches/models.py | ✅ | Contiene score, quarter_scores, referees, has_report, is_finished |
+| Partita / Match | `Match` | matches | matches/models.py | ✅ | Contiene score, quarter_scores, referees, has_report, is_finished, is_public (vedi note tecniche sotto) |
 | Squadra / Team | `Team` | core | core/models.py | ✅ | FK verso Society e League; nome auto-generato da Society + category |
 | Società | `Society` | core | core/models.py | ✅ | Creata dal Presidente nel wizard onboarding |
 | Sport | `Sport` | core | core/models.py | ✅ | Multi-sport: pallanuoto e altri; contiene point_system e period_label |
@@ -35,6 +35,11 @@ Questo documento è il ponte tra il linguaggio di prodotto usato nel blueprint (
 | Stagione | `League.season` (CharField) | core | core/models.py | 🟡 | La stagione è un CharField su League (es. "2024-2025"), non un modello autonomo; blueprint §10 suggerisce "Seasons" come entità separata |
 | Impianto / Venue | `Match.location` (CharField) | matches | matches/models.py | 🟡 | Blueprint §10 menziona "Venues" come entità; nel codice è solo stringa sul match |
 | Validation_Logs | `MatchReportAuditLog` | matches | matches/models.py | ✅ | Blueprint §10 li chiama "Validation_Logs"; il codice usa `MatchReportAuditLog` |
+
+### Note tecniche su `Match`
+
+- **`Match.is_public` è una `@property` calcolata, non un campo DB.** Si appoggia su `reports.filter(status='PUBLISHED').exists()` — è True solo se il match ha almeno un `MatchReport` in stato `PUBLISHED`. Conseguenza pratica: **non è filtrabile via ORM QuerySet**. Una chiamata tipo `Match.objects.filter(is_public=True)` solleva `FieldError`. Per ottenere lo stesso risultato lato DB usare `Match.objects.filter(reports__status='PUBLISHED').distinct()`.
+- **`Match.has_report` è un flag one-way.** Viene settato a `True` quando un `MatchReport` viene associato al match (quattro punti di scrittura noti: `matches/views.py:132`, `:505`, `:561`, `admin.py:221`), ma **non viene mai riabbassato a `False`** se il report viene successivamente eliminato o de-pubblicato. Significa che `has_report=True` indica "in passato è stato associato un report", non "esiste un report attivo adesso". Per il check "ha un report attivo" usare le relazioni dirette su `reports`.
 
 ---
 

@@ -65,6 +65,7 @@ Generato leggendo:
 
 - **OCR precondition:** `source_channel == 'FILE'` richiede che `report.file` esista; altrimenti → `REJECTED` immediatamente.
 - **Publish readiness check:** `OCRSchemaValidator.assess_publish_readiness(data)` valuta blockers e warnings. Se `safe=False` e `force=False` la pubblicazione viene bloccata con messaggio esplicito.
+- **Reconciliazione incompleta (blocker):** dentro `assess_publish_readiness` ([matches/services/schema.py](../matches/services/schema.py) righe 356–371), per ogni evento con `player_name` o `player` valorizzato, il nome viene cercato nella mappa `reconciliation.home_players` ∪ `reconciliation.away_players`. Se anche un solo nome non risulta riconciliato, il blocker `Riconciliazione incompleta per: <nomi>` viene aggiunto e la publish è bloccata. Razionale: pubblicare con eventi che fanno riferimento a giocatori non riconciliati produrrebbe drift nelle statistiche atleti, perché l'aggregatore `update_stats` non saprebbe a quale `AthleteProfile` attribuire il gol/cartellino. Distinto dal warning "Incompletezza" delle righe 351–354 che si attiva quando >50% dei roster non è riconciliato e non blocca.
 - **Force override:** `publish_report(force=True)` bypassa i blockers ma li loga come `PUBBLICAZIONE FORZATA` e li registra nell'`AuditLog.details.overridden_blockers`.
 - **Concurrent publish guard:** `select_for_update()` sul report dentro la transazione; doppio check dello stato dopo lock per prevenire race conditions.
 - **Status precondition per publish:** solo `VALIDATED` o `PUBLISHED` (re-publish) sono accettati; qualsiasi altro stato ritorna `(False, messaggio)`.
@@ -351,12 +352,13 @@ In ordine di priorità:
    Aggiungere `NEEDS_REVIEW` e `REJECTED` al grafo degli stati. Correggere i nomi dei campi: `source_channel` (non `source`), `source_type` (non `origin`). Rendere esplicito che il flusso non è lineare (es. `NEEDS_REVIEW → PROCESSING` per riprocessamento).~~
    **CHIUSO il 24-apr-2026** — Risolto indirettamente: la sezione dedicata in `CLAUDE.md` è stata sostituita da un puntatore a questo documento (vedi §"State machines" in `CLAUDE.md`, con istruzione esplicita "Non duplicare qui"). La divergenza è eliminata alla radice: non c'è più nulla da allineare.
 
-2. **[ALTA] Aggiornare `docs/PRODUCT_BLUEPRINT.md` §8 — rinominare `VERIFIED` → `VALIDATED`:**
-   Il blueprint usa `VERIFIED` per lo stato di approvazione admin; il codice usa `VALIDATED`. Divergenza di nomenclatura che può causare confusione durante sviluppo e code review.
-   *Nota (verifica 24-apr-2026):* il Blueprint è stato aggiornato di recente a v3.3 (ripristino capitoli 7.4-7.6 e 8-14). Verifica fatta su [`PRODUCT_BLUEPRINT.md`](PRODUCT_BLUEPRINT.md) §8: la revisione v3.3 **non** ha risolto la divergenza — la riga `UPLOADED → EXTRACTED → NEEDS_REVIEW → VERIFIED → PUBLISHED` usa ancora `VERIFIED`. L'azione resta aperta.
+2. ~~**[ALTA] Aggiornare `docs/PRODUCT_BLUEPRINT.md` §8 — rinominare `VERIFIED` → `VALIDATED`:**
+   Il blueprint usa `VERIFIED` per lo stato di approvazione admin; il codice usa `VALIDATED`. Divergenza di nomenclatura che può causare confusione durante sviluppo e code review.~~
+   **CHIUSO il 09-mag-2026** — Blueprint §8 corretto: la riga del workflow ora usa `VALIDATED` al posto di `VERIFIED`. Verificato con `grep -n "VERIFIED"` su `PRODUCT_BLUEPRINT.md`: zero occorrenze residue.
 
-3. **[MEDIA] Aggiornare `docs/PRODUCT_BLUEPRINT.md` §8 — aggiungere `PROCESSING` e `DRAFT`:**
-   Il flusso nel blueprint parte da `UPLOADED` direttamente a `EXTRACTED`, saltando `PROCESSING`. E ignora `DRAFT` (usato per referti digitali). Il blueprint è incompleto rispetto all'implementazione reale.
+3. ~~**[MEDIA] Aggiornare `docs/PRODUCT_BLUEPRINT.md` §8 — aggiungere `PROCESSING` e `DRAFT`:**
+   Il flusso nel blueprint parte da `UPLOADED` direttamente a `EXTRACTED`, saltando `PROCESSING`. E ignora `DRAFT` (usato per referti digitali). Il blueprint è incompleto rispetto all'implementazione reale.~~
+   **CHIUSO il 09-mag-2026** — Blueprint §8 ora distingue il flusso cartaceo (UPLOADED → PROCESSING → EXTRACTED → VALIDATED → PUBLISHED) dal flusso digitale (DRAFT → VALIDATED → PUBLISHED), include i branch NEEDS_REVIEW/REJECTED con possibilità di ritorno a PROCESSING, e rimanda esplicitamente a STATE_MACHINES.md §1 come fonte di verità.
 
 4. ~~**[MEDIA] Aggiornare `CLAUDE.md` — chiarire la natura della property `onboarding_state`:**
    La sezione "Onboarding State Machine" implica l'esistenza di un campo `status` sull'utente. In realtà è una property calcolata. Aggiungere una nota che spiega i tre campi reali sottostanti e la logica di composizione.~~
