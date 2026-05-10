@@ -373,3 +373,25 @@ Scoperto il 2-mag durante diagnosi fix #2 Cluster F (commit `0ad0b16`).
 **Debito residuo:** la divergenza strutturale resta — `EXTENDED_EVENT_TYPES` non è ancora derivato da `event_types.py`. Un futuro evento aggiunto in un solo file ricreerà lo stesso pattern. Da consolidare in source-of-truth unica: `EXTENDED_EVENT_TYPES = {e['code'] for e in DEFAULT_EVENT_TYPES}` (o equivalente), in `schema.py` con import da `event_types.py`.
 
 **Prossimi passi:** sessione dedicata di consolidamento. Includere anche allineamento prompt OCR (`vision_providers.py` riga 217 e `ocr_providers/openai.py` riga 155) che oggi enumera codici hardcoded, dovrebbero essere generati programmaticamente dalla source-of-truth.
+
+## 11. Sicurezza operativa e frontiera reversibile
+
+Questa sezione codifica le regole di sicurezza operativa emerse dalle sessioni di aprile-maggio 2026, e in particolare consolidate dopo l'incidente del 4 maggio 2026 in cui una password sudo in chiaro è stata trovata nella history pubblica del repo (`install_service.sh`, commit `473c296` del 15 marzo 2026). La regola madre è che le operazioni con effetti permanenti, distruttivi o privilegiati passano per Alberto e mai per l'agente, e che i segreti non transitano mai in contesti condivisi.
+
+### 11.1 Rotazione segreti
+
+Le rotazioni di segreto — chiavi API in `.env`, password sudo, credenziali SMTP, app password Google, qualunque cosa abbia valore di credenziale viva — vanno fatte da Alberto direttamente sul VPS via `nano` (o editor equivalente che non transita su pipe). Mai via prompt dell'agente, mai via incolla in chat, mai via heredoc passato a un tool. La ragione tecnica è che ogni transito in un contesto condiviso (chat, log dell'agente, terminale dell'agente) crea una copia residua del valore, e quella copia sopravvive in punti che non vengono ruotati insieme alla credenziale reale.
+
+Il protocollo standard è: backup del file `.env` in `/var/tmp/.env.backup.pre-<rotation>-YYYYMMDD`, edit con `nano` da terminale di Alberto con il nuovo valore incollato direttamente, verifica che il valore sia cambiato senza stamparlo (confronto SHA256 della riga rispetto al backup, oppure lunghezza), restart del service per far rileggere la nuova variabile d'ambiente. Il valore vecchio va revocato lato provider (OpenAI, Google, ecc.) **prima** della rotazione, non dopo, in modo che non ci sia finestra in cui due credenziali siano entrambe attive.
+
+### 11.2 Frontiera reversibile / irreversibile
+
+Tutti i comandi `sudo` sono eseguiti da Alberto, mai dall'agente. Tutte le operazioni irreversibili — `rm -rf` su directory non triviali, `git reset --hard`, `git push --force`, `systemctl restart/reload` su service di produzione, edit di unit systemd, scritture sul DB di produzione, edit di crontab, `git filter-repo` — sono eseguite da Alberto, mai dall'agente. L'agente propone, mostra il comando esatto, mostra il diff o la preview dell'effetto, e si ferma esplicitamente prima dell'esecuzione, aspettando conferma scritta da Alberto.
+
+La frontiera è asimmetrica per disegno: l'agente può fare tutto ciò che è reversibile in un comando (modifica file in repo, commit locale, dry-run di management command, lettura, grep, query SELECT su DB *non*-produzione) senza chiedere conferma; deve fermarsi a ogni operazione che attraversa la soglia. La definizione di "irreversibile" è generosa: include anche operazioni tecnicamente reversibili ma con visibilità esterna immediata (es. `nginx reload` su produzione — reversibile ma il sito vive il cambio in chiaro). Nel dubbio, fermarsi.
+
+### 11.3 DB produzione: autorizzazione esplicita anche per query read-only
+
+Anche una query `SELECT` via Django shell o psql sul DB di produzione richiede autorizzazione esplicita di Alberto prima dell'esecuzione. Le query read-only sembrano innocue ma hanno tre rischi non ovvi: (a) carico — uno scan full-table sbagliato può degradare il servizio sotto pilot, (b) leak — il risultato della query finisce nei log dell'agente, e se contiene dati personali o sensibili crea un'eco fuori dal DB, (c) errore di context — è facile pensare di essere su DB di dev mentre si è su prod, e il primo segnale di sbaglio è il risultato della query stessa, ormai troppo tardi se conteneva una `UPDATE` mascherata.
+
+La regola in pratica: prima di lanciare una qualunque interazione col DB di prod, l'agente prepara la query, la mostra integrale, e chiede conferma. Alberto la rilegge e dà ok, oppure la lancia lui da shell. Per diagnostica frequente che richiede conferma ripetuta, valutare di scriversi script idempotenti read-only in repo (es. `scripts/diag_<area>.py`) con autorizzazione una volta sola allo script, non a ogni esecuzione.
