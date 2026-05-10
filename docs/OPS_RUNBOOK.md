@@ -359,7 +359,7 @@ Scoperto il 2-mag durante verifica live Antigravity post-revert §10.1.
 
 **Risolto (commit `a9ca246`):** aggiunta query `report_audit_logs` nel context della review admin (`matches/admin.py` `review_view()`) + scritture audit per `review_opened` (con dedup 5 min per evitare rumore su redirect post-azione), `save_draft`, `validate`. `publish_now`/`publish_force` restano delegati a `PublishingService` che già scrive il proprio log (`action='publish'`/`'republish'`). Il blocco template `{% if report_audit_logs %}` era già presente in `templates/admin/matches/matchreport/review.html` dal 2-mag con CSS dedicato per i badge per action: mancava solo il collegamento context↔template — classico pattern "1, 2, 4 senza 3" (§3.11).
 
-### 10.3 EXTENDED_EVENT_TYPES non allineato a event_types.py
+### 10.3 EXTENDED_EVENT_TYPES non allineato a event_types.py — CHIUSO 10-mag
 
 Scoperto il 2-mag durante diagnosi fix #2 Cluster F (commit `0ad0b16`).
 
@@ -370,9 +370,7 @@ Scoperto il 2-mag durante diagnosi fix #2 Cluster F (commit `0ad0b16`).
 
 **Impatto pre-fix `0ad0b16`:** un evento OCR con `type='EXCLUSION_BRUTAL'` passava il validator schema ma `event_types.py`, `stats_services`, e `views.py` filtravano solo `EXCLUSION_DEF` → l'espulsione non veniva conteggiata in stats e match detail. Risolto rinominando `EXCLUSION_BRUTAL → EXCLUSION_DEF` in schema + prompt OCR (3 stringhe).
 
-**Debito residuo:** la divergenza strutturale resta — `EXTENDED_EVENT_TYPES` non è ancora derivato da `event_types.py`. Un futuro evento aggiunto in un solo file ricreerà lo stesso pattern. Da consolidare in source-of-truth unica: `EXTENDED_EVENT_TYPES = {e['code'] for e in DEFAULT_EVENT_TYPES}` (o equivalente), in `schema.py` con import da `event_types.py`.
-
-**Prossimi passi:** sessione dedicata di consolidamento. Includere anche allineamento prompt OCR (`vision_providers.py` riga 217 e `ocr_providers/openai.py` riga 155) che oggi enumera codici hardcoded, dovrebbero essere generati programmaticamente dalla source-of-truth.
+**Risolto (commit `b97e9e5` del 10-mag):** event types ridotti a 5 canonici (GOAL, EXCLUSION_20, YELLOW_CARD, RED_CARD, TIMEOUT), eliminato EXTENDED_EVENT_TYPES (codice morto, definito in `schema.py` ma mai referenziato), allineati prompt OCR in `vision_providers.py` e `ocr_providers/openai.py` al nuovo set + OTHER catch-all. Adattati i consumer (`accounts.models.update_stats`, `matches.views`, `matches.stats_services`, `seed_match`, `verify_consistency`) e i relativi test. Verifica: `manage.py check` clean, `manage.py test matches` 172 passati / 2 skipped.
 
 ## 11. Sicurezza operativa e frontiera reversibile
 
