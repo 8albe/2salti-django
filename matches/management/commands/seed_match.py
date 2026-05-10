@@ -54,10 +54,9 @@ class Command(BaseCommand):
         MatchEvent.objects.create(match=match, event_type='GOAL', player=p1, team=t1, minute=5, quarter=1, is_superiority=True)
         
         # Events Q2
-        MatchEvent.objects.create(match=match, event_type='PENALTY_GOAL', player=p2, team=t2, minute=3, quarter=2, is_penalty=True)
-        MatchEvent.objects.create(match=match, event_type='SAVE', player=p3, team=t2, minute=6, quarter=2)
-        
+        MatchEvent.objects.create(match=match, event_type='GOAL', player=p2, team=t2, minute=3, quarter=2, is_penalty=True)
+
         # Events Q3
-        MatchEvent.objects.create(match=match, event_type='EXCLUSION_DEF', player=p1, team=t1, minute=1, quarter=3)
+        MatchEvent.objects.create(match=match, event_type='EXCLUSION_20', player=p1, team=t1, minute=1, quarter=3)
         
         self.stdout.write(self.style.SUCCESS(f'Successfully seeded match: {match.id}'))

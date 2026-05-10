@@ -3,23 +3,6 @@ from typing import Dict, Any, Tuple, List
 # -- Schema version --
 SCHEMA_VERSION = "2.0"
 
-# -- Extended event types supported in v2 --
-EXTENDED_EVENT_TYPES = {
-    # Scoring
-    "GOAL",
-    "PENALTY_GOAL",
-    "PENALTY_MISSED",
-    # Exclusions / Fouls
-    "EXCLUSION_20",
-    "EXCLUSION_DEF",
-    "RED_CARD",
-    "YELLOW_CARD",
-    # Timeouts
-    "TIMEOUT",
-    # Generic fallback
-    "OTHER",
-}
-
 class OCRSchemaValidator:
     """
     Validatore nativo e strutturato per il payload OCR (normalized_data).

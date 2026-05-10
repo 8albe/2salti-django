@@ -872,13 +872,6 @@ class SchemaV2ExtensionTestCase(TestCase):
         ok, msg = OCRSchemaValidator.validate(data)
         self.assertTrue(ok)
 
-    def test_penalty_missed_event_accepted(self):
-        """Tipo evento PENALTY_MISSED è accettato."""
-        data = self._make_v1_payload()
-        data["events"].append({"type": "PENALTY_MISSED", "player_name": "Player 5", "team": "home", "minute": 30, "quarter": 3})
-        ok, msg = OCRSchemaValidator.validate(data)
-        self.assertTrue(ok)
-
     def test_sanction_duration_field_accepted(self):
         """Campo sanction_duration negli eventi non rompe la validazione."""
         data = self._make_v1_payload()

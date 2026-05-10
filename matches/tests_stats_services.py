@@ -32,9 +32,9 @@ class StatsTestCase(TestCase):
         )
 
         # Events
-        # P1 scores 1 goal and 1 penalty goal
+        # P1 scores 2 goals (one regular, one from penalty)
         MatchEvent.objects.create(match=self.match, event_type='GOAL', player=self.p1, team=self.team, minute=1, quarter=1)
-        MatchEvent.objects.create(match=self.match, event_type='PENALTY_GOAL', player=self.p1, team=self.team, minute=2, quarter=2, is_penalty=True)
+        MatchEvent.objects.create(match=self.match, event_type='GOAL', player=self.p1, team=self.team, minute=2, quarter=2, is_penalty=True)
 
         # P2 scores 1 goal
         MatchEvent.objects.create(match=self.match, event_type='GOAL', player=self.p2, team=self.team, minute=3, quarter=3)

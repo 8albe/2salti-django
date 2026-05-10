@@ -152,7 +152,7 @@ class OpenAIProvider(BaseOCRProvider):
             },
             "events": [
                 {
-                    "type": "GOAL|EXCLUSION_20|EXCLUSION_DEF|PENALTY_GOAL|PENALTY_MISSED|RED_CARD|YELLOW_CARD|TIMEOUT|OTHER",
+                    "type": "GOAL|EXCLUSION_20|YELLOW_CARD|RED_CARD|TIMEOUT|OTHER",
                     "player_name": "<nome>", "team": "home|away", "minute": <int>, "quarter": <int>,
                     "sanction_duration": <null|int secondi>
                 }

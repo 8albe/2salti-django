@@ -10,9 +10,9 @@ from management.permissions import get_membership_context
 from .models import Match, MatchEvent, MatchReport
 from .forms import MatchReportUploadForm, MatchReportReviewForm
 from .event_types import (
-    EVENT_TYPE_GOAL, EVENT_TYPE_PENALTY_GOAL, 
-    EVENT_TYPE_EXCLUSION_20, EVENT_TYPE_EXCLUSION_DEF,
-    EVENT_TYPE_TIMEOUT, EVENT_TYPE_SAVE
+    EVENT_TYPE_GOAL,
+    EVENT_TYPE_EXCLUSION_20,
+    EVENT_TYPE_TIMEOUT,
 )
 
 
@@ -28,12 +28,11 @@ def match_detail(request, match_id):
     
     # Eventi raggruppati per tipo (Solo se pubblico)
     if match.is_public:
-        goals = match.events.filter(event_type__in=[EVENT_TYPE_GOAL, EVENT_TYPE_PENALTY_GOAL]).select_related('player', 'team')
-        expulsions = match.events.filter(event_type__in=[EVENT_TYPE_EXCLUSION_20, EVENT_TYPE_EXCLUSION_DEF]).select_related('player', 'team')
+        goals = match.events.filter(event_type=EVENT_TYPE_GOAL).select_related('player', 'team')
+        expulsions = match.events.filter(event_type=EVENT_TYPE_EXCLUSION_20).select_related('player', 'team')
         timeouts = match.events.filter(event_type=EVENT_TYPE_TIMEOUT).select_related('team')
-        saves = match.events.filter(event_type=EVENT_TYPE_SAVE).select_related('player', 'team')
     else:
-        goals = expulsions = timeouts = saves = []
+        goals = expulsions = timeouts = []
 
 
     
@@ -71,7 +70,6 @@ def match_detail(request, match_id):
         'goals': goals,
         'expulsions': expulsions,
         'timeouts': timeouts,
-        'saves': saves,
         'qs_processed': qs_processed,
         'home_roster': home_roster,
         'away_roster': away_roster,

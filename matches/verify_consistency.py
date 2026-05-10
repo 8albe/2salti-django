@@ -22,8 +22,8 @@ def verify_all():
         print(f"\nMatch ID: {match.id} - {match}")
         
         # A. Goal Sum Consistency
-        home_goals = match.events.filter(team=match.home_team, event_type__in=['GOAL', 'PENALTY_GOAL']).count()
-        away_goals = match.events.filter(team=match.away_team, event_type__in=['GOAL', 'PENALTY_GOAL']).count()
+        home_goals = match.events.filter(team=match.home_team, event_type='GOAL').count()
+        away_goals = match.events.filter(team=match.away_team, event_type='GOAL').count()
         
         if home_goals != match.home_score or away_goals != match.away_score:
             print(f"  [FAIL] Score mismatch! DB: {match.home_score}-{match.away_score} | EventsSum: {home_goals}-{away_goals}")
