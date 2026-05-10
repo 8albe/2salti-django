@@ -349,7 +349,7 @@ Scoperto il 2-mag durante la verifica live del wire OCRQualityGate (commit `1934
 
 **Debito residuo:** la classifica calcolata da `match.score` resta coerente con il revert, ma se in futuro decidiamo "match revertato a NEEDS_REVIEW perde anche il punteggio dalla classifica", richiede modifica al `standings_service` (rebuild deve filtrare match con report attivi non `PUBLISHED`). Decisione di prodotto rinviata.
 
-### 10.2 Audit trail UI non visibile nella review page admin
+### 10.2 Audit trail UI non visibile nella review page admin — CHIUSO 10-mag
 
 Scoperto il 2-mag durante verifica live Antigravity post-revert §10.1.
 
@@ -357,7 +357,7 @@ Scoperto il 2-mag durante verifica live Antigravity post-revert §10.1.
 
 **Impatto:** zero impatto funzionale, audit log persistito correttamente. Impatto operativo: il reviewer non ha visibilità sulla cronologia del referto direttamente dalla review page e deve interrogare `MatchReportAuditLog` via shell o admin Django dedicato.
 
-**Prossimi passi:** verificare se esiste un blocco template per audit trail (probabile `{% for log in report.auditlog_set.all %}` mai aggiunto), oppure se è una feature mai implementata. Da decidere se aggiungere un widget "Cronologia" nella review page.
+**Risolto (commit `a9ca246`):** aggiunta query `report_audit_logs` nel context della review admin (`matches/admin.py` `review_view()`) + scritture audit per `review_opened` (con dedup 5 min per evitare rumore su redirect post-azione), `save_draft`, `validate`. `publish_now`/`publish_force` restano delegati a `PublishingService` che già scrive il proprio log (`action='publish'`/`'republish'`). Il blocco template `{% if report_audit_logs %}` era già presente in `templates/admin/matches/matchreport/review.html` dal 2-mag con CSS dedicato per i badge per action: mancava solo il collegamento context↔template — classico pattern "1, 2, 4 senza 3" (§3.11).
 
 ### 10.3 EXTENDED_EVENT_TYPES non allineato a event_types.py
 
