@@ -158,6 +158,35 @@ issues = DataIntegrityService().check_league_standings(League.objects.get(id=<id
 
 Restituisce la lista di issue senza side effects. Il management command resta lo strumento giusto solo quando si *vuole* generare l'alert.
 
+### 3.9 `gunicorn_config.py` auto-caricato se presente nel CWD
+
+Gunicorn cerca un file `gunicorn_config.py` nella working directory all'avvio e lo carica automaticamente se lo trova, anche quando il service passa esplicitamente `--config /path/to/altro_config.py`. Il config esplicito vince sui valori in conflitto, ma direttive presenti solo nel `gunicorn_config.py` di CWD entrano nel runtime senza che nessuno le abbia chieste.
+
+Il rischio concreto è in due scenari: (a) `WorkingDirectory=` nel unit file viene cambiato e punta a una directory che contiene un `gunicorn_config.py` legacy o orfano — è esattamente l'incidente del 23 aprile 2026 risolto col problema #3, dove il config in repo era inerte ma stava per tornare attivo a un cambio di working dir; (b) il `gunicorn_config.py` nel repo viene rinominato o spostato e qualcuno ne ricrea uno in quella posizione per altri motivi.
+
+Cosa fare: tenere il `gunicorn_config.py` nel repo coerente con il config esplicito caricato via `--config`, oppure non averlo affatto in CWD del service. Verificare a freddo con `lsof -p <gunicorn_pid> | grep config` o leggendo l'output di `systemctl cat 2salti` per vedere `WorkingDirectory` e `ExecStart` insieme.
+
+### 3.10 Tag Django con newline interno emesso come testo letterale
+
+Il template tokenizer di Django non usa il flag `re.DOTALL` quando matcha tag template. Conseguenza: un tag scritto su più righe nel sorgente template — tipico esito di un autoformatter HTML che manda a capo `}}` per rispettare la max line length — non viene riconosciuto come tag e viene emesso come testo grezzo nella pagina renderizzata.
+
+Esempio del bug, scoperto il 2 maggio 2026 sulla classifica pubblica:
+
+```django
+{{ entry.goals_against
+}}
+```
+
+renderizza letteralmente `{{ entry.goals_against }}` nella pagina invece del valore numerico.
+
+Cosa fare: tenere ogni tag template `{{ ... }}` o `{% ... %}` su una riga sola. Configurare l'editor o il prettier HTML per non spezzare le righe dentro questi delimitatori. In code review su template, segnalare ogni tag che attraversa newline.
+
+### 3.11 "1, 2, 4 senza 3" è la firma del refactor incompleto
+
+Quando in un blocco di codice o in un test trovi una sequenza numerica con un buco — commenti `# 1.`, `# 2.`, `# 4.` senza `# 3.`, oppure variabili `step1`, `step2`, `step4` senza `step3` — quasi sempre il pezzo mancante esisteva e un refactor lo ha rimosso senza aggiornare la numerazione né i punti che vi si appoggiavano. Il bug del 28 aprile 2026 sul `staff_dashboard` (`NameError: stuck_reports`) era esattamente questo: il commit di consolidamento `668b406` aveva rimosso la sezione `# 3. Calcola stuck reports` lasciando intatti i `# 1.`, `# 2.` e `# 4.` adiacenti, e nessuno aveva notato il salto.
+
+Cosa fare: quando vedi una sequenza numerata con un buco, prima di assumere che il buco sia intenzionale, fare `git log -p --follow <file>` cercando il pattern del numero mancante. Se il pezzo c'era ed è stato rimosso, decidere se va ripristinato o se la numerazione va riallineata per riflettere la nuova realtà. Il salto silenzioso fra due numeri è quasi sempre debito tecnico, raramente intenzione.
+
 ## 4. Pulizia repo: history vs indice corrente
 
 Sono due operazioni distinte che affrontano due problemi distinti, e confonderle è un errore di categoria. È esattamente l'errore commesso il 22 aprile 2026 sulla chiusura del problema #7 e corretto il 23 aprile; la lezione merita di vivere in un posto stabile.
