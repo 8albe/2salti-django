@@ -128,6 +128,36 @@ Cosa fare: rimuovere tutti i re-import locali, lasciare solo l'import globale a 
 
 Caso reale: fix `ce4df80` su `report_review` — tre re-import di `MatchEvent` in branch diversi, ricognizione iniziale ne aveva trovati solo due, il terzo è emerso dall'estensione del check al resto del file.
 
+### 3.6 `rebuild_standings` exit code 0 anche su errore interno
+
+Il management command `rebuild_standings` ([core/management/commands/rebuild_standings.py](../core/management/commands/rebuild_standings.py)) termina con exit code 0 anche quando il rebuild interno fallisce. Le eccezioni dentro il loop di ricostruzione vengono catturate e logate ma non risalgono al codice di uscita: dal punto di vista di systemd, di un cron, o di un wrapper script il comando è "andato bene" anche quando le `LeagueStanding` non sono state aggiornate.
+
+Sintomo: `echo $?` restituisce `0` ma il monitor di integrità segnala discrepanze sulla lega che credevi appena ricostruita.
+
+Cosa fare: non usare l'exit code come segnale di successo. Verificare lato dati con una query diretta sulle `LeagueStanding` della lega target, o concatenare `monitor_integrity --league <id>` come check di chiusura. In alternativa, cercare le stringhe `ERRORE` o `OK` nello stdout del comando.
+
+### 3.7 `monitor_integrity` exit code 1 è semantico, non un errore
+
+`monitor_integrity` esce con codice 1 quando trova discrepanze nelle `LeagueStanding` — è il modo in cui comunica "ho fatto il check e ho trovato `MISSING_RECORD` o `DATA_MISMATCH` da rivedere", non "il comando è crashato". Per questo motivo il systemd unit `2salti-monitor.service` ha `SuccessExitStatus=1` esplicito: senza quella riga systemd marcherebbe l'unit come `failed` ad ogni esecuzione che trova drift.
+
+Cosa fare: trattare exit code 1 di `monitor_integrity` come informazione semantica, non come failure. Se si scrive un wrapper o un alert sopra a questo comando, replicare la stessa convenzione (`SuccessExitStatus=1` o equivalente lato shell).
+
+Coppia con §3.6: gli ops command di questo progetto hanno exit code inaffidabili in entrambe le direzioni — `rebuild_standings` non segnala errori veri come tali, `monitor_integrity` segnala stato come "errore". Mai dedurre il successo o il fallimento di un'operazione dal solo exit code dei nostri management command.
+
+### 3.8 `monitor_integrity` in run manuale invia notifiche
+
+Il management command `monitor_integrity` invia mail (e Telegram, se configurato) ad ogni esecuzione che trova discrepanze, indipendentemente dal fatto che l'esecuzione sia partita dal timer systemd o lanciata a mano da Django shell per diagnostica. Conseguenza: se durante un'indagine si lancia il comando da terminale per "vedere lo stato", si sveglia la stessa pipeline di notifiche del cron, generando rumore per chi riceve gli alert e potenzialmente svegliando qualcuno alle tre di notte.
+
+Cosa fare: per audit silenzioso usare direttamente `DataIntegrityService.check_league_standings(league)` da Django shell:
+
+```python
+from core.models import League
+from matches.services.integrity_service import DataIntegrityService
+issues = DataIntegrityService().check_league_standings(League.objects.get(id=<id>))
+```
+
+Restituisce la lista di issue senza side effects. Il management command resta lo strumento giusto solo quando si *vuole* generare l'alert.
+
 ## 4. Pulizia repo: history vs indice corrente
 
 Sono due operazioni distinte che affrontano due problemi distinti, e confonderle è un errore di categoria. È esattamente l'errore commesso il 22 aprile 2026 sulla chiusura del problema #7 e corretto il 23 aprile; la lezione merita di vivere in un posto stabile.
