@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import Match, MatchEvent, MatchReport, InboundEmail, SportEventConfig
+from .models import Match, MatchEvent, MatchReport, MatchReportAuditLog, InboundEmail, SportEventConfig
 from .event_types import DEFAULT_EVENT_TYPES
 
 from .forms import MatchReportAdminForm
@@ -262,7 +262,19 @@ class MatchReportAdmin(admin.ModelAdmin):
         else:
             obj.in_review_by, obj.in_review_at = request.user, now
             obj.save(update_fields=['in_review_by', 'in_review_at'])
-        
+
+        # Audit: log apertura review (solo GET, dedup 5 min per evitare rumore su redirect)
+        if request.method == 'GET':
+            recent_open = MatchReportAuditLog.objects.filter(
+                report=obj, user=request.user, action='review_opened',
+                created_at__gte=now - timezone.timedelta(minutes=5),
+            ).exists()
+            if not recent_open:
+                MatchReportAuditLog.objects.create(
+                    report=obj, user=request.user, action='review_opened',
+                    old_status=obj.status, new_status=obj.status,
+                )
+
         match = obj.match
         home_team, away_team = (match.home_team, match.away_team) if match else (None, None)
         
@@ -326,9 +338,23 @@ class MatchReportAdmin(admin.ModelAdmin):
 
             form = ReviewForm(request.POST, instance=obj)
             if form.is_valid():
-                if action == 'save_draft': obj.save(); return redirect('admin:matches_matchreport_review', object_id)
+                if action == 'save_draft':
+                    obj.save()
+                    MatchReportAuditLog.objects.create(
+                        report=obj, user=request.user, action='save_draft',
+                        old_status=obj.status, new_status=obj.status,
+                        reason='Salvataggio intermedio (draft) senza cambio di stato',
+                    )
+                    return redirect('admin:matches_matchreport_review', object_id)
+                old_status = obj.status
                 obj.status, obj.validated_by, obj.validated_at = MatchReport.Status.VALIDATED, request.user, timezone.now()
                 obj.save()
+                MatchReportAuditLog.objects.create(
+                    report=obj, user=request.user, action='validate',
+                    old_status=old_status, new_status=obj.status,
+                )
+                # publish_now / publish_force: PublishingService scrive già il proprio audit log
+                # (action='publish' o 'republish'), quindi non duplichiamo qui.
                 if action in ['publish_now', 'publish_force']:
                     success, msg = PublishingService.publish_report(obj, user=request.user, force=(action=='publish_force'))
                     self.message_user(request, msg, messages.SUCCESS if success else messages.WARNING)
@@ -377,7 +403,7 @@ class MatchReportAdmin(admin.ModelAdmin):
         meta = (obj.normalized_data or {}).get('metadata', {}) if isinstance(obj.normalized_data, dict) else {}
         confidence = meta.get('confidence', 0.0) or 0.0
         context = self.admin_site.each_context(request)
-        context.update({'opts': self.model._meta, 'original': obj, 'title': f"Review: {obj}", 'potential_matches': potential_matches, 'form': form, 'is_image': obj.file.name.lower().endswith(('.png', '.jpg', '.jpeg')) if obj.file else False, 'reconciliation_data': recon_ui, 'publish_safe': safe, 'publish_blockers': blockers, 'unresolved_count': sum(1 for s in ["home", "away"] for item in recon_ui[s] if item["is_unresolved"]), 'bootstrap': EntityBootstrapService.preview_creation(obj.normalized_data, obj.match) if obj.match else None, 'ocr_is_valid': ocr_is_valid, 'ocr_blockers': ocr_blockers, 'ocr_warnings': ocr_warnings, 'confidence': confidence, 'confidence_percent': round(confidence * 100), 'extraction_warnings': meta.get('extraction_warnings', [])})
+        context.update({'opts': self.model._meta, 'original': obj, 'title': f"Review: {obj}", 'potential_matches': potential_matches, 'form': form, 'is_image': obj.file.name.lower().endswith(('.png', '.jpg', '.jpeg')) if obj.file else False, 'reconciliation_data': recon_ui, 'publish_safe': safe, 'publish_blockers': blockers, 'unresolved_count': sum(1 for s in ["home", "away"] for item in recon_ui[s] if item["is_unresolved"]), 'bootstrap': EntityBootstrapService.preview_creation(obj.normalized_data, obj.match) if obj.match else None, 'ocr_is_valid': ocr_is_valid, 'ocr_blockers': ocr_blockers, 'ocr_warnings': ocr_warnings, 'confidence': confidence, 'confidence_percent': round(confidence * 100), 'extraction_warnings': meta.get('extraction_warnings', []), 'report_audit_logs': obj.audit_logs.select_related('user').all()})
         return TemplateResponse(request, 'admin/matches/matchreport/review.html', context)
 
 op_admin_site.register(Match, MatchAdmin)
