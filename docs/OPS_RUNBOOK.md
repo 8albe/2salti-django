@@ -395,3 +395,49 @@ La frontiera è asimmetrica per disegno: l'agente può fare tutto ciò che è re
 Anche una query `SELECT` via Django shell o psql sul DB di produzione richiede autorizzazione esplicita di Alberto prima dell'esecuzione. Le query read-only sembrano innocue ma hanno tre rischi non ovvi: (a) carico — uno scan full-table sbagliato può degradare il servizio sotto pilot, (b) leak — il risultato della query finisce nei log dell'agente, e se contiene dati personali o sensibili crea un'eco fuori dal DB, (c) errore di context — è facile pensare di essere su DB di dev mentre si è su prod, e il primo segnale di sbaglio è il risultato della query stessa, ormai troppo tardi se conteneva una `UPDATE` mascherata.
 
 La regola in pratica: prima di lanciare una qualunque interazione col DB di prod, l'agente prepara la query, la mostra integrale, e chiede conferma. Alberto la rilegge e dà ok, oppure la lancia lui da shell. Per diagnostica frequente che richiede conferma ripetuta, valutare di scriversi script idempotenti read-only in repo (es. `scripts/diag_<area>.py`) con autorizzazione una volta sola allo script, non a ogni esecuzione.
+
+## 12. Verifiche e regole di processo
+
+Raccoglie le regole sulle attività di verifica post-azione e sui pattern di processo applicabili a sessioni intere. Dove §6 codifica regole trasversali sulle singole operazioni e §11 codifica regole di sicurezza, §12 codifica regole sui flussi più ampi: come si verifica la fine di un'azione, come si stima il tempo di una sessione, come si gestisce il bilanciamento autonomia/conferma fra sessione corta e sessione lunga.
+
+### 12.1 Verifiche visuali via Antigravity: "Disable cache" obbligatoria
+
+Per ogni verifica visuale post-deploy in Antigravity (o in qualunque browser usato come sentinella di produzione), aprire DevTools e attivare "Disable cache" prima di ricaricare la pagina. Senza, il browser può servire dalla sua cache una versione precedente dell'asset e restituire un 200 anche quando il server in realtà non è ancora aggiornato o sta servendo un asset rotto. Il falso positivo è particolarmente subdolo per CSS, JS e immagini, che sono cacheable di default.
+
+Cosa fare: prima del primo `Ctrl-R` di verifica, DevTools aperto → tab Network → checkbox "Disable cache" attivo. Tenerlo attivo per tutta la sessione di verifica visuale. Se si vuole essere ancora più paranoici, hard reload (`Ctrl-Shift-R`) come ulteriore garanzia.
+
+### 12.2 Post restart: `sleep 3-5` prima del `curl` di verifica
+
+Dopo `sudo systemctl restart 2salti`, i worker gunicorn impiegano qualche secondo a bootare prima che il socket unix sia pronto a servire richieste. Un `curl https://2salti.com/` lanciato immediatamente dopo il restart può ricevere un 502 transitorio anche se il restart è andato a buon fine — è la finestra fra "master process up, socket creato" e "worker pronti a rispondere". Questo 502 non è errore di runtime, è naturale del ciclo di restart, ed è stato osservato il 4 maggio 2026 durante il restart post-rotazione delle chiavi `.env`.
+
+Cosa fare: aggiungere `sleep 3` (o `sleep 5` se il sistema è sotto carico) fra il `restart` e il `curl` di verifica. Se il primo `curl` restituisce 502, ripetere dopo altri 2-3 secondi prima di considerarlo errore vero.
+
+### 12.3 Una chat alla volta — mai sessioni 2salti parallele
+
+Lavorare su 2salti in più chat o più istanze dell'agente in parallelo è anti-pattern garantito. Le sessioni concorrenti scoprono indipendentemente le stesse trappole — la dualità home/deploy, il bug nginx degli alias, i path obsoleti in CLAUDE.md — senza sapere che le altre le hanno già viste, e ognuna ripaga lo stesso debito di contesto rifacendo il lavoro. Il pattern è stato osservato in modo netto fra il 17 e il 22 aprile 2026 con sei istanze in parallelo, sei volte lo stesso onboarding al contesto del progetto.
+
+Regola: una chat alla volta. Quando una chat si allunga e comincia a esaurire il contesto, si scrive una session note puntuale, si chiude la chat, si apre la successiva con la nuova session note come ancora di ripartenza. Le session note in `/home/alberto/_session_notes/` (vedi §7.2) sono il meccanismo che rende possibile la sequenza di chat senza dispersione.
+
+### 12.4 Regola di stima: triage sottostima 2-3x sistematicamente
+
+Ogni triage di un cluster di lavoro sottostima il costo reale di un fattore 2-3x. Pattern confermato sei volte fra il 28 aprile e il 4 maggio 2026: cluster G stimato 5 minuti, reale 10; cluster F stimato 30 minuti, reale 95; fase 4.5 (pulizia script obsoleti) stimata 30 minuti, reale 3 ore (perché ha rivelato il leak della password sudo); e così via. La causa è strutturale: il triage misura solo la modifica nominale, non le scoperte laterali che il protocollo protected file (§8) inevitabilmente genera.
+
+Cosa fare: usare il moltiplicatore 2-3x come default nella pianificazione. Se il triage dice "1 ora", pianificare 2-3 ore. Se dice "mezza giornata", pianificare una giornata. Quando si propongono opzioni di sessione corta vs lunga, applicare il moltiplicatore *prima* di presentare la stima all'utente, non dopo.
+
+### 12.5 TODO `(ux)` "sull'altro lato" = allinea il test, non il codice
+
+Quando un test fallisce e nel codice di produzione adiacente c'è un commento del tipo `// TODO (ux)`, `# TODO (ux)`, o annotazioni di scope dichiarato (es. `messaggio telegrafico — vedi UX`), il segnale è quasi sempre che il codice è giusto come scelta consapevole e il test è stale rispetto a quella scelta. Il TODO sull'altro lato è la firma di "qualcuno ha già pensato a questo, l'ha lasciato così di proposito".
+
+Cosa fare: prima di toccare il codice per far passare il test, leggere i commenti adiacenti al codice. Se c'è un TODO che inquadra la scelta corrente come consapevole o WIP, allineare il test al codice (cambiare la stringa attesa, cambiare l'assertion) invece di cambiare il codice. Caso reale: cluster G del 2 maggio 2026 sull'`admin.py:219`, stringa telegrafica deliberata, test stale.
+
+### 12.6 Bilanciamento autonomia/conferma degrada oltre 6h di sessione
+
+Dopo 6 ore di sessione continua, la qualità della review cala anche quando la meccanica delle modifiche resta lineare. Il pattern è stato osservato il 28 aprile 2026 con il fix `ce4df80` delle 21:30 — tre re-import locali mancati nella ricognizione iniziale, recuperati solo perché Claude Code ha esteso il check di sua iniziativa. Il problema non era il fix in sé, era che l'agente aveva smesso di chiedere conferma su ogni passaggio per "fluidità", e quella mancanza di check intermedi ha abbassato la rete di sicurezza proprio nel momento in cui serviva di più.
+
+Regola: oltre le 6 ore di sessione attiva, tornare a chiedere conferma esplicita anche su operazioni che in sessione fresca sarebbero autonome. La fatica riduce il giudizio prima di ridurre la velocità di esecuzione, quindi serve un meccanismo esterno (la conferma utente) per riportare attenzione sui dettagli.
+
+### 12.7 Manipolazione del wording delle opzioni è disonestà sottile
+
+Quando l'agente propone più opzioni all'utente, il framing del wording è esso stesso una forma di scelta. Mettere l'opzione preferita per prima nella lista, evidenziarla in grassetto, marcarla "(Recommended)", o presentare le altre come "da giustificare" mentre la preferita appare "naturale", non è neutrale — è una preferenza camuffata da scelta libera. Ed è una forma di disonestà sottile: l'utente non si accorge del bias e finisce per scegliere ciò che l'agente avrebbe scelto comunque, ma con l'illusione di averlo deciso lui.
+
+Regola: o le opzioni sono presentate in modo genuinamente neutro (ordinamento neutro, pari peso visivo, descrizione bilanciata di pro/contro), o il bias va dichiarato esplicitamente come tale ("io preferirei A perché X, ma Y e Z sono alternative valide e legittime"). Nascondere la preferenza dietro una struttura che sembra neutra è la versione più insidiosa del problema, perché toglie all'utente la possibilità di accettare o rifiutare il bias consapevolmente. Pattern osservato il 2 maggio 2026 e corretto in tempo reale dopo che Alberto ha segnalato la dinamica.
