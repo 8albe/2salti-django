@@ -351,44 +351,28 @@ def chat_message_add(request, team_id):
 @onboarding_required
 def team_access(request):
     """Fase 4: Accesso Squadra (Sezione 7)"""
+    from .services.membership_enrollment import (
+        redeem_activation_code,
+        request_manual_membership,
+    )
+
     if request.method == 'POST':
         code_str = request.POST.get('activation_code')
         if code_str:
-            try:
-                code_obj = ActivationCode.objects.get(code=code_str, is_active=True)
-                # Verifica usi e scadenza...
-                if code_obj.expires_at and code_obj.expires_at < timezone.now():
-                    messages.error(request, "Codice scaduto.")
-                elif code_obj.current_uses >= code_obj.max_uses:
-                    messages.error(request, "Codice già utilizzato il massimo numero di volte.")
-                else:
-                    # Crea Membership
-                    Membership.objects.get_or_create(
-                        user=request.user,
-                        society=code_obj.society,
-                        team=code_obj.team,
-                        role=code_obj.role
-                    )
-                    code_obj.current_uses += 1
-                    code_obj.save()
-                    messages.success(request, f"Benvenuto nella squadra {code_obj.team or code_obj.society}!")
-                    return redirect('profile', username=request.user.username)
-            except ActivationCode.DoesNotExist:
-                messages.error(request, "Codice non valido.")
-        
-        # Gestione Richiesta Manuale
+            ok, membership, err = redeem_activation_code(request.user, code_str, request=request)
+            if ok:
+                scope = membership.team or membership.society
+                messages.success(request, f"Benvenuto nella squadra {scope}!")
+                return redirect('profile', username=request.user.username)
+            messages.error(request, err)
+
         manual_team_id = request.POST.get('team_id')
         if manual_team_id:
-            team = get_object_or_404(Team, id=manual_team_id)
-            MembershipRequest.objects.get_or_create(
-                user=request.user,
-                society=team.society,
-                team=team,
-                role='PLAYER', # Default per richiesta manuale atleta
-                status='PENDING'
-            )
-            messages.success(request, "Richiesta inviata al Club Admin. Sarai avvisato via email.")
-            return render(request, 'management/onboarding/pending_approval.html')
+            ok, mr, err = request_manual_membership(request.user, manual_team_id, request=request)
+            if ok:
+                messages.success(request, "Richiesta inviata al Club Admin. Sarai avvisato via email.")
+                return render(request, 'management/onboarding/pending_approval.html')
+            messages.error(request, err)
 
     teams = Team.objects.all().select_related('society')
     return render(request, 'management/onboarding/team_access.html', {'teams': teams})

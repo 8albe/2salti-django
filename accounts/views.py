@@ -186,68 +186,30 @@ def onboarding_membership(request):
         return redirect('dashboard')
 
     if request.method == 'POST':
-        action = request.POST.get('action')
-        
-        # 1. Uso di Activation Code
+        from django.contrib import messages
+        from management.services.membership_enrollment import (
+            redeem_activation_code,
+            request_manual_membership,
+        )
+
         activation_code = request.POST.get('activation_code')
         if activation_code:
-            from management.models import ActivationCode, Membership
-            try:
-                code_obj = ActivationCode.objects.get(code=activation_code, is_active=True)
-                # Verifica usi
-                if code_obj.current_uses < code_obj.max_uses:
-                    # Crea Membership
-                    Membership.objects.create(
-                        user=user,
-                        society=code_obj.society,
-                        team=code_obj.team,
-                        role=code_obj.role,
-                        is_active=True
-                    )
-                    code_obj.current_uses += 1
-                    code_obj.save()
-                    
-                    from management.utils import log_action
-                    log_action(user, code_obj.society, "ONBOARDING_MEMBERSHIP_CODE_REDEEMED", target=code_obj, request=request)
-                    
-                    import django.contrib.messages as messages
-                    messages.success(request, f"Benvenuto in {code_obj.society.name}!")
-                    return redirect('dashboard')
-                else:
-                    import django.contrib.messages as messages
-                    messages.error(request, "Questo codice ha esaurito gli utilizzi disponibili.")
-            except ActivationCode.DoesNotExist:
-                import django.contrib.messages as messages
-                messages.error(request, "Codice di attivazione non valido o scaduto.")
+            ok, membership, err = redeem_activation_code(user, activation_code, request=request)
+            if ok:
+                messages.success(request, f"Benvenuto in {membership.society.name}!")
+                return redirect('dashboard')
+            messages.error(request, err)
 
-        # 2. Richiesta manuale (senza codice)
         team_id = request.POST.get('team_id')
         if team_id:
-            from core.models import Team
-            from management.models import MembershipRequest
-            try:
-                team = Team.objects.get(id=team_id)
-                # Determina il ruolo in base al tipo di utente
-                role = 'PLAYER' if user.role == 'athlete' else 'HEAD_COACH'
-                
-                # Crea richiesta
-                mr, created = MembershipRequest.objects.get_or_create(
-                    user=user,
-                    society=team.society,
-                    team=team,
-                    role=role,
-                    defaults={'status': 'PENDING'}
+            ok, mr, err = request_manual_membership(user, team_id, request=request)
+            if ok:
+                messages.success(
+                    request,
+                    f"Richiesta inviata alla società {mr.society.name}. Ti avviseremo appena sarai approvato.",
                 )
-                
-                from management.utils import log_action
-                log_action(user, team.society, "ONBOARDING_MEMBERSHIP_REQUESTED", target=team, request=request)
-                
-                import django.contrib.messages as messages
-                messages.success(request, f"Richiesta inviata alla società {team.society.name}. Ti avviseremo appena sarai approvato.")
                 return redirect('dashboard')
-            except Team.DoesNotExist:
-                import django.contrib.messages as messages
-                messages.error(request, "Squadra non trovata.")
+            messages.error(request, err)
 
     return render(request, 'accounts/onboarding/membership.html', {
         'role': user.get_role_display(),
