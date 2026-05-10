@@ -370,12 +370,6 @@ class OCRSchemaValidator:
             unique_unreconciled = sorted(list(set(unreconciled_names)))
             blockers.append(f"Riconciliazione incompleta per: {', '.join(unique_unreconciled)}. Il publish è bloccato per evitare drift nelle statistiche.")
 
-        # --- WARNINGS ---
-
-        # Low (but not critically low) confidence
-        if isinstance(confidence, (int, float)) and 0.3 <= confidence < 0.6:
-            warnings.append(f"Confidenza bassa: {confidence:.0%}")
-
         # Extraction warnings from provider
         extraction_warnings = meta.get("extraction_warnings", [])
         if extraction_warnings:

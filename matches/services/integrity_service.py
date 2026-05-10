@@ -26,11 +26,12 @@ class DataIntegrityService:
                 discrepancies.append({
                     'team': expected[tid]['team'],
                     'type': 'MISSING_RECORD',
-                    'message': f"Squadra {expected[tid]['team']} presente nei match ma non in classifica persistita."
+                    'message': f"Squadra {expected[tid]['team']} iscritta alla lega ma non in classifica persistita."
                 })
         
         if extra_in_db:
             for tid in extra_in_db:
+                # TODO: rivedere wording anche qui (extra = squadra non più iscritta alla lega)
                 discrepancies.append({
                     'team': actual[tid].team,
                     'type': 'EXTRA_RECORD',
