@@ -270,6 +270,6 @@ Conferma del pattern già annotato il 28-apr: il triage rapido stima il "fix mec
 ### Debiti collegati (non test) annotati in §10 OPS_RUNBOOK
 
 - §10.1 CHIUSO: report PUBLISHED con blocker quality gate (Policy A applicata + revert dei 4 referti)
-- §10.2 APERTO: audit trail UI non visibile nella review page admin
-- §10.3 APERTO: EXTENDED_EVENT_TYPES (schema.py) non derivata da event_types.py — divergenza strutturale
+- §10.2 CHIUSO il 10-mag-2026: audit trail UI nella review page admin wirato (commit `a9ca246`)
+- §10.3 CHIUSO il 10-mag-2026: EXTENDED_EVENT_TYPES eliminato, event types ridotti a 5 canonici (commit `b97e9e5`)
 

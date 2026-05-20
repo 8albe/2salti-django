@@ -163,8 +163,8 @@ In caso di contraddizione: vince il documento più specifico. STATE_MACHINES vin
 - STATE_MACHINES.md §1 (MatchReport workflow) — 8 stati, transizioni complete, guardrails
 
 ### Gap rispetto al blueprint
-- Blueprint §8 chiama `VALIDATED` con il nome `VERIFIED` — divergenza di nomenclatura confermata in STATE_MACHINES.md §"Discrepanze".
-- Blueprint §8 omette `PROCESSING` e `DRAFT` dal grafo degli stati.
+- ~~Blueprint §8 chiama `VALIDATED` con il nome `VERIFIED` — divergenza di nomenclatura confermata in STATE_MACHINES.md §"Discrepanze".~~ **CHIUSO il 09-mag-2026** — fix applicato in PRODUCT_BLUEPRINT.md v3.3.
+- ~~Blueprint §8 omette `PROCESSING` e `DRAFT` dal grafo degli stati.~~ **CHIUSO il 09-mag-2026** — Blueprint §8 ora distingue flusso cartaceo (UPLOADED → PROCESSING → EXTRACTED → VALIDATED → PUBLISHED) e flusso digitale (DRAFT → VALIDATED → PUBLISHED).
 
 ---
 

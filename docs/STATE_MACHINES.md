@@ -3,7 +3,7 @@
 Questo documento descrive le macchine a stati implementate nel codice.
 Se il blueprint di prodotto o altri documenti dicono cose diverse, **questo file vince**.
 
-Ultimo aggiornamento: 2026-04-20
+Ultimo aggiornamento: 2026-05-20
 Generato leggendo:
 - `accounts/models.py`
 - `accounts/middleware.py`
