@@ -26,8 +26,8 @@ Prima di iniziare qualunque task, identifica quale documento consultare.
 | Modifiche a stati/transizioni di un modello | [docs/STATE_MACHINES.md](docs/STATE_MACHINES.md) | 9 macchine a stati verificate sul codice |
 | Cercare il modello Django da un termine italiano | [docs/DOMAIN_GLOSSARY.md](docs/DOMAIN_GLOSSARY.md) | mapping blueprint ↔ codice, 30+ entità |
 | Capire se una feature esiste, dove sta, quali test la coprono | [docs/FEATURE_STATUS.md](docs/FEATURE_STATUS.md) | 21 feature operative, gap vs blueprint |
-| Capire il "perché" di una decisione di prodotto | [docs/BLUEPRINT.md](docs/BLUEPRINT.md) | visione, UX, business model (italiano) |
-| Roadmap e priorità feature | [docs/SYLLABUS.md](docs/SYLLABUS.md) | 15 macro-obiettivi funzionali con dettaglio in [docs/syllabus/](docs/syllabus/) |
+| Capire il "perché" di una decisione di prodotto | [[BLUEPRINT.md]] | visione, UX, business model (italiano) |
+| Roadmap e priorità feature | [[SYLLABUS.md]] | 15 macro-obiettivi funzionali con dettaglio in [docs/syllabus/](docs/syllabus/) |
 | Regole, comandi, convenzioni di sviluppo | CLAUDE.md (questo file) | regole operative |
 
 In caso di contraddizione tra documenti: `STATE_MACHINES.md > DOMAIN_GLOSSARY.md > FEATURE_STATUS.md > CLAUDE.md > BLUEPRINT.md` per questioni di codice; `BLUEPRINT.md` vince sulla visione di prodotto.
