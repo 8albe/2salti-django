@@ -1,6 +1,6 @@
 # Feature Status — Code Inventory
 
-Fotografia delle feature operative del progetto al 2026-04-20. Descrive il PRESENTE del codice. Per la visione di prodotto vedi [docs/PRODUCT_BLUEPRINT.md](PRODUCT_BLUEPRINT.md); per la roadmap futura vedi [docs/FEATURE_SYLLABUS_LEGACY.md](FEATURE_SYLLABUS_LEGACY.md) (in corso di revisione).
+Fotografia delle feature operative del progetto al 2026-04-20. Descrive il PRESENTE del codice. Per la visione di prodotto vedi [docs/BLUEPRINT.md](BLUEPRINT.md); per la roadmap futura vedi [docs/FEATURE_SYLLABUS_LEGACY.md](FEATURE_SYLLABUS_LEGACY.md) (in corso di revisione).
 
 Fonti correlate:
 - [docs/STATE_MACHINES.md](STATE_MACHINES.md) — macchine a stati (9 documentate, verificate sul codice)
@@ -13,7 +13,7 @@ Legenda:
 
 ## Come leggere questo documento
 
-Ogni feature è descritta in modo uniforme: status, codice chiave, test, entità correlate, gap rispetto al blueprint. I rimandi ai documenti correlati (STATE_MACHINES, DOMAIN_GLOSSARY, PRODUCT_BLUEPRINT) sono sempre espliciti — questo file non duplica le loro informazioni, le indicizza.
+Ogni feature è descritta in modo uniforme: status, codice chiave, test, entità correlate, gap rispetto al blueprint. I rimandi ai documenti correlati (STATE_MACHINES, DOMAIN_GLOSSARY, BLUEPRINT) sono sempre espliciti — questo file non duplica le loro informazioni, le indicizza.
 
 In caso di contraddizione: vince il documento più specifico. STATE_MACHINES vince su FEATURE_STATUS che vince sul blueprint per questioni di codice; il blueprint vince sulla visione di prodotto.
 
@@ -163,7 +163,7 @@ In caso di contraddizione: vince il documento più specifico. STATE_MACHINES vin
 - STATE_MACHINES.md §1 (MatchReport workflow) — 8 stati, transizioni complete, guardrails
 
 ### Gap rispetto al blueprint
-- ~~Blueprint §8 chiama `VALIDATED` con il nome `VERIFIED` — divergenza di nomenclatura confermata in STATE_MACHINES.md §"Discrepanze".~~ **CHIUSO il 09-mag-2026** — fix applicato in PRODUCT_BLUEPRINT.md v3.3.
+- ~~Blueprint §8 chiama `VALIDATED` con il nome `VERIFIED` — divergenza di nomenclatura confermata in STATE_MACHINES.md §"Discrepanze".~~ **CHIUSO il 09-mag-2026** — fix applicato in BLUEPRINT.md v3.3.
 - ~~Blueprint §8 omette `PROCESSING` e `DRAFT` dal grafo degli stati.~~ **CHIUSO il 09-mag-2026** — Blueprint §8 ora distingue flusso cartaceo (UPLOADED → PROCESSING → EXTRACTED → VALIDATED → PUBLISHED) e flusso digitale (DRAFT → VALIDATED → PUBLISHED).
 
 ---

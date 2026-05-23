@@ -5,7 +5,7 @@ Questo documento è il ponte tra il linguaggio di prodotto usato nel blueprint (
 **Ultimo aggiornamento:** 2026-04-20
 **Generato leggendo:**
 - `docs/STATE_MACHINES.md` (fonte di verità per stati e transizioni)
-- `docs/PRODUCT_BLUEPRINT.md` (vocabolario di prodotto)
+- `docs/BLUEPRINT.md` (vocabolario di prodotto)
 - `accounts/models.py`, `core/models.py`, `matches/models.py`, `management/models.py`, `seasons/models.py`
 
 **Legenda status:**
@@ -132,7 +132,7 @@ Le 8 relazioni più strutturali del dominio:
 | Termine nel blueprint | Come funziona nel codice | Azione |
 |---|---|---|
 | "Referto Digitale" (sembra un oggetto separato) | È `MatchReport` con `source_channel='DIGITAL'` — stesso modello, stesso workflow | Nessuna modifica al codice; nota da tenere presente in ogni discussione di feature |
-| "VERIFIED" (stato referto nel blueprint §8) | Nel codice lo stato si chiama `VALIDATED` | CHIUSO il 09-mag-2026 — fix applicato in PRODUCT_BLUEPRINT.md v3.3, rinomina VERIFIED → VALIDATED in §8 |
+| "VERIFIED" (stato referto nel blueprint §8) | Nel codice lo stato si chiama `VALIDATED` | CHIUSO il 09-mag-2026 — fix applicato in BLUEPRINT.md v3.3, rinomina VERIFIED → VALIDATED in §8 |
 | `source` / `origin` (campi menzionati in CLAUDE.md) | Nel codice i campi si chiamano `source_channel` e `source_type` | CHIUSO il 24-apr-2026 — sezione obsoleta rimossa da CLAUDE.md, ora delega a STATE_MACHINES.md |
 | "Subscriptions" (entità business §10) | Non è un modello separato — il piano è codificato in `User.subscription_status` (INACTIVE/ACTIVE) e `User.subscription_end_date`; il three-tier Freemium/Premium/Club Pro non è ancora modellato | Tenere a mente quando si lavora sulla feature abbonamenti |
 | "Giuria (ruolo)" (blueprint §7.1) | Nel codice non esiste un valore 'jury' o 'giuria' per `User.role`; il ruolo più vicino sarebbe 'referee', ma la giuria ha poteri diversi (token, firma) | Da decidere se aggiungere 'jury' come valore di role o gestirlo come sotto-ruolo di referee |

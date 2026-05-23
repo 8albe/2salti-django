@@ -1,6 +1,6 @@
 # OPS Runbook — 2salti
 
-Questo file raccoglie le procedure operative dell'infrastruttura 2salti: topologia degli ambienti, regole di allineamento fra home e deploy, trappole tecniche note, convenzioni di pulizia repo e regole metodologiche per le note di sessione. Non contiene né convenzioni di codice (quelle stanno in [CLAUDE.md](../CLAUDE.md)) né la visione di prodotto (quella sta in [PRODUCT_BLUEPRINT.md](PRODUCT_BLUEPRINT.md)); consultarlo quando si lavora sull'infrastruttura, sul deploy, sulla gestione del repo, o quando si chiude/riapre un problema nelle note di sessione. Si aggiorna man mano che emergono pattern operativi ricorrenti: se una lezione viene imparata due volte, probabilmente merita una voce qui.
+Questo file raccoglie le procedure operative dell'infrastruttura 2salti: topologia degli ambienti, regole di allineamento fra home e deploy, trappole tecniche note, convenzioni di pulizia repo e regole metodologiche per le note di sessione. Non contiene né convenzioni di codice (quelle stanno in [CLAUDE.md](../CLAUDE.md)) né la visione di prodotto (quella sta in [BLUEPRINT.md](BLUEPRINT.md)); consultarlo quando si lavora sull'infrastruttura, sul deploy, sulla gestione del repo, o quando si chiude/riapre un problema nelle note di sessione. Si aggiorna man mano che emergono pattern operativi ricorrenti: se una lezione viene imparata due volte, probabilmente merita una voce qui.
 
 ## 1. Mappa ambienti
 
