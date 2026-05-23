@@ -27,10 +27,10 @@ Prima di iniziare qualunque task, identifica quale documento consultare.
 | Cercare il modello Django da un termine italiano | [docs/DOMAIN_GLOSSARY.md](docs/DOMAIN_GLOSSARY.md) | mapping blueprint ↔ codice, 30+ entità |
 | Capire se una feature esiste, dove sta, quali test la coprono | [docs/FEATURE_STATUS.md](docs/FEATURE_STATUS.md) | 21 feature operative, gap vs blueprint |
 | Capire il "perché" di una decisione di prodotto | [docs/BLUEPRINT.md](docs/BLUEPRINT.md) | visione, UX, business model (italiano) |
-| Roadmap e priorità feature | [docs/FEATURE_SYLLABUS_LEGACY.md](docs/FEATURE_SYLLABUS_LEGACY.md) | ex syllabus Antigravity, in revisione |
+| Roadmap e priorità feature | [docs/SYLLABUS.md](docs/SYLLABUS.md) | 15 macro-obiettivi funzionali con dettaglio in [docs/syllabus/](docs/syllabus/) |
 | Regole, comandi, convenzioni di sviluppo | CLAUDE.md (questo file) | regole operative |
 
-In caso di contraddizione tra documenti: `STATE_MACHINES > DOMAIN_GLOSSARY > FEATURE_STATUS > CLAUDE.md > BLUEPRINT` per questioni di codice; `BLUEPRINT` vince sulla visione di prodotto.
+In caso di contraddizione tra documenti: `STATE_MACHINES > DOMAIN_GLOSSARY > FEATURE_STATUS > CLAUDE.md > BLUEPRINT.md` per questioni di codice; `BLUEPRINT` vince sulla visione di prodotto.
 
 ## Protected Files — Ask Before Modifying
 
