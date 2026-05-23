@@ -23,11 +23,11 @@ Prima di iniziare qualunque task, identifica quale documento consultare.
 
 | Tipo di task | Documento autoritativo | Contiene |
 |---|---|---|
-| Macchine a stati di tutti i modelli | [docs/STATE_MACHINES.md](docs/STATE_MACHINES.md) | 9 state machine verificate sul codice con transizioni e side effects |
-| Mapping termini blueprint ↔ modelli Django | [docs/DOMAIN_GLOSSARY.md](docs/DOMAIN_GLOSSARY.md) | 30+ entità, note tecniche su Match.is_public e onboarding_state |
-| Protocollo test OCR | [docs/ocr_test_protocol.md](docs/ocr_test_protocol.md) | Criteri PASS/WARNING/FAIL, KPI, workflow riconciliazione |
-| Procedure operative infrastruttura | [docs/OPS_RUNBOOK.md](docs/OPS_RUNBOOK.md) | Deploy, trappole tecniche, protocollo protected file, sicurezza |
-| Debiti tecnici test suite | [docs/TEST_DEBT_TRIAGE.md](docs/TEST_DEBT_TRIAGE.md) | Storico KO, cluster residui, quick wins |
+| Macchine a stati di tutti i modelli | [[STATE_MACHINES.md]] | 9 state machine verificate sul codice con transizioni e side effects |
+| Mapping termini blueprint ↔ modelli Django | [[DOMAIN_GLOSSARY.md]] | 30+ entità, note tecniche su Match.is_public e onboarding_state |
+| Protocollo test OCR | [[ocr_test_protocol.md]] | Criteri PASS/WARNING/FAIL, KPI, workflow riconciliazione |
+| Procedure operative infrastruttura | [[OPS_RUNBOOK.md]] | Deploy, trappole tecniche, protocollo protected file, sicurezza |
+| Debiti tecnici test suite | [[TEST_DEBT_TRIAGE.md]] | Storico KO, cluster residui, quick wins |
 | Capire il "perché" di una decisione di prodotto | [[BLUEPRINT.md]] | visione, UX, business model (italiano) |
 | Roadmap e priorità feature | [[SYLLABUS.md]] | 15 macro-obiettivi funzionali con dettaglio in [docs/syllabus/](docs/syllabus/) |
 | Regole, comandi, convenzioni di sviluppo | CLAUDE.md (questo file) | regole operative |
