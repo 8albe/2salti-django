@@ -30,7 +30,7 @@ Prima di iniziare qualunque task, identifica quale documento consultare.
 | Roadmap e priorità feature | [docs/SYLLABUS.md](docs/SYLLABUS.md) | 15 macro-obiettivi funzionali con dettaglio in [docs/syllabus/](docs/syllabus/) |
 | Regole, comandi, convenzioni di sviluppo | CLAUDE.md (questo file) | regole operative |
 
-In caso di contraddizione tra documenti: `STATE_MACHINES > DOMAIN_GLOSSARY > FEATURE_STATUS > CLAUDE.md > BLUEPRINT.md` per questioni di codice; `BLUEPRINT` vince sulla visione di prodotto.
+In caso di contraddizione tra documenti: `STATE_MACHINES.md > DOMAIN_GLOSSARY.md > FEATURE_STATUS.md > CLAUDE.md > BLUEPRINT.md` per questioni di codice; `BLUEPRINT.md` vince sulla visione di prodotto.
 
 ## Protected Files — Ask Before Modifying
 
