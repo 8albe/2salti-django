@@ -13,7 +13,7 @@ Legenda:
 
 ## Come leggere questo documento
 
-Ogni feature è descritta in modo uniforme: status, codice chiave, test, entità correlate, gap rispetto al blueprint. I rimandi ai documenti correlati (STATE_MACHINES, DOMAIN_GLOSSARY, BLUEPRINT) sono sempre espliciti — questo file non duplica le loro informazioni, le indicizza.
+Ogni feature è descritta in modo uniforme: status, codice chiave, test, entità correlate, gap rispetto al blueprint. I rimandi ai documenti correlati (STATE_MACHINES.md, DOMAIN_GLOSSARY.md, BLUEPRINT.md) sono sempre espliciti — questo file non duplica le loro informazioni, le indicizza.
 
 In caso di contraddizione: vince il documento più specifico. STATE_MACHINES vince su FEATURE_STATUS che vince sul blueprint per questioni di codice; il blueprint vince sulla visione di prodotto.
 
