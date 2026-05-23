@@ -12,13 +12,13 @@ Questo file non separa più in modo rigido "quello che esiste" e "quello che dov
 
 ## 1. Visione del prodotto e principi non negoziabili
 
-2salti deve diventare l'hub multi-sport che trasforma un referto ufficiale o un referto compilato nativamente in-app in un archivio sportivo vivo. Il cuore non e la pagina bella da vedere: e la fiducia nel dato. Quando il dato e affidabile, allora classifiche, schede squadra, profili atleta, storico arbitrale e leaderboard acquistano valore reale.
+2salti deve diventare l'hub multi-sport che trasforma un referto ufficiale o un referto compilato nativamente in-app in un archivio sportivo vivo. Il cuore non è la pagina bella da vedere: è la fiducia nel dato. Quando il dato è affidabile, allora classifiche, schede squadra, profili atleta, storico arbitrale e leaderboard acquistano valore reale.
 
 La pallanuoto e il primo sport di rollout, non il limite del prodotto. La direzione corretta e quindi questa: pochi moduli, molto chiari, tutti agganciati allo stesso motore e progettati per essere replicabili anche su altri sport. Il percorso ideale parte dall'ingresso del referto, passa da compilazione digitale nativa oppure da OCR + AI + controlli, finisce nel database e aggiorna in automatico sito pubblico, dashboard e statistiche aggregate.
 
 ### Chiarimenti di baseline da tenere fissi
 
-- Pallanuoto = primo sport lanciato e banco di prova principale; architettura, naming e navigazione vanno pero pensati come framework multi-sport.
+- Pallanuoto = primo sport lanciato e banco di prova principale; architettura, naming e navigazione vanno però pensati come framework multi-sport.
 - L'ingestione dei dati è automatizzata: i referti arrivano via email o WhatsApp e vengono processati autonomamente.
 - **Relazione strategica OCR ↔ Referto Digitale**: Il Referto Digitale in-app è la via principale per l'ingestione affidabile del dato; l'OCR resta in sviluppo come fallback per campionati/giurie che non adottano il digitale o per archivio storico. Entrambe le fonti convergono nello stesso contratto dati e workflow di validazione.
 - Include un motore di interrogazione AI (AI Stats Engine) che funge da router intelligente e motore di risposte in linguaggio naturale.
@@ -30,7 +30,7 @@ La pallanuoto e il primo sport di rollout, non il limite del prodotto. La direzi
 - Ogni numero mostrato sul sito deve essere tracciabile fino alla partita e, se serve, fino al referto sorgente.
 - Le pagine pubbliche devono essere alimentate dallo stesso backend usato dall'admin, non da contenuti duplicati.
 - L'esperienza guest e quella autenticata devono essere chiaramente diverse: da pubblico si navigano dati generali, da autenticato si entra in dashboard personali e strumenti operativi.
-- Prima affidabilita e usabilita interna, poi profondita pubblica, poi mobile e integrazioni.
+- Prima affidabilità e usabilità interna, poi profondità pubblica, poi mobile e integrazioni.
 - Le correzioni umane devono lasciare audit log, versione precedente e motivazione della modifica.
 
 ## 2. Ecosistema utenti e valore generato
@@ -48,18 +48,18 @@ Il progetto genera valore differenziato in base al ruolo e al piano di abbonamen
 
 ### Matrice servizi per piano
 
-| Servizio | Pagante | Fruizione | Connessione | RBAC |
-| --- | --- | --- | --- | --- |
-| Consultazione Bacheca | Club Pro | Tutti (Gratis) | Web/App | No |
-| Notifiche Push Bacheca | Club Pro | Solo Premium | Push Act. | Si |
-| Referto Digitale | Giuria (Gratis) | Tutti (via API) | Offline-first | Si (Token) |
-| Chatbot AI | Premium | Solo Premium | Web/App | Si (Hard) |
-| Media Gallery / Tagging | Premium | Tutti (Vista) | Cloud/CDN | Si (Opt-in) |
-| Live Alerts (Referto) | Premium | Solo Premium | Push Act. | Si |
-| Season Recap | Premium | Solo Premium | Batch PDF | Si |
-| Shop vetrina (Request) | Club Pro | Tutti (Ordina) | Out. Webhook | Si (Order) |
-| Sponsor & Widget Club | Club Pro | Tutti (Vista) | Web/App | No |
-| Personalizzazione Dash | Premium | Solo Premium | DB Sync | Si |
+| Servizio                | Pagante         | Fruizione       | Connessione   | RBAC        |
+| ----------------------- | --------------- | --------------- | ------------- | ----------- |
+| Consultazione Bacheca   | Club Pro        | Tutti (Gratis)  | Web/App       | No          |
+| Notifiche Push Bacheca  | Club Pro        | Solo Premium    | Push Act.     | Si          |
+| Referto Digitale        | Giuria (Gratis) | Tutti (via API) | Offline-first | Si (Token)  |
+| Chatbot AI              | Premium         | Solo Premium    | Web/App       | Si (Hard)   |
+| Media Gallery / Tagging | Premium         | Tutti (Vista)   | Cloud/CDN     | Si (Opt-in) |
+| Live Alerts (Referto)   | Premium         | Solo Premium    | Push Act.     | Si          |
+| Season Recap            | Premium         | Solo Premium    | Batch PDF     | Si          |
+| Shop vetrina (Request)  | Club Pro        | Tutti (Ordina)  | Out. Webhook  | Si (Order)  |
+| Sponsor & Widget Club   | Club Pro        | Tutti (Vista)   | Web/App       | No          |
+| Personalizzazione Dash  | Premium         | Solo Premium    | DB Sync       | Si          |
 
 ## 3. Struttura completa del sito e della navigazione
 
@@ -67,20 +67,20 @@ Mappa del prodotto: pagine pubbliche, superfici post-login, profili e strumenti 
 
 ### Inventario pagine core
 
-| Area | Pagina | Scopo |
-| --- | --- | --- |
-| Pubblico | Home / Landing Sport | Hub di ingresso, campionati, classifiche teaser |
-| Pubblico | Partite / Match Detail | Calendario, risultati, tabellini e cronologia eventi |
-| Pubblico | Classifiche / Statistiche | Standing squadre e leaderboard marcatori |
-| Pubblico | Scheda squadra / Società | Rosa, staff, sponsor, bacheca pubblica, link esterno |
-| Autenticato | Dashboard personalizzata | Widget riordinabili (Premium), alert, preferenze |
-| Autenticato | Bacheca (Atleti / Genitori) | Comunicazioni società gated: scrittura Club Pro, lettura tutti |
-| Autenticato | Media Gallery Partita | Upload (Premium) e visualizzazione foto/video taggati |
-| Autenticato | Vetrina Shop Società | Catalogo prodotti con pulsante "Richiesta Materiale" |
-| Autenticato | Chatbot Panel | Interfaccia AI per query e comandi operativi |
-| Profili | Atleta / Coach / Arbitro | Identità sportiva, storico e Season Recap (Premium) |
-| Admin / Giuria | Form Referto Digitale | Compilazione mobile, firma PIN, sync offline |
-| Admin | Cockpit Workflow | Review OCR, validazione, audit log e publishing |
+| Area           | Pagina                      | Scopo                                                          |
+| -------------- | --------------------------- | -------------------------------------------------------------- |
+| Pubblico       | Home / Landing Sport        | Hub di ingresso, campionati, classifiche teaser                |
+| Pubblico       | Partite / Match Detail      | Calendario, risultati, tabellini e cronologia eventi           |
+| Pubblico       | Classifiche / Statistiche   | Standing squadre e leaderboard marcatori                       |
+| Pubblico       | Scheda squadra / Società    | Rosa, staff, sponsor, bacheca pubblica, link esterno           |
+| Autenticato    | Dashboard personalizzata    | Widget riordinabili (Premium), alert, preferenze               |
+| Autenticato    | Bacheca (Atleti / Genitori) | Comunicazioni società gated: scrittura Club Pro, lettura tutti |
+| Autenticato    | Media Gallery Partita       | Upload (Premium) e visualizzazione foto/video taggati          |
+| Autenticato    | Vetrina Shop Società        | Catalogo prodotti con pulsante "Richiesta Materiale"           |
+| Autenticato    | Chatbot Panel               | Interfaccia AI per query e comandi operativi                   |
+| Profili        | Atleta / Coach / Arbitro    | Identità sportiva, storico e Season Recap (Premium)            |
+| Admin / Giuria | Form Referto Digitale       | Compilazione mobile, firma PIN, sync offline                   |
+| Admin          | Cockpit Workflow            | Review OCR, validazione, audit log e publishing                |
 
 ## 4. Home page: architettura dettagliata
 
@@ -416,9 +416,22 @@ L'OCR funge da fallback strategico per i referti cartacei. Il Referto Digitale i
 
 OCR e Referto Digitale producono lo stesso contratto dati JSON e passano per lo stesso workflow di validazione. Un match con referto digitale nativo NON rifà OCR; un match con solo cartaceo passa per OCR e poi per review umana come sempre.
 
+### Ordine di modifica della pipeline OCR
+
+Chi tocca la pipeline OCR deve rispettare l'ordine: **schema.py → ocr_service.py → converters.py → test e fixtures**. Modificare il converter senza prima aggiornare lo schema (o viceversa) crea disallineamenti tra contratto JSON e normalizzazione, con KO silenziosi sui referti reali. Le fixture di test vanno aggiornate solo dopo che il contratto è stabile, mai prima.
+
+### Monitor integrità — falsi positivi strutturali
+
+`DataIntegrityService.check_league_standings(league)` confronta la classifica persistita con quella **attesa**, dove "attesa" è un placeholder a zero per ogni squadra iscritta alla lega, **indipendentemente dai match giocati**. Conseguenza: una lega con N squadre iscritte e zero `MatchReport` in stato `PUBLISHED` produce sempre N segnalazioni `MISSING_RECORD` finché un rebuild non popola i placeholder. Non è un bug — è il comportamento atteso del check — ma genera mail dal monitor (`2salti-monitor.timer`) che sembrano allarmi e non lo sono. Prima di trattare un alert come problema, verificare quanti match `PUBLISHED` ha la lega segnalata: se sono zero, l'alert è strutturale.
+
 ## 9.1 AI Stats Engine
 
 Scopo: fornire un'interfaccia di ricerca e analisi basata su AI che integri la navigazione esistente con risposte dinamiche in linguaggio naturale.
+
+### Stato implementazione: v0 vs v1
+
+- **v0 (presente in produzione)**: endpoint query→risposta statico, log query in `AIQueryLog`, matching atleta basico, calcolo statistiche aggregate via `stats_services.py`. Nessun contesto multi-turn, nessun function calling.
+- **v1 (roadmap)**: chatbot interattivo con history conversazione, hybrid mode redirect/direct answer, function calling con whitelist comandi, RBAC enforcement server-side per query private. Quanto descritto nei paragrafi seguenti è il target v1, non l'implementazione attuale.
 
 ### Funzionamento HYBRID MODE
 
@@ -460,6 +473,7 @@ Per evitare caos, il database deve riflettere entità reali e relazioni chiare.
 - **Sponsor_Assets**: sponsor caricati dalle società, con placement (pagina società, profili atleti).
 - **User_Preferences**: layout widget, tema colore, notifiche opt-in per ciascun utente Premium.
 - **Jury_Tokens**: token match-specific emessi per i giurati certificati, con scadenza e stato revoca.
+- **ChatMessage**: canale di chat informale per squadra (messaggistica diretta tra membri), complementare alla Bacheca (Post/Comment) che resta il canale strutturato.
 
 ### Principi di integrità
 

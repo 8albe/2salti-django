@@ -20,8 +20,10 @@ App/interfaccia mobile per arbitri/giuria. Jury Tokens, firma PIN, offline-first
 
 ### 14.3 Form Referto Digitale mobile
 
+- [x] Workflow `DRAFT → VALIDATED → PUBLISHED` per `source_channel=DIGITAL` (vedi macro 8 §8.3, STATE_MACHINES.md §1)
+- [x] REST CRUD draft digitale in `api_views_digital.py` + routing `api_urls.py`
 - [ ] UI mobile compilazione referto (Base + Avanzato)
-- [ ] Sync offline-first
+- [ ] Sync offline-first (Service Worker + IndexedDB)
 - [ ] Conflict resolution sync multi-device (policy pendente)
 
 ### 14.4 Firma arbitro

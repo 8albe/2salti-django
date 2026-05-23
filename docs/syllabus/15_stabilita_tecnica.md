@@ -26,6 +26,53 @@ KO residui sulla test suite e debiti tecnici aperti.
 - [ ] Procedura dump/restore documentata e testata
 - [ ] Test suite su PostgreSQL (verifica nessuna dipendenza da sfumature SQLite)
 
+### 15.4 RBAC Staff Roles
+
+- [x] Sistema 5 livelli (UPLOADER ⊂ REVIEWER ⊂ PUBLISHER ⊂ SUPERADMIN, separato da `is_staff` Django)
+- [x] Property `can_upload`, `can_review`, `can_publish` su `User`
+- [x] Decorator/check in `management/permissions.py` — vedi STATE_MACHINES.md §3
+- [ ] Ruolo "Giuria"/`jury` non presente nell'enum `User.role` (gap blueprint §7.1; valori attuali: athlete, coach, referee, fan, president)
+
+### 15.5 Audit Logging
+
+- [x] `AuditLog` (management) per azioni critiche di sistema (PUBLISH_REPORT, ONBOARDING_*)
+- [x] `MatchReportAuditLog` (matches) per ogni transizione di stato del referto
+- [x] Scrittura entrambi i log alla pubblicazione in `publishing_service.py`
+
+### 15.6 AI Stats Engine v0 → v1
+
+- [x] v0 endpoint query→risposta statico (`api_views.py`) + `AIQueryLog` + matching atleta basico
+- [x] Calcolo statistiche aggregate via `stats_services.py`
+- [ ] v1 chatbot interattivo multi-turn con history (blueprint §7.5)
+- [ ] v1 hybrid mode redirect/direct answer (blueprint §9.1)
+- [ ] v1 function calling con whitelist comandi
+- [ ] v1 RBAC enforcement server-side per query private
+
+### 15.7 Pilot Program
+
+- [x] Modelli `PilotDailyLog`, `PilotBug`, `PilotFeedback`, `PilotReview`
+- [x] Service `pilot_services.py` per aggregazione e analisi
+- [x] Command `check_pilot_alerts` (alert automatici su soglie)
+- [x] Command `send_pilot_report` (report periodico)
+- [x] State machines PilotBug (6 stati) e PilotFeedback (5 stati) — STATE_MACHINES.md §8-§9
+
+### 15.8 Ops Commands
+
+- [x] `ops_check` — health check completo applicazione
+- [x] `run_scheduler` — dispatcher tasks schedulati
+- [x] `rebuild_standings` — rebuild classifica manuale
+- [x] `monitor_integrity` — monitoraggio integrità dati
+- [x] `ingest_emails` — pull email in ingresso
+- [x] `send_pilot_report` — report operativo periodico
+- [ ] Fix exit code `rebuild_standings` (vedi §15.2)
+
+### 15.9 Coverage Gaps — feature senza test dedicati
+
+- [ ] Aggiungere test dedicati per **Convocations** (state machine 4 stati + property time-based)
+- [ ] Aggiungere test dedicati per **Training Management** (presenze + geofencing)
+- [ ] Aggiungere test dedicati per **Team Communications** (Post, Comment, ChatMessage)
+- [ ] Aggiungere test dedicati per **Sponsors** (JSONField serialization)
+
 ---
 
 ← [Macro precedente](14_referto_digitale_mobile.md)
