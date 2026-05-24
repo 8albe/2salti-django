@@ -1,6 +1,6 @@
 ## 2. Pagina pubblica delle partite
 
-Stato: 🔄 In corso
+Stato: ✅ Completato
 
 Tabellino partita completo: marcatori, eventi (espulsioni, cartellini, timeout), score per periodo, arbitri, venue, data.
 
@@ -13,11 +13,11 @@ Tabellino partita completo: marcatori, eventi (espulsioni, cartellini, timeout),
 ### 2.2 Vista pubblica
 
 - [x] Vista dettaglio partita base in `matches/views.py`
-- [ ] Tabellino marcatori completo (raggruppamento per squadra)
-- [ ] Cronologia eventi con timestamp e periodo
-- [ ] Score per periodo visualizzato esplicitamente
-- [ ] Sezione arbitri + venue + data
-- [ ] Link a profili atleti/arbitri dalla pagina partita
+- [x] Tabellino marcatori completo (raggruppamento per squadra)
+- [x] Cronologia eventi con timestamp e periodo
+- [x] Score per periodo visualizzato esplicitamente
+- [x] Sezione arbitri + venue + data
+- [x] Link a profili atleti/arbitri dalla pagina partita
 
 ---
 
