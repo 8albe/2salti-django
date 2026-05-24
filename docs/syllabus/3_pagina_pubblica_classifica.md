@@ -13,10 +13,13 @@ Classifica per campionato/stagione: punti, gol fatti/subiti, partite giocate/vin
 
 ### 3.2 Vista pubblica
 
-- [ ] Tabella classifica con colonne PG/V/N/P/GF/GS/PT
+- [x] Tabella classifica con colonne PG/V/N/P/GF/GS/PT
 - [ ] Filtro per stagione (oggi `League.season` è CharField)
+  - Bloccato: nessuna League storica nel DB dev. Richiede modello Season autonomo (gap §10) — deferire a sprint futuro.
 - [ ] Modello `Season` autonomo (gap blueprint §10)
+  - Gap §10 blueprint — fuori scope Sprint A.
 - [ ] Modello `Venue/Impianto` autonomo (gap blueprint §10 — oggi `Match.location` CharField)
+  - Gap §10 blueprint — fuori scope Sprint A.
 
 ---
 
