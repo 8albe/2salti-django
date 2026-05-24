@@ -6,11 +6,11 @@ KO residui sulla test suite e debiti tecnici aperti.
 
 ### 15.1 Cluster KO residui
 
-- [ ] Cluster A — Public API legacy behavior (3 KO): endpoint `api_league_list` e `api_team_detail` rimossi, chiave `name`→`full_name`. Richiede decisione backward-compatibility
-- [ ] Cluster D — dedup logic (1 KO): verifica `MatchReportUploadForm.clean()` post-fix `f3179c1`
-- [ ] Cluster E — OCR service no-file guard (3 KO): guardia early-return in `ocr_service.py:254` che cortocircuita NEEDS_REVIEW
-- [ ] Cluster I — reconciliation blocker: verifica auto-risoluzione test 22 post Policy A (`c787b11`)
-- [ ] Recount KO post-fix 10-mag (`a9ca246` audit trail + `b97e9e5` event types refactor)
+- [x] Cluster A — Public API legacy behavior (3 KO): endpoint `api_league_list` e `api_team_detail` rimossi, chiave `name`→`full_name`. Richiede decisione backward-compatibility
+- [x] Cluster D — dedup logic (1 KO): verifica `MatchReportUploadForm.clean()` post-fix `f3179c1`
+- [x] Cluster E — OCR service no-file guard (3 KO): guardia early-return in `ocr_service.py:254` che cortocircuita NEEDS_REVIEW
+- [x] Cluster I — reconciliation blocker: verifica auto-risoluzione test 22 post Policy A (`c787b11`)
+- [x] Recount KO post-fix 10-mag (`a9ca246` audit trail + `b97e9e5` event types refactor)
 
 ### 15.2 Debiti aperti
 
@@ -64,7 +64,7 @@ KO residui sulla test suite e debiti tecnici aperti.
 - [x] `monitor_integrity` — monitoraggio integrità dati
 - [x] `ingest_emails` — pull email in ingresso
 - [x] `send_pilot_report` — report operativo periodico
-- [ ] Fix exit code `rebuild_standings` (vedi §15.2)
+- vedi §15.2 per il task Fix exit code `rebuild_standings`
 
 ### 15.9 Coverage Gaps — feature senza test dedicati
 

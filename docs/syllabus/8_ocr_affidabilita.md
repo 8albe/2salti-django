@@ -17,8 +17,8 @@ Miglioramento accuracy, preprocessing, gestione errori, dataset test, qualità d
 - [ ] Dataset di test con referti reali rappresentativi (accuracy baseline misurabile)
 - [ ] Gestione multi-page PDF: concatenazione pagine prima dell'estrazione
 - [ ] Metriche qualità: success rate per campo, tempo medio upload→publish
-- [ ] Cluster E KO residui — guardia early-return in `ocr_service.py:254` che cortocircuita exception path per NEEDS_REVIEW
-- [ ] Cluster D KO residui — verifica `MatchReportUploadForm.clean()` interroga davvero `MatchReport.objects.filter(file_hash=…)`
+- [x] Cluster E KO residui — guardia early-return in `ocr_service.py:254` che cortocircuita exception path per NEEDS_REVIEW
+- [x] Cluster D KO residui — verifica `MatchReportUploadForm.clean()` interroga davvero `MatchReport.objects.filter(file_hash=…)`
 
 ### 8.3 Match Report Workflow
 
