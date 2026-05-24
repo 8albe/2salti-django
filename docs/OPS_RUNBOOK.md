@@ -48,7 +48,7 @@ Tre workflow da seguire in modo disciplinato ogni sessione.
 
 **B. Fine sessione — aggiornamento memoria**
 
-1. Claude Code aggiorna i file in `docs/` toccati nella sessione (BLUEPRINT.md, SYLLABUS.md, OPS_RUNBOOK.md, TEST_DEBT_TRIAGE.md, session note).
+1. Claude Code aggiorna i file in `docs/` toccati nella sessione (BLUEPRINT.md, SYLLABUS.md, OPS_RUNBOOK.md, session note).
 2. Commit + push su GitHub (branch `dev`).
 3. Sul PC Windows: Syncthing sincronizza automaticamente entro pochi minuti.
 4. Obsidian mostra la situazione aggiornata.
