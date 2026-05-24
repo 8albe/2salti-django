@@ -26,7 +26,6 @@ Prima di iniziare qualunque task, identifica quale documento consultare.
 | Macchine a stati di tutti i modelli | [[STATE_MACHINES.md]] | 9 state machine verificate sul codice con transizioni e side effects |
 | Mapping termini blueprint ↔ modelli Django | [[DOMAIN_GLOSSARY.md]] | 30+ entità, note tecniche su Match.is_public e onboarding_state |
 | Procedure operative infrastruttura | [[OPS_RUNBOOK.md]] | Deploy, trappole tecniche, protocollo protected file, sicurezza |
-| Debiti tecnici test suite | [[TEST_DEBT_TRIAGE.md]] | Storico KO, cluster residui, quick wins |
 | Capire il "perché" di una decisione di prodotto | [[BLUEPRINT.md]] | visione, UX, business model (italiano) |
 | Roadmap e priorità feature | [[SYLLABUS.md]] | 15 macro-obiettivi funzionali con dettaglio in [docs/syllabus/](docs/syllabus/) |
 | Regole, comandi, convenzioni di sviluppo | CLAUDE.md (questo file) | regole operative |
