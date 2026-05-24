@@ -32,6 +32,35 @@ Se il pull tocca solo documentazione, test, fixture di dati o altri artefatti no
 
 L'introduzione di un meccanismo di allineamento automatico — post-commit hook nella home che ricordi il pull, cron che rilevi divergenze, o qualsiasi altra soluzione equivalente — vive nel backlog come side-quest aperta. Finché non è implementata, la disciplina manuale è l'unico meccanismo; se la nota di sessione del giorno include un commit significativo e non menziona il pull sul deploy, è probabile che il deploy stia già accumulando deriva.
 
+### 2.1 Workflow standard di sessione
+
+Tre workflow da seguire in modo disciplinato ogni sessione.
+
+**A. Sviluppo e deploy codice**
+
+1. Lavora in `/home/alberto/` su branch `dev`.
+2. `git push origin dev` — GitHub aggiornato.
+3. Entro 2 minuti `dev.2salti.com` si aggiorna automaticamente (auto-pull attivo su `/opt/2salti-dev/`).
+4. Testa su `dev.2salti.com`.
+5. Quando OK: `git checkout master && git merge dev && git push origin master`.
+6. Sul VPS: `cd /opt/2salti-new && git pull origin master` + `sudo systemctl reload 2salti` (o `restart` se cambia `ExecStart` o variabili d'ambiente).
+7. `2salti.com` aggiornato — verifica con `curl -I https://2salti.com/` dopo `sleep 3` (vedi §12.2).
+
+**B. Fine sessione — aggiornamento memoria**
+
+1. Claude Code aggiorna i file in `docs/` toccati nella sessione (BLUEPRINT.md, SYLLABUS.md, OPS_RUNBOOK.md, TEST_DEBT_TRIAGE.md, session note).
+2. Commit + push su GitHub (branch `dev`).
+3. Sul PC Windows: Syncthing sincronizza automaticamente entro pochi minuti.
+4. Obsidian mostra la situazione aggiornata.
+
+**C. Approvazione modifiche memoria via Claude Code Work**
+
+1. Claude Code Work deposita le modifiche proposte nella cartella `cowork/` sul PC.
+2. Produce un riassunto: quali file, cosa ha cambiato (evidenziato con callout `> [!CHANGE]`).
+3. Alberto legge in Obsidian e rimuove il callout dai blocchi che non approva.
+4. Dice "approvato" — Claude Code Work sposta il contenuto ancora evidenziato nella cartella `alberto/`.
+5. Alberto esegue `git add` + `git commit` + `git push` dei file approvati.
+
 ## 3. Trappole tecniche note
 
 ### 3.1 `git rm --cached` + file dirty = pull abortito
