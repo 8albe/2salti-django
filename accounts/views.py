@@ -4,6 +4,7 @@ from django.contrib.auth.decorators import login_required
 from .forms import SignUpForm, UserSetupForm, AthleteSetupForm, CoachSetupForm, RefereeSetupForm, FanSetupForm
 from .models import User
 from matches.models import Match, MatchReport
+from management.models import Membership
 from django.db import models
 
 def signup(request):
@@ -393,13 +394,23 @@ def profile(request, username):
     elif user.role == 'coach':
         profile = user.coach_profile
         context['coach_profile'] = profile
-        
-        if profile.current_team:
-            matches = Match.objects.filter(
-                models.Q(home_team=profile.current_team) | 
-                models.Q(away_team=profile.current_team)
+
+        coached_memberships = Membership.objects.filter(
+            user=user,
+            role='HEAD_COACH'
+        ).select_related('team', 'team__society', 'team__league').order_by('-created_at')
+        context['coached_memberships'] = coached_memberships
+
+        coached_team_ids = list(coached_memberships.values_list('team_id', flat=True))
+        direct_matches = None
+        if coached_team_ids:
+            direct_matches = Match.objects.filter(
+                models.Q(home_team__in=coached_team_ids) |
+                models.Q(away_team__in=coached_team_ids)
             ).order_by('-match_date')[:10]
-            context['team_matches'] = matches
+            context['direct_matches'] = direct_matches
+
+        if profile.current_team:
             context['current_team'] = profile.current_team
             context['league'] = profile.current_team.league
             context['league_standings'] = profile.current_team.league.get_standings()

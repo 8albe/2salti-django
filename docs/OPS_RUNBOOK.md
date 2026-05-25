@@ -401,6 +401,20 @@ Scoperto il 2-mag durante diagnosi fix #2 Cluster F (commit `0ad0b16`).
 
 **Risolto (commit `b97e9e5` del 10-mag):** event types ridotti a 5 canonici (GOAL, EXCLUSION_20, YELLOW_CARD, RED_CARD, TIMEOUT), eliminato EXTENDED_EVENT_TYPES (codice morto, definito in `schema.py` ma mai referenziato), allineati prompt OCR in `vision_providers.py` e `ocr_providers/openai.py` al nuovo set + OTHER catch-all. Adattati i consumer (`accounts.models.update_stats`, `matches.views`, `matches.stats_services`, `seed_match`, `verify_consistency`) e i relativi test. Verifica: `manage.py check` clean, `manage.py test matches` 172 passati / 2 skipped.
 
+### 10.4 `Membership` manca `start_date`/`end_date` — APERTO
+
+Scoperto il 25-mag durante l'implementazione di §5.2 (storico coach + partite dirette).
+
+**Sintomo:** `management.models.Membership` traccia ruolo + `is_active` + `created_at`/`updated_at`, ma non ha un intervallo di tenure esplicito. Conseguenze:
+
+- Storico squadre HEAD_COACH (profilo coach) ordinabile solo per `created_at` desc, non per periodo reale.
+- Partite dirette aggregate per squadra senza filtro temporale: includono potenzialmente partite avvenute prima dell'arrivo o dopo l'uscita del coach dalla squadra.
+- Stesso limite applicabile a storico PLAYER (atleti) quando sarà implementata l'equivalente sezione "minuti giocati"/storico.
+
+**Workaround attuale (Sprint A):** opzione (a) — aggregazione storica per squadra qualsiasi `is_active`, ordinata per `created_at`. Nota visibile nel template profilo coach.
+
+**Risoluzione futura:** aggiungere `start_date` (DateField, required) e `end_date` (DateField, nullable per tenure attiva) a `Membership`, backfill da `created_at` per i record esistenti, e filtrare query storiche per `start_date <= match.match_date <= COALESCE(end_date, today)`. Coordinare con la transizione `is_active=False` → settare `end_date`.
+
 ## 11. Sicurezza operativa e frontiera reversibile
 
 Questa sezione codifica le regole di sicurezza operativa emerse dalle sessioni di aprile-maggio 2026, e in particolare consolidate dopo l'incidente del 4 maggio 2026 in cui una password sudo in chiaro è stata trovata nella history pubblica del repo (`install_service.sh`, commit `473c296` del 15 marzo 2026). La regola madre è che le operazioni con effetti permanenti, distruttivi o privilegiati passano per Alberto e mai per l'agente, e che i segreti non transitano mai in contesti condivisi.
