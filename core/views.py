@@ -81,57 +81,52 @@ def home(request):
     })
 
 def sport_detail(request, slug):
-    """Dashboard sport con calendario"""
+    """Dashboard sport con classifica, ultimi risultati e prossime partite per campionato."""
     sport = get_object_or_404(Sport, slug=slug)
-    
-    # Raggruppa campionati e relative partite recenti
+    now = timezone.now()
+
     leagues = sport.leagues.all().prefetch_related(
         'matches__home_team__society',
-        'matches__away_team__society'
+        'matches__away_team__society',
     )
-    
+
     leagues_data = []
     for league in leagues:
-        # Find the next matchday (first match in future + 4 days window)
-        from django.utils import timezone
-        import datetime
-        now = timezone.now()
-        
-        # 1. Trova la prima partita futura
-        next_match = league.matches.filter(match_date__gte=now).order_by('match_date').first()
-        
-        matches = []
-        if next_match:
-            # 2. Definisci il range del "turno" (es. Venerdì -> Lunedì = 4 giorni)
-            start_date = next_match.match_date.date()
-            end_date = start_date + datetime.timedelta(days=4)
-            
-            # 3. Prendi tutte le partite in quel range
-            matches = league.matches.filter(
-                match_date__date__range=[start_date, end_date]
-            ).order_by('match_date')
-        else:
-            # Fallback: Se non ci sono partite future, mostra le ultime giocate (ultima giornata)
-            last_match = league.matches.filter(match_date__lt=now).order_by('-match_date').first()
-            if last_match:
-                 end_date = last_match.match_date.date()
-                 start_date = end_date - datetime.timedelta(days=4)
-                 matches = league.matches.filter(
-                    match_date__date__range=[start_date, end_date]
-                ).order_by('match_date')
+        standings = league.get_standings()[:4]
 
-        if matches:
+        last_matches = league.matches.filter(
+            is_finished=True,
+            reports__status='PUBLISHED',
+        ).distinct().order_by('-match_date')[:3]
+
+        next_matches = league.matches.filter(
+            match_date__gt=now,
+            is_finished=False,
+        ).order_by('match_date')[:3]
+
+        if standings or last_matches or next_matches:
             leagues_data.append({
                 'league': league,
-                'matches': matches
+                'standings': standings,
+                'last_matches': last_matches,
+                'next_matches': next_matches,
             })
-            
+
+    all_sports = Sport.objects.filter(leagues__isnull=False).distinct().order_by('name')
+    current_season = (
+        sport.leagues.order_by('-season').first().season
+        if sport.leagues.exists()
+        else ''
+    )
+
     from core.services.seo_service import SEOService
-    
+
     return render(request, 'sport/sport_detail.html', {
-        'sport': sport, 
+        'sport': sport,
         'leagues_data': leagues_data,
         'sport_color': sport.hex_color,
+        'all_sports': all_sports,
+        'current_season': current_season,
         'seo_title': f"Campionati e Classifiche {sport.name}",
         'seo_description': f"Tutte le classifiche e i risultati per il mondo {sport.name}. Segui la tua squadra su 2salti.",
         'structured_data': SEOService.get_breadcrumb_schema(request, [(sport.name, request.path)])

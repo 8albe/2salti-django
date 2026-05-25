@@ -2,6 +2,23 @@
 {% load core_extras %}
 
 {% block content %}
+{% if all_sports|length > 1 %}
+<nav class="mb-8 flex flex-wrap gap-2" aria-label="Seleziona sport">
+    {% for s in all_sports %}
+    {% if s.slug == sport.slug %}
+    <span class="glass-panel px-4 py-2 rounded-full border-2 border-cyan-400 text-white font-bold text-sm">
+        {{ s.name }}
+    </span>
+    {% else %}
+    <a href="{% url 'sport_detail' s.slug %}"
+       class="glass-panel px-4 py-2 rounded-full border border-white/10 text-slate-300 hover:text-white hover:border-cyan-400/50 hover:bg-white/5 transition-all text-sm">
+        {{ s.name }}
+    </a>
+    {% endif %}
+    {% endfor %}
+</nav>
+{% endif %}
+
 <div class="mb-8">
     <h1 class="text-4xl font-bold sport-accent mb-2">{{ sport.name }}</h1>
     <p class="text-slate-400">Stagione {{ current_season|default:"Corrente" }}</p>
@@ -9,7 +26,7 @@
 
 <!-- QUICK LINKS -->
 <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-12">
-    <a href="{% url 'sport_matches' sport.slug %}" 
+    <a href="{% url 'sport_matches' sport.slug %}"
        class="glass-panel p-6 flex items-center justify-between group hover:bg-white/5 transition-all border-l-4 border-cyan-500">
         <div>
             <h3 class="text-xl font-bold text-white mb-1">📅 Risultati</h3>
@@ -31,7 +48,7 @@
     </div>
 </div>
 
-<!-- CAMPIONATI E PARTITE -->
+<!-- CAMPIONATI -->
 <div class="space-y-12">
     {% for item in leagues_data %}
     <div class="glass-panel p-6">
@@ -54,14 +71,62 @@
             </a>
         </div>
 
-        <!-- MATCH LIST -->
-        <div class="glass-panel overflow-hidden border border-white/10 rounded-xl bg-slate-900/50">
-            <div class="divide-y divide-white/5">
-                {% for match in item.matches %}
-                {% include 'matches/compact_match_row.html' with match=match %}
-                {% endfor %}
+        <!-- MINI CLASSIFICA -->
+        {% if item.standings %}
+        <div class="mb-6">
+            <h3 class="text-sm font-bold uppercase tracking-wider text-slate-400 mb-3">Classifica</h3>
+            <div class="glass-panel overflow-hidden border border-white/10 rounded-xl bg-slate-900/50">
+                <table class="w-full text-sm">
+                    <thead class="bg-white/5 text-slate-400 uppercase text-xs">
+                        <tr>
+                            <th class="px-3 py-2 text-left w-12">Pos</th>
+                            <th class="px-3 py-2 text-left">Squadra</th>
+                            <th class="px-3 py-2 text-center w-12">PG</th>
+                            <th class="px-3 py-2 text-center w-12">PT</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-white/5 text-white">
+                        {% for row in item.standings %}
+                        <tr>
+                            <td class="px-3 py-2 font-bold text-cyan-400">{{ row.rank|default:forloop.counter }}</td>
+                            <td class="px-3 py-2">{{ row.team.society.name }}</td>
+                            <td class="px-3 py-2 text-center text-slate-300">{{ row.played }}</td>
+                            <td class="px-3 py-2 text-center font-bold">{{ row.points }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
             </div>
         </div>
+        {% endif %}
+
+        <!-- ULTIMI RISULTATI -->
+        {% if item.last_matches %}
+        <div class="mb-6">
+            <h3 class="text-sm font-bold uppercase tracking-wider text-slate-400 mb-3">Ultimi Risultati</h3>
+            <div class="glass-panel overflow-hidden border border-white/10 rounded-xl bg-slate-900/50">
+                <div class="divide-y divide-white/5">
+                    {% for match in item.last_matches %}
+                    {% include 'matches/compact_match_row.html' with match=match %}
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- PROSSIME PARTITE -->
+        {% if item.next_matches %}
+        <div>
+            <h3 class="text-sm font-bold uppercase tracking-wider text-slate-400 mb-3">Prossime Partite</h3>
+            <div class="glass-panel overflow-hidden border border-white/10 rounded-xl bg-slate-900/50">
+                <div class="divide-y divide-white/5">
+                    {% for match in item.next_matches %}
+                    {% include 'matches/compact_match_row.html' with match=match %}
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+        {% endif %}
     </div>
     {% empty %}
     <div class="text-center py-12 text-slate-500">
