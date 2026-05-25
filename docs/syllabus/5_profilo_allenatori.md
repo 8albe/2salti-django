@@ -12,9 +12,9 @@ Anagrafica, squadra attuale, storico squadre, partite dirette.
 
 - [x] Pagina pubblica profilo coach dedicata
 - [x] Sezione squadra attuale + storico (da `Membership` ruolo HEAD_COACH)
-  - Implementato con **opzione (a)**: tutte le `Membership` con `role='HEAD_COACH'`, ordinate per `created_at` desc, qualsiasi `is_active`. Debito: [OPS_RUNBOOK §10.4](../OPS_RUNBOOK.md#104-membership-manca-start_dateend_date--aperto) — manca `start_date`/`end_date` su `Membership`.
+  - Implementato con **opzione (a)**: tutte le `Membership` con `role='HEAD_COACH'`, ordinate per `created_at` desc, qualsiasi `is_active`. Debito: manca `start_date`/`end_date` su `Membership` (tracciato in OPS_RUNBOOK §10.4).
 - [x] Sezione partite dirette (aggregazione da `Match`)
-  - Implementato con **opzione (a)**: unione delle partite di tutte le squadre con `Membership` HEAD_COACH (qualsiasi stato), ordinate per `match_date` desc, limite 10. Non filtrato per periodo di tenure. Stesso debito di [OPS_RUNBOOK §10.4](../OPS_RUNBOOK.md#104-membership-manca-start_dateend_date--aperto).
+  - Implementato con **opzione (a)**: unione delle partite di tutte le squadre con `Membership` HEAD_COACH (qualsiasi stato), ordinate per `match_date` desc, limite 10. Non filtrato per periodo di tenure. Stesso debito (OPS_RUNBOOK §10.4).
 
 ---
 
