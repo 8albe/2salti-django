@@ -16,6 +16,7 @@ Anagrafica, squadra attuale, storico squadre, statistiche (gol, presenze, minuti
 - [ ] Sezione squadra attuale + storico squadre (da `Membership`)
 - [ ] Sezione statistiche stagione corrente
 - [ ] Statistica "minuti giocati" (non presente fra le metriche correnti)
+  - ⏸ Deferito — richiede SUB_IN/SUB_OUT events, fuori scope Sprint A. Gap aperto in §10.
 
 ---
 

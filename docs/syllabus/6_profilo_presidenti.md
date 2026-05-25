@@ -10,8 +10,8 @@ Anagrafica, società, ruolo.
 
 ### 6.2 Vista pubblica
 
-- [ ] Pagina pubblica profilo presidente/dirigente
-- [ ] Sezione società di riferimento e ruolo
+- [x] Pagina pubblica profilo presidente/dirigente
+- [x] Sezione società di riferimento e ruolo
 
 ---
 

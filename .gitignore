@@ -118,3 +118,8 @@ SESSION_NOTE_*.md
 
 # One-off tools
 /git-filter-repo
+docs/CLAUDE.md
+
+# Per-machine editor/sync artifacts
+docs/.obsidian/
+docs/.stfolder/
