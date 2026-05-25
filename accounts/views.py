@@ -380,12 +380,45 @@ def profile(request, username):
             events__player=user,
             reports__status=MatchReport.Status.PUBLISHED
         ).distinct().order_by('-match_date')[:10]
-        
+
         context.update({
             'athlete_profile': profile,
             'recent_matches': matches,
         })
-        
+
+        # Storico squadre PLAYER
+        player_memberships = Membership.objects.filter(
+            user=user,
+            role='PLAYER'
+        ).select_related('team', 'team__society', 'team__league').order_by('-created_at')
+        context['player_memberships'] = player_memberships
+
+        # Stat stagione corrente (workaround senza Season autonomo)
+        # Stagione calcistica: 1 settembre → 31 agosto, ancorata a Europe/Rome
+        from django.utils import timezone
+        from datetime import datetime
+        from matches.models import MatchEvent
+
+        now = timezone.now()
+        season_year = now.year if now.month >= 9 else now.year - 1
+        season_start = timezone.make_aware(datetime(season_year, 9, 1))
+
+        season_goals = MatchEvent.objects.filter(
+            player=user,
+            event_type='GOAL',
+            match__match_date__gte=season_start,
+            match__reports__status=MatchReport.Status.PUBLISHED
+        ).count()
+
+        season_matches = Match.objects.filter(
+            events__player=user,
+            match_date__gte=season_start,
+            reports__status=MatchReport.Status.PUBLISHED
+        ).distinct().count()
+
+        context['season_goals'] = season_goals
+        context['season_matches'] = season_matches
+
         if profile.current_team:
              context['current_team'] = profile.current_team
              context['league'] = profile.current_team.league

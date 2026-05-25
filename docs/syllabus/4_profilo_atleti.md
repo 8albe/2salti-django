@@ -12,9 +12,10 @@ Anagrafica, squadra attuale, storico squadre, statistiche (gol, presenze, minuti
 
 ### 4.2 Vista pubblica
 
-- [ ] Pagina pubblica profilo atleta dedicata
-- [ ] Sezione squadra attuale + storico squadre (da `Membership`)
-- [ ] Sezione statistiche stagione corrente
+- [x] Pagina pubblica profilo atleta dedicata
+- [x] Sezione squadra attuale + storico squadre (da `Membership`)
+- [x] Sezione statistiche stagione corrente
+  - Cutoff stagione calcistica: 1 settembre → 31 agosto, ancorato a `Europe/Rome` via `timezone.make_aware`. Aggregazione da `MatchEvent` con `match__reports__status=PUBLISHED`.
 - [ ] Statistica "minuti giocati" (non presente fra le metriche correnti)
   - ⏸ Deferito — richiede SUB_IN/SUB_OUT events, fuori scope Sprint A. Gap aperto in §10.
 
