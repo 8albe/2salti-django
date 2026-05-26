@@ -1,6 +1,6 @@
 ## 5. Pagina profilo pubblica degli allenatori
 
-Stato: 🔄 In corso
+Stato: ✅ Completato
 
 Anagrafica, squadra attuale, storico squadre, partite dirette.
 

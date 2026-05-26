@@ -1,6 +1,6 @@
 ## 6. Pagina profilo pubblica dei presidenti / dirigenti
 
-Stato: 🔄 In corso
+Stato: ✅ Completato
 
 Anagrafica, società, ruolo.
 

@@ -14,10 +14,10 @@ Punto d'ingresso operativo del progetto. Per la visione di prodotto vedi [BLUEPR
 
 ---
 
-## 1. Pagina home pubblica di ogni sport 🔄
+## 1. Pagina home pubblica di ogni sport ✅
 → [Dettaglio](syllabus/1_pagina_home_pubblica.md)
 
-## 2. Pagina pubblica delle partite 🔄
+## 2. Pagina pubblica delle partite ✅
 → [Dettaglio](syllabus/2_pagina_pubblica_partite.md)
 
 ## 3. Pagina pubblica della classifica 🔄
@@ -26,10 +26,10 @@ Punto d'ingresso operativo del progetto. Per la visione di prodotto vedi [BLUEPR
 ## 4. Pagina profilo pubblica degli atleti 🔄
 → [Dettaglio](syllabus/4_profilo_atleti.md)
 
-## 5. Pagina profilo pubblica degli allenatori 🔄
+## 5. Pagina profilo pubblica degli allenatori ✅
 → [Dettaglio](syllabus/5_profilo_allenatori.md)
 
-## 6. Pagina profilo pubblica dei presidenti / dirigenti 🔄
+## 6. Pagina profilo pubblica dei presidenti / dirigenti ✅
 → [Dettaglio](syllabus/6_profilo_presidenti.md)
 
 ## 7. Pagina profilo pubblica dei fan/genitori ⏳
@@ -47,13 +47,13 @@ Punto d'ingresso operativo del progetto. Per la visione di prodotto vedi [BLUEPR
 ## 11. Media Gallery e AI Tagging ⏳
 → [Dettaglio](syllabus/11_media_gallery.md)
 
-## 12. Live Alerts e notifiche push ⏳
+## 12. Live Alerts e notifiche push 🔄
 → [Dettaglio](syllabus/12_live_alerts.md)
 
 ## 13. Season Archive e Season Recap PDF 🔄
 → [Dettaglio](syllabus/13_season_archive.md)
 
-## 14. Referto digitale mobile (Jury App) ⏳
+## 14. Referto digitale mobile (Jury App) 🔄
 → [Dettaglio](syllabus/14_referto_digitale_mobile.md)
 
 ## 15. Stabilità tecnica — test suite e debito 🔄
