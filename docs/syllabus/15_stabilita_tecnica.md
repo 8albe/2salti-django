@@ -15,7 +15,7 @@ KO residui sulla test suite e debiti tecnici aperti.
 ### 15.2 Debiti aperti
 
 - [x] Bug slug `pallanuotopallanuoto` (Sport #6) — fix dato in prod 26-mag + regression net in `core/tests.py` (`SportSlugInvariantTest`). Causa: edit manuale, codice già corretto.
-- [x] ~~Stats incoerenti `mrossi_test` — discrepanza `AthleteProfile.total_goals` vs `MatchEvent`~~ — discrepanza confermata su dev (`AthleteProfile.total_goals=10` vs 6 `MatchEvent`/`GOAL`, ovvero 4 goal fantasma). Trattandosi di utente di test, la risoluzione confluisce in §15.2 audit utenti/società di test: cancellando `mrossi_test` la discrepanza sparisce. Verificato 2026-05-26.
+- [x] Stats incoerenti `mrossi_test` — fix confermato — `update_stats()` filtrava `MatchEvent` senza considerare lo stato del report (contava anche DRAFT/VALIDATED). Fix: aggiunto filtro `match__reports__status=PUBLISHED` + spostata chiamata `update_stats()` in `publishing_service` dopo la transizione di stato a PUBLISHED. Aggiunti 2 test di regressione in `accounts/tests_stats.py`. Commit 74177a0.
 - [ ] Lista B audit utenti/società di test (admin_test_v2, Pro Recco Test, ecc.) — inventario dev 2026-05-26:
   - Utenti test-like (7): `admin_bot` (super), `admin_test` (super), `admin_test_v2`, `athl_test_v2`, `mrossi_test`, `referee_api_test`, `testadmin` (super). Da cancellare tutti (`mrossi_test` chiude anche la discrepanza stats sopra).
   - Società test (2): `AN Brescia Test` (id=4), `Pro Recco Test` (id=3). Da cancellare.
