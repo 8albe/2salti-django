@@ -415,6 +415,12 @@ Scoperto il 25-mag durante l'implementazione di §5.2 (storico coach + partite d
 
 **Risoluzione futura:** aggiungere `start_date` (DateField, required) e `end_date` (DateField, nullable per tenure attiva) a `Membership`, backfill da `created_at` per i record esistenti, e filtrare query storiche per `start_date <= match.match_date <= COALESCE(end_date, today)`. Coordinare con la transizione `is_active=False` → settare `end_date`.
 
+### 10.5 Pulizia utenti/società di test su prod — APERTO (scoperto 26-mag in Sprint B)
+
+- Su dev: admin_bot cancellato, rimasto solo albe_admin come superuser. Nessuna società test trovata.
+- Su prod: non verificato — richiede sessione dedicata con accesso esplicito al VPS.
+- Da fare: inventario utenti test su prod, cancellazione controllata.
+
 ## 11. Sicurezza operativa e frontiera reversibile
 
 Questa sezione codifica le regole di sicurezza operativa emerse dalle sessioni di aprile-maggio 2026, e in particolare consolidate dopo l'incidente del 4 maggio 2026 in cui una password sudo in chiaro è stata trovata nella history pubblica del repo (`install_service.sh`, commit `473c296` del 15 marzo 2026). La regola madre è che le operazioni con effetti permanenti, distruttivi o privilegiati passano per Alberto e mai per l'agente, e che i segreti non transitano mai in contesti condivisi.
