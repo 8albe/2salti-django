@@ -15,7 +15,7 @@ KO residui sulla test suite e debiti tecnici aperti.
 ### 15.2 Debiti aperti
 
 - [x] Bug slug `pallanuotopallanuoto` (Sport #6) — fix dato in prod 26-mag + regression net in `core/tests.py` (`SportSlugInvariantTest`). Causa: edit manuale, codice già corretto.
-- [ ] Stats incoerenti `mrossi_test` — discrepanza `AthleteProfile.total_goals` vs `MatchEvent`
+- [x] ~~Stats incoerenti `mrossi_test` — discrepanza `AthleteProfile.total_goals` vs `MatchEvent`~~ — obsoleto: utente `mrossi_test` non trovato né su dev né su prod, nessun `AthleteProfile` con `total_goals>0`, task stale (verificato 2026-05-26)
 - [ ] Lista B audit utenti/società di test (admin_test_v2, Pro Recco Test, ecc.)
 - [ ] Ridurre superuser di test da 5 a 1–2
 - [x] Fix `rebuild_standings` exit code (esce 0 anche su errore — OPS_RUNBOOK §3.6)
