@@ -56,5 +56,5 @@ Punto d'ingresso operativo del progetto. Per la visione di prodotto vedi [BLUEPR
 ## 14. Referto digitale mobile (Jury App) ⏳
 → [Dettaglio](syllabus/14_referto_digitale_mobile.md)
 
-## 15. Stabilità tecnica — test suite e debito ⏳
+## 15. Stabilità tecnica — test suite e debito 🔄
 → [Dettaglio](syllabus/15_stabilita_tecnica.md)
