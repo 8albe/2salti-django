@@ -88,6 +88,7 @@ python manage.py run_scheduler
 
 - Settings: [config/settings.py](config/settings.py) — Root URLs: [config/urls.py](config/urls.py)
 - User model: `accounts.User` (`AUTH_USER_MODEL`) — always use `get_user_model()`
+- `Sport` è in `core.models`, non in un'app separata: `from core.models import Sport`
 - Env vars loaded from `.env` via `python-dotenv`. Language: `it`, timezone: `Europe/Rome`
 - SQLite in dev, configurable for PostgreSQL in production
 - URL prefixes: `/` → core, `/accounts/` → accounts, `/matches/` → matches, `/api/` → matches REST v1, `/management/` → management, `/admin/` → custom op_admin_site
