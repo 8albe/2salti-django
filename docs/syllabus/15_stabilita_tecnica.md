@@ -15,9 +15,12 @@ KO residui sulla test suite e debiti tecnici aperti.
 ### 15.2 Debiti aperti
 
 - [x] Bug slug `pallanuotopallanuoto` (Sport #6) — fix dato in prod 26-mag + regression net in `core/tests.py` (`SportSlugInvariantTest`). Causa: edit manuale, codice già corretto.
-- [x] ~~Stats incoerenti `mrossi_test` — discrepanza `AthleteProfile.total_goals` vs `MatchEvent`~~ — obsoleto: utente `mrossi_test` non trovato né su dev né su prod, nessun `AthleteProfile` con `total_goals>0`, task stale (verificato 2026-05-26)
-- [ ] Lista B audit utenti/società di test (admin_test_v2, Pro Recco Test, ecc.)
-- [ ] Ridurre superuser di test da 5 a 1–2
+- [x] ~~Stats incoerenti `mrossi_test` — discrepanza `AthleteProfile.total_goals` vs `MatchEvent`~~ — discrepanza confermata su dev (`AthleteProfile.total_goals=10` vs 6 `MatchEvent`/`GOAL`, ovvero 4 goal fantasma). Trattandosi di utente di test, la risoluzione confluisce in §15.2 audit utenti/società di test: cancellando `mrossi_test` la discrepanza sparisce. Verificato 2026-05-26.
+- [ ] Lista B audit utenti/società di test (admin_test_v2, Pro Recco Test, ecc.) — inventario dev 2026-05-26:
+  - Utenti test-like (7): `admin_bot` (super), `admin_test` (super), `admin_test_v2`, `athl_test_v2`, `mrossi_test`, `referee_api_test`, `testadmin` (super). Da cancellare tutti (`mrossi_test` chiude anche la discrepanza stats sopra).
+  - Società test (2): `AN Brescia Test` (id=4), `Pro Recco Test` (id=3). Da cancellare.
+  - Da verificare cross-prod prima dell'esecuzione (richiede accesso esplicito al VPS).
+- [ ] Ridurre superuser di test da 5 a 1–2 — inventario dev 2026-05-26: 7 superuser (`admin`, `admin_bot`, `admin_test`, `albe_admin`, `antigravity_admin`, `testadmin`, `verifyadmin`). Target: mantenere solo `admin` + `albe_admin`, cancellare gli altri 5.
 - [x] Fix `rebuild_standings` exit code (esce 0 anche su errore — OPS_RUNBOOK §3.6)
   - Nota: `CommandError` già corretto — fixato invece summary fuorviante su errors>0 (commit 5466c25)
 
