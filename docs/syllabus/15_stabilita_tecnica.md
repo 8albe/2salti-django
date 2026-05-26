@@ -14,7 +14,7 @@ KO residui sulla test suite e debiti tecnici aperti.
 
 ### 15.2 Debiti aperti
 
-- [ ] Bug slug `pallanuotopallanuoto` (Sport #6) — slug duplicato/concatenato
+- [x] Bug slug `pallanuotopallanuoto` (Sport #6) — fix dato in prod 26-mag + regression net in `core/tests.py` (`SportSlugInvariantTest`). Causa: edit manuale, codice già corretto.
 - [ ] Stats incoerenti `mrossi_test` — discrepanza `AthleteProfile.total_goals` vs `MatchEvent`
 - [ ] Lista B audit utenti/società di test (admin_test_v2, Pro Recco Test, ecc.)
 - [ ] Ridurre superuser di test da 5 a 1–2
