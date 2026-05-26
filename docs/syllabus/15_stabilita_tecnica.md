@@ -37,7 +37,7 @@ KO residui sulla test suite e debiti tecnici aperti.
 - [x] Sistema 5 livelli (UPLOADER ⊂ REVIEWER ⊂ PUBLISHER ⊂ SUPERADMIN, separato da `is_staff` Django)
 - [x] Property `can_upload`, `can_review`, `can_publish` su `User`
 - [x] Decorator/check in `management/permissions.py` — vedi STATE_MACHINES.md §3
-- [ ] Ruolo "Giuria"/`jury` non presente nell'enum `User.role` (gap blueprint §7.1; valori attuali: athlete, coach, referee, fan, president)
+- [ ] Ruolo "Giuria"/`jury` non presente nell'enum `User.role` (gap blueprint §7.1; valori attuali: athlete, coach, referee, fan, president) — **deferito** — aggiunta non è puntuale: richiede `JuryProfile`, branching onboarding, permessi referto, gating self-registration. Apre 5 decisioni di prodotto. Da pianificare come feature dedicata.
 
 ### 15.5 Audit Logging
 
