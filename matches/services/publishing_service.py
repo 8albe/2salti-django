@@ -138,17 +138,6 @@ class PublishingService:
                     _abort_triggered = True
 
                 if not _abort_triggered:
-                    # 2.5 Aggiornamento Statistiche Atleti (Dati derivati)
-                    # Uniamo atleti nuovi e atleti vecchi per garantire coerenza in caso di rimozione/spostamento (No drift)
-                    all_athletes_to_update = involved_athlete_ids.union(previously_involved_ids)
-
-                    for athlete_id in all_athletes_to_update:
-                        try:
-                            athlete = AthleteProfile.objects.get(user_id=athlete_id)
-                            athlete.update_stats()
-                        except AthleteProfile.DoesNotExist:
-                            pass
-
                     # 3. Transizione di stato referto (Singolarità del Source of Truth)
                     # Downgrading explicitly any other published reports to maintain 1:1 live sync visual guarantee.
                     # Adding an internal note to track the supersede event for operators.
@@ -172,6 +161,19 @@ class PublishingService:
                     report.published_by = user
                     report.published_at = timezone.now()
                     report.save(update_fields=['status', 'published_by', 'published_at'])
+
+                    # 3.4 Aggiornamento Statistiche Atleti (Dati derivati)
+                    # Eseguito DOPO la transizione a PUBLISHED perché update_stats() ora
+                    # filtra MatchEvent per match__reports__status=PUBLISHED.
+                    # Uniamo atleti nuovi e atleti vecchi per garantire coerenza in caso di rimozione/spostamento (No drift).
+                    all_athletes_to_update = involved_athlete_ids.union(previously_involved_ids)
+
+                    for athlete_id in all_athletes_to_update:
+                        try:
+                            athlete = AthleteProfile.objects.get(user_id=athlete_id)
+                            athlete.update_stats()
+                        except AthleteProfile.DoesNotExist:
+                            pass
 
                     # 3.5 Audit Trail (MatchReportAuditLog) per publish
                     from matches.models import MatchReportAuditLog
