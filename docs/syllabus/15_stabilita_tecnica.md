@@ -16,11 +16,13 @@ KO residui sulla test suite e debiti tecnici aperti.
 
 - [x] Bug slug `pallanuotopallanuoto` (Sport #6) — fix dato in prod 26-mag + regression net in `core/tests.py` (`SportSlugInvariantTest`). Causa: edit manuale, codice già corretto.
 - [x] Stats incoerenti `mrossi_test` — fix confermato — `update_stats()` filtrava `MatchEvent` senza considerare lo stato del report (contava anche DRAFT/VALIDATED). Fix: aggiunto filtro `match__reports__status=PUBLISHED` + spostata chiamata `update_stats()` in `publishing_service` dopo la transizione di stato a PUBLISHED. Aggiunti 2 test di regressione in `accounts/tests_stats.py`. Commit 74177a0.
-- [ ] Lista B audit utenti/società di test (admin_test_v2, Pro Recco Test, ecc.) — inventario dev 2026-05-26:
+- [x] Lista B audit utenti/società di test (admin_test_v2, Pro Recco Test, ecc.) — inventario dev 2026-05-26:
   - Utenti test-like (7): `admin_bot` (super), `admin_test` (super), `admin_test_v2`, `athl_test_v2`, `mrossi_test`, `referee_api_test`, `testadmin` (super). Da cancellare tutti (`mrossi_test` chiude anche la discrepanza stats sopra).
   - Società test (2): `AN Brescia Test` (id=4), `Pro Recco Test` (id=3). Da cancellare.
   - Da verificare cross-prod prima dell'esecuzione (richiede accesso esplicito al VPS).
-- [ ] Ridurre superuser di test da 5 a 1–2 — inventario dev 2026-05-26: 7 superuser (`admin`, `admin_bot`, `admin_test`, `albe_admin`, `antigravity_admin`, `testadmin`, `verifyadmin`). Target: mantenere solo `admin` + `albe_admin`, cancellare gli altri 5.
+  - Nota: su dev rimasto solo `albe_admin` come superuser. `admin_bot` cancellato (id=66, `SET_NULL` su `MatchReport.in_review_by`). Nessuna società test trovata su dev. Pulizia prod rinviata a sessione dedicata.
+- [x] Ridurre superuser di test da 5 a 1–2 — inventario dev 2026-05-26: 7 superuser (`admin`, `admin_bot`, `admin_test`, `albe_admin`, `antigravity_admin`, `testadmin`, `verifyadmin`). Target: mantenere solo `admin` + `albe_admin`, cancellare gli altri 5.
+  - Nota: su dev rimasto solo `albe_admin` come superuser — vedi task sopra per dettagli. Pulizia prod rinviata a sessione dedicata.
 - [x] Fix `rebuild_standings` exit code (esce 0 anche su errore — OPS_RUNBOOK §3.6)
   - Nota: `CommandError` già corretto — fixato invece summary fuorviante su errors>0 (commit 5466c25)
 
