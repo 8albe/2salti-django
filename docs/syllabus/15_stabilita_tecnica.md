@@ -18,7 +18,8 @@ KO residui sulla test suite e debiti tecnici aperti.
 - [ ] Stats incoerenti `mrossi_test` — discrepanza `AthleteProfile.total_goals` vs `MatchEvent`
 - [ ] Lista B audit utenti/società di test (admin_test_v2, Pro Recco Test, ecc.)
 - [ ] Ridurre superuser di test da 5 a 1–2
-- [ ] Fix `rebuild_standings` exit code (esce 0 anche su errore — OPS_RUNBOOK §3.6)
+- [x] Fix `rebuild_standings` exit code (esce 0 anche su errore — OPS_RUNBOOK §3.6)
+  - Nota: `CommandError` già corretto — fixato invece summary fuorviante su errors>0 (commit 5466c25)
 
 ### 15.3 Decisione DB
 
