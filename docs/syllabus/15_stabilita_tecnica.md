@@ -74,10 +74,10 @@ KO residui sulla test suite e debiti tecnici aperti.
 
 ### 15.9 Coverage Gaps — feature senza test dedicati
 
-- [ ] Aggiungere test dedicati per **Convocations** (state machine 4 stati + property time-based)
-- [ ] Aggiungere test dedicati per **Training Management** (presenze + geofencing)
-- [ ] Aggiungere test dedicati per **Team Communications** (Post, Comment, ChatMessage)
-- [ ] Aggiungere test dedicati per **Sponsors** (JSONField serialization)
+- [ ] Aggiungere test dedicati per **Convocations** (state machine 4 stati + property time-based) — **rinviato**: modello presente ma nessuna view/service/URL esposta, test attesi a feature implementata
+- [ ] Aggiungere test dedicati per **Training Management** (presenze + geofencing) — **rinviato**: modello presente ma nessuna view/service/URL esposta, test attesi a feature implementata
+- [ ] Aggiungere test dedicati per **Team Communications** (Post, Comment, ChatMessage) — **rinviato**: modello presente ma nessuna view/service/URL esposta, test attesi a feature implementata
+- ~~Aggiungere test dedicati per **Sponsors** (JSONField serialization)~~ — **task stale rimosso**: modello `Sponsor` non esiste nel codice
 
 ---
 
