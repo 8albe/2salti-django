@@ -37,7 +37,6 @@ class Command(BaseCommand):
                 total += 1
                 if not self._process_league(league, verify, DataIntegrityService if verify else None):
                     errors += 1
-            self.stdout.write(self.style.SUCCESS(f"Ricalcolate {total - errors}/{total} classifiche."))
         else:
             # Comportamento predefinito: ricalcola solo le leghe 'dirty'
             leagues = League.objects.filter(needs_rebuild=True)
@@ -53,6 +52,8 @@ class Command(BaseCommand):
 
         if errors:
             raise CommandError(f"Rebuild fallito su {errors}/{total} leghe.")
+        else:
+            self.stdout.write(self.style.SUCCESS(f"Ricalcolate {total}/{total} classifiche."))
 
     def _process_league(self, league, verify, integrity_service):
         if verify and integrity_service:
