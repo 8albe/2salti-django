@@ -453,7 +453,7 @@ Scoperto il 25-mag durante l'implementazione di §5.2 (storico coach + partite d
 - Step 3a (commit `6e0243e`): `MembershipQuerySet.active_at(date)` come API canonica per "membership attiva a una data X", testata con 16 nuovi test in `management.tests_membership_dates`.
 - Step 3b (commit `0eeff1a`): signal `pre_save` su `Membership` che chiude cross-society le membership precedenti settando `end_date=today` quando l'utente cambia team nello stesso ruolo; `_sync_profile_denorm` invocato dopo redeem/approve per allineare `CoachProfile.current_team`/`AthleteProfile.current_team`.
 - Step 3c (commit `0db9307`): refactor `accounts/views.py` con filtro temporale `start_date <= match.match_date <= COALESCE(end_date, today)` su `coached_matches`/`direct_matches` del profilo coach, e ordinamento di `player_memberships`/`coached_memberships` per `start_date`.
-- Step 3d (commit `<TBD>`): rimosse le note disclaimer "Aggregazione storica — non filtrata per periodo di tenure" dai template `athlete_profile.html` e `profile.html` (coach). Doc consolidato: questo runbook + syllabus 5.
+- Step 3d (commit `cbb1491`): rimosse le note disclaimer "Aggregazione storica — non filtrata per periodo di tenure" dai template `athlete_profile.html` e `profile.html` (coach). Doc consolidato: questo runbook + syllabus 5.
 
 **Test:** suite da 239 a 269+ test (16 nuovi `management.tests_membership_dates` + 6 nuovi `accounts.tests_temporal_views`). `manage.py test` verde.
 
