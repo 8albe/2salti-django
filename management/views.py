@@ -15,7 +15,7 @@ from datetime import timedelta
 from django.contrib import messages
 from core.models import Society, Team
 from core.integrations import INTEGRATION_REGISTRY
-from django.db import models
+from django.db import models, transaction
 from matches.models import Match, MatchReport
 from accounts.models import User
 from accounts.utils import onboarding_required
@@ -411,13 +411,17 @@ def approve_membership(request, request_id):
     if request.method == 'POST':
         action = request.POST.get('action')
         if action == 'approve':
+            from management.services.membership_enrollment import _sync_profile_denorm
             req.status = 'APPROVED'
-            Membership.objects.get_or_create(
-                user=req.user,
-                society=req.society,
-                team=req.team,
-                role=req.role
-            )
+            with transaction.atomic():
+                Membership.objects.get_or_create(
+                    user=req.user,
+                    society=req.society,
+                    team=req.team,
+                    role=req.role,
+                    defaults={'start_date': timezone.localdate()},
+                )
+                _sync_profile_denorm(req.user, req.role, req.team, req.society)
             messages.success(request, f"Membro {req.user.username} approvato.")
         else:
             req.status = 'REJECTED'
