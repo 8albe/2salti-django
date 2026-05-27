@@ -14,6 +14,7 @@ from collections import defaultdict
 
 from django.core.management.base import BaseCommand
 from django.db import transaction
+from django.utils import timezone
 
 from management.models import Membership
 
@@ -64,7 +65,7 @@ class Command(BaseCommand):
             nonlocal processed, errors
             for m in candidates_qs.iterator():
                 try:
-                    new_start = m.created_at.date()
+                    new_start = timezone.localtime(m.created_at).date()
                     society_name = m.society.name if m.society_id else "<no-society>"
                     team_name = m.team.name if m.team_id else "<no-team>"
                     per_group[(society_name, team_name)] += 1
