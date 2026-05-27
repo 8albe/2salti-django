@@ -7,9 +7,10 @@ from .models import (
 
 @admin.register(Membership)
 class MembershipAdmin(admin.ModelAdmin):
-    list_display = ('user', 'society', 'team', 'role', 'is_active')
+    list_display = ('user', 'society', 'team', 'role', 'is_active', 'start_date', 'end_date')
     list_filter = ('role', 'is_active', 'society')
     search_fields = ('user__username', 'user__first_name', 'user__last_name')
+    fields = ('user', 'society', 'team', 'role', 'is_active', 'start_date', 'end_date')
 
     def has_module_permission(self, request):
         return False

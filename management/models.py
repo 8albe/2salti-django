@@ -20,6 +20,8 @@ class Membership(models.Model):
     role = models.CharField(max_length=20, choices=ROLE_CHOICES)
     
     is_active = models.BooleanField(default=True)
+    start_date = models.DateField(null=True, blank=True)
+    end_date = models.DateField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
