@@ -386,11 +386,11 @@ def profile(request, username):
             'recent_matches': matches,
         })
 
-        # Storico squadre PLAYER
+        # Storico squadre PLAYER (ordinato per data inizio tenure, tie-breaker created_at)
         player_memberships = Membership.objects.filter(
             user=user,
             role='PLAYER'
-        ).select_related('team', 'team__society', 'team__league').order_by('-created_at')
+        ).select_related('team', 'team__society', 'team__league').order_by('-start_date', '-created_at')
         context['player_memberships'] = player_memberships
 
         # Stat stagione corrente (workaround senza Season autonomo)
@@ -428,19 +428,31 @@ def profile(request, username):
         profile = user.coach_profile
         context['coach_profile'] = profile
 
-        coached_memberships = Membership.objects.filter(
-            user=user,
-            role='HEAD_COACH'
-        ).select_related('team', 'team__society', 'team__league').order_by('-created_at')
-        context['coached_memberships'] = coached_memberships
+        # Storico Allenatori: mostra tutte le Membership HEAD_COACH (incluso start_date=None
+        # per non nascondere record legacy/anomali); materializza in lista per riusarla nel
+        # loop tenure_q senza doppia query.
+        coached_memberships_list = list(
+            Membership.objects.filter(
+                user=user,
+                role='HEAD_COACH'
+            ).select_related('team', 'team__society', 'team__league').order_by('-start_date', '-created_at')
+        )
+        context['coached_memberships'] = coached_memberships_list
 
-        coached_team_ids = list(coached_memberships.values_list('team_id', flat=True))
+        # direct_matches: partite dirette dal coach. Per ogni tenure HEAD_COACH con start_date
+        # noto, includi i Match dove home_team o away_team è quel team e match_date cade dentro
+        # la tenure. Record con start_date=None vengono ignorati (nessun match attribuibile).
+        valid_tenures = [m for m in coached_memberships_list if m.start_date is not None]
         direct_matches = None
-        if coached_team_ids:
-            direct_matches = Match.objects.filter(
-                models.Q(home_team__in=coached_team_ids) |
-                models.Q(away_team__in=coached_team_ids)
-            ).order_by('-match_date')[:10]
+        if valid_tenures:
+            tenure_q = models.Q()
+            for mem in valid_tenures:
+                team_q = models.Q(home_team_id=mem.team_id) | models.Q(away_team_id=mem.team_id)
+                date_q = models.Q(match_date__date__gte=mem.start_date)
+                if mem.end_date is not None:
+                    date_q &= models.Q(match_date__date__lte=mem.end_date)
+                tenure_q |= (team_q & date_q)
+            direct_matches = Match.objects.filter(tenure_q).order_by('-match_date')[:10]
             context['direct_matches'] = direct_matches
 
         if profile.current_team:
