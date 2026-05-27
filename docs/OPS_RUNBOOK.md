@@ -61,6 +61,40 @@ Tre workflow da seguire in modo disciplinato ogni sessione.
 4. Dice "approvato" — Claude Code Work sposta il contenuto ancora evidenziato nella cartella `alberto/`.
 5. Alberto esegue `git add` + `git commit` + `git push` dei file approvati.
 
+### 2.2 Meccanismo autopull dev — dettaglio tecnico
+
+L'ambiente `dev.2salti.com` ospitato in `/opt/2salti-dev/` è allineato a GitHub via auto-pull schedulato. Diversamente dal deploy di produzione `/opt/2salti-new/` (sezione 2, allineamento manuale), qui la propagazione `GitHub → runtime` è automatica entro ~2-3 minuti dal push sul branch `dev`.
+
+**Componenti systemd:**
+
+- Timer `2salti-dev-autopull.timer` con `OnUnitActiveSec=2min` e `AccuracySec=10s`: scatta ogni 2 minuti circa rispetto alla fine dell'esecuzione precedente, con tolleranza di 10 secondi.
+- Service `2salti-dev-autopull.service` di tipo `oneshot`, eseguito come `User=alberto` / `Group=www-data`, `WorkingDirectory=/opt/2salti-dev`.
+
+**Comportamento per invocazione** (eseguito solo se `git ls-remote origin dev` restituisce un SHA diverso da `git rev-parse HEAD`):
+
+1. `git pull --ff-only origin dev`
+2. `manage.py migrate --noinput`
+3. `manage.py collectstatic --noinput`
+4. `sudo /bin/systemctl reload 2salti-dev.service` (richiede sudoers `NOPASSWD` per `alberto` sul comando specifico)
+
+**Runtime service:** `2salti-dev.service` esegue gunicorn con SIGHUP-reload: il `reload` fa exit pulito dei worker, respawn, e reimporta WSGI (e quindi tutto il codice Python applicativo). Non è abilitato il flag `--reload` di gunicorn (no file watcher).
+
+**Diagnostica:**
+
+```bash
+journalctl -u 2salti-dev-autopull.service -n 50         # log ultima esecuzione
+systemctl list-timers 2salti-dev-autopull.timer        # prossimo trigger
+```
+
+**Limiti noti:**
+
+- Se `manage.py migrate` fallisce, la pipeline si ferma allo step 2: il codice nuovo è già su disco (post step 1) ma il runtime non viene ricaricato. Sintomo: push avvenuto ma `dev.2salti.com` non riflette la modifica. Diagnosi via `journalctl -u 2salti-dev-autopull.service`.
+- `git pull --ff-only` aborta se il working tree di `/opt/2salti-dev/` è dirty. Il dev environment non dovrebbe avere edit locali; verificare con `git -C /opt/2salti-dev status`.
+- Se il NOPASSWD sudoers per il reload si rompe (ad esempio dopo edit a `/etc/sudoers.d/`), lo step 4 fallisce silenziosamente: i worker continuano a servire il codice vecchio. Diagnosi nello stesso log del service.
+- Race window di ~1 secondo fra fine `migrate` e SIGHUP. In quel breve intervallo i worker vecchi servono codice vecchio su DB già migrato — finestra trascurabile in dev, ma non assumibile sicura per produzione.
+
+Tempo tipico push → runtime aggiornato: meno di 3 minuti. La produzione resta manuale per disegno (vedi §2 e workflow A in §2.1).
+
 ## 3. Trappole tecniche note
 
 ### 3.1 `git rm --cached` + file dirty = pull abortito
@@ -401,7 +435,7 @@ Scoperto il 2-mag durante diagnosi fix #2 Cluster F (commit `0ad0b16`).
 
 **Risolto (commit `b97e9e5` del 10-mag):** event types ridotti a 5 canonici (GOAL, EXCLUSION_20, YELLOW_CARD, RED_CARD, TIMEOUT), eliminato EXTENDED_EVENT_TYPES (codice morto, definito in `schema.py` ma mai referenziato), allineati prompt OCR in `vision_providers.py` e `ocr_providers/openai.py` al nuovo set + OTHER catch-all. Adattati i consumer (`accounts.models.update_stats`, `matches.views`, `matches.stats_services`, `seed_match`, `verify_consistency`) e i relativi test. Verifica: `manage.py check` clean, `manage.py test matches` 172 passati / 2 skipped.
 
-### 10.4 `Membership` manca `start_date`/`end_date` — APERTO
+### 10.4 `Membership` manca `start_date`/`end_date` — ✅ CHIUSO (Sprint C, 2026-05-27/28)
 
 Scoperto il 25-mag durante l'implementazione di §5.2 (storico coach + partite dirette).
 
@@ -411,15 +445,64 @@ Scoperto il 25-mag durante l'implementazione di §5.2 (storico coach + partite d
 - Partite dirette aggregate per squadra senza filtro temporale: includono potenzialmente partite avvenute prima dell'arrivo o dopo l'uscita del coach dalla squadra.
 - Stesso limite applicabile a storico PLAYER (atleti) quando sarà implementata l'equivalente sezione "minuti giocati"/storico.
 
-**Workaround attuale (Sprint A):** opzione (a) — aggregazione storica per squadra qualsiasi `is_active`, ordinata per `created_at`. Nota visibile nel template profilo coach.
+**Workaround applicato in Sprint A (storico):** opzione (a) — aggregazione storica per squadra qualsiasi `is_active`, ordinata per `created_at`. Note disclaimer visibili nei template profilo coach/atleta.
 
-**Risoluzione futura:** aggiungere `start_date` (DateField, required) e `end_date` (DateField, nullable per tenure attiva) a `Membership`, backfill da `created_at` per i record esistenti, e filtrare query storiche per `start_date <= match.match_date <= COALESCE(end_date, today)`. Coordinare con la transizione `is_active=False` → settare `end_date`.
+**Risoluzione (Sprint C):**
+
+- Step 2 (commit `0f6ca64`, backfill): aggiunti `Membership.start_date` (DateField, required) e `Membership.end_date` (DateField, nullable per tenure attiva). Management command `backfill_membership_dates` idempotente che popola `start_date` da `created_at::date` per i record esistenti.
+- Step 3a (commit `6e0243e`): `MembershipQuerySet.active_at(date)` come API canonica per "membership attiva a una data X", testata con 16 nuovi test in `management.tests_membership_dates`.
+- Step 3b (commit `0eeff1a`): signal `pre_save` su `Membership` che chiude cross-society le membership precedenti settando `end_date=today` quando l'utente cambia team nello stesso ruolo; `_sync_profile_denorm` invocato dopo redeem/approve per allineare `CoachProfile.current_team`/`AthleteProfile.current_team`.
+- Step 3c (commit `0db9307`): refactor `accounts/views.py` con filtro temporale `start_date <= match.match_date <= COALESCE(end_date, today)` su `coached_matches`/`direct_matches` del profilo coach, e ordinamento di `player_memberships`/`coached_memberships` per `start_date`.
+- Step 3d (commit `<TBD>`): rimosse le note disclaimer "Aggregazione storica — non filtrata per periodo di tenure" dai template `athlete_profile.html` e `profile.html` (coach). Doc consolidato: questo runbook + syllabus 5.
+
+**Test:** suite da 239 a 269+ test (16 nuovi `management.tests_membership_dates` + 6 nuovi `accounts.tests_temporal_views`). `manage.py test` verde.
+
+**Debiti residui:** vedi §10.6 ("Debiti residui post-Sprint C") per il dettaglio dei rischi non risolti (concorrenza, dual-role, CHECK constraint date, unique_together).
 
 ### 10.5 Pulizia utenti/società di test su prod — APERTO (scoperto 26-mag in Sprint B)
 
 - Su dev: admin_bot cancellato, rimasto solo albe_admin come superuser. Nessuna società test trovata.
 - Su prod: non verificato — richiede sessione dedicata con accesso esplicito al VPS.
 - Da fare: inventario utenti test su prod, cancellazione controllata.
+
+### 10.6 Debiti residui post-Sprint C — APERTI
+
+Sprint C §10.4 ha chiuso il debito principale (`Membership.start_date`/`end_date` + filtro temporale partite coach). Restano in carico cinque item identificati durante la ricognizione iniziale e le estensioni di Step 3b/3c, non bloccanti per la chiusura dello sprint ma da tracciare.
+
+**BUG-001 — `templates/base.html` navbar: 500 su sport con 0 leghe**
+
+- **Sintomo:** 500 sulle pagine che ereditano `base.html` quando lo sport in context ha `leagues.exists() == False`. URL impattate su dev: `/sport/calcio-11/`, `/sport/basket/`, `/sport/pallavolo/`.
+- **Causa:** `templates/base.html:347` accede a `.slug` su `sport.leagues.first`, che restituisce `None` quando il queryset è vuoto.
+- **Fix proposto:** avvolgere il blocco in `{% if sport.leagues.exists %}` oppure usare `|default:'#'` sull'attributo.
+- **Priorità:** media. Non blocca Sprint C ma è 500 visibile su dev.
+
+**DEBT-001 — `Membership.unique_together` impedisce rientro storico**
+
+- **Sintomo:** un atleta che lascia il team A e successivamente rientra in team A nello stesso ruolo non può avere due record `Membership` distinti (uno chiuso con `end_date`, uno nuovo aperto): il vincolo `unique_together = (user, society, team, role)` blocca il secondo `INSERT`.
+- **Origine:** rischio #3 della ricognizione iniziale di Sprint C, non risolto perché caso oggi non presente nei dati.
+- **Fix proposto:** rimuovere `unique_together` e gestire l'univocità "una sola Membership ATTIVA per (user, society, team, role)" via `UniqueConstraint` condizionale (`condition=Q(end_date__isnull=True)`).
+- **Priorità:** bassa.
+
+**DEBT-002 — Dual-role coach (HEAD_COACH + ASSISTANT_COACH simultanei)**
+
+- **Sintomo:** un utente che è HEAD_COACH del team X e diventa anche ASSISTANT_COACH del team Y subisce overwrite di `CoachProfile.current_team` da parte di `_sync_profile_denorm`; il signal `_close_other_team_memberships` non chiude la HEAD_COACH precedente perché è chiamato con `role` hardcoded a `HEAD_COACH` e quindi non vede il record assistant.
+- **Origine:** nuovo rischio #2 emerso durante l'estensione di Step 3b.
+- **Fix proposto:** differenziare il signal per ruolo, o estendere `CoachProfile` con due FK separate (`current_head_team`, `current_assistant_team`).
+- **Priorità:** bassa — caso raro nel dominio sportivo coperto.
+
+**DEBT-003 — `Membership` con `end_date < start_date` (dati corrotti)**
+
+- **Sintomo:** edit manuale via `op_admin_site` permette di salvare `Membership` con date incoerenti (chiusura prima dell'inizio).
+- **Origine:** rischio #5 di Step 3c, non risolto in scope.
+- **Fix proposto:** `CheckConstraint(check=Q(end_date__isnull=True) | Q(end_date__gte=F('start_date')), name='end_date_after_start')` a livello DB, o validator Django sul model (`clean()`).
+- **Priorità:** bassa.
+
+**DEBT-004 — Concorrenza redeem/approve sullo stesso user**
+
+- **Sintomo:** due `redeem_activation_code` o due `approve_membership` simultanei sullo stesso user creano race condition su `_sync_profile_denorm`: il `CoachProfile.current_team`/`AthleteProfile.current_team` può finire in stato incoerente con la Membership ATTIVA persistita.
+- **Origine:** rischio #3 emerso durante Step 3b extension.
+- **Fix proposto:** `select_for_update()` su `Membership` e profilo nel blocco transaction, oppure lock applicativo via cache/redis.
+- **Priorità:** bassa. SQLite (dev) serializza implicitamente; PostgreSQL (prod target futuro, §15.3) avrebbe row-level lock implicito ma andrebbe testato esplicitamente.
 
 ## 11. Sicurezza operativa e frontiera reversibile
 
