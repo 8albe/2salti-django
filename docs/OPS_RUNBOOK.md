@@ -469,12 +469,12 @@ Scoperto il 25-mag durante l'implementazione di §5.2 (storico coach + partite d
 
 Sprint C §10.4 ha chiuso il debito principale (`Membership.start_date`/`end_date` + filtro temporale partite coach). Restano in carico cinque item identificati durante la ricognizione iniziale e le estensioni di Step 3b/3c, non bloccanti per la chiusura dello sprint ma da tracciare.
 
-**BUG-001 — `templates/base.html` navbar: 500 su sport con 0 leghe**
+**BUG-001 — `templates/base.html` navbar: 500 su sport con 0 leghe — ✅ CHIUSO (Sprint D, 2026-05-28)**
 
-- **Sintomo:** 500 sulle pagine che ereditano `base.html` quando lo sport in context ha `leagues.exists() == False`. URL impattate su dev: `/sport/calcio-11/`, `/sport/basket/`, `/sport/pallavolo/`.
-- **Causa:** `templates/base.html:347` accede a `.slug` su `sport.leagues.first`, che restituisce `None` quando il queryset è vuoto.
-- **Fix proposto:** avvolgere il blocco in `{% if sport.leagues.exists %}` oppure usare `|default:'#'` sull'attributo.
-- **Priorità:** media. Non blocca Sprint C ma è 500 visibile su dev.
+- **Sintomo:** 500 sulle pagine che ereditano `base.html` quando lo sport in context ha `leagues.exists() == False`. URL impattate: `/sport/calcio-11/`, `/sport/basket/`, `/sport/pallavolo/`.
+- **Causa reale:** `VariableDoesNotExist` su lookup `.slug` quando `sport.leagues.first` restituisce `None` (queryset vuoto). Il filtro `|default` non protegge: Django valuta `sport.leagues.first.slug` **prima** di applicare `default`, quindi l'eccezione esplode in fase di resolve della variabile.
+- **Fix applicato:** guard `{% if sport.leagues.exists %}` attorno alla voce navbar "Statistiche" in `templates/base.html`. Commit dev `5eaab746`, merge prod `01427d59` (2026-05-28). Test di regressione: `core/tests_navbar.py` (+1, suite 263 → 264).
+- **Verifica end-to-end:** smoke prod 4 URL — `calcio-11`/`basket`/`pallavolo` 200 senza voce Statistiche, `pallanuoto` 200 con voce Statistiche presente (controllo positivo).
 
 **DEBT-001 — `Membership.unique_together` impedisce rientro storico**
 
