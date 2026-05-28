@@ -1,6 +1,6 @@
 ## 14. Referto digitale mobile (Jury App)
 
-Stato: ⏳ Da fare
+Stato: 🔄 In corso
 
 App/interfaccia mobile per arbitri/giuria. Jury Tokens, firma PIN, offline-first. Convergenza JSON con OCR su `schema_version: 2.0`.
 

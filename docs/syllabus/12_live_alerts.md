@@ -1,6 +1,6 @@
 ## 12. Live Alerts e notifiche push
 
-Stato: ⏳ Da fare
+Stato: 🔄 In corso
 
 Notifiche push per risultati live, variazioni orario, convocazioni. Gated Premium.
 

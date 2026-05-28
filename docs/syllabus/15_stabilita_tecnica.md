@@ -1,6 +1,6 @@
 ## 15. Stabilità tecnica — test suite e debito
 
-Stato: ⏳ Da fare
+Stato: 🔄 In corso
 
 KO residui sulla test suite e debiti tecnici aperti.
 
