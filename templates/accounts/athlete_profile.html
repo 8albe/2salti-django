@@ -72,19 +72,44 @@
         </div>
     </section>
 
-    <!-- 2. SEASON STATS: Giant Cards -->
+    <!-- 2. STORICO SQUADRE -->
+    {% if player_memberships %}
+    <div class="glass-panel p-8">
+        <h3 class="text-sm font-black text-white uppercase tracking-[0.4em] mb-6 flex items-center gap-3">
+            <span class="w-10 h-10 rounded-xl bg-cyan-500/10 flex items-center justify-center text-cyan-400"><i class="fas fa-shield-alt"></i></span>
+            Storico Squadre
+        </h3>
+        <div class="flex flex-wrap gap-4">
+        {% for m in player_memberships %}
+            <a href="{% url 'team_detail' m.team.slug %}" class="flex items-center gap-3 px-4 py-3 rounded-2xl bg-white/5 border border-white/10 hover:border-cyan-500/30 transition-all">
+                {% if m.team.society.logo %}
+                <img src="{{ m.team.society.logo.url }}" class="w-8 h-8 object-contain">
+                {% endif %}
+                <span class="text-sm font-bold text-white">{{ m.team.name|clean_team_name }}</span>
+                {% if m.is_active %}
+                <span class="text-[10px] text-green-400 font-black uppercase">Attuale</span>
+                {% else %}
+                <span class="text-[10px] text-slate-500 font-black uppercase">Passata</span>
+                {% endif %}
+            </a>
+        {% endfor %}
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- 3. SEASON STATS: Giant Cards -->
     <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
         <div class="glass-premium p-8 text-center hover-lift relative overflow-hidden group">
             <div class="absolute inset-0 bg-gradient-to-t from-cyan-500/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity"></div>
-            <span class="block text-[10px] font-black text-slate-500 uppercase tracking-[0.3em] mb-4">Gol Stagionali</span>
-            <div class="text-7xl font-display font-black text-white text-glow mb-2">{{ athlete_profile.total_goals }}</div>
+            <span class="block text-[10px] font-black text-slate-500 uppercase tracking-[0.3em] mb-4">Gol Stagione</span>
+            <div class="text-7xl font-display font-black text-white text-glow mb-2">{{ season_goals }}</div>
             <div class="w-12 h-1 bg-cyan-500 mx-auto rounded-full"></div>
         </div>
 
         <div class="glass-premium p-8 text-center hover-lift relative overflow-hidden group">
             <div class="absolute inset-0 bg-gradient-to-t from-purple-500/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity"></div>
-            <span class="block text-[10px] font-black text-slate-500 uppercase tracking-[0.3em] mb-4">Partite Giocate</span>
-            <div class="text-7xl font-display font-black text-white mb-2">{{ athlete_profile.total_matches }}</div>
+            <span class="block text-[10px] font-black text-slate-500 uppercase tracking-[0.3em] mb-4">Partite Stagione</span>
+            <div class="text-7xl font-display font-black text-white mb-2">{{ season_matches }}</div>
             <div class="w-12 h-1 bg-purple-500 mx-auto rounded-full"></div>
         </div>
 
@@ -96,7 +121,7 @@
         </div>
     </div>
 
-    <!-- 3. RECENT PERFORMANCE & STANDINGS -->
+    <!-- 4. RECENT PERFORMANCE & STANDINGS -->
     <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
         
         <!-- Timeline Ultime Partite -->

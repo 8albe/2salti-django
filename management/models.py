@@ -1,6 +1,31 @@
 from django.db import models
+from django.db.models import Q
 from django.conf import settings
+from django.utils import timezone
 from core.models import Society, Team
+
+
+class MembershipQuerySet(models.QuerySet):
+    def active_at(self, date=None):
+        """
+        Filtra le Membership attive alla data indicata (default: oggi in TZ locale).
+
+        Regola di attività:
+        - start_date NOT NULL (record senza start_date sono anomali, esclusi)
+        - start_date <= date
+        - end_date IS NULL OR end_date >= date
+        """
+        if date is None:
+            date = timezone.localdate()
+        return self.filter(
+            start_date__isnull=False,
+            start_date__lte=date,
+        ).filter(Q(end_date__isnull=True) | Q(end_date__gte=date))
+
+
+class MembershipManager(models.Manager.from_queryset(MembershipQuerySet)):
+    pass
+
 
 class Membership(models.Model):
     """
@@ -18,10 +43,14 @@ class Membership(models.Model):
     society = models.ForeignKey(Society, on_delete=models.CASCADE, related_name='memberships')
     team = models.ForeignKey(Team, on_delete=models.CASCADE, null=True, blank=True, related_name='memberships')
     role = models.CharField(max_length=20, choices=ROLE_CHOICES)
-    
+
     is_active = models.BooleanField(default=True)
+    start_date = models.DateField(null=True, blank=True)
+    end_date = models.DateField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+
+    objects = MembershipManager()
 
     class Meta:
         unique_together = ['user', 'society', 'team', 'role']

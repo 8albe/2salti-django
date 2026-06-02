@@ -3,7 +3,7 @@
 Questo documento descrive le macchine a stati implementate nel codice.
 Se il blueprint di prodotto o altri documenti dicono cose diverse, **questo file vince**.
 
-Ultimo aggiornamento: 2026-04-20
+Ultimo aggiornamento: 2026-05-20
 Generato leggendo:
 - `accounts/models.py`
 - `accounts/middleware.py`
@@ -15,7 +15,7 @@ Generato leggendo:
 - `matches/views.py`
 - `management/models.py`
 - `core/models.py`
-- `docs/PRODUCT_BLUEPRINT.md`
+- `docs/BLUEPRINT.md`
 - `docs/FEATURE_SYLLABUS_LEGACY.md`
 - `CLAUDE.md`
 
@@ -78,7 +78,7 @@ Generato leggendo:
   **Codice dice:** esistono anche `NEEDS_REVIEW` e `REJECTED`, e le transizioni non sono strettamente lineari (es. `NEEDS_REVIEW → PROCESSING` per riprocessamento).
   **Verdetto:** codice corretto, CLAUDE.md da aggiornare — mancano due stati e il grafo reale.
 
-- **PRODUCT_BLUEPRINT.md §8 dice:** `UPLOADED → EXTRACTED → NEEDS_REVIEW → VERIFIED → PUBLISHED` + `REJECTED`
+- **BLUEPRINT.md §8 dice:** `UPLOADED → EXTRACTED → NEEDS_REVIEW → VERIFIED → PUBLISHED` + `REJECTED`
   **Codice dice:** lo stato si chiama `VALIDATED` (non `VERIFIED`); esiste anche `PROCESSING` (assente nel blueprint); `DRAFT` esiste (assente nel blueprint).
   **Verdetto:** codice corretto. Nel blueprint `VERIFIED` va rinominato `VALIDATED`. `PROCESSING` e `DRAFT` vanno aggiunti alla descrizione del flusso.
 
@@ -140,7 +140,7 @@ Generato leggendo:
   **Codice dice:** sono stati logici di una property, non un singolo campo `status`. Il campo reale sottostante è la combinazione di `identity_status` + `subscription_status` + `setup_completed` + relazioni.
   **Verdetto:** CLAUDE.md corretto nel descrivere il flusso, ma fuorviante nell'implicare l'esistenza di un campo unico. Da aggiornare per chiarire che è una property calcolata.
 
-- **PRODUCT_BLUEPRINT.md §7.2 dice:** sequenza in 6 passi: Registrazione → Verifica identità → Selezione piano → Claim profilo → Autenticazione con squadra → Accesso completo.
+- **BLUEPRINT.md §7.2 dice:** sequenza in 6 passi: Registrazione → Verifica identità → Selezione piano → Claim profilo → Autenticazione con squadra → Accesso completo.
   **Codice dice:** i passi reali sono 4 (identity, payment, setup, membership). "Selezione piano" corrisponde a `PAYMENT_PENDING`. "Claim profilo" e "Autenticazione con squadra" sono entrambi inglobati in `MEMBERSHIP_PENDING` (uno o l'altro basta).
   **Verdetto:** entrambi validi, il blueprint è più granulare per la UX, il codice li unifica. Nessuna correzione urgente.
 
@@ -333,7 +333,7 @@ Nessuna transizione automatica rilevata — gestito manualmente dall'admin.
 
 ## Funzionalità descritte nel Blueprint ma non implementate
 
-Le seguenti funzionalità sono descritte in `PRODUCT_BLUEPRINT.md` ma **non hanno modelli o campo corrispondente nel codice**:
+Le seguenti funzionalità sono descritte in `BLUEPRINT.md` ma **non hanno modelli o campo corrispondente nel codice**:
 
 | Funzionalità | Sezione Blueprint | Stato |
 |---|---|---|
@@ -352,11 +352,11 @@ In ordine di priorità:
    Aggiungere `NEEDS_REVIEW` e `REJECTED` al grafo degli stati. Correggere i nomi dei campi: `source_channel` (non `source`), `source_type` (non `origin`). Rendere esplicito che il flusso non è lineare (es. `NEEDS_REVIEW → PROCESSING` per riprocessamento).~~
    **CHIUSO il 24-apr-2026** — Risolto indirettamente: la sezione dedicata in `CLAUDE.md` è stata sostituita da un puntatore a questo documento (vedi §"State machines" in `CLAUDE.md`, con istruzione esplicita "Non duplicare qui"). La divergenza è eliminata alla radice: non c'è più nulla da allineare.
 
-2. ~~**[ALTA] Aggiornare `docs/PRODUCT_BLUEPRINT.md` §8 — rinominare `VERIFIED` → `VALIDATED`:**
+2. ~~**[ALTA] Aggiornare `docs/BLUEPRINT.md` §8 — rinominare `VERIFIED` → `VALIDATED`:**
    Il blueprint usa `VERIFIED` per lo stato di approvazione admin; il codice usa `VALIDATED`. Divergenza di nomenclatura che può causare confusione durante sviluppo e code review.~~
-   **CHIUSO il 09-mag-2026** — Blueprint §8 corretto: la riga del workflow ora usa `VALIDATED` al posto di `VERIFIED`. Verificato con `grep -n "VERIFIED"` su `PRODUCT_BLUEPRINT.md`: zero occorrenze residue.
+   **CHIUSO il 09-mag-2026** — Blueprint §8 corretto: la riga del workflow ora usa `VALIDATED` al posto di `VERIFIED`. Verificato con `grep -n "VERIFIED"` su `BLUEPRINT.md`: zero occorrenze residue.
 
-3. ~~**[MEDIA] Aggiornare `docs/PRODUCT_BLUEPRINT.md` §8 — aggiungere `PROCESSING` e `DRAFT`:**
+3. ~~**[MEDIA] Aggiornare `docs/BLUEPRINT.md` §8 — aggiungere `PROCESSING` e `DRAFT`:**
    Il flusso nel blueprint parte da `UPLOADED` direttamente a `EXTRACTED`, saltando `PROCESSING`. E ignora `DRAFT` (usato per referti digitali). Il blueprint è incompleto rispetto all'implementazione reale.~~
    **CHIUSO il 09-mag-2026** — Blueprint §8 ora distingue il flusso cartaceo (UPLOADED → PROCESSING → EXTRACTED → VALIDATED → PUBLISHED) dal flusso digitale (DRAFT → VALIDATED → PUBLISHED), include i branch NEEDS_REVIEW/REJECTED con possibilità di ritorno a PROCESSING, e rimanda esplicitamente a STATE_MACHINES.md §1 come fonte di verità.
 

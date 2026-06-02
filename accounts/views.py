@@ -4,6 +4,7 @@ from django.contrib.auth.decorators import login_required
 from .forms import SignUpForm, UserSetupForm, AthleteSetupForm, CoachSetupForm, RefereeSetupForm, FanSetupForm
 from .models import User
 from matches.models import Match, MatchReport
+from management.models import Membership
 from django.db import models
 
 def signup(request):
@@ -379,12 +380,45 @@ def profile(request, username):
             events__player=user,
             reports__status=MatchReport.Status.PUBLISHED
         ).distinct().order_by('-match_date')[:10]
-        
+
         context.update({
             'athlete_profile': profile,
             'recent_matches': matches,
         })
-        
+
+        # Storico squadre PLAYER (ordinato per data inizio tenure, tie-breaker created_at)
+        player_memberships = Membership.objects.filter(
+            user=user,
+            role='PLAYER'
+        ).select_related('team', 'team__society', 'team__league').order_by('-start_date', '-created_at')
+        context['player_memberships'] = player_memberships
+
+        # Stat stagione corrente (workaround senza Season autonomo)
+        # Stagione calcistica: 1 settembre → 31 agosto, ancorata a Europe/Rome
+        from django.utils import timezone
+        from datetime import datetime
+        from matches.models import MatchEvent
+
+        now = timezone.now()
+        season_year = now.year if now.month >= 9 else now.year - 1
+        season_start = timezone.make_aware(datetime(season_year, 9, 1))
+
+        season_goals = MatchEvent.objects.filter(
+            player=user,
+            event_type='GOAL',
+            match__match_date__gte=season_start,
+            match__reports__status=MatchReport.Status.PUBLISHED
+        ).count()
+
+        season_matches = Match.objects.filter(
+            events__player=user,
+            match_date__gte=season_start,
+            reports__status=MatchReport.Status.PUBLISHED
+        ).distinct().count()
+
+        context['season_goals'] = season_goals
+        context['season_matches'] = season_matches
+
         if profile.current_team:
              context['current_team'] = profile.current_team
              context['league'] = profile.current_team.league
@@ -393,13 +427,35 @@ def profile(request, username):
     elif user.role == 'coach':
         profile = user.coach_profile
         context['coach_profile'] = profile
-        
+
+        # Storico Allenatori: mostra tutte le Membership HEAD_COACH (incluso start_date=None
+        # per non nascondere record legacy/anomali); materializza in lista per riusarla nel
+        # loop tenure_q senza doppia query.
+        coached_memberships_list = list(
+            Membership.objects.filter(
+                user=user,
+                role='HEAD_COACH'
+            ).select_related('team', 'team__society', 'team__league').order_by('-start_date', '-created_at')
+        )
+        context['coached_memberships'] = coached_memberships_list
+
+        # direct_matches: partite dirette dal coach. Per ogni tenure HEAD_COACH con start_date
+        # noto, includi i Match dove home_team o away_team è quel team e match_date cade dentro
+        # la tenure. Record con start_date=None vengono ignorati (nessun match attribuibile).
+        valid_tenures = [m for m in coached_memberships_list if m.start_date is not None]
+        direct_matches = None
+        if valid_tenures:
+            tenure_q = models.Q()
+            for mem in valid_tenures:
+                team_q = models.Q(home_team_id=mem.team_id) | models.Q(away_team_id=mem.team_id)
+                date_q = models.Q(match_date__date__gte=mem.start_date)
+                if mem.end_date is not None:
+                    date_q &= models.Q(match_date__date__lte=mem.end_date)
+                tenure_q |= (team_q & date_q)
+            direct_matches = Match.objects.filter(tenure_q).order_by('-match_date')[:10]
+            context['direct_matches'] = direct_matches
+
         if profile.current_team:
-            matches = Match.objects.filter(
-                models.Q(home_team=profile.current_team) | 
-                models.Q(away_team=profile.current_team)
-            ).order_by('-match_date')[:10]
-            context['team_matches'] = matches
             context['current_team'] = profile.current_team
             context['league'] = profile.current_team.league
             context['league_standings'] = profile.current_team.league.get_standings()

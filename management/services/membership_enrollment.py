@@ -23,6 +23,25 @@ def _resolve_role(user) -> str:
     return 'PLAYER'
 
 
+def _sync_profile_denorm(user, role, team, society):
+    """
+    Aggiorna il campo denormalizzato sul profilo (current_team / managed_society)
+    coerente con la Membership appena creata.
+
+    Usa .update() per bypassare i signal post_save del profilo: evitiamo di
+    rievocare sync_*_membership che ri-eseguirebbe chiusure/aperture inutili
+    sulla Membership appena creata. La Membership è la fonte di verità.
+    """
+    from accounts.models import AthleteProfile, CoachProfile, PresidentProfile
+
+    if role == 'PLAYER':
+        AthleteProfile.objects.filter(user=user).update(current_team=team)
+    elif role in ('HEAD_COACH', 'ASSISTANT_COACH'):
+        CoachProfile.objects.filter(user=user).update(current_team=team)
+    elif role == 'PRESIDENT':
+        PresidentProfile.objects.filter(user=user).update(managed_society=society)
+
+
 def redeem_activation_code(user, code_string, request=None):
     """
     Riscatta un ActivationCode per l'utente.
@@ -52,10 +71,13 @@ def redeem_activation_code(user, code_string, request=None):
             society=code_obj.society,
             team=code_obj.team,
             role=role,
+            defaults={'start_date': timezone.localdate()},
         )
         if created:
             code_obj.current_uses += 1
             code_obj.save(update_fields=['current_uses'])
+
+        _sync_profile_denorm(user, role, code_obj.team, code_obj.society)
 
         log_action(
             user,

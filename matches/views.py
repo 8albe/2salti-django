@@ -12,8 +12,18 @@ from .forms import MatchReportUploadForm, MatchReportReviewForm
 from .event_types import (
     EVENT_TYPE_GOAL,
     EVENT_TYPE_EXCLUSION_20,
+    EVENT_TYPE_YELLOW_CARD,
+    EVENT_TYPE_RED_CARD,
     EVENT_TYPE_TIMEOUT,
 )
+
+STANDARD_EVENT_TYPES = {
+    EVENT_TYPE_GOAL,
+    EVENT_TYPE_EXCLUSION_20,
+    EVENT_TYPE_YELLOW_CARD,
+    EVENT_TYPE_RED_CARD,
+    EVENT_TYPE_TIMEOUT,
+}
 
 
 User = get_user_model()
@@ -28,11 +38,27 @@ def match_detail(request, match_id):
     
     # Eventi raggruppati per tipo (Solo se pubblico)
     if match.is_public:
-        goals = match.events.filter(event_type=EVENT_TYPE_GOAL).select_related('player', 'team')
+        goals = list(match.events.filter(event_type=EVENT_TYPE_GOAL).select_related('player', 'team'))
         expulsions = match.events.filter(event_type=EVENT_TYPE_EXCLUSION_20).select_related('player', 'team')
+        yellow_cards = match.events.filter(event_type=EVENT_TYPE_YELLOW_CARD).select_related('player', 'team')
+        red_cards = match.events.filter(event_type=EVENT_TYPE_RED_CARD).select_related('player', 'team')
         timeouts = match.events.filter(event_type=EVENT_TYPE_TIMEOUT).select_related('team')
+        other_events = match.events.exclude(event_type__in=STANDARD_EVENT_TYPES).select_related('player', 'team')
     else:
-        goals = expulsions = timeouts = []
+        goals = []
+        expulsions = yellow_cards = red_cards = timeouts = other_events = []
+
+    # Marcatori raggruppati per squadra e giocatore (per il tabellino sintetico)
+    home_scorers = {}
+    away_scorers = {}
+    for event in goals:
+        if not event.player or not event.team:
+            continue
+        bucket = home_scorers if event.team_id == match.home_team_id else away_scorers
+        entry = bucket.setdefault(event.player_id, {'player': event.player, 'minutes': []})
+        entry['minutes'].append(event.minute)
+    home_scorers_list = sorted(home_scorers.values(), key=lambda e: e['player'].get_full_name())
+    away_scorers_list = sorted(away_scorers.values(), key=lambda e: e['player'].get_full_name())
 
 
     
@@ -69,7 +95,12 @@ def match_detail(request, match_id):
         'match': match,
         'goals': goals,
         'expulsions': expulsions,
+        'yellow_cards': yellow_cards,
+        'red_cards': red_cards,
         'timeouts': timeouts,
+        'other_events': other_events,
+        'home_scorers': home_scorers_list,
+        'away_scorers': away_scorers_list,
         'qs_processed': qs_processed,
         'home_roster': home_roster,
         'away_roster': away_roster,

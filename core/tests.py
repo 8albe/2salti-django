@@ -3,6 +3,19 @@ from django.utils import timezone
 from core.models import Sport, Society, Team, League
 from matches.models import Match, MatchReport
 
+
+class SportSlugInvariantTest(TestCase):
+    def test_slug_auto_generated_from_name(self):
+        sport = Sport.objects.create(name="Pallanuoto")
+        self.assertEqual(sport.slug, "pallanuoto")
+
+    def test_save_idempotent_does_not_concatenate(self):
+        sport = Sport.objects.create(name="Pallanuoto")
+        for _ in range(3):
+            sport.save()
+            sport.refresh_from_db()
+        self.assertEqual(sport.slug, "pallanuoto")
+
 class StandingsTest(TestCase):
     def setUp(self):
         self.sport = Sport.objects.create(name="WP", slug="wp")
