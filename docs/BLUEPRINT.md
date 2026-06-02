@@ -607,8 +607,8 @@ Il modello economico si basa su tre piani paralleli che sbloccano diverse profon
 
 ## Punti da validare con il product owner
 
-- **[Federazione]** Chi è l'autorità che emette i token giuria? (Nazionale / Lega / Club?)
-- **[Conflitti]** Policy di conflict resolution per sync simultaneo di più dispositivi sullo stesso match.
+- **[Federazione]** ✅ **RISOLTO (2026-06-02):** l'autorità emittente dei token giuria è la **federazione/lega** (NON il club). Conferma §7.4.1 e §14 (Baseline); vedi SYLLABUS Macro 14 §14.2.
+- **[Conflitti]** ✅ **RISOLTO (2026-06-02):** conflict resolution = single-writer lock per match (un solo device writer-attivo alla volta; NON last-write-wins, NON merge). Vedi SYLLABUS Macro 14 §14.3.
 - **[Shop]** SLA del webhook verso società: quante ore di retry? Notifica admin club in caso di failure?
 - **[UX]** Opzione "sito esterno": Redirect diretto (Opzione A) vs Pagina teaser con badge (Opzione B).
 - **[Gallery]** Moderazione contenuti: Segnalazione automatica o dashboard manuale Club Admin?
@@ -637,3 +637,4 @@ Il modello economico si basa su tre piani paralleli che sbloccano diverse profon
 - **v3.1**: Introdotti modello three-tier, Referto Digitale, Chatbot, Media Gallery, profili default per ruolo. Capitoli 8-14 inavvertitamente compressi a stub.
 - **v3.2**: Ripristinata numerazione capitoli originale; aggiunto blocco "Punti da validare"; capitoli 8-14 parzialmente ricostruiti ma ancora incompleti.
 - **v3.3**: Ripristino chirurgico completo dei capitoli 7.4-7.6 e 8-14 con contenuto operativo pieno. Consolidata sezione 7.3.
+- **v3.4**: Risolti 2 punti da validare — [Federazione] issuer token giuria = federazione/lega; [Conflitti] sync multi-device = single-writer lock. Macro 14 (Referto Digitale) marcata 🧊 Differita nel syllabus per dipendenza esterna (accordo federale).
