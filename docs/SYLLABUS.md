@@ -11,6 +11,7 @@ Punto d'ingresso operativo del progetto. Per la visione di prodotto vedi [BLUEPR
 - ✅ Completato — tutti i task sono [x]; il blocco verrà rimosso nella sessione successiva
 - 🔄 In corso — almeno un task [x] e almeno uno [ ]
 - ⏳ Da fare — nessun task ancora iniziato
+- 🧊 Differito — decisioni di prodotto complete; implementazione rinviata per dipendenza esterna
 
 ---
 
@@ -53,7 +54,7 @@ Punto d'ingresso operativo del progetto. Per la visione di prodotto vedi [BLUEPR
 ## 13. Season Archive e Season Recap PDF 🔄
 → [Dettaglio](syllabus/13_season_archive.md)
 
-## 14. Referto digitale mobile (Jury App) 🔄
+## 14. Referto digitale mobile (Jury App) 🧊
 → [Dettaglio](syllabus/14_referto_digitale_mobile.md)
 
 ## 15. Stabilità tecnica — test suite e debito 🔄
