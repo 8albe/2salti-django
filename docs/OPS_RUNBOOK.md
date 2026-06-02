@@ -95,6 +95,21 @@ systemctl list-timers 2salti-dev-autopull.timer        # prossimo trigger
 
 Tempo tipico push → runtime aggiornato: meno di 3 minuti. La produzione resta manuale per disegno (vedi §2 e workflow A in §2.1).
 
+### 2.3 Lineage `prod` ↔ `origin/master` divergente by design — e chiusura FASE 3 git (2026-06-02)
+
+Il deploy di produzione `/opt/2salti-new/` **non pusha mai** per policy (vedi workflow A in §2.1: no push da prod). Di conseguenza la sua lineage `master` accumula commit prod-local — per esempio il merge `--no-ff` che chiude BUG-001, `01427d59` — che **non esistono e non sono raggiungibili** da `/home/alberto/` né da `origin`: in home `git cat-file -t 01427d59` (o `0876243a`) risponde `Not a valid object name`. È atteso, non un errore e non un history-rewrite.
+
+L'allineamento di `origin/master` si fa **ricostruendo** il merge `dev → master` da home e pushando da home, mai propagando le SHA di prod. Esito strutturale: `prod master` e `origin/master` restano **contenuto-equivalenti ma con SHA diverse**, by design. In una sessione futura, **non interpretare lo scarto di SHA prod ↔ origin come regressione o rewrite**: confrontare il *contenuto* (`git diff <sha_a> <sha_b>`, atteso vuoto), non le SHA.
+
+**Chiusura FASE 3 git (2026-06-02)** — i 4 debiti git (tracciati nella session note 28-mag, non nell'§10) risolti:
+
+1. `master` home behind prod di 1 commit → **CHIUSO**: home `master` ricostruito a `7d1d135` via merge `--no-ff dev→master`, contenuto-equivalente a prod.
+2. `origin/master` behind di 54 commit (Sprint A/B/C + BUG-001 + syllabus 12/14/15) → **CHIUSO**: pushato `c4b68da..7d1d135`; `git diff master b58506d` vuoto, suite 264 OK / 2 skipped.
+3. Branch `dev` locale residuo su `/opt/2salti-new/` (`6159c352`, artefatto storico) → **CHIUSO**: `git branch -D dev` su prod (HEAD prod = `master`, delete sicura).
+4. Untracked `find_coach.py` / `find_coach2.py` su `/opt/2salti-dev/` (script debug HEAD_COACH) → **CHIUSO**: rimossi.
+
+Questi erano debiti **git/infrastruttura**, distinti dai debiti di **codice** DEBT-001..004 in §10.6, che restano APERTI e invariati.
+
 ## 3. Trappole tecniche note
 
 ### 3.1 `git rm --cached` + file dirty = pull abortito
