@@ -349,3 +349,57 @@ class MembershipSignalCleanupTests(TestCase):
         coach_membership.refresh_from_db()
         self.assertIsNone(coach_membership.end_date)
         self.assertTrue(coach_membership.is_active)
+
+
+class MembershipEndDateConstraintTests(TestCase):
+    """DEBT-003: end_date < start_date deve essere impedito a livello DB
+    (CheckConstraint) e segnalato pulito a livello validazione (clean())."""
+
+    def setUp(self):
+        self.sport = Sport.objects.create(name="Pallanuoto", slug="pn")
+        self.society = Society.objects.create(
+            name="Pro Recco", slug="pro-recco", sport=self.sport, city="Recco"
+        )
+        self.team = Team.objects.create(
+            society=self.society, category='SENIOR', slug='pro-recco-senior'
+        )
+        self.user = User.objects.create_user(username='athlete1', role='athlete')
+        self.today = timezone.localdate()
+        self.yesterday = self.today - timedelta(days=1)
+
+    def _membership(self, **overrides):
+        defaults = dict(
+            user=self.user,
+            society=self.society,
+            team=self.team,
+            role='PLAYER',
+        )
+        defaults.update(overrides)
+        return Membership(**defaults)
+
+    def test_db_rejects_end_before_start(self):
+        from django.db import IntegrityError, transaction
+
+        m = self._membership(start_date=self.today, end_date=self.yesterday)
+        with self.assertRaises(IntegrityError):
+            with transaction.atomic():
+                m.save()
+
+    def test_clean_rejects_end_before_start(self):
+        from django.core.exceptions import ValidationError
+
+        m = self._membership(start_date=self.today, end_date=self.yesterday)
+        with self.assertRaises(ValidationError):
+            m.full_clean()
+
+    def test_allows_equal_dates(self):
+        m = self._membership(start_date=self.today, end_date=self.today)
+        m.full_clean()
+        m.save()
+        self.assertEqual(Membership.objects.filter(pk=m.pk).count(), 1)
+
+    def test_allows_null_start_with_end(self):
+        m = self._membership(start_date=None, end_date=self.today)
+        m.full_clean()
+        m.save()
+        self.assertEqual(Membership.objects.filter(pk=m.pk).count(), 1)

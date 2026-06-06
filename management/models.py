@@ -1,5 +1,6 @@
+from django.core.exceptions import ValidationError
 from django.db import models
-from django.db.models import Q
+from django.db.models import F, Q
 from django.conf import settings
 from django.utils import timezone
 from core.models import Society, Team
@@ -56,6 +57,30 @@ class Membership(models.Model):
         unique_together = ['user', 'society', 'team', 'role']
         verbose_name = "Appartenenza"
         verbose_name_plural = "Appartenenze"
+        constraints = [
+            # Permissivo sui NULL: vincola end_date >= start_date solo quando
+            # entrambe le date sono valorizzate (start_date nullo è legittimo,
+            # vedi MembershipQuerySet.active_at).
+            models.CheckConstraint(
+                check=(
+                    Q(end_date__isnull=True)
+                    | Q(start_date__isnull=True)
+                    | Q(end_date__gte=F('start_date'))
+                ),
+                name='membership_end_date_after_start',
+            ),
+        ]
+
+    def clean(self):
+        super().clean()
+        if (
+            self.start_date is not None
+            and self.end_date is not None
+            and self.end_date < self.start_date
+        ):
+            raise ValidationError(
+                {'end_date': "La data di fine non può precedere la data di inizio."}
+            )
 
     def __str__(self):
         scope = self.team.name if self.team else self.society.name
