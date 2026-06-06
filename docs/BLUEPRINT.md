@@ -460,8 +460,20 @@ Per evitare caos, il database deve riflettere entità reali e relazioni chiare.
 - **Coaches**: anagrafica tecnici, storico squadre allenate.
 - **Referees**: anagrafica arbitri, designazioni storiche.
 - **Match_Events**: riga per ogni evento (gol, espulsione, cartellino, timeout, rigore), con timestamp/periodo, atleta, team.
-- **Competitions / Seasons / Venues**: entità di contesto per aggregare correttamente i dati.
+- **Competitions / Venues**: entità di contesto per aggregare correttamente i dati.
+- **Season** (entità di prima classe): identificativo stagione nel formato canonico `2025/2026` (validato sul pattern `AAAA/AAAA`, con secondo anno = primo + 1), `sport`, flag `is_current`. Sostituisce il CharField libero `League.season` come asse temporale del dominio. Distinta da `SeasonArchive` (cap. 13 / Macro 13), che resta l'archivio storico delle statistiche.
 - **Validation_Logs**: storico di tutte le correzioni e revisioni manuali.
+
+### 10.1 Modello stagione e tesseramento
+
+> Decisione di prodotto **chiusa** (Sprint D, 2026-06-06). Non ancora implementata — vedi [SYLLABUS](SYLLABUS.md) Macro 16.
+
+Il dominio adotta la **stagione come asse** del tesseramento, non più le date libere:
+
+- **Season come entità.** La stagione corrente è un flag `is_current` acceso a mano dall'admin, **per sport** (di norma le stagioni sono allineate tra sport), con al massimo una stagione corrente per sport. Sostituisce il calcolo lessicografico `order_by('-season')` oggi in `core/views.py`.
+- **Membership per stagione.** `Membership` acquisisce un campo `season` esplicito (FK a `Season`) e una nuova chiave di unicità `(user, society, team, role, season)`. Spariscono `start_date`/`end_date`: l'appartenenza è ancorata alla stagione, non a un intervallo di date.
+- **La lega è la fonte di verità grandi/giovanili.** Si elimina la `category` duplicata e contraddittoria su `Team`. Il tipo lega è una lista chiusa: `A1, A2, B, C, D` = "dei grandi"; `U10, U12, U14, U16, U18, U20` = giovanili. Le giovanili portano etichette tradizionali italiane come **display**, mappate 1:1 sul valore Under canonico (U12 = Esordienti, U14 = Ragazzi, U16 = Allievi, U18 = Juniores; U10 e U20 senza etichetta tradizionale assegnata).
+- **Prestito strutturato.** Unica eccezione alla regola "una società per stagione", valida **solo** per squadre dei grandi (A1–D), mai giovanili. Il giocatore in prestito mantiene tesseramento e giovanili nella società d'origine. Constraint DB **rigido**: vietata una seconda società nella stessa stagione se la membership non è marcata come prestito. La membership di prestito porta il riferimento alla società di tesseramento e uno **stato (attivo/concluso) come semplice etichetta** — non una macchina a stati.
 
 ### Entità business
 
@@ -638,3 +650,4 @@ Il modello economico si basa su tre piani paralleli che sbloccano diverse profon
 - **v3.2**: Ripristinata numerazione capitoli originale; aggiunto blocco "Punti da validare"; capitoli 8-14 parzialmente ricostruiti ma ancora incompleti.
 - **v3.3**: Ripristino chirurgico completo dei capitoli 7.4-7.6 e 8-14 con contenuto operativo pieno. Consolidata sezione 7.3.
 - **v3.4**: Risolti 2 punti da validare — [Federazione] issuer token giuria = federazione/lega; [Conflitti] sync multi-device = single-writer lock. Macro 14 (Referto Digitale) marcata 🧊 Differita nel syllabus per dipendenza esterna (accordo federale).
+- **v3.5**: Modello stagione e tesseramento (Sprint D, deciso, non implementato) — `Season` promossa a entità di prima classe (formato `2025/2026`, `is_current` per sport), `Membership.season` + nuova unique key `(user, society, team, role, season)` in luogo di `start_date`/`end_date`, lega come fonte di verità grandi/giovanili (lista chiusa A1–D / U10–U20 con etichette tradizionali), prestito strutturato con constraint DB rigido (solo squadre dei grandi, riferimento società di tesseramento + stato attivo/concluso come etichetta). Vedi cap. 10.1 e syllabus Macro 16.

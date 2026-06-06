@@ -480,9 +480,9 @@ Scoperto il 25-mag durante l'implementazione di §5.2 (storico coach + partite d
 - Su prod: non verificato — richiede sessione dedicata con accesso esplicito al VPS.
 - Da fare: inventario utenti test su prod, cancellazione controllata.
 
-### 10.6 Debiti residui post-Sprint C — APERTI
+### 10.6 Debiti residui post-Sprint C — DEBT-001/002/004 APERTI
 
-Sprint C §10.4 ha chiuso il debito principale (`Membership.start_date`/`end_date` + filtro temporale partite coach). Restano in carico cinque item identificati durante la ricognizione iniziale e le estensioni di Step 3b/3c, non bloccanti per la chiusura dello sprint ma da tracciare.
+Sprint C §10.4 ha chiuso il debito principale (`Membership.start_date`/`end_date` + filtro temporale partite coach). Erano stati identificati cinque item durante la ricognizione iniziale e le estensioni di Step 3b/3c, non bloccanti per la chiusura dello sprint ma da tracciare. **BUG-001** (2026-05-28) e **DEBT-003** (Sprint D, 2026-06-06) sono ora ✅ CHIUSI; restano aperti **DEBT-001 / DEBT-002 / DEBT-004**.
 
 **BUG-001 — `templates/base.html` navbar: 500 su sport con 0 leghe — ✅ CHIUSO (Sprint D, 2026-05-28)**
 
@@ -505,11 +505,12 @@ Sprint C §10.4 ha chiuso il debito principale (`Membership.start_date`/`end_dat
 - **Fix proposto:** differenziare il signal per ruolo, o estendere `CoachProfile` con due FK separate (`current_head_team`, `current_assistant_team`).
 - **Priorità:** bassa — caso raro nel dominio sportivo coperto.
 
-**DEBT-003 — `Membership` con `end_date < start_date` (dati corrotti)**
+**DEBT-003 — `Membership` con `end_date < start_date` (dati corrotti) — ✅ CHIUSO (Sprint D, 2026-06-06)**
 
 - **Sintomo:** edit manuale via `op_admin_site` permette di salvare `Membership` con date incoerenti (chiusura prima dell'inizio).
 - **Origine:** rischio #5 di Step 3c, non risolto in scope.
-- **Fix proposto:** `CheckConstraint(check=Q(end_date__isnull=True) | Q(end_date__gte=F('start_date')), name='end_date_after_start')` a livello DB, o validator Django sul model (`clean()`).
+- **Fix applicato:** `CheckConstraint` a livello DB (migration `0009`, commit `068ec8e`, constraint `membership_end_date_after_start`) — permissivo sui NULL: vincola `end_date >= start_date` solo quando entrambe le date sono valorizzate; più validator `Membership.clean()` lato model.
+- **Nota:** il constraint **decadrà col redesign del modello stagione** (rimozione di `start_date`/`end_date` da `Membership` in Fase 2) — vedi [syllabus Macro 16](syllabus/16_modello_stagione.md) §16.3.
 - **Priorità:** bassa.
 
 **DEBT-004 — Concorrenza redeem/approve sullo stesso user**

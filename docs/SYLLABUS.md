@@ -1,6 +1,6 @@
 # SYLLABUS — Roadmap operativa 2salti
 
-Aggiornato: 2026-05-22
+Aggiornato: 2026-06-06
 
 Punto d'ingresso operativo del progetto. Per la visione di prodotto vedi [BLUEPRINT.md](BLUEPRINT.md).
 
@@ -59,3 +59,6 @@ Punto d'ingresso operativo del progetto. Per la visione di prodotto vedi [BLUEPR
 
 ## 15. Stabilità tecnica — test suite e debito 🔄
 → [Dettaglio](syllabus/15_stabilita_tecnica.md)
+
+## 16. Modello stagione e tesseramento per stagione ⏳
+→ [Dettaglio](syllabus/16_modello_stagione.md)
