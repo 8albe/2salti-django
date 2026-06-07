@@ -1,6 +1,6 @@
 ## 16. Modello stagione e tesseramento per stagione
 
-Stato: ⏳ Da fare
+Stato: 🛠️ In corso (Fase 0 ✅ implementata dev+home; Fasi 1-4 da fare)
 
 Redesign del modello stagione in 5 fasi: la **stagione diventa l'asse** del tesseramento (non più le date libere), la **lega** è la fonte di verità per la distinzione grandi/giovanili e si introduce il **prestito strutturato**. Le decisioni di prodotto sono **chiuse** (Sprint D, 2026-06-06, decision capture concluso); resta da implementare. Vedi [BLUEPRINT §10.1](../BLUEPRINT.md).
 
@@ -8,17 +8,20 @@ Redesign del modello stagione in 5 fasi: la **stagione diventa l'asse** del tess
 
 ### 16.1 Bonifica dati (Fase 0)
 
+Stato: ✅ **implementata** (dev + home, 2026-06-07). Propagazione a prod ancora da fare (giro master, §11.3).
+
 Decisioni chiuse:
 
 - [x] Formato canonico stagione: `2025/2026` (slash), validato sul pattern `AAAA/AAAA` con secondo anno = primo + 1.
-- [x] Conversione valori esistenti: `2025-2026` → `2025/2026`; typo `2025-5026` → `2025/2026`.
-- [x] Leghe/standings su `2024-2025` cancellati (residui di test, non dati reali).
+- [x] Conversione valori esistenti: `2025-2026` → `2025/2026`; typo `2025-5026` → `2025/2026`. Conversione in **lockstep** `League.season` + `LeagueStanding.season` (stessa stagione) per non rompere `unique_together(league, team, season)`.
+- [x] ~~Leghe/standings su `2024-2025` cancellati (residui di test).~~ **CORRETTO dai dati (Fase 0 audit/dry-run)**: si cancellano **solo** le leghe `2024-2025` realmente orfane (0 team **e** 0 standing collegati). Le leghe `2024-2025` che reggono team live + tesseramenti (es. lega "Senior" su dev: 4 team SENIOR + 58 PLAYER) **non** sono residui → sono leghe correnti mal-datate, **convertite** a `2025/2026` in lockstep con i loro standing (decisione C del product owner). La riclassificazione del tipo lega resta Fase 3.
 
 Task implementativi:
 
-- [ ] Management command idempotente di bonifica/normalizzazione dei valori `season` esistenti al formato slash.
-- [ ] Cancellazione controllata dei residui `2024-2025` (leghe + standings collegate).
-- [ ] Validator del formato `AAAA/AAAA` (secondo anno = primo + 1) riusabile da Season.
+- [x] Bonifica realizzata come **data migration tracciata** (non management command) per riproducibilità su prod: `core/migrations/0009_bonifica_season_slash.py` (`RunPython` idempotente, filtro per **pattern di valore** — mai pk hardcoded —, logging per record, pre-check collisioni `unique_together`, reverse irreversibile documentato → ripristino da backup).
+- [x] Cancellazione controllata dei soli residui `2024-2025` orfani; conversione delle leghe mal-datate (lockstep League + standings).
+- [x] Validator `core/validators.validate_season_format` (`AAAA/AAAA`, secondo anno = primo + 1) riusabile da Season; applicato a `League.season`, `LeagueStanding.season`, `SeasonArchive.season` (migration `core/0010`, `seasons/0002`).
+- [x] `League.save()` sanitizza il separatore nello slug (`/`→`-`) così i nuovi record con season slash non producono `/` nello slug. Gli slug esistenti **non** sono stati rigenerati (scelta: evitare churn pre-lancio).
 
 ### 16.2 Entità Season (Fase 1)
 
@@ -90,10 +93,11 @@ Task implementativi:
 ### Note aperte
 
 - [ ] **Trasferimento definitivo a stagione in corso**: come modellarlo senza violare il constraint prestito (cambio società "normale" entro la stessa stagione vs prestito). Da chiarire prima della Fase 4.
-- [ ] **Censimento `order_by('-season')`**: trovare tutti i punti che ordinano lessicograficamente sul CharField `season` (almeno `core/views.py:116`) prima di rimuovere il campo.
+- [ ] **Censimento `order_by('-season')`**: punti che ordinano lessicograficamente sul CharField `season`, da sostituire prima di rimuovere il campo. Censiti in Fase 0: `core/views.py:117` (League, punto core), `seasons/models.py:30` (`SeasonArchive.Meta.ordering=['-season']`) e `accounts/views.py:511` (`SeasonArchive.objects.order_by('-season')`). Gli ultimi due sono su `SeasonArchive` (oggi vuoto), ma usano lo stesso ordinamento fragile.
 - [ ] **Formato slash negli URL/slug**: `2025/2026` contiene `/`; valutare encoding o slug alternativo (`2025-2026`) per route e slug, mantenendo il display con slash.
 - [ ] **Etichette U10/U20**: nessuna etichetta tradizionale assegnata — da decidere (display = valore Under canonico nel frattempo).
-- [ ] **Constraint `membership_end_date_after_start` (migration 0009)**: da rimuovere in Fase 2 contestualmente all'eliminazione di `start_date`/`end_date` (DEBT-003, OPS_RUNBOOK §10.6).
+- [ ] **Constraint `membership_end_date_after_start` (migration `management/0009`)**: da rimuovere in Fase 2 contestualmente all'eliminazione di `start_date`/`end_date` (DEBT-003, OPS_RUNBOOK §10.6).
+- [ ] **Incoerenza slug girone (preesistente)**: su dev gli slug delle leghe "serie B Maschile" sono disallineati al `group_name` reale — lega con `group_name='Girone C'` ha slug `...-girone-d`, e una con `group_name='Girone D'` ha slug `...-girone-D` (maiuscola non slugificata). Indipendente dalla stagione, **non** sanitizzato in Fase 0 (gli slug esistenti non si rigenerano): da indagare in futuro.
 
 ---
 

@@ -2,6 +2,8 @@ from django.db import models
 from django.utils.text import slugify
 from django.contrib.auth import get_user_model
 
+from core.validators import validate_season_format
+
 User = get_user_model()
 
 
@@ -132,7 +134,8 @@ class League(models.Model):
     name = models.CharField(max_length=100, help_text="Es: Serie A1 Maschile")
     sport = models.ForeignKey(Sport, on_delete=models.CASCADE, related_name='leagues')
     category = models.CharField(max_length=10, choices=Team.CATEGORY_CHOICES)
-    season = models.CharField(max_length=9, default='2024-2025', help_text="Es: 2024-2025")
+    season = models.CharField(max_length=9, default='2025/2026',
+                              validators=[validate_season_format], help_text="Es: 2025/2026")
     group_name = models.CharField(max_length=50, blank=True, help_text="Es: Girone A, Girone B")
     
     # Metadati
@@ -145,9 +148,10 @@ class League(models.Model):
 
     def save(self, *args, **kwargs):
         if not self.slug:
-            self.slug = slugify(f"{self.name}-{self.season}-{self.group_name}")
+            season_slug = (self.season or "").replace("/", "-")
+            self.slug = slugify(f"{self.name}-{season_slug}-{self.group_name}")
         super().save(*args, **kwargs)
-    
+
     def __str__(self):
         base = f"{self.name} {self.season}"
         if self.group_name:
@@ -237,7 +241,7 @@ class LeagueStanding(models.Model):
     """Classifica persistita per evitare ricalcoli costosi"""
     league = models.ForeignKey(League, on_delete=models.CASCADE, related_name='persisted_standings')
     team = models.ForeignKey(Team, on_delete=models.CASCADE, related_name='persisted_standings')
-    season = models.CharField(max_length=9, help_text="Es: 2024-2025")
+    season = models.CharField(max_length=9, validators=[validate_season_format], help_text="Es: 2025/2026")
     
     played = models.IntegerField(default=0)
     won = models.IntegerField(default=0)
