@@ -103,13 +103,11 @@ def bonifica(apps, schema_editor):
             ls.save(update_fields=["season"])
 
 
-def reverse(apps, schema_editor):
-    # Non reversibile in modo fedele: la conversione e' lossy
-    # (2025-2026 e 2025-5026 collassano entrambi su 2025/2026; le DELETE sono
-    # irreversibili). Ripristinare dal backup db.sqlite3.bak.* se necessario.
-    raise RuntimeError(
-        "Migration di bonifica non reversibile: ripristinare dal backup DB."
-    )
+# Reverse: noop a livello schema. La conversione dati e' LOSSY (2025-2026 e
+# 2025-5026 collassano entrambi su 2025/2026; le DELETE sono definitive): il
+# ripristino dati avviene SOLO da backup db.sqlite3.bak.*. Il noop (anziche'
+# un raise) mantiene la migration rewindabile in dev/test senza promettere un
+# ripristino dati che non puo' essere fedele.
 
 
 class Migration(migrations.Migration):
@@ -119,5 +117,5 @@ class Migration(migrations.Migration):
     ]
 
     operations = [
-        migrations.RunPython(bonifica, reverse),
+        migrations.RunPython(bonifica, migrations.RunPython.noop),
     ]
