@@ -1,6 +1,6 @@
 ## 16. Modello stagione e tesseramento per stagione
 
-Stato: 🛠️ In corso (Fase 0 ✅ implementata dev+home; Fasi 1-4 da fare)
+Stato: 🛠️ In corso (Fase 0 ✅ implementata dev+home; Fase 1 ✅ implementata dev; Fasi 2-4 da fare)
 
 Redesign del modello stagione in 5 fasi: la **stagione diventa l'asse** del tesseramento (non più le date libere), la **lega** è la fonte di verità per la distinzione grandi/giovanili e si introduce il **prestito strutturato**. Le decisioni di prodotto sono **chiuse** (Sprint D, 2026-06-06, decision capture concluso); resta da implementare. Vedi [BLUEPRINT §10.1](../BLUEPRINT.md).
 
@@ -25,6 +25,8 @@ Task implementativi:
 
 ### 16.2 Entità Season (Fase 1)
 
+Stato: ✅ **implementata** (dev, 2026-06-09, fette 1a-i/1a-ii/1b). Propagazione a prod insieme a Fase 0 (giro master, §11.3).
+
 Decisioni chiuse:
 
 - [x] Nuova entità `Season` che sostituisce il CharField libero `League.season`.
@@ -35,11 +37,11 @@ Decisioni chiuse:
 
 Task implementativi:
 
-- [ ] Modello `Season` (campi: identificativo formato `2025/2026` validato, `sport` FK, `is_current` bool) + migration.
-- [ ] Constraint "al massimo una `is_current` per sport" (`UniqueConstraint` condizionale `condition=Q(is_current=True)` su `sport`).
-- [ ] Migrare `League.season` (CharField) → FK a `Season`; backfill delle leghe esistenti.
-- [ ] Sostituire il calcolo lessicografico in `core/views.py` con lookup `Season.is_current` per sport.
-- [ ] **Backfill tesseramenti**: 58 Membership PLAYER (dev e prod allineate, verificato) → stagione `2025/2026`.
+- [x] Modello `Season` (campi: identificativo formato `2025/2026` validato, `sport` FK, `is_current` bool) + migration. — `core.Season`, migration 0011, commit 4baaf7f.
+- [x] Constraint "al massimo una `is_current` per sport" (`UniqueConstraint` condizionale `condition=Q(is_current=True)` su `sport`). — `UniqueConstraint` condizionale `Q(is_current=True)`, in 0011.
+- [x] Migrare `League.season` (CharField) → FK a `Season`; backfill delle leghe esistenti. — FK transitoria `League.season_fk` (nullable, PROTECT) affiancata alla stringa, non sostitutiva; migration 0013 (schema) + 0014 (backfill), commit c7cef79. Nota: la stringa `League.season` resta fino alla Fase 2 (rename `season_fk`→`season` + rimozione stringa + non-null lì).
+- [x] Sostituire il calcolo lessicografico in `core/views.py` con lookup `Season.is_current` per sport. — service `get_current_season(sport)` cablato in `core/views.py:117`, fallback bit-identico al MAX se `None`; data-migration 0012 popola + elegge, commit bd0dbfc.
+- [ ] **Backfill tesseramenti**: 58 Membership PLAYER (dev e prod allineate, verificato) → stagione `2025/2026`. → Fase 2 (§16.3): è backfill di `Membership`, non svolto in questa fetta.
 
 ### 16.3 Membership per stagione (Fase 2)
 
@@ -93,7 +95,7 @@ Task implementativi:
 ### Note aperte
 
 - [ ] **Trasferimento definitivo a stagione in corso**: come modellarlo senza violare il constraint prestito (cambio società "normale" entro la stessa stagione vs prestito). Da chiarire prima della Fase 4.
-- [ ] **Censimento `order_by('-season')`**: punti che ordinano lessicograficamente sul CharField `season`, da sostituire prima di rimuovere il campo. Censiti in Fase 0: `core/views.py:117` (League, punto core), `seasons/models.py:30` (`SeasonArchive.Meta.ordering=['-season']`) e `accounts/views.py:511` (`SeasonArchive.objects.order_by('-season')`). Gli ultimi due sono su `SeasonArchive` (oggi vuoto), ma usano lo stesso ordinamento fragile.
+- [ ] **Censimento `order_by('-season')`**: punti che ordinano lessicograficamente sul CharField `season`, da sostituire prima di rimuovere il campo. Censiti in Fase 0: `core/views.py:117` (League, punto core) — ✅ **risolto in Fase 1** (ora legge da `Season` via `get_current_season`); restano aperti `seasons/models.py:30` (`SeasonArchive.Meta.ordering=['-season']`) e `accounts/views.py:511` (`SeasonArchive.objects.order_by('-season')`). Gli ultimi due sono su `SeasonArchive` (oggi vuoto), ordinano l'archivio e sono indipendenti dall'elezione `is_current`: da fare in una fetta dedicata, usano lo stesso ordinamento fragile.
 - [ ] **Formato slash negli URL/slug**: `2025/2026` contiene `/`; valutare encoding o slug alternativo (`2025-2026`) per route e slug, mantenendo il display con slash.
 - [ ] **Etichette U10/U20**: nessuna etichetta tradizionale assegnata — da decidere (display = valore Under canonico nel frattempo).
 - [ ] **Constraint `membership_end_date_after_start` (migration `management/0009`)**: da rimuovere in Fase 2 contestualmente all'eliminazione di `start_date`/`end_date` (DEBT-003, OPS_RUNBOOK §10.6).
