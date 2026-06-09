@@ -1,10 +1,9 @@
 ## 16. Modello stagione e tesseramento per stagione
 
-Stato: 🛠️ In corso (Fase 0 ✅ implementata dev+home; Fase 1 ✅ implementata dev; Fasi 2-4 da fare)
+Stato: 🛠️ In corso 
 
-Redesign del modello stagione in 5 fasi: la **stagione diventa l'asse** del tesseramento (non più le date libere), la **lega** è la fonte di verità per la distinzione grandi/giovanili e si introduce il **prestito strutturato**. Le decisioni di prodotto sono **chiuse** (Sprint D, 2026-06-06, decision capture concluso); resta da implementare. Vedi [BLUEPRINT §10.1](../BLUEPRINT.md).
-
-> **Nota di scope.** Le decisioni sono registrate come `- [x]`; i task implementativi come `- [ ]`. Nessun codice/migration/test è stato scritto in Sprint D. Il prestito porta uno stato come **semplice etichetta** (attivo/concluso): **non** è una macchina a stati, quindi [STATE_MACHINES.md](../STATE_MACHINES.md) non va toccato.
+Redesign del modello stagione in 5 fasi: la **stagione diventa l'asse** del tesseramento (non più le date libere), la **lega** è la fonte di verità per la distinzione grandi/giovanili e si introduce il **prestito strutturato**. Le decisioni di prodotto sono **chiuse** (Sprint D, 2026-06-06, decision capture concluso); resta da implementare. 
+> **Nota di scope.** Le decisioni sono registrate come `- [x]`; i task implementativi come `- [ ]`. Nessun codice/migration/test è stato scritto in Sprint D. Il prestito porta uno stato come **semplice etichetta** (attivo/concluso): non è una macchina a stati, quindi STATE_MACHINES.md non va toccato.
 
 ### 16.1 Bonifica dati (Fase 0)
 
@@ -25,8 +24,6 @@ Task implementativi:
 
 ### 16.2 Entità Season (Fase 1)
 
-Stato: ✅ **implementata** (dev, 2026-06-09, fette 1a-i/1a-ii/1b). Propagazione a prod insieme a Fase 0 (giro master, §11.3).
-
 Decisioni chiuse:
 
 - [x] Nuova entità `Season` che sostituisce il CharField libero `League.season`.
@@ -37,11 +34,11 @@ Decisioni chiuse:
 
 Task implementativi:
 
-- [x] Modello `Season` (campi: identificativo formato `2025/2026` validato, `sport` FK, `is_current` bool) + migration. — `core.Season`, migration 0011, commit 4baaf7f.
-- [x] Constraint "al massimo una `is_current` per sport" (`UniqueConstraint` condizionale `condition=Q(is_current=True)` su `sport`). — `UniqueConstraint` condizionale `Q(is_current=True)`, in 0011.
-- [x] Migrare `League.season` (CharField) → FK a `Season`; backfill delle leghe esistenti. — FK transitoria `League.season_fk` (nullable, PROTECT) affiancata alla stringa, non sostitutiva; migration 0013 (schema) + 0014 (backfill), commit c7cef79. Nota: la stringa `League.season` resta fino alla Fase 2 (rename `season_fk`→`season` + rimozione stringa + non-null lì).
-- [x] Sostituire il calcolo lessicografico in `core/views.py` con lookup `Season.is_current` per sport. — service `get_current_season(sport)` cablato in `core/views.py:117`, fallback bit-identico al MAX se `None`; data-migration 0012 popola + elegge, commit bd0dbfc.
-- [ ] **Backfill tesseramenti**: 58 Membership PLAYER (dev e prod allineate, verificato) → stagione `2025/2026`. → Fase 2 (§16.3): è backfill di `Membership`, non svolto in questa fetta.
+- [x] Modello `Season` (campi: identificativo formato `2025/2026` validato, `sport` FK, `is_current` bool) + migration.
+- [x] Constraint "al massimo una `is_current` per sport" (`UniqueConstraint` condizionale `condition=Q(is_current=True)` su `sport`).
+- [x] Migrare `League.season` (CharField) → FK a `Season`; backfill delle leghe esistenti.
+- [x] Sostituire il calcolo lessicografico in `core/views.py` con lookup `Season.is_current` per sport.
+- [x] **Backfill tesseramenti**: 58 Membership PLAYER (dev e prod allineate, verificato) → stagione `2025/2026`.
 
 ### 16.3 Membership per stagione (Fase 2)
 
@@ -95,7 +92,7 @@ Task implementativi:
 ### Note aperte
 
 - [ ] **Trasferimento definitivo a stagione in corso**: come modellarlo senza violare il constraint prestito (cambio società "normale" entro la stessa stagione vs prestito). Da chiarire prima della Fase 4.
-- [ ] **Censimento `order_by('-season')`**: punti che ordinano lessicograficamente sul CharField `season`, da sostituire prima di rimuovere il campo. Censiti in Fase 0: `core/views.py:117` (League, punto core) — ✅ **risolto in Fase 1** (ora legge da `Season` via `get_current_season`); restano aperti `seasons/models.py:30` (`SeasonArchive.Meta.ordering=['-season']`) e `accounts/views.py:511` (`SeasonArchive.objects.order_by('-season')`). Gli ultimi due sono su `SeasonArchive` (oggi vuoto), ordinano l'archivio e sono indipendenti dall'elezione `is_current`: da fare in una fetta dedicata, usano lo stesso ordinamento fragile.
+- [x] **Censimento `order_by('-season')`** — chiuso. `core/views.py:117` (League, punto core) risolto in Fase 1 (commit `bd0dbfc`, lookup `Season.is_current`). I due punti su `SeasonArchive` — `seasons/models.py:30` (`Meta.ordering=['-season']`) e `accounts/views.py:511` (`SeasonArchive.objects.order_by('-season')`) — sono già coperti: il campo `SeasonArchive.season` porta `validators=[validate_season_format]` dalla Fase 0 (commit `1816567`, migration `seasons/0002`), che vincola il formato al canonico `2025/2026`, rendendo l'ordinamento lessicografico corretto a regime. Limite noto: il validator scatta su `full_clean()`, non su `.save()` nudo — irrilevante oggi (`SeasonArchive` ha 0 righe e 0 scrittori), da ricordare se la tabella verrà popolata in Fase 2.
 - [ ] **Formato slash negli URL/slug**: `2025/2026` contiene `/`; valutare encoding o slug alternativo (`2025-2026`) per route e slug, mantenendo il display con slash.
 - [ ] **Etichette U10/U20**: nessuna etichetta tradizionale assegnata — da decidere (display = valore Under canonico nel frattempo).
 - [ ] **Constraint `membership_end_date_after_start` (migration `management/0009`)**: da rimuovere in Fase 2 contestualmente all'eliminazione di `start_date`/`end_date` (DEBT-003, OPS_RUNBOOK §10.6).
