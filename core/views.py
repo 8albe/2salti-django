@@ -113,11 +113,20 @@ def sport_detail(request, slug):
             })
 
     all_sports = Sport.objects.filter(leagues__isnull=False).distinct().order_by('name')
-    current_season = (
-        sport.leagues.order_by('-season').first().season
-        if sport.leagues.exists()
-        else ''
-    )
+
+    from core.services.season_service import get_current_season
+    season = get_current_season(sport)
+    if season:
+        current_season = season.label
+    else:
+        # Fallback bit-identico al vecchio MAX lessicografico finche' Season non
+        # e' popolata per questo sport. Isolato nella view: il service non cambia
+        # contratto (resta Season | None).
+        current_season = (
+            sport.leagues.order_by('-season').first().season
+            if sport.leagues.exists()
+            else ''
+        )
 
     from core.services.seo_service import SEOService
 
