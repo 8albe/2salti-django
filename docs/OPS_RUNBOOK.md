@@ -520,6 +520,13 @@ Sprint C §10.4 ha chiuso il debito principale (`Membership.start_date`/`end_dat
 - **Fix proposto:** `select_for_update()` su `Membership` e profilo nel blocco transaction, oppure lock applicativo via cache/redis.
 - **Priorità:** bassa. SQLite (dev) serializza implicitamente; PostgreSQL (prod target futuro, §15.3) avrebbe row-level lock implicito ma andrebbe testato esplicitamente.
 
+### 10.7 Fragilità test migration Macro 16 — APERTO (introdotto Fase 1b, 2026-06-09)
+
+- **Sintomo:** i test in `core/tests_migrations_season.py` fissano i leaf `accounts@0005_staff_role_pii` e `management@0009_membership_end_date_constraint` nel `project_state` combinato. Si romperanno (errore di schema storico) al primo `makemigrations` che tocca lo schema di `User`/`Membership` su quelle app.
+- **Origine:** Macro 16 Fase 1b (commit `c7cef79`).
+- **Fix proposto:** aggiornare i leaf in lockstep con le nuove migration, o rendere il test leaf-agnostico (risoluzione dinamica del leaf invece dell'hardcoding).
+- **Priorità:** bassa — scatta solo alla prossima migration su `accounts`/`management` (es. Fase 2, che aggiunge `Membership.season`).
+
 ## 11. Sicurezza operativa e frontiera reversibile
 
 Questa sezione codifica le regole di sicurezza operativa emerse dalle sessioni di aprile-maggio 2026, e in particolare consolidate dopo l'incidente del 4 maggio 2026 in cui una password sudo in chiaro è stata trovata nella history pubblica del repo (`install_service.sh`, commit `473c296` del 15 marzo 2026). La regola madre è che le operazioni con effetti permanenti, distruttivi o privilegiati passano per Alberto e mai per l'agente, e che i segreti non transitano mai in contesti condivisi.

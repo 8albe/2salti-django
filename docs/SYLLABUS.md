@@ -60,5 +60,5 @@ Punto d'ingresso operativo del progetto. Per la visione di prodotto vedi [BLUEPR
 ## 15. Stabilità tecnica — test suite e debito 🔄
 → [Dettaglio](syllabus/15_stabilita_tecnica.md)
 
-## 16. Modello stagione e tesseramento per stagione ⏳
+## 16. Modello stagione e tesseramento per stagione 🔄
 → [Dettaglio](syllabus/16_modello_stagione.md)
