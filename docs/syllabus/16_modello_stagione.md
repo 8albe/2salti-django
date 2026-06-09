@@ -59,11 +59,14 @@ Task implementativi:
 - [ ] Sostituire `unique_together = (user, society, team, role)` con `(user, society, team, role, season)`.
 - [ ] Rimuovere `start_date`/`end_date` e il `CheckConstraint` `membership_end_date_after_start` (migration `0009`) — vedi OPS_RUNBOOK §10.6 DEBT-003.
 - [ ] Rivedere `MembershipQuerySet.active_at()` (oggi basato su date) → logica per stagione.
-- [ ] Backfill `season = 2025/2026` sui 58 record PLAYER esistenti (dev + prod), poi migration che rende `season` NOT NULL.
+- [x] Backfill `season` sui 58 record esistenti (migration `0011`, dev reale 58/58 → `2025/2026`).
+- [ ] Migration `season` NOT NULL — rinviata a fine 2d (vedi nota blocker sotto).
 
 > **Nota tecnica — logica date in produzione da ridisegnare in Fase 2.** Oggi due punti del codice dipendono dalle date di `Membership` e non erano mappati in questa sezione:
 > - `management/signals.py` — lifecycle "attiva" = `end_date IS NULL` (apertura/chiusura automatica delle Membership sui save dei profili). Da riportare su `season` nella fetta 2d (rimozione date).
 > - `accounts/views.py` (§10.4) — tenure coach per **finestra-data** (`match_date` tra `start_date` e `end_date` della Membership HEAD_COACH) per attribuire le partite dirette. Da sostituire con il modello β-stagione/coach-finale nella fetta 2d.
+
+> **Blocker 2c (NOT NULL) → rinviato a fine 2d.** Il flip `season` NOT NULL non è schema-only: lo storico è popolato (58/58) ma 3 creation-site di produzione creano `Membership` senza `season` — `management/signals.py:66` (`_open_or_reopen_membership`), `management/views.py:417` (approvazione MembershipRequest), `management/services/membership_enrollment.py:69` (redeem activation code). Con FK nullable nascono `season=NULL`; con NOT NULL romperebbero in runtime. I 3 siti vanno resi season-aware in 2d (derivazione come il backfill: `team.league.season_fk` → fallback `is_current`), contestualmente alla nuova unique key che li tocca comunque. Il NOT NULL è quindi l'ultimo gradino di 2d.
 
 ### 16.4 Leghe grandi vs giovanili (Fase 3)
 
