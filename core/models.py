@@ -262,3 +262,38 @@ class LeagueStanding(models.Model):
 
     def __str__(self):
         return f"{self.team.name} - {self.league.name} ({self.points} pts)"
+
+
+class Season(models.Model):
+    """Stagione di prima classe, per-sport. Fonte di verita' per l'elezione
+    della stagione corrente (sostituisce il MAX lessicografico su stringa).
+
+    NB (Fase 1a-i): nessuna FK da League verso questo modello ancora; la
+    stringa League.season resta la fonte dati. La FK arrivera' in 1b.
+    """
+    sport = models.ForeignKey(Sport, on_delete=models.CASCADE, related_name='seasons')
+    label = models.CharField(max_length=9, validators=[validate_season_format], help_text="Es: 2025/2026")
+    is_current = models.BooleanField(default=False, help_text="Stagione corrente per questo sport")
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['sport', '-label']
+        verbose_name = "Stagione"
+        verbose_name_plural = "🗓 Stagioni"
+        constraints = [
+            models.UniqueConstraint(
+                fields=['sport', 'label'],
+                name='unique_season_per_sport',
+            ),
+            models.UniqueConstraint(
+                fields=['sport'],
+                condition=models.Q(is_current=True),
+                name='unique_current_season_per_sport',
+            ),
+        ]
+
+    def __str__(self):
+        marker = " (corrente)" if self.is_current else ""
+        return f"{self.sport.name} {self.label}{marker}"

@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import Sport, Society, Team, League, LeagueStanding
+from .models import Sport, Society, Team, League, LeagueStanding, Season
 
 @admin.register(LeagueStanding)
 class LeagueStandingAdmin(admin.ModelAdmin):
@@ -16,6 +16,11 @@ class LeagueStandingAdmin(admin.ModelAdmin):
 class SportAdmin(admin.ModelAdmin):
     list_display = ('name', 'slug', 'hex_color')
     readonly_fields = ('slug',)
+
+@admin.register(Season)
+class SeasonAdmin(admin.ModelAdmin):
+    list_display = ('sport', 'label', 'is_current')
+    list_filter = ('sport', 'is_current')
 
 @admin.register(Society)
 class SocietyAdmin(admin.ModelAdmin):
