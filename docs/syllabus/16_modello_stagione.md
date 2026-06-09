@@ -48,6 +48,10 @@ Decisioni chiuse:
 - [x] Nuova chiave di unicità: `(user, society, team, role, season)`.
 - [x] Eliminazione di `start_date`/`end_date` da `Membership`.
 - [x] Il `CheckConstraint` `membership_end_date_after_start` (migration `0009`, DEBT-003) decade col redesign.
+- [x] Attribuzione partite-allenatore: modello **β-stagione, coach finale**. Il coach "della stagione" per una squadra è quello in carica a fine stagione; a lui sono attribuite **tutte** le partite della squadra in quella stagione. Nessuna finestra temporale (`start_date`/`end_date`) nel calcolo dell'attribuzione.
+- [x] Cambio coach in corso di stagione (chi→chi, quando): registrato come **nota descrittiva** (testo libero), **non** come dato strutturato che piloti l'attribuzione. Campo da aggiungere/verificare nella fetta 2d.
+- [x] Sostituzione spot per singole partite: **non modellata**.
+- [x] Timeline cambi-coach strutturata/interrogabile: feature futura separata, **fuori Fase 2**.
 
 Task implementativi:
 
@@ -56,6 +60,10 @@ Task implementativi:
 - [ ] Rimuovere `start_date`/`end_date` e il `CheckConstraint` `membership_end_date_after_start` (migration `0009`) — vedi OPS_RUNBOOK §10.6 DEBT-003.
 - [ ] Rivedere `MembershipQuerySet.active_at()` (oggi basato su date) → logica per stagione.
 - [ ] Backfill `season = 2025/2026` sui 58 record PLAYER esistenti (dev + prod), poi migration che rende `season` NOT NULL.
+
+> **Nota tecnica — logica date in produzione da ridisegnare in Fase 2.** Oggi due punti del codice dipendono dalle date di `Membership` e non erano mappati in questa sezione:
+> - `management/signals.py` — lifecycle "attiva" = `end_date IS NULL` (apertura/chiusura automatica delle Membership sui save dei profili). Da riportare su `season` nella fetta 2d (rimozione date).
+> - `accounts/views.py` (§10.4) — tenure coach per **finestra-data** (`match_date` tra `start_date` e `end_date` della Membership HEAD_COACH) per attribuire le partite dirette. Da sostituire con il modello β-stagione/coach-finale nella fetta 2d.
 
 ### 16.4 Leghe grandi vs giovanili (Fase 3)
 

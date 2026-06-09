@@ -45,6 +45,14 @@ class Membership(models.Model):
     team = models.ForeignKey(Team, on_delete=models.CASCADE, null=True, blank=True, related_name='memberships')
     role = models.CharField(max_length=20, choices=ROLE_CHOICES)
 
+    # Fase 2 (fetta 2a): FK stagione transitoria, nullable, affiancata a
+    # start_date/end_date (che spariranno nella fetta 2d). Lazy ref a 'core.Season'
+    # per evitare cicli d'import. Nessun backfill in 2a: i record restano season=NULL.
+    season = models.ForeignKey(
+        'core.Season', null=True, blank=True,
+        on_delete=models.PROTECT, related_name='memberships',
+    )
+
     is_active = models.BooleanField(default=True)
     start_date = models.DateField(null=True, blank=True)
     end_date = models.DateField(null=True, blank=True)
