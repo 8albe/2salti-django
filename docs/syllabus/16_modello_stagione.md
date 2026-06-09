@@ -55,7 +55,7 @@ Decisioni chiuse:
 
 Task implementativi:
 
-- [ ] Aggiungere `Membership.season` (FK a `Season`) + migration.
+- [x] Aggiungere `Membership.season` (FK a `Season`) + migration.
 - [ ] Sostituire `unique_together = (user, society, team, role)` con `(user, society, team, role, season)`.
 - [ ] Rimuovere `start_date`/`end_date` e il `CheckConstraint` `membership_end_date_after_start` (migration `0009`) — vedi OPS_RUNBOOK §10.6 DEBT-003.
 - [ ] Rivedere `MembershipQuerySet.active_at()` (oggi basato su date) → logica per stagione.
