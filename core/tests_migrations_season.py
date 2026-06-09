@@ -11,14 +11,14 @@ quindi i valori dash/typo seminati sono accettati.
 """
 from datetime import date
 
-from django.contrib.auth import get_user_model
 from django.core.management import call_command
 from django.db import connection
 from django.db.migrations.executor import MigrationExecutor
 from django.test import TransactionTestCase
 
-from core.models import League, LeagueStanding, Society, Sport, Team
-from management.models import Membership
+# I modelli (core.League/Society/Team/LeagueStanding, management.Membership,
+# accounts.User) sono ottenuti come modelli STORICI dal project_state in setUp:
+# il modello reale core.League ha ora season_fk, assente nello schema 0008/0010.
 
 
 class SeasonBonificaMigrationTest(TransactionTestCase):
@@ -30,7 +30,35 @@ class SeasonBonificaMigrationTest(TransactionTestCase):
         executor = MigrationExecutor(connection)
         executor.migrate(self.migrate_from)
 
-        User = get_user_model()
+        # Modelli STORICI dello stato pre-bonifica. Il modello reale core.League
+        # ha ora season_fk (introdotto in 0013, assente nello schema storico
+        # 0008/0010): un seeding/una query col modello reale emetterebbe
+        # season_fk_id e fallirebbe ("no such column"). Si usa un project_state
+        # combinato che riproduce il DB reale dopo il rewind del SOLO core a 0008:
+        # accounts e management restano ai loro leaf (non vengono mai retrocessi),
+        # quindi vanno targettati ai leaf per avere User/Membership con lo schema
+        # fisico corrente (es. accounts.User.identity_status, esistente da 0003).
+        # Tutti i modelli provengono cosi' dallo stesso registro storico: niente
+        # ibridi, FK coerenti dentro lo stesso apps registry.
+        old_apps = executor.loader.project_state(
+            self.migrate_from + [
+                ("accounts", "0005_staff_role_pii"),
+                ("management", "0009_membership_end_date_constraint"),
+            ]
+        ).apps
+        Sport = old_apps.get_model("core", "Sport")
+        Society = old_apps.get_model("core", "Society")
+        League = old_apps.get_model("core", "League")
+        Team = old_apps.get_model("core", "Team")
+        LeagueStanding = old_apps.get_model("core", "LeagueStanding")
+        Membership = old_apps.get_model("management", "Membership")
+        User = old_apps.get_model("accounts", "User")
+        # Riusati dalle asserzioni (gli altri modelli restano impliciti via id).
+        self.League = League
+        self.LeagueStanding = LeagueStanding
+        self.Team = Team
+        self.Membership = Membership
+
         sport = Sport.objects.create(name="PN MigTest", slug="pn-migtest")
         society = Society.objects.create(name="Soc MigTest", slug="soc-migtest", sport=sport, city="Roma")
 
@@ -72,27 +100,27 @@ class SeasonBonificaMigrationTest(TransactionTestCase):
         call_command("migrate", verbosity=0)
 
     def test_branch_a_pure_dash_converted(self):
-        self.assertEqual(League.objects.get(pk=self.ids["a"]).season, "2025/2026")
+        self.assertEqual(self.League.objects.get(pk=self.ids["a"]).season, "2025/2026")
 
     def test_branch_b_typo_converted_lockstep(self):
-        self.assertEqual(League.objects.get(pk=self.ids["b"]).season, "2025/2026")
-        self.assertEqual(LeagueStanding.objects.get(pk=self.ids["std_b"]).season, "2025/2026")
+        self.assertEqual(self.League.objects.get(pk=self.ids["b"]).season, "2025/2026")
+        self.assertEqual(self.LeagueStanding.objects.get(pk=self.ids["std_b"]).season, "2025/2026")
 
     def test_branch_c_maldated_with_links_converted_not_deleted(self):
-        league_c = League.objects.get(pk=self.ids["c"])  # esiste ancora
+        league_c = self.League.objects.get(pk=self.ids["c"])  # esiste ancora
         self.assertEqual(league_c.season, "2025/2026")
-        self.assertEqual(LeagueStanding.objects.get(pk=self.ids["std_c"]).season, "2025/2026")
-        self.assertEqual(Team.objects.get(pk=self.ids["team_c"]).league_id, self.ids["c"])
-        membership = Membership.objects.get(pk=self.ids["membership"])
+        self.assertEqual(self.LeagueStanding.objects.get(pk=self.ids["std_c"]).season, "2025/2026")
+        self.assertEqual(self.Team.objects.get(pk=self.ids["team_c"]).league_id, self.ids["c"])
+        membership = self.Membership.objects.get(pk=self.ids["membership"])
         self.assertEqual(membership.role, "PLAYER")
         self.assertTrue(membership.is_active)
         self.assertIsNone(membership.end_date)
 
     def test_branch_d_orphan_deleted(self):
-        self.assertFalse(League.objects.filter(pk=self.ids["d"]).exists())
+        self.assertFalse(self.League.objects.filter(pk=self.ids["d"]).exists())
 
     def test_no_noncanonical_season_left(self):
-        for value in League.objects.values_list("season", flat=True):
+        for value in self.League.objects.values_list("season", flat=True):
             self.assertRegex(value, r"^\d{4}/\d{4}$")
-        for value in LeagueStanding.objects.values_list("season", flat=True):
+        for value in self.LeagueStanding.objects.values_list("season", flat=True):
             self.assertRegex(value, r"^\d{4}/\d{4}$")

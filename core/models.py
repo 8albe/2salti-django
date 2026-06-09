@@ -136,6 +136,13 @@ class League(models.Model):
     category = models.CharField(max_length=10, choices=Team.CATEGORY_CHOICES)
     season = models.CharField(max_length=9, default='2025/2026',
                               validators=[validate_season_format], help_text="Es: 2025/2026")
+    # FK transitoria a Season (Macro 16 Fase 1b). Nullable per backfill rollback-safe;
+    # la stringa `season` resta intatta finche' la Fase 2 non la rimuove, momento in cui
+    # questo campo verra' rinominato `season`. PROTECT: una Season con leghe collegate
+    # non dev'essere cancellabile.
+    season_fk = models.ForeignKey('Season', on_delete=models.PROTECT, null=True, blank=True,
+                                  related_name='leagues',
+                                  help_text="Stagione (FK transitoria, Fase 1b)")
     group_name = models.CharField(max_length=50, blank=True, help_text="Es: Girone A, Girone B")
     
     # Metadati
