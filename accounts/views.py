@@ -439,20 +439,24 @@ def profile(request, username):
         )
         context['coached_memberships'] = coached_memberships_list
 
-        # direct_matches: partite dirette dal coach. Per ogni tenure HEAD_COACH con start_date
-        # noto, includi i Match dove home_team o away_team è quel team e match_date cade dentro
-        # la tenure. Record con start_date=None vengono ignorati (nessun match attribuibile).
-        valid_tenures = [m for m in coached_memberships_list if m.start_date is not None]
+        # direct_matches: partite dirette dal coach. Modello β-stagione (Macro 16
+        # §16.3, fetta 2d-3): per ogni Membership HEAD_COACH con season nota,
+        # attribuisci TUTTE le partite della squadra in quella stagione, senza
+        # bound start_date/end_date. La stagione del match si deriva dalla catena
+        # Match -> league -> league.season_fk. Record con season=None vengono
+        # ignorati (ramo difensivo coerente con resolve_membership_season di 2d-1);
+        # match con league.season_fk=None non eguagliano alcun season_id valorizzato
+        # e cadono fuori senza crash. Nessuna disambiguazione "coach finale": il
+        # cambio-coach è nota libera, quindi si attribuisce a tutti i record
+        # HEAD_COACH di quella (team, season).
+        season_tenures = [m for m in coached_memberships_list if m.season_id is not None]
         direct_matches = None
-        if valid_tenures:
-            tenure_q = models.Q()
-            for mem in valid_tenures:
+        if season_tenures:
+            attr_q = models.Q()
+            for mem in season_tenures:
                 team_q = models.Q(home_team_id=mem.team_id) | models.Q(away_team_id=mem.team_id)
-                date_q = models.Q(match_date__date__gte=mem.start_date)
-                if mem.end_date is not None:
-                    date_q &= models.Q(match_date__date__lte=mem.end_date)
-                tenure_q |= (team_q & date_q)
-            direct_matches = Match.objects.filter(tenure_q).order_by('-match_date')[:10]
+                attr_q |= (team_q & models.Q(league__season_fk_id=mem.season_id))
+            direct_matches = Match.objects.filter(attr_q).order_by('-match_date')[:10]
             context['direct_matches'] = direct_matches
 
         if profile.current_team:

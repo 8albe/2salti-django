@@ -5,7 +5,7 @@ from django.urls import reverse
 from django.contrib.auth import get_user_model
 from django.utils import timezone
 
-from core.models import Sport, Society, Team, League
+from core.models import Sport, Society, Team, League, Season
 from management.models import Membership
 from matches.models import Match
 
@@ -56,15 +56,33 @@ class PlayerMembershipsOrderingTests(TestCase):
 
 
 class CoachedDirectMatchesTemporalTests(TestCase):
-    """§10.4 Step 3c: direct_matches filtrato dalla tenure HEAD_COACH (Opzione C)."""
+    """§16.3 fetta 2d-3: direct_matches attribuito col modello β-stagione/coach-finale.
+
+    Il coach "della stagione" per una squadra è quello in carica a fine stagione; a
+    lui sono attribuite TUTTE le partite della squadra in quella stagione, derivata
+    via Match -> league -> league.season_fk, senza alcun bound start_date/end_date.
+    """
 
     def setUp(self):
         self.client = Client()
         self.sport = Sport.objects.create(name='Pallanuoto', slug='pallanuoto')
         self.society = Society.objects.create(name='Pro Recco', slug='pro-recco', sport=self.sport)
         self.opponent_society = Society.objects.create(name='SC Quinto', slug='sc-quinto', sport=self.sport)
+
+        # Due Season reali per lo sport; la lega corrente ha season_fk valorizzato
+        # (senza questo, l'attribuzione β-stagione cadrebbe nel ramo difensivo).
+        self.season_curr = Season.objects.create(sport=self.sport, label='2025/2026', is_current=True)
+        self.season_prev = Season.objects.create(sport=self.sport, label='2024/2025', is_current=False)
+
         self.league = League.objects.create(
             name='Serie A1', sport=self.sport, category='SENIOR', season='2025-2026',
+            season_fk=self.season_curr,
+        )
+        # Lega di un'altra stagione, stessa squadra/avversario: serve a provare che
+        # l'attribuzione è per stagione, non per squadra in assoluto.
+        self.league_prev = League.objects.create(
+            name='Serie A1 (24/25)', sport=self.sport, category='SENIOR', season='2024-2025',
+            season_fk=self.season_prev,
         )
         self.team_a = Team.objects.create(society=self.society, category='SENIOR', league=self.league)
         self.opponent = Team.objects.create(society=self.opponent_society, category='SENIOR', league=self.league)
@@ -78,94 +96,86 @@ class CoachedDirectMatchesTemporalTests(TestCase):
         from accounts.models import CoachProfile
         CoachProfile.objects.get_or_create(user=self.coach)
 
-    def _make_match(self, match_d, home=None, away=None):
+    def _make_match(self, match_d, home=None, away=None, league=None):
         return Match.objects.create(
-            league=self.league,
+            league=league or self.league,
             home_team=home or self.team_a,
             away_team=away or self.opponent,
             match_date=_aware_dt_on(match_d),
         )
 
-    def test_coached_team_filter_excludes_match_outside_tenure(self):
-        """Match fuori dalla finestra start–end NON appare in direct_matches."""
-        Membership.objects.create(
+    def _coach_membership(self, season=None, start_date=None, end_date=None, is_active=True):
+        return Membership.objects.create(
             user=self.coach, society=self.society, team=self.team_a, role='HEAD_COACH',
-            start_date=date(2025, 1, 1), end_date=date(2025, 12, 31), is_active=False,
+            season=season, start_date=start_date, end_date=end_date, is_active=is_active,
         )
-        match_outside = self._make_match(date(2026, 3, 1))
+
+    def test_includes_match_same_season(self):
+        """Match nella stagione della membership (league.season_fk == season) → incluso."""
+        self._coach_membership(season=self.season_curr)
+        match_same = self._make_match(date(2025, 6, 15))
+
+        response = self.client.get(reverse('profile', args=[self.coach.username]))
+        self.assertEqual(response.status_code, 200)
+        direct = response.context.get('direct_matches')
+        self.assertIsNotNone(direct)
+        ids = [m.id for m in direct]
+        self.assertIn(match_same.id, ids)
+
+    def test_excludes_match_other_season(self):
+        """Match della stessa squadra ma in un'altra stagione (diverso league.season_fk) → escluso."""
+        self._coach_membership(season=self.season_curr)
+        match_other_season = self._make_match(date(2025, 6, 15), league=self.league_prev)
 
         response = self.client.get(reverse('profile', args=[self.coach.username]))
         self.assertEqual(response.status_code, 200)
         direct = response.context.get('direct_matches')
         ids = [m.id for m in direct] if direct else []
-        self.assertNotIn(match_outside.id, ids)
+        self.assertNotIn(match_other_season.id, ids)
 
-    def test_coached_team_includes_match_during_tenure(self):
-        """Tenure aperta (end_date=None): match dentro la finestra appare."""
-        Membership.objects.create(
-            user=self.coach, society=self.society, team=self.team_a, role='HEAD_COACH',
-            start_date=date(2025, 1, 1), end_date=None, is_active=True,
+    def test_includes_match_regardless_of_date_window(self):
+        """Cambio semantico β-stagione: anche un match fuori dall'ex-finestra-data,
+        purché nella stessa stagione, ora è attribuito (le date non contano più)."""
+        # Ex-finestra stretta che sotto il vecchio modello AVREBBE escluso il match.
+        self._coach_membership(
+            season=self.season_curr,
+            start_date=date(2025, 9, 1), end_date=date(2025, 9, 30),
         )
-        match_inside = self._make_match(date(2025, 6, 15))
+        match_outside_old_window = self._make_match(date(2026, 3, 1))  # fuori [set,set], stessa season
 
         response = self.client.get(reverse('profile', args=[self.coach.username]))
         self.assertEqual(response.status_code, 200)
         direct = response.context.get('direct_matches')
         self.assertIsNotNone(direct)
         ids = [m.id for m in direct]
-        self.assertIn(match_inside.id, ids)
+        self.assertIn(match_outside_old_window.id, ids)
 
-    def test_coached_team_includes_match_on_start_date(self):
-        """Boundary: Match datato esattamente start_date → incluso."""
-        start = date(2025, 1, 1)
-        Membership.objects.create(
-            user=self.coach, society=self.society, team=self.team_a, role='HEAD_COACH',
-            start_date=start, end_date=date(2025, 12, 31), is_active=False,
-        )
-        match_boundary = self._make_match(start)
-
-        response = self.client.get(reverse('profile', args=[self.coach.username]))
-        self.assertEqual(response.status_code, 200)
-        direct = response.context.get('direct_matches')
-        self.assertIsNotNone(direct)
-        ids = [m.id for m in direct]
-        self.assertIn(match_boundary.id, ids)
-
-    def test_coached_team_includes_match_on_end_date(self):
-        """Boundary: Match datato esattamente end_date → incluso."""
-        end = date(2025, 12, 31)
-        Membership.objects.create(
-            user=self.coach, society=self.society, team=self.team_a, role='HEAD_COACH',
-            start_date=date(2025, 1, 1), end_date=end, is_active=False,
-        )
-        match_boundary = self._make_match(end)
-
-        response = self.client.get(reverse('profile', args=[self.coach.username]))
-        self.assertEqual(response.status_code, 200)
-        direct = response.context.get('direct_matches')
-        self.assertIsNotNone(direct)
-        ids = [m.id for m in direct]
-        self.assertIn(match_boundary.id, ids)
-
-    def test_coach_with_no_start_date_membership_does_not_match(self):
-        """
-        Membership HEAD_COACH con start_date=None: APPARE in coached_memberships
-        (storico completo) ma NON genera direct_matches (record anomalo, saltato in tenure_q).
-        """
-        legacy = Membership.objects.create(
-            user=self.coach, society=self.society, team=self.team_a, role='HEAD_COACH',
-            start_date=None, end_date=None, is_active=True,
-        )
+    def test_season_none_membership_no_direct_matches(self):
+        """Ramo difensivo: Membership HEAD_COACH con season=None APPARE nello storico
+        ma NON genera attribuzione (coerente con resolve_membership_season → None)."""
+        legacy = self._coach_membership(season=None, start_date=date(2025, 1, 1))
         match = self._make_match(date(2025, 6, 15))
 
         response = self.client.get(reverse('profile', args=[self.coach.username]))
         self.assertEqual(response.status_code, 200)
 
         coached_ids = [m.id for m in response.context['coached_memberships']]
-        self.assertIn(legacy.id, coached_ids)  # storico mostra il record
+        self.assertIn(legacy.id, coached_ids)  # storico mostra comunque il record
 
         direct = response.context.get('direct_matches')
         if direct is not None:
             ids = [m.id for m in direct]
             self.assertNotIn(match.id, ids)
-        # direct=None è anche corretto: nessuna tenure valida → niente direct_matches.
+        # direct=None è anche corretto: nessuna season nota → niente direct_matches.
+
+    def test_no_start_date_but_season_set_includes_match(self):
+        """Le date non contano più: start_date=None con season valorizzata → match incluso."""
+        self._coach_membership(season=self.season_curr, start_date=None, end_date=None)
+        match = self._make_match(date(2025, 6, 15))
+
+        response = self.client.get(reverse('profile', args=[self.coach.username]))
+        self.assertEqual(response.status_code, 200)
+        direct = response.context.get('direct_matches')
+        self.assertIsNotNone(direct)
+        ids = [m.id for m in direct]
+        self.assertIn(match.id, ids)
