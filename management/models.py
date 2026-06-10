@@ -71,7 +71,6 @@ class Membership(models.Model):
     objects = MembershipManager()
 
     class Meta:
-        unique_together = ['user', 'society', 'team', 'role']
         verbose_name = "Appartenenza"
         verbose_name_plural = "Appartenenze"
         constraints = [
@@ -85,6 +84,16 @@ class Membership(models.Model):
                     | Q(end_date__gte=F('start_date'))
                 ),
                 name='membership_end_date_after_start',
+            ),
+            # Fase 2 (fetta 2d-4a): chiave di unicità season-aware, sostituisce
+            # il vecchio unique_together (user, society, team, role). Espressa
+            # come UniqueConstraint (più esplicita di unique_together). season è
+            # nullable: i NULL restano distinti (default nulls_distinct) — la
+            # difesa contro duplicati-NULL è la guard applicativa di 2d-4b, e il
+            # flip NOT NULL di 2d-7 chiude definitivamente il caso.
+            models.UniqueConstraint(
+                fields=['user', 'society', 'team', 'role', 'season'],
+                name='uniq_membership_user_society_team_role_season',
             ),
         ]
 
