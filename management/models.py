@@ -53,6 +53,15 @@ class Membership(models.Model):
         on_delete=models.PROTECT, related_name='memberships',
     )
 
+    # Fase 2 (fetta 2d-2): nota descrittiva del cambio coach in corso di stagione
+    # (chi->chi, quando). Testo libero §16.3, NON dato strutturato: non piloti
+    # l'attribuzione β-stagione (vedi accounts/views.py, fetta 2d-3). default=''
+    # additivo: nessun backfill, omettibile sugli INSERT dei modelli storici.
+    coach_change_note = models.TextField(
+        blank=True, default='',
+        help_text="Cambio coach in corso di stagione (chi→chi, quando): nota libera, non struttura l'attribuzione."
+    )
+
     is_active = models.BooleanField(default=True)
     start_date = models.DateField(null=True, blank=True)
     end_date = models.DateField(null=True, blank=True)
