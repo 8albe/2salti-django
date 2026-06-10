@@ -12,8 +12,9 @@ def _close_other_team_memberships(user, role, new_team):
     Chiude le Membership attive di (user, role) con team diverso da new_team,
     indipendentemente dalla società (cross-society cleanup).
 
-    Una Membership è considerata attiva se end_date IS NULL.
-    Chiusura: end_date = oggi (TZ locale), is_active = False.
+    Una Membership è considerata attiva se is_active=True (2d-5: predicato
+    disaccoppiato dalle date). Chiusura: end_date = oggi (TZ locale),
+    is_active = False.
 
     La Membership con team = new_team (se esiste) viene preservata.
 
@@ -24,7 +25,7 @@ def _close_other_team_memberships(user, role, new_team):
     Membership.objects.filter(
         user=user,
         role=role,
-        end_date__isnull=True,
+        is_active=True,
     ).exclude(team=new_team).update(end_date=today, is_active=False)
 
 
@@ -38,19 +39,19 @@ def _close_stale_president_memberships(user, society):
     Membership.objects.filter(
         user=user,
         role='PRESIDENT',
-        end_date__isnull=True,
+        is_active=True,
     ).exclude(society=society).update(end_date=today, is_active=False)
 
 
 def _close_all_role_memberships(user, role):
     """
-    Chiude tutte le Membership attive (end_date IS NULL) di (user, role)
+    Chiude tutte le Membership attive (is_active=True) di (user, role)
     su qualunque society. Usato quando il profilo perde l'appartenenza
     (current_team / managed_society = None).
     """
     today = timezone.localdate()
     Membership.objects.filter(
-        user=user, role=role, end_date__isnull=True,
+        user=user, role=role, is_active=True,
     ).update(end_date=today, is_active=False)
 
 
@@ -58,10 +59,11 @@ def _open_or_reopen_membership(user, society, team, role):
     """
     Apre (o riapre) la Membership target.
     - Se non esiste: crea con start_date=oggi, end_date=None, is_active=True.
-    - Se esiste ed è già attiva (end_date IS NULL, is_active=True): no-op
-      (preserva start_date originale, evita reset su save innocuo del profilo).
-    - Se esiste ma è chiusa o inattiva: riapri (start_date=oggi, end_date=None,
-      is_active=True).
+    - Se esiste ed è già attiva (is_active=True): no-op (preserva start_date
+      originale, evita reset su save innocuo del profilo). 2d-5: la decisione
+      dipende solo da is_active, non più dalle date.
+    - Se esiste ma è inattiva (is_active=False): riapri (start_date=oggi,
+      end_date=None, is_active=True).
     """
     today = timezone.localdate()
     # Fetta 2d-4b: lookup season-aware. season entra nella chiave del
@@ -85,7 +87,7 @@ def _open_or_reopen_membership(user, society, team, role):
     )
     if created:
         return membership
-    if membership.end_date is not None or not membership.is_active or membership.start_date is None:
+    if not membership.is_active:
         membership.start_date = today
         membership.end_date = None
         membership.is_active = True

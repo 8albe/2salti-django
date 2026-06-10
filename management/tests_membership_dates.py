@@ -188,7 +188,7 @@ class MembershipSignalCleanupTests(TestCase):
         self.assertFalse(m.is_active)
         self.assertFalse(
             Membership.objects.filter(
-                user=self.user, role='PLAYER', end_date__isnull=True,
+                user=self.user, role='PLAYER', is_active=True,
             ).exists()
         )
 
@@ -284,7 +284,7 @@ class MembershipSignalCleanupTests(TestCase):
         self.assertTrue(membership.is_active)
         self.assertEqual(
             Membership.objects.filter(
-                user=self.user, role='PLAYER', end_date__isnull=True,
+                user=self.user, role='PLAYER', is_active=True,
             ).count(),
             1,
         )
@@ -349,6 +349,43 @@ class MembershipSignalCleanupTests(TestCase):
         coach_membership.refresh_from_db()
         self.assertIsNone(coach_membership.end_date)
         self.assertTrue(coach_membership.is_active)
+
+    # ── 2d-5: predicato "attiva" disaccoppiato dalle date ─────────────────
+
+    def test_close_decision_decoupled_from_end_date(self):
+        """2d-5: la decisione di chiusura segue is_active, non end_date.
+
+        Caso che distingue vecchio predicato da nuovo: una Membership con
+        end_date GIÀ valorizzato (>= start_date, rispetta il CheckConstraint)
+        ma is_active=True. Col vecchio filtro `end_date__isnull=True` sarebbe
+        stata ignorata e mai chiusa; col nuovo filtro `is_active=True` viene
+        comunque trattata come attiva e chiusa sul cambio team.
+        """
+        profile = self.user.athlete_profile
+        stale = Membership.objects.create(
+            user=self.user,
+            society=self.society,
+            team=self.team_a,
+            role='PLAYER',
+            start_date=self.today - timedelta(days=10),
+            end_date=self.today,
+            is_active=True,
+        )
+
+        profile.current_team = self.team_b
+        profile.save()
+
+        # Sotto `end_date__isnull=True` non sarebbe stata chiusa (end_date
+        # non nullo); sotto `is_active=True` viene chiusa → disaccoppiamento.
+        stale.refresh_from_db()
+        self.assertFalse(stale.is_active)
+        self.assertEqual(stale.end_date, self.today)
+
+        new = Membership.objects.get(
+            user=self.user, society=self.society, team=self.team_b, role='PLAYER'
+        )
+        self.assertTrue(new.is_active)
+        self.assertIsNone(new.end_date)
 
 
 class MembershipEndDateConstraintTests(TestCase):
