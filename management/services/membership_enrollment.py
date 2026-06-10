@@ -67,16 +67,21 @@ def redeem_activation_code(user, code_string, request=None):
     role = _resolve_role(user)
 
     with transaction.atomic():
+        # Fetta 2d-4b: lookup season-aware. season entra nella chiave solo se
+        # derivabile; None (ramo difensivo) resta fuori e il lookup ricade su
+        # 4-field (2d-1), nessun duplicato-NULL spurio.
+        season = resolve_membership_season(
+            user, code_obj.society, code_obj.team, role)
+        lookup = dict(
+            user=user, society=code_obj.society, team=code_obj.team, role=role,
+        )
+        if season is not None:
+            lookup['season'] = season
         membership, created = Membership.objects.get_or_create(
-            user=user,
-            society=code_obj.society,
-            team=code_obj.team,
-            role=role,
+            **lookup,
             defaults={
                 'start_date': timezone.localdate(),
-                # Fetta 2d-1: season-aware nei defaults; lookup invariato.
-                'season': resolve_membership_season(
-                    user, code_obj.society, code_obj.team, role),
+                'season': season,
             },
         )
         if created:

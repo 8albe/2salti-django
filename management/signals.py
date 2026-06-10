@@ -64,18 +64,23 @@ def _open_or_reopen_membership(user, society, team, role):
       is_active=True).
     """
     today = timezone.localdate()
+    # Fetta 2d-4b: lookup season-aware. season entra nella chiave del
+    # get_or_create solo se derivabile; se resolve ritorna None (ramo
+    # difensivo) resta fuori dal lookup — la chiave ricade su 4-field (2d-1) e
+    # non si creano duplicati-NULL spuri (il UniqueConstraint 5-field non
+    # vincola i NULL, nulls_distinct). season resta anche nei defaults per il
+    # caso created=True.
+    season = resolve_membership_season(user, society, team, role)
+    lookup = dict(user=user, society=society, team=team, role=role)
+    if season is not None:
+        lookup['season'] = season
     membership, created = Membership.objects.get_or_create(
-        user=user,
-        society=society,
-        team=team,
-        role=role,
+        **lookup,
         defaults={
             'is_active': True,
             'start_date': today,
             'end_date': None,
-            # Fetta 2d-1: nuove Membership nascono season-aware (FK ancora
-            # nullable). Solo nei defaults: il lookup resta invariato (2d-4).
-            'season': resolve_membership_season(user, society, team, role),
+            'season': season,
         },
     )
     if created:

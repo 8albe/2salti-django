@@ -415,16 +415,22 @@ def approve_membership(request, request_id):
             from management.services.membership_season import resolve_membership_season
             req.status = 'APPROVED'
             with transaction.atomic():
+                # Fetta 2d-4b: lookup season-aware. season entra nella chiave
+                # solo se derivabile; None (ramo difensivo) resta fuori e il
+                # lookup ricade su 4-field (2d-1), nessun duplicato-NULL spurio.
+                season = resolve_membership_season(
+                    req.user, req.society, req.team, req.role)
+                lookup = dict(
+                    user=req.user, society=req.society,
+                    team=req.team, role=req.role,
+                )
+                if season is not None:
+                    lookup['season'] = season
                 Membership.objects.get_or_create(
-                    user=req.user,
-                    society=req.society,
-                    team=req.team,
-                    role=req.role,
+                    **lookup,
                     defaults={
                         'start_date': timezone.localdate(),
-                        # Fetta 2d-1: season-aware nei defaults; lookup invariato.
-                        'season': resolve_membership_season(
-                            req.user, req.society, req.team, req.role),
+                        'season': season,
                     },
                 )
                 _sync_profile_denorm(req.user, req.role, req.team, req.society)

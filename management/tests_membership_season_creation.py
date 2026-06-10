@@ -209,15 +209,14 @@ class MembershipCreationSeasonAwareTests(TestCase):
 
     # ── idempotenza: created=False non sovrascrive season ────────────────────
 
-    def test_existing_membership_season_not_overwritten(self):
-        # Membership preesistente con una season "altra" (non corrente). Un
-        # redeem sullo stesso lookup non deve toccarla (defaults ignorati).
-        other_season = Season.objects.create(
-            sport=self.sport, label='2024/2025', is_current=False
-        )
+    def test_existing_membership_same_season_not_overwritten(self):
+        # Membership preesistente con la *stessa* season che il sito deriverebbe
+        # (self.season, via team.league). Con il lookup season-aware (2d-4b) il
+        # get_or_create la ritrova (created=False) e i defaults — season inclusa
+        # — sono ignorati: la riga non viene toccata.
         existing = Membership.objects.create(
             user=self.user, society=self.society, team=self.team,
-            role='PLAYER', season=other_season,
+            role='PLAYER', season=self.season,
         )
         ActivationCode.objects.create(
             code='IDEM-1', society=self.society, team=self.team,
@@ -229,4 +228,132 @@ class MembershipCreationSeasonAwareTests(TestCase):
         self.assertTrue(ok)
         self.assertEqual(membership.pk, existing.pk)
         existing.refresh_from_db()
-        self.assertEqual(existing.season, other_season)  # invariata
+        self.assertEqual(existing.season, self.season)  # invariata
+        self.assertEqual(
+            Membership.objects.filter(
+                user=self.user, society=self.society, team=self.team,
+                role='PLAYER',
+            ).count(),
+            1,
+        )
+
+
+class MembershipLookupSeasonAwareTests(TestCase):
+    """Fetta 2d-4b: season nel *lookup* del get_or_create (non solo defaults).
+
+    Copre i tre comportamenti chiave introdotti dalla guard:
+      - idempotenza stessa-season: due chiamate, stessa season derivata -> 1 riga;
+      - rollover: stessa (user,society,team,role) ma season diversa -> 2 righe
+        distinte (la chiave 5-field 2d-4a le separa);
+      - guard season=None: se resolve ritorna None il lookup ricade su 4-field e
+        non si creano duplicati-NULL spuri.
+    """
+
+    def setUp(self):
+        self.sport = Sport.objects.create(name="Pallanuoto", slug="pn")
+        self.society = Society.objects.create(
+            name="Pro Recco", slug="pro-recco", sport=self.sport, city="Recco"
+        )
+        self.user = User.objects.create_user(username='athlete1', role='athlete')
+
+    # ── idempotenza: stessa season derivata -> una sola riga ─────────────────
+
+    def test_redeem_twice_same_season_single_row(self):
+        # Team senza lega + unica Season is_current -> fallback deterministico:
+        # entrambi i redeem derivano la stessa season, quindi il lookup
+        # season-aware ritrova la riga (created=False) e non duplica.
+        Season.objects.create(
+            sport=self.sport, label='2025/2026', is_current=True
+        )
+        team = Team.objects.create(
+            society=self.society, category='SENIOR', slug='t-idem', league=None
+        )
+        ActivationCode.objects.create(
+            code='IDEM-2', society=self.society, team=team,
+            role='PLAYER', max_uses=5, current_uses=0, is_active=True,
+        )
+
+        ok1, m1, _ = redeem_activation_code(self.user, 'IDEM-2')
+        ok2, m2, _ = redeem_activation_code(self.user, 'IDEM-2')
+
+        self.assertTrue(ok1 and ok2)
+        self.assertEqual(m1.pk, m2.pk)
+        self.assertEqual(
+            Membership.objects.filter(
+                user=self.user, society=self.society, team=team, role='PLAYER',
+            ).count(),
+            1,
+        )
+
+    # ── rollover: season diversa -> riga distinta ────────────────────────────
+
+    def test_rollover_different_season_two_rows(self):
+        # Primo redeem deriva la season corrente A; poi A smette di essere
+        # corrente e diventa corrente B. Un secondo redeem sullo stesso
+        # (user,society,team,role) deriva B: il lookup 5-field non trova la riga
+        # con season=A e ne crea una nuova (comportamento voluto della chiave).
+        season_a = Season.objects.create(
+            sport=self.sport, label='2024/2025', is_current=True
+        )
+        team = Team.objects.create(
+            society=self.society, category='SENIOR', slug='t-roll', league=None
+        )
+        ActivationCode.objects.create(
+            code='ROLL-1', society=self.society, team=team,
+            role='PLAYER', max_uses=5, current_uses=0, is_active=True,
+        )
+
+        ok1, m1, _ = redeem_activation_code(self.user, 'ROLL-1')
+        self.assertTrue(ok1)
+        self.assertEqual(m1.season, season_a)
+
+        # rollover di stagione
+        season_a.is_current = False
+        season_a.save(update_fields=['is_current'])
+        season_b = Season.objects.create(
+            sport=self.sport, label='2025/2026', is_current=True
+        )
+
+        ok2, m2, _ = redeem_activation_code(self.user, 'ROLL-1')
+        self.assertTrue(ok2)
+        self.assertEqual(m2.season, season_b)
+
+        self.assertNotEqual(m1.pk, m2.pk)
+        self.assertEqual(
+            Membership.objects.filter(
+                user=self.user, society=self.society, team=team, role='PLAYER',
+            ).count(),
+            2,
+        )
+
+    # ── guard season=None: niente duplicati-NULL spuri (test cardine) ─────────
+
+    def test_guard_season_none_no_spurious_null_duplicate(self):
+        # Nessuna Season is_current per lo sport e team senza lega -> resolve
+        # ritorna None. season NON entra nel lookup: la chiave ricade su 4-field
+        # (2d-1) e il secondo redeem ritrova la riga (created=False) invece di
+        # creare un duplicato season=NULL (il UniqueConstraint 5-field non
+        # vincola i NULL: senza la guard nascerebbero due righe NULL).
+        team = Team.objects.create(
+            society=self.society, category='SENIOR', slug='t-none', league=None
+        )
+        self.assertIsNone(
+            resolve_membership_season(self.user, self.society, team, 'PLAYER')
+        )
+        ActivationCode.objects.create(
+            code='NONE-1', society=self.society, team=team,
+            role='PLAYER', max_uses=5, current_uses=0, is_active=True,
+        )
+
+        ok1, m1, _ = redeem_activation_code(self.user, 'NONE-1')
+        ok2, m2, _ = redeem_activation_code(self.user, 'NONE-1')
+
+        self.assertTrue(ok1 and ok2)
+        self.assertEqual(m1.pk, m2.pk)
+        self.assertIsNone(m1.season)
+        self.assertEqual(
+            Membership.objects.filter(
+                user=self.user, society=self.society, team=team, role='PLAYER',
+            ).count(),
+            1,
+        )
