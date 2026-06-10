@@ -4,6 +4,7 @@ from django.dispatch import receiver
 from django.utils import timezone
 from accounts.models import PresidentProfile, AthleteProfile, CoachProfile
 from .models import Membership
+from .services.membership_season import resolve_membership_season
 
 
 def _close_other_team_memberships(user, role, new_team):
@@ -72,6 +73,9 @@ def _open_or_reopen_membership(user, society, team, role):
             'is_active': True,
             'start_date': today,
             'end_date': None,
+            # Fetta 2d-1: nuove Membership nascono season-aware (FK ancora
+            # nullable). Solo nei defaults: il lookup resta invariato (2d-4).
+            'season': resolve_membership_season(user, society, team, role),
         },
     )
     if created:

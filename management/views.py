@@ -412,6 +412,7 @@ def approve_membership(request, request_id):
         action = request.POST.get('action')
         if action == 'approve':
             from management.services.membership_enrollment import _sync_profile_denorm
+            from management.services.membership_season import resolve_membership_season
             req.status = 'APPROVED'
             with transaction.atomic():
                 Membership.objects.get_or_create(
@@ -419,7 +420,12 @@ def approve_membership(request, request_id):
                     society=req.society,
                     team=req.team,
                     role=req.role,
-                    defaults={'start_date': timezone.localdate()},
+                    defaults={
+                        'start_date': timezone.localdate(),
+                        # Fetta 2d-1: season-aware nei defaults; lookup invariato.
+                        'season': resolve_membership_season(
+                            req.user, req.society, req.team, req.role),
+                    },
                 )
                 _sync_profile_denorm(req.user, req.role, req.team, req.society)
             messages.success(request, f"Membro {req.user.username} approvato.")

@@ -13,6 +13,7 @@ from django.utils import timezone
 
 from core.models import Team
 from management.models import ActivationCode, Membership, MembershipRequest
+from management.services.membership_season import resolve_membership_season
 from management.utils import log_action
 
 
@@ -71,7 +72,12 @@ def redeem_activation_code(user, code_string, request=None):
             society=code_obj.society,
             team=code_obj.team,
             role=role,
-            defaults={'start_date': timezone.localdate()},
+            defaults={
+                'start_date': timezone.localdate(),
+                # Fetta 2d-1: season-aware nei defaults; lookup invariato.
+                'season': resolve_membership_season(
+                    user, code_obj.society, code_obj.team, role),
+            },
         )
         if created:
             code_obj.current_uses += 1
