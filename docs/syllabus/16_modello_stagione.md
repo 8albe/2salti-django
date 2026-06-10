@@ -49,7 +49,7 @@ Decisioni chiuse:
 - [x] Eliminazione di `start_date`/`end_date` da `Membership`.
 - [x] Il `CheckConstraint` `membership_end_date_after_start` (migration `0009`, DEBT-003) decade col redesign.
 - [x] Attribuzione partite-allenatore: modello **β-stagione, coach finale**. Il coach "della stagione" per una squadra è quello in carica a fine stagione; a lui sono attribuite **tutte** le partite della squadra in quella stagione. Nessuna finestra temporale (`start_date`/`end_date`) nel calcolo dell'attribuzione.
-- [x] Cambio coach in corso di stagione (chi→chi, quando): registrato come **nota descrittiva** (testo libero), **non** come dato strutturato che piloti l'attribuzione. Campo da aggiungere/verificare nella fetta 2d.
+- [x] Cambio coach in corso di stagione (chi→chi, quando): registrato come **nota descrittiva** (testo libero), **non** come dato strutturato che piloti l'attribuzione. Campo da aggiungere/verificare nella fetta 2d. ✅ implementato 2d-2 (`Membership.coach_change_note`, migration `0012`, commit `7f3cb63`).
 - [x] Sostituzione spot per singole partite: **non modellata**.
 - [x] Timeline cambi-coach strutturata/interrogabile: feature futura separata, **fuori Fase 2**.
 

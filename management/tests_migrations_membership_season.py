@@ -31,11 +31,11 @@ class BackfillMembershipSeasonMigrationTest(TransactionTestCase):
         # Rewind allo stato pre-backfill (FK season presente, valori NULL).
         executor.migrate(self.migrate_from)
 
-        # accounts pinnato a 0005 (come tests_migrations_season): a quello stato
-        # User non ha ancora il campo identity_status, quindi l'INSERT lo omette
-        # e SQLite usa il default di colonna del DB fisico (al leaf). Prendendo
-        # User dal leaf, Django invierebbe identity_status=NULL e violerebbe il
-        # NOT NULL. core resta implicito al leaf (Season/League.season_fk presenti).
+        # accounts pinnato a 0005_staff_role_pii (come tests_migrations_season):
+        # 0005 è il leaf di accounts. identity_status esiste già a questo stato
+        # (introdotto in 0003, default 'UNVERIFIED', NOT NULL), quindi l'INSERT del
+        # modello storico lo valorizza col default e non viola il NOT NULL.
+        # core resta implicito al leaf (Season/League.season_fk presenti).
         old_apps = executor.loader.project_state(
             self.migrate_from + [("accounts", "0005_staff_role_pii")]
         ).apps

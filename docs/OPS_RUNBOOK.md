@@ -522,10 +522,10 @@ Sprint C §10.4 ha chiuso il debito principale (`Membership.start_date`/`end_dat
 
 ### 10.7 Fragilità test migration Macro 16 — APERTO (introdotto Fase 1b, 2026-06-09)
 
-- **Sintomo:** i test in `core/tests_migrations_season.py` fissano i leaf `accounts@0005_staff_role_pii` e `management@0009_membership_end_date_constraint` nel `project_state` combinato. Si romperanno (errore di schema storico) al primo `makemigrations` che tocca lo schema di `User`/`Membership` su quelle app.
+- **Sintomo:** i test in `core/tests_migrations_season.py` fissano i leaf `accounts@0005_staff_role_pii` e `management@0009_membership_end_date_constraint` nel `project_state` combinato. Si romperanno (errore di schema storico) **non** a ogni nuova migration, ma solo quando lo schema storico di `User`/`Membership` cambia in modo **non-additivo**: le `AddField` additive con default (es. `Membership.season`, migration `0010`) sono omettibili sugli `INSERT` dei modelli storici e **reggono**; rompono invece la **rimozione di colonne** (`start_date`/`end_date`, 2d-6) e il **flip a `NOT NULL`** di `season` (2d-7).
 - **Origine:** Macro 16 Fase 1b (commit `c7cef79`).
 - **Fix proposto:** aggiornare i leaf in lockstep con le nuove migration, o rendere il test leaf-agnostico (risoluzione dinamica del leaf invece dell'hardcoding).
-- **Priorità:** bassa — scatta solo alla prossima migration su `accounts`/`management` (es. Fase 2, che aggiunge `Membership.season`).
+- **Priorità:** bassa — **non** scatta sulle migration additive già applicate (`0010` season, `0011` backfill, `0012` coach_change_note → i test reggono); scatterà con la rimozione di `start_date`/`end_date` (2d-6) e il flip `season NOT NULL` (2d-7).
 
 ## 11. Sicurezza operativa e frontiera reversibile
 
