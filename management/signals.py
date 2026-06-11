@@ -59,22 +59,21 @@ def _open_or_reopen_membership(user, society, team, role):
       save innocuo del profilo). 2d-5: la decisione dipende solo da is_active.
     - Se esiste ma è inattiva (is_active=False): riapri (is_active=True).
     """
-    # Fetta 2d-4b: lookup season-aware. season entra nella chiave del
-    # get_or_create solo se derivabile; se resolve ritorna None (ramo
-    # difensivo) resta fuori dal lookup — la chiave ricade su 4-field (2d-1) e
-    # non si creano duplicati-NULL spuri (il UniqueConstraint 5-field non
-    # vincola i NULL, nulls_distinct). season resta anche nei defaults per il
-    # caso created=True.
+    # Lookup season-aware (2d-4b). Dal flip NOT NULL (2d-7) una Membership
+    # senza stagione non puo' esistere: se la stagione non e' derivabile
+    # (nessuna lega con season_fk e nessuna Season is_current per lo sport)
+    # si fallisce subito con un errore esplicito invece di lasciar esplodere
+    # il NOT NULL a livello DB — e' una misconfigurazione da sanare in admin.
     season = resolve_membership_season(user, society, team, role)
-    lookup = dict(user=user, society=society, team=team, role=role)
-    if season is not None:
-        lookup['season'] = season
+    if season is None:
+        raise RuntimeError(
+            "Cannot open membership (user=%s society=%s team=%s role=%s): "
+            "no season derivable — configure a current Season for the sport."
+            % (user.pk, society.pk, getattr(team, 'pk', None), role)
+        )
     membership, created = Membership.objects.get_or_create(
-        **lookup,
-        defaults={
-            'is_active': True,
-            'season': season,
-        },
+        user=user, society=society, team=team, role=role, season=season,
+        defaults={'is_active': True},
     )
     if created:
         return membership

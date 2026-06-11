@@ -96,6 +96,10 @@ class BackfillMembershipSeasonMigrationTest(TransactionTestCase):
         self.Membership = self.new_apps.get_model("management", "Membership")
 
     def tearDown(self):
+        # Il forward al leaf attraversa 0015 (flip NOT NULL), che e' fail-fast
+        # sui NULL non derivabili: il record difensivo seminato va rimosso
+        # prima, altrimenti la migrazione di chiusura solleva.
+        self.Membership.objects.filter(pk=self.ids["defensive"]).delete()
         call_command("migrate", verbosity=0)
 
     def test_derivation_via_team_league_season_fk(self):

@@ -66,22 +66,20 @@ def redeem_activation_code(user, code_string, request=None):
 
     role = _resolve_role(user)
 
-    with transaction.atomic():
-        # Fetta 2d-4b: lookup season-aware. season entra nella chiave solo se
-        # derivabile; None (ramo difensivo) resta fuori e il lookup ricade su
-        # 4-field (2d-1), nessun duplicato-NULL spurio.
-        season = resolve_membership_season(
-            user, code_obj.society, code_obj.team, role)
-        lookup = dict(
-            user=user, society=code_obj.society, team=code_obj.team, role=role,
+    # Dal flip NOT NULL (2d-7): senza stagione derivabile il tesseramento non
+    # puo' nascere — errore pulito all'utente invece di IntegrityError.
+    season = resolve_membership_season(
+        user, code_obj.society, code_obj.team, role)
+    if season is None:
+        return False, None, (
+            "Stagione corrente non configurata per questo sport: "
+            "contatta l'amministratore."
         )
-        if season is not None:
-            lookup['season'] = season
+
+    with transaction.atomic():
         membership, created = Membership.objects.get_or_create(
-            **lookup,
-            defaults={
-                'season': season,
-            },
+            user=user, society=code_obj.society, team=code_obj.team,
+            role=role, season=season,
         )
         if created:
             code_obj.current_uses += 1

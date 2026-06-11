@@ -4,7 +4,7 @@ from django.contrib.auth import get_user_model
 from django.test import TestCase
 from django.utils import timezone
 
-from core.models import Society, Sport, Team
+from core.models import Season, Society, Sport, Team
 from management.models import (
     ActivationCode,
     AuditLog,
@@ -27,6 +27,10 @@ class MembershipEnrollmentServiceTests(TestCase):
         )
         self.team = Team.objects.create(
             society=self.society, category='SENIOR', slug='pro-recco-senior'
+        )
+        # Season corrente: dal flip NOT NULL (2d-7) i creation-site la esigono.
+        self.season = Season.objects.create(
+            sport=self.sport, label='2025/2026', is_current=True
         )
         self.athlete = User.objects.create_user(
             username='athlete1', role='athlete'

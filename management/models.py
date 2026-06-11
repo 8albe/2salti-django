@@ -43,10 +43,10 @@ class Membership(models.Model):
     role = models.CharField(max_length=20, choices=ROLE_CHOICES)
 
     # Asse del tesseramento (Macro 16 Fase 2): la stagione, non le date.
-    # Nullable fino al flip NOT NULL (2d-7). Lazy ref a 'core.Season' per
-    # evitare cicli d'import.
+    # NOT NULL dal flip 2d-7: una Membership senza stagione non e' un
+    # tesseramento valido. Lazy ref a 'core.Season' per evitare cicli d'import.
     season = models.ForeignKey(
-        'core.Season', null=True, blank=True,
+        'core.Season',
         on_delete=models.PROTECT, related_name='memberships',
     )
 
@@ -71,10 +71,9 @@ class Membership(models.Model):
         constraints = [
             # Fase 2 (fetta 2d-4a): chiave di unicità season-aware, sostituisce
             # il vecchio unique_together (user, society, team, role). Espressa
-            # come UniqueConstraint (più esplicita di unique_together). season è
-            # nullable: i NULL restano distinti (default nulls_distinct) — la
-            # difesa contro duplicati-NULL è la guard applicativa di 2d-4b, e il
-            # flip NOT NULL di 2d-7 chiude definitivamente il caso.
+            # come UniqueConstraint (più esplicita di unique_together). Dal flip
+            # NOT NULL (2d-7) season è sempre valorizzata: niente più caso
+            # duplicati-NULL.
             models.UniqueConstraint(
                 fields=['user', 'society', 'team', 'role', 'season'],
                 name='uniq_membership_user_society_team_role_season',

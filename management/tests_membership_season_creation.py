@@ -10,8 +10,9 @@ riceva `season` derivata come il backfill 2b:
 E che una Membership *esistente* (get_or_create created=False) non venga
 toccata: i defaults sono ignorati per definizione (idempotenza).
 
-La FK season e' ancora nullable (nessuna migration in 2d-1): il ramo difensivo
-e' lecito e non deve sollevare.
+Dal flip NOT NULL (2d-7) il ramo difensivo (season non derivabile) non produce
+piu' righe season=NULL: i creation-site falliscono in modo esplicito
+(errore utente sul redeem/approve, RuntimeError sul signal).
 """
 from django.contrib.auth import get_user_model
 from django.test import TestCase
@@ -239,14 +240,14 @@ class MembershipCreationSeasonAwareTests(TestCase):
 
 
 class MembershipLookupSeasonAwareTests(TestCase):
-    """Fetta 2d-4b: season nel *lookup* del get_or_create (non solo defaults).
+    """Fetta 2d-4b (rivista in 2d-7): season nel *lookup* del get_or_create.
 
-    Copre i tre comportamenti chiave introdotti dalla guard:
+    Copre i tre comportamenti chiave:
       - idempotenza stessa-season: due chiamate, stessa season derivata -> 1 riga;
       - rollover: stessa (user,society,team,role) ma season diversa -> 2 righe
         distinte (la chiave 5-field 2d-4a le separa);
-      - guard season=None: se resolve ritorna None il lookup ricade su 4-field e
-        non si creano duplicati-NULL spuri.
+      - season non derivabile: fail-fast esplicito (niente righe NULL, vietate
+        dal NOT NULL di 2d-7).
     """
 
     def setUp(self):
@@ -326,34 +327,40 @@ class MembershipLookupSeasonAwareTests(TestCase):
             2,
         )
 
-    # ── guard season=None: niente duplicati-NULL spuri (test cardine) ─────────
+    # ── season non derivabile: fail-fast esplicito (2d-7) ────────────────────
 
-    def test_guard_season_none_no_spurious_null_duplicate(self):
+    def test_season_not_derivable_redeem_fails_cleanly(self):
         # Nessuna Season is_current per lo sport e team senza lega -> resolve
-        # ritorna None. season NON entra nel lookup: la chiave ricade su 4-field
-        # (2d-1) e il secondo redeem ritrova la riga (created=False) invece di
-        # creare un duplicato season=NULL (il UniqueConstraint 5-field non
-        # vincola i NULL: senza la guard nascerebbero due righe NULL).
+        # ritorna None. Dal flip NOT NULL il redeem NON crea righe season=NULL:
+        # fallisce con messaggio utente e nessuna Membership viene creata.
         team = Team.objects.create(
             society=self.society, category='SENIOR', slug='t-none', league=None
         )
         self.assertIsNone(
             resolve_membership_season(self.user, self.society, team, 'PLAYER')
         )
-        ActivationCode.objects.create(
+        code = ActivationCode.objects.create(
             code='NONE-1', society=self.society, team=team,
             role='PLAYER', max_uses=5, current_uses=0, is_active=True,
         )
 
-        ok1, m1, _ = redeem_activation_code(self.user, 'NONE-1')
-        ok2, m2, _ = redeem_activation_code(self.user, 'NONE-1')
+        ok, membership, err = redeem_activation_code(self.user, 'NONE-1')
 
-        self.assertTrue(ok1 and ok2)
-        self.assertEqual(m1.pk, m2.pk)
-        self.assertIsNone(m1.season)
-        self.assertEqual(
-            Membership.objects.filter(
-                user=self.user, society=self.society, team=team, role='PLAYER',
-            ).count(),
-            1,
+        self.assertFalse(ok)
+        self.assertIsNone(membership)
+        self.assertIn("Stagione corrente non configurata", err)
+        self.assertFalse(Membership.objects.filter(user=self.user).exists())
+        code.refresh_from_db()
+        self.assertEqual(code.current_uses, 0)  # uso non consumato
+
+    def test_season_not_derivable_signal_raises(self):
+        # Il path signal (save del profilo) e' fail-fast: misconfigurazione
+        # da sanare, non un flusso utente — RuntimeError esplicito.
+        team = Team.objects.create(
+            society=self.society, category='SENIOR', slug='t-none-2', league=None
         )
+        profile = self.user.athlete_profile
+        profile.current_team = team
+
+        with self.assertRaises(RuntimeError):
+            profile.save()

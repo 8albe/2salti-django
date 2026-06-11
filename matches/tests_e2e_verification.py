@@ -2,7 +2,7 @@ from django.test import TestCase, Client
 from django.urls import reverse
 from django.contrib.auth import get_user_model
 from django.utils import timezone
-from core.models import Sport, Society, Team, League
+from core.models import Season, Sport, Society, Team, League
 from matches.models import Match, MatchReport, MatchEvent
 import json
 
@@ -15,6 +15,7 @@ class EndToEndPilotVerificationTest(TestCase):
     def setUp(self):
         # 1. Setup Infrastructure
         self.sport = Sport.objects.create(name="Pallanuoto", slug="pallanuoto")
+        self.season = Season.objects.create(sport=self.sport, label='2025/2026', is_current=True)
         self.society_h = Society.objects.create(name="Pro Recco", sport=self.sport, slug="pro-recco")
         self.society_a = Society.objects.create(name="AN Brescia", sport=self.sport, slug="an-brescia")
         

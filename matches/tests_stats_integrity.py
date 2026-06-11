@@ -5,7 +5,7 @@ from django.urls import reverse
 from django.contrib.auth import get_user_model
 from django.utils import timezone
 from django.core.files.uploadedfile import SimpleUploadedFile
-from core.models import Sport, Society, Team, League
+from core.models import Season, Sport, Society, Team, League
 from matches.models import Match, MatchReport, MatchEvent
 from accounts.models import AthleteProfile
 
@@ -14,6 +14,7 @@ User = get_user_model()
 class StatsIntegrityTest(TestCase):
     def setUp(self):
         self.sport = Sport.objects.create(name="Water Polo", slug="wp")
+        self.season = Season.objects.create(sport=self.sport, label='2025/2026', is_current=True)
         self.soc_h = Society.objects.create(name="Home Soc", slug="soc-h", sport=self.sport)
         self.soc_a = Society.objects.create(name="Away Soc", slug="soc-a", sport=self.sport)
         self.league = League.objects.create(name="League 1", sport=self.sport, category="SENIOR", slug="l1")

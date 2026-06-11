@@ -107,7 +107,7 @@ class CoachedDirectMatchesTemporalTests(TestCase):
             match_date=_aware_dt_on(match_d),
         )
 
-    def _coach_membership(self, season=None, is_active=True):
+    def _coach_membership(self, season, is_active=True):
         return Membership.objects.create(
             user=self.coach, society=self.society, team=self.team_a, role='HEAD_COACH',
             season=season, is_active=is_active,
@@ -151,20 +151,7 @@ class CoachedDirectMatchesTemporalTests(TestCase):
         self.assertIn(match_early.id, ids)
         self.assertIn(match_late.id, ids)
 
-    def test_season_none_membership_no_direct_matches(self):
-        """Ramo difensivo: Membership HEAD_COACH con season=None APPARE nello storico
-        ma NON genera attribuzione (coerente con resolve_membership_season → None)."""
-        legacy = self._coach_membership(season=None)
-        match = self._make_match(date(2025, 6, 15))
-
-        response = self.client.get(reverse('profile', args=[self.coach.username]))
-        self.assertEqual(response.status_code, 200)
-
-        coached_ids = [m.id for m in response.context['coached_memberships']]
-        self.assertIn(legacy.id, coached_ids)  # storico mostra comunque il record
-
-        direct = response.context.get('direct_matches')
-        if direct is not None:
-            ids = [m.id for m in direct]
-            self.assertNotIn(match.id, ids)
-        # direct=None è anche corretto: nessuna season nota → niente direct_matches.
+    # Nota Fase 2 (2d-7): lo scenario "Membership con season=None" non esiste
+    # piu' a livello di schema (NOT NULL), quindi il vecchio test del ramo
+    # difensivo della view e' stato rimosso: il filtro season_id is not None
+    # nella view resta come difesa morta ma innocua.

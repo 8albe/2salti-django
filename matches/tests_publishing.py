@@ -1,6 +1,6 @@
 from django.test import TestCase
 from django.utils import timezone
-from core.models import Sport, Society, League, Team, LeagueStanding
+from core.models import Season, Sport, Society, League, Team, LeagueStanding
 from matches.models import Match, MatchReport
 from matches.services.publishing_service import PublishingService
 from matches.services.standings_service import StandingsService
@@ -18,6 +18,7 @@ AWAY_GOALS = 8
 class PublishingServiceTestCase(TestCase):
     def setUp(self):
         self.sport = Sport.objects.create(name="Pallanuoto", slug="pallanuoto")
+        self.season = Season.objects.create(sport=self.sport, label='2025/2026', is_current=True)
         self.soc_home = Society.objects.create(name="Pro Recco", sport=self.sport, slug="pro-recco")
         self.soc_away = Society.objects.create(name="AN Brescia", sport=self.sport, slug="an-brescia")
         self.league = League.objects.create(name="Serie A1", sport=self.sport, category="SENIOR", slug="serie-a1")

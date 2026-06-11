@@ -1,7 +1,7 @@
 from django.test import TestCase
 from django.utils import timezone
 from django.contrib.auth import get_user_model
-from core.models import Sport, Society, Team, League, LeagueStanding
+from core.models import Season, Sport, Society, Team, League, LeagueStanding
 from matches.models import Match, MatchReport
 from matches.services.publishing_service import PublishingService
 from matches.services.standings_service import StandingsService
@@ -18,6 +18,7 @@ AWAY_GOALS = 5
 class StandingsVerificationTest(TestCase):
     def setUp(self):
         self.sport = Sport.objects.create(name="Pallanuoto", slug="pallanuoto")
+        self.season = Season.objects.create(sport=self.sport, label='2025/2026', is_current=True)
         self.soc_a = Society.objects.create(name="Soc A", slug="soc-a", sport=self.sport)
         self.soc_b = Society.objects.create(name="Soc B", slug="soc-b", sport=self.sport)
         self.league = League.objects.create(name="A1", sport=self.sport, category="SENIOR", slug="a1")

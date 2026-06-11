@@ -2,7 +2,7 @@ from django.test import TestCase
 from django.contrib.auth import get_user_model
 from django.utils import timezone
 
-from core.models import Sport, Society, Team, League
+from core.models import Season, Sport, Society, Team, League
 from matches.models import Match, MatchReport, MatchEvent
 from matches.event_types import EVENT_TYPE_GOAL
 
@@ -16,6 +16,11 @@ class AthleteStatsPublishedFilterTest(TestCase):
         self.sport = Sport.objects.create(name="Water Polo", slug="wp-stats")
         self.soc_h = Society.objects.create(name="Home", slug="home-soc-stats", sport=self.sport)
         self.soc_a = Society.objects.create(name="Away", slug="away-soc-stats", sport=self.sport)
+        # Season corrente: il signal sync_athlete_membership (profile.save piu'
+        # sotto) la esige dal flip NOT NULL (2d-7).
+        self.season = Season.objects.create(
+            sport=self.sport, label='2025/2026', is_current=True
+        )
         self.league = League.objects.create(
             name="League Stats", sport=self.sport, category="SENIOR", slug="l-stats"
         )

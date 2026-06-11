@@ -1,6 +1,6 @@
 from django.test import TestCase
 from django.utils import timezone
-from core.models import Sport, Society, League, Team
+from core.models import Season, Sport, Society, League, Team
 from matches.models import Match, MatchReport
 from matches.services.ocr_service import OCRService
 from matches.services.schema import OCRSchemaValidator
@@ -19,6 +19,8 @@ class OCRServiceTestCase(TestCase):
         OCRService.set_provider(MockVisionProvider())
 
         self.sport = Sport.objects.create(name="Pallanuoto", slug="pallanuoto")
+
+        self.season = Season.objects.create(sport=self.sport, label='2025/2026', is_current=True)
         self.soc_home = Society.objects.create(name="Pro Recco", sport=self.sport, slug="pro-recco")
         self.soc_away = Society.objects.create(name="AN Brescia", sport=self.sport, slug="an-brescia")
         self.league = League.objects.create(name="Serie A1", sport=self.sport, category="SENIOR", slug="serie-a1")
@@ -477,6 +479,8 @@ class FullFlowRegressionTest(TestCase):
         OCRService.set_provider(MockVisionProvider())
 
         self.sport = Sport.objects.create(name="Pallanuoto", slug="pallanuoto")
+
+        self.season = Season.objects.create(sport=self.sport, label='2025/2026', is_current=True)
         self.soc_home = Society.objects.create(name="Pro Recco", sport=self.sport, slug="pro-recco-ff")
         self.soc_away = Society.objects.create(name="AN Brescia", sport=self.sport, slug="an-brescia-ff")
         self.league = League.objects.create(name="Serie A1", sport=self.sport, category="SENIOR", slug="serie-a1-ff")
@@ -576,12 +580,14 @@ class ReviewUXTestCase(TestCase):
         from matches.services.vision_providers import MockVisionProvider
         OCRService.set_provider(MockVisionProvider())
         
-        from core.models import Sport, Society, League, Team
+        from core.models import Season, Sport, Society, League, Team
         from matches.models import Match, MatchReport
         from django.utils import timezone
         from django.contrib.auth import get_user_model
         
         self.sport = Sport.objects.create(name="Pallanuoto", slug="pallanuoto-ux")
+        
+        self.season = Season.objects.create(sport=self.sport, label='2025/2026', is_current=True)
         self.soc_home = Society.objects.create(name="Home Soc", sport=self.sport)
         self.soc_away = Society.objects.create(name="Away Soc", sport=self.sport)
         self.team_home = Team.objects.create(society=self.soc_home, category='SENIOR')

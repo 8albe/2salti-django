@@ -1,7 +1,7 @@
 from django.test import TestCase, Client
 from django.contrib.auth import get_user_model
 from django.utils import timezone
-from core.models import Sport, Society, Team, League
+from core.models import Season, Sport, Society, Team, League
 from matches.models import Match, MatchReport
 
 User = get_user_model()
@@ -9,6 +9,7 @@ User = get_user_model()
 class ManualReviewTest(TestCase):
     def setUp(self):
         self.sport = Sport.objects.create(name="Water Polo", slug="wp")
+        self.season = Season.objects.create(sport=self.sport, label='2025/2026', is_current=True)
         self.soc_a = Society.objects.create(name="Soc A", slug="soc-a", sport=self.sport)
         self.soc_b = Society.objects.create(name="Soc B", slug="soc-b", sport=self.sport)
         self.league = League.objects.create(name="League 1", sport=self.sport, category="SENIOR", slug="l1")

@@ -1,7 +1,7 @@
 from django.test import TestCase, Client
 from django.urls import reverse
 from django.contrib.auth import get_user_model
-from core.models import Sport, Society, Team, League, LeagueStanding
+from core.models import Season, Sport, Society, Team, League, LeagueStanding
 from matches.models import Match, MatchEvent, MatchReport
 import json
 from django.utils import timezone
@@ -12,6 +12,7 @@ class PublicReadLayerTests(TestCase):
     def setUp(self):
         self.client = Client()
         self.sport = Sport.objects.create(name="Pallanuoto", slug="pallanuoto")
+        self.season = Season.objects.create(sport=self.sport, label='2025/2026', is_current=True)
         self.society = Society.objects.create(name="Pro Recco", slug="pro-recco", sport=self.sport)
         self.team = Team.objects.create(society=self.society, category="SENIOR")
         self.league = League.objects.create(name="Serie A1", sport=self.sport, category="SENIOR", season="2024-2025")
