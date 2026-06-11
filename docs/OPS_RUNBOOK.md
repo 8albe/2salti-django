@@ -529,6 +529,12 @@ Sprint C §10.4 ha chiuso il debito principale (`Membership.start_date`/`end_dat
 - **Priorità:** bassa — **non** scatta sulle migration additive già applicate (`0010` season, `0011` backfill, `0012` coach_change_note → i test reggono); scatterà con la rimozione di `start_date`/`end_date` (2d-6) e il flip `season NOT NULL` (2d-7).
 - **Aggiornamento 2026-06-11 (Macro 16 Fasi 2-4):** il lockstep è stato applicato ai punti previsti. `core/tests_migrations_season.py` ora **retrocede fisicamente anche management a `0009`** nel `migrate_from` (un pin al leaf è impossibile: trascinerebbe core oltre 0008 nel project_state) e risemina `Team.category` via modello storico 0008; `tests_season.BackfillSeasonFkMigrationTest` asserisce via modello storico a core@0014 (il reale ha `league_type`); il tearDown di `tests_migrations_membership_season` ripulisce il record difensivo season=NULL prima del forward (la `0015` è fail-fast sui NULL). Il debito resta APERTO come fragilità strutturale: ogni futura migration non-additiva su `User`/`Membership`/`League`/`Team` richiede lo stesso lockstep.
 
+### 10.8 Macro 16 — propagazione prod PENDENTE (2026-06-11)
+
+- **Stato:** Macro 16 è chiusa e su `dev` (`19fb44b`), dev box migrato (`management` leaf `0016`, `core` leaf `0018`). Prod `/opt/2salti-new/` è a `01427d59` e **non** ha Macro 16: né codice né migration.
+- **Propagazione:** segue il pattern §2.3 — ricostruzione `dev→master` da home e push da home, **mai** propagando le SHA prod-local. Il `migrate` su DB prod è **gated dopo backup** (Alberto, §11.2/§11.3).
+- **Trappola:** la history di `dev` è stata **riscritta con `git-filter-repo`** (rimozione binari >100MB); la ricostruzione di `master` deve quindi partire dal **nuovo** `dev`, non da SHA pre-riscrittura.
+
 ## 11. Sicurezza operativa e frontiera reversibile
 
 Questa sezione codifica le regole di sicurezza operativa emerse dalle sessioni di aprile-maggio 2026, e in particolare consolidate dopo l'incidente del 4 maggio 2026 in cui una password sudo in chiaro è stata trovata nella history pubblica del repo (`install_service.sh`, commit `473c296` del 15 marzo 2026). La regola madre è che le operazioni con effetti permanenti, distruttivi o privilegiati passano per Alberto e mai per l'agente, e che i segreti non transitano mai in contesti condivisi.
