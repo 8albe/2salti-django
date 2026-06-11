@@ -9,8 +9,6 @@ validator/default/help_text, non colonne): il seeding usa quindi i modelli reali
 Il validator non viene triggerato perche' .save()/.create() non chiama full_clean,
 quindi i valori dash/typo seminati sono accettati.
 """
-from datetime import date
-
 from django.core.management import call_command
 from django.db import connection
 from django.db.migrations.executor import MigrationExecutor
@@ -22,7 +20,16 @@ from django.test import TransactionTestCase
 
 
 class SeasonBonificaMigrationTest(TransactionTestCase):
-    migrate_from = [("core", "0008_alter_league_options_alter_sport_options_and_more")]
+    # Lockstep §10.7 (Fase 2): management viene RETROCESSO fisicamente a 0009
+    # insieme a core. Dal leaf 0014 le colonne start_date/end_date non esistono
+    # piu', ma il pin storico 0009 le emette negli INSERT; un pin management al
+    # leaf e' impossibile perche' trascinerebbe core oltre 0008 nel
+    # project_state (management/0010+ dipende da core.Season). Si riallineano
+    # quindi schema fisico e modello storico retrocedendo entrambi.
+    migrate_from = [
+        ("core", "0008_alter_league_options_alter_sport_options_and_more"),
+        ("management", "0009_membership_end_date_constraint"),
+    ]
     migrate_to = [("core", "0010_alter_league_season_alter_leaguestanding_season")]
 
     def setUp(self):
@@ -41,10 +48,7 @@ class SeasonBonificaMigrationTest(TransactionTestCase):
         # Tutti i modelli provengono cosi' dallo stesso registro storico: niente
         # ibridi, FK coerenti dentro lo stesso apps registry.
         old_apps = executor.loader.project_state(
-            self.migrate_from + [
-                ("accounts", "0005_staff_role_pii"),
-                ("management", "0009_membership_end_date_constraint"),
-            ]
+            self.migrate_from + [("accounts", "0005_staff_role_pii")]
         ).apps
         Sport = old_apps.get_model("core", "Sport")
         Society = old_apps.get_model("core", "Society")
@@ -78,9 +82,11 @@ class SeasonBonificaMigrationTest(TransactionTestCase):
         self.team_c = Team.objects.create(society=society, category="SENIOR", league=self.league_c, name="Team C", slug="team-c")
         self.std_c = LeagueStanding.objects.create(league=self.league_c, team=self.team_c, season="2024-2025")
         self.player = User.objects.create(username="player_migtest", role="athlete")
+        # Niente date (sparite al leaf 0014) e niente season (a core@0008 la
+        # tabella core_season non esiste): la riga viaggia su user/team/role.
         self.membership = Membership.objects.create(
             user=self.player, society=society, team=self.team_c, role="PLAYER",
-            is_active=True, start_date=date(2025, 9, 1), end_date=None)
+            is_active=True)
 
         # (d) lega 2024-2025 SENZA team E SENZA standing -> DELETE (orfana)
         self.league_d = League.objects.create(
@@ -114,7 +120,6 @@ class SeasonBonificaMigrationTest(TransactionTestCase):
         membership = self.Membership.objects.get(pk=self.ids["membership"])
         self.assertEqual(membership.role, "PLAYER")
         self.assertTrue(membership.is_active)
-        self.assertIsNone(membership.end_date)
 
     def test_branch_d_orphan_deleted(self):
         self.assertFalse(self.League.objects.filter(pk=self.ids["d"]).exists())

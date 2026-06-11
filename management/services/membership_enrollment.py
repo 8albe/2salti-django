@@ -80,7 +80,6 @@ def redeem_activation_code(user, code_string, request=None):
         membership, created = Membership.objects.get_or_create(
             **lookup,
             defaults={
-                'start_date': timezone.localdate(),
                 'season': season,
             },
         )

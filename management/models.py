@@ -1,27 +1,24 @@
-from django.core.exceptions import ValidationError
 from django.db import models
-from django.db.models import F, Q
 from django.conf import settings
 from django.utils import timezone
 from core.models import Society, Team
 
 
 class MembershipQuerySet(models.QuerySet):
-    def active_at(self, date=None):
-        """
-        Filtra le Membership attive alla data indicata (default: oggi in TZ locale).
+    def active(self):
+        """Membership attive: predicato is_active (2d-5), nessuna data."""
+        return self.filter(is_active=True)
 
-        Regola di attività:
-        - start_date NOT NULL (record senza start_date sono anomali, esclusi)
-        - start_date <= date
-        - end_date IS NULL OR end_date >= date
+    def active_in_season(self, season):
         """
-        if date is None:
-            date = timezone.localdate()
-        return self.filter(
-            start_date__isnull=False,
-            start_date__lte=date,
-        ).filter(Q(end_date__isnull=True) | Q(end_date__gte=date))
+        Membership attive nella stagione indicata (Macro 16 Fase 2: l'asse
+        del tesseramento e' la stagione, non una finestra di date).
+
+        Sostituisce il vecchio active_at(date): non esiste piu' una nozione
+        di "attiva a una certa data" — una Membership appartiene a una Season
+        ed e' attiva (is_active=True) o chiusa.
+        """
+        return self.filter(is_active=True, season=season)
 
 
 class MembershipManager(models.Manager.from_queryset(MembershipQuerySet)):
@@ -45,9 +42,9 @@ class Membership(models.Model):
     team = models.ForeignKey(Team, on_delete=models.CASCADE, null=True, blank=True, related_name='memberships')
     role = models.CharField(max_length=20, choices=ROLE_CHOICES)
 
-    # Fase 2 (fetta 2a): FK stagione transitoria, nullable, affiancata a
-    # start_date/end_date (che spariranno nella fetta 2d). Lazy ref a 'core.Season'
-    # per evitare cicli d'import. Nessun backfill in 2a: i record restano season=NULL.
+    # Asse del tesseramento (Macro 16 Fase 2): la stagione, non le date.
+    # Nullable fino al flip NOT NULL (2d-7). Lazy ref a 'core.Season' per
+    # evitare cicli d'import.
     season = models.ForeignKey(
         'core.Season', null=True, blank=True,
         on_delete=models.PROTECT, related_name='memberships',
@@ -63,8 +60,6 @@ class Membership(models.Model):
     )
 
     is_active = models.BooleanField(default=True)
-    start_date = models.DateField(null=True, blank=True)
-    end_date = models.DateField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -74,17 +69,6 @@ class Membership(models.Model):
         verbose_name = "Appartenenza"
         verbose_name_plural = "Appartenenze"
         constraints = [
-            # Permissivo sui NULL: vincola end_date >= start_date solo quando
-            # entrambe le date sono valorizzate (start_date nullo è legittimo,
-            # vedi MembershipQuerySet.active_at).
-            models.CheckConstraint(
-                check=(
-                    Q(end_date__isnull=True)
-                    | Q(start_date__isnull=True)
-                    | Q(end_date__gte=F('start_date'))
-                ),
-                name='membership_end_date_after_start',
-            ),
             # Fase 2 (fetta 2d-4a): chiave di unicità season-aware, sostituisce
             # il vecchio unique_together (user, society, team, role). Espressa
             # come UniqueConstraint (più esplicita di unique_together). season è
@@ -96,17 +80,6 @@ class Membership(models.Model):
                 name='uniq_membership_user_society_team_role_season',
             ),
         ]
-
-    def clean(self):
-        super().clean()
-        if (
-            self.start_date is not None
-            and self.end_date is not None
-            and self.end_date < self.start_date
-        ):
-            raise ValidationError(
-                {'end_date': "La data di fine non può precedere la data di inizio."}
-            )
 
     def __str__(self):
         scope = self.team.name if self.team else self.society.name

@@ -429,7 +429,6 @@ def approve_membership(request, request_id):
                 Membership.objects.get_or_create(
                     **lookup,
                     defaults={
-                        'start_date': timezone.localdate(),
                         'season': season,
                     },
                 )

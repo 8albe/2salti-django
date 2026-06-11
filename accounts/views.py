@@ -386,11 +386,14 @@ def profile(request, username):
             'recent_matches': matches,
         })
 
-        # Storico squadre PLAYER (ordinato per data inizio tenure, tie-breaker created_at)
+        # Storico squadre PLAYER (ordinato per stagione più recente, label
+        # canonica AAAA/AAAA lessicograficamente ordinabile; season NULL in
+        # coda; tie-breaker created_at)
         player_memberships = Membership.objects.filter(
             user=user,
             role='PLAYER'
-        ).select_related('team', 'team__society', 'team__league').order_by('-start_date', '-created_at')
+        ).select_related('team', 'team__society', 'team__league', 'season').order_by(
+            models.F('season__label').desc(nulls_last=True), '-created_at')
         context['player_memberships'] = player_memberships
 
         # Stat stagione corrente (workaround senza Season autonomo)
@@ -428,14 +431,16 @@ def profile(request, username):
         profile = user.coach_profile
         context['coach_profile'] = profile
 
-        # Storico Allenatori: mostra tutte le Membership HEAD_COACH (incluso start_date=None
-        # per non nascondere record legacy/anomali); materializza in lista per riusarla nel
-        # loop tenure_q senza doppia query.
+        # Storico Allenatori: mostra tutte le Membership HEAD_COACH (incluse
+        # quelle con season=None, per non nascondere record legacy/anomali);
+        # ordina per stagione più recente (label canonica, NULL in coda).
+        # Materializza in lista per riusarla nel loop tenure_q senza doppia query.
         coached_memberships_list = list(
             Membership.objects.filter(
                 user=user,
                 role='HEAD_COACH'
-            ).select_related('team', 'team__society', 'team__league').order_by('-start_date', '-created_at')
+            ).select_related('team', 'team__society', 'team__league', 'season').order_by(
+                models.F('season__label').desc(nulls_last=True), '-created_at')
         )
         context['coached_memberships'] = coached_memberships_list
 
