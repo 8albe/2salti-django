@@ -7,11 +7,18 @@ migration core/0016.
 """
 import importlib
 
+from django.apps import apps as django_apps
+from django.contrib.auth import get_user_model
 from django.test import TestCase
 
-from core.models import League, Sport
+from core.models import League, LeagueStanding, Season, Society, Sport, Team
 
 _mig = importlib.import_module("core.migrations.0016_classify_league_type")
+_rifusione = importlib.import_module(
+    "core.migrations.0017_rifusione_scaffolding_senior"
+)
+
+User = get_user_model()
 
 
 class LeagueTypeModelTests(TestCase):
@@ -117,3 +124,75 @@ class ClassifyLeagueTypeByNameTests(TestCase):
         umbrella.refresh_from_db()
         self.assertEqual(recognized.league_type, "B")
         self.assertIsNone(umbrella.league_type)
+
+
+class RifusioneScaffoldingSeniorTests(TestCase):
+    """Data migration core/0017 (D4-A): la lega-ombrello 'Senior' diventa
+    'serie C Maschile' (tipo C) IN PLACE — pk conservato, link intatti."""
+
+    def setUp(self):
+        self.sport = Sport.objects.create(name="PN RifTest", slug="pn-riftest")
+        self.season = Season.objects.create(
+            sport=self.sport, label='2025/2026', is_current=True
+        )
+        self.society = Society.objects.create(
+            name="Soc Rif", slug="soc-rif", sport=self.sport, city="Roma"
+        )
+        self.umbrella = League.objects.create(
+            name="Senior", sport=self.sport, category="SENIOR",
+            season="2025/2026", season_fk=self.season, slug="senior-riftest",
+            league_type=None,
+        )
+        self.team = Team.objects.create(
+            society=self.society, category="SENIOR", league=self.umbrella,
+            name="Team Rif", slug="team-riftest",
+        )
+        self.standing = LeagueStanding.objects.create(
+            league=self.umbrella, team=self.team, season="2025/2026"
+        )
+        self.user = User.objects.create_user(username='rif_user', role='athlete')
+        from management.models import Membership
+        self.membership = Membership.objects.create(
+            user=self.user, society=self.society, team=self.team,
+            role='PLAYER', season=self.season,
+        )
+
+    def test_umbrella_converted_in_place_links_intact(self):
+        _rifusione.rifusione_scaffolding_senior(django_apps, None)
+
+        self.umbrella.refresh_from_db()
+        self.assertEqual(self.umbrella.name, "serie C Maschile")
+        self.assertEqual(self.umbrella.league_type, "C")
+        self.assertTrue(self.umbrella.is_senior_league)
+        self.assertIn("serie-c-maschile", self.umbrella.slug)
+        # Stesso pk: team, standing e membership restano agganciati.
+        self.team.refresh_from_db()
+        self.assertEqual(self.team.league_id, self.umbrella.pk)
+        self.standing.refresh_from_db()
+        self.assertEqual(self.standing.league_id, self.umbrella.pk)
+        self.membership.refresh_from_db()
+        self.assertEqual(self.membership.team_id, self.team.pk)
+
+    def test_idempotent_second_run_no_op(self):
+        _rifusione.rifusione_scaffolding_senior(django_apps, None)
+        self.umbrella.refresh_from_db()
+        snapshot = (self.umbrella.name, self.umbrella.league_type, self.umbrella.slug)
+
+        _rifusione.rifusione_scaffolding_senior(django_apps, None)
+        self.umbrella.refresh_from_db()
+        self.assertEqual(
+            (self.umbrella.name, self.umbrella.league_type, self.umbrella.slug),
+            snapshot,
+        )
+
+    def test_real_senior_league_with_type_not_touched(self):
+        # Una lega legittimamente chiamata "Senior" ma GIA' classificata non
+        # viene rifusa (filtro: league_type IS NULL).
+        classified = League.objects.create(
+            name="Senior", sport=self.sport, category="SENIOR",
+            season="2024/2025", slug="senior-classificata", league_type="D",
+        )
+        _rifusione.rifusione_scaffolding_senior(django_apps, None)
+        classified.refresh_from_db()
+        self.assertEqual(classified.name, "Senior")
+        self.assertEqual(classified.league_type, "D")
