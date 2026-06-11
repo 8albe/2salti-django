@@ -14,10 +14,10 @@ class Command(BaseCommand):
         soc1, _ = Society.objects.get_or_create(name="Pro Recco", sport=sport, slug="pro-recco")
         soc2, _ = Society.objects.get_or_create(name="AN Brescia", sport=sport, slug="an-brescia")
         
-        league_24, _ = League.objects.get_or_create(name="Serie A1", sport=sport, category="SENIOR", season="2024-2025", slug="serie-a1-24")
+        league_24, _ = League.objects.get_or_create(name="Serie A1", sport=sport, season="2024-2025", slug="serie-a1-24")
         
-        t1, _ = Team.objects.get_or_create(society=soc1, category="SENIOR", defaults={'league': league_24})
-        t2, _ = Team.objects.get_or_create(society=soc2, category="SENIOR", defaults={'league': league_24})
+        t1, _ = Team.objects.get_or_create(society=soc1, defaults={'league': league_24})
+        t2, _ = Team.objects.get_or_create(society=soc2, defaults={'league': league_24})
         
         # Ensure league is correct if they already existed
         t1.league = league_24

@@ -14,10 +14,10 @@ class PublicAPITestCase(TestCase):
         self.society_h = Society.objects.create(name="Pro Recco", sport=self.sport, slug="pro-recco")
         self.society_a = Society.objects.create(name="AN Brescia", sport=self.sport, slug="an-brescia")
         
-        self.league = League.objects.create(name="Serie A1", sport=self.sport, category="SENIOR", slug="serie-a1")
+        self.league = League.objects.create(name="Serie A1", sport=self.sport, slug="serie-a1")
         
-        self.team_h = Team.objects.create(society=self.society_h, league=self.league, category="SENIOR")
-        self.team_a = Team.objects.create(society=self.society_a, league=self.league, category="SENIOR")
+        self.team_h = Team.objects.create(society=self.society_h, league=self.league)
+        self.team_a = Team.objects.create(society=self.society_a, league=self.league)
         
         self.match = Match.objects.create(
             league=self.league,

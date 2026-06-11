@@ -14,8 +14,8 @@ class PublicReadLayerTests(TestCase):
         self.sport = Sport.objects.create(name="Pallanuoto", slug="pallanuoto")
         self.season = Season.objects.create(sport=self.sport, label='2025/2026', is_current=True)
         self.society = Society.objects.create(name="Pro Recco", slug="pro-recco", sport=self.sport)
-        self.team = Team.objects.create(society=self.society, category="SENIOR")
-        self.league = League.objects.create(name="Serie A1", sport=self.sport, category="SENIOR", season="2024-2025")
+        self.team = Team.objects.create(society=self.society)
+        self.league = League.objects.create(name="Serie A1", sport=self.sport, season="2024-2025")
         self.team.league = self.league
         self.team.save()
         
@@ -113,7 +113,7 @@ class PublicReadLayerTests(TestCase):
 
     def test_empty_states_render_safely(self):
         """Verifica che stati vuoti non mandino in crash le pagine."""
-        empty_team = Team.objects.create(society=self.society, category="U10", slug="empty-team")
+        empty_team = Team.objects.create(society=self.society, slug="empty-team")
         response = self.client.get(reverse('team_detail', args=[empty_team.slug]))
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Nessuna partita recente")

@@ -12,8 +12,8 @@ class OCRProviderToggleTest(TestCase):
     def setUp(self):
         self.sport = Sport.objects.create(name="WP", slug="wp-prov")
         self.soc_a = Society.objects.create(name="T1", slug="t1", sport=self.sport)
-        self.league = League.objects.create(name="BootLeague", sport=self.sport, category="SENIOR")
-        self.team_a = Team.objects.create(society=self.soc_a, category="SENIOR", name="T1")
+        self.league = League.objects.create(name="BootLeague", sport=self.sport)
+        self.team_a = Team.objects.create(society=self.soc_a, name="T1")
         self.match = Match.objects.create(
             league=self.league, home_team=self.team_a, away_team=self.team_a, match_date=timezone.now()
         )

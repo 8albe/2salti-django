@@ -23,9 +23,9 @@ class OCRServiceTestCase(TestCase):
         self.season = Season.objects.create(sport=self.sport, label='2025/2026', is_current=True)
         self.soc_home = Society.objects.create(name="Pro Recco", sport=self.sport, slug="pro-recco")
         self.soc_away = Society.objects.create(name="AN Brescia", sport=self.sport, slug="an-brescia")
-        self.league = League.objects.create(name="Serie A1", sport=self.sport, category="SENIOR", slug="serie-a1")
-        self.team_home = Team.objects.create(society=self.soc_home, category="SENIOR", league=self.league)
-        self.team_away = Team.objects.create(society=self.soc_away, category="SENIOR", league=self.league)
+        self.league = League.objects.create(name="Serie A1", sport=self.sport, slug="serie-a1")
+        self.team_home = Team.objects.create(society=self.soc_home, league=self.league)
+        self.team_away = Team.objects.create(society=self.soc_away, league=self.league)
         self.user = User.objects.create_user(username="testuser", role="athlete")
         
         self.match = Match.objects.create(
@@ -483,9 +483,9 @@ class FullFlowRegressionTest(TestCase):
         self.season = Season.objects.create(sport=self.sport, label='2025/2026', is_current=True)
         self.soc_home = Society.objects.create(name="Pro Recco", sport=self.sport, slug="pro-recco-ff")
         self.soc_away = Society.objects.create(name="AN Brescia", sport=self.sport, slug="an-brescia-ff")
-        self.league = League.objects.create(name="Serie A1", sport=self.sport, category="SENIOR", slug="serie-a1-ff")
-        self.team_home = Team.objects.create(society=self.soc_home, category="SENIOR", league=self.league)
-        self.team_away = Team.objects.create(society=self.soc_away, category="SENIOR", league=self.league)
+        self.league = League.objects.create(name="Serie A1", sport=self.sport, slug="serie-a1-ff")
+        self.team_home = Team.objects.create(society=self.soc_home, league=self.league)
+        self.team_away = Team.objects.create(society=self.soc_away, league=self.league)
         self.user = User.objects.create_superuser(username="admin_ff", email="ff@test.com", password="password")
 
         # Atleti per coprire i nomi citati negli eventi del MockVisionProvider
@@ -590,9 +590,9 @@ class ReviewUXTestCase(TestCase):
         self.season = Season.objects.create(sport=self.sport, label='2025/2026', is_current=True)
         self.soc_home = Society.objects.create(name="Home Soc", sport=self.sport)
         self.soc_away = Society.objects.create(name="Away Soc", sport=self.sport)
-        self.team_home = Team.objects.create(society=self.soc_home, category='SENIOR')
-        self.team_away = Team.objects.create(society=self.soc_away, category='SENIOR')
-        self.league = League.objects.create(name="Test League", sport=self.sport, category='SENIOR')
+        self.team_home = Team.objects.create(society=self.soc_home)
+        self.team_away = Team.objects.create(society=self.soc_away)
+        self.league = League.objects.create(name="Test League", sport=self.sport)
         self.match = Match.objects.create(
             league=self.league,
             home_team=self.team_home,
@@ -901,9 +901,9 @@ class SchemaV2ExtensionTestCase(TestCase):
         sport = Sport.objects.create(name="Pallanuoto", slug="pall-v2test")
         soc_h = Society.objects.create(name="SocHomeV2", sport=sport, slug="soc-h-v2")
         soc_a = Society.objects.create(name="SocAwayV2", sport=sport, slug="soc-a-v2")
-        league = League.objects.create(name="LegaV2", sport=sport, category="SENIOR", slug="lega-v2")
-        team_h = Team.objects.create(society=soc_h, category="SENIOR", league=league)
-        team_a = Team.objects.create(society=soc_a, category="SENIOR", league=league)
+        league = League.objects.create(name="LegaV2", sport=sport, slug="lega-v2")
+        team_h = Team.objects.create(society=soc_h, league=league)
+        team_a = Team.objects.create(society=soc_a, league=league)
         user = User.objects.create_user(username="userv2", role="athlete")
         from django.utils import timezone as tz
         match = Match.objects.create(league=league, home_team=team_h, away_team=team_a,
@@ -924,9 +924,9 @@ class SchemaV2ExtensionTestCase(TestCase):
         sport = Sport.objects.create(name="Pallanuoto", slug="pall-off-test")
         soc_h = Society.objects.create(name="OffHome", sport=sport, slug="off-h")
         soc_a = Society.objects.create(name="OffAway", sport=sport, slug="off-a")
-        league = League.objects.create(name="OffLega", sport=sport, category="SENIOR", slug="off-lega")
-        team_h = Team.objects.create(society=soc_h, category="SENIOR", league=league)
-        team_a = Team.objects.create(society=soc_a, category="SENIOR", league=league)
+        league = League.objects.create(name="OffLega", sport=sport, slug="off-lega")
+        team_h = Team.objects.create(society=soc_h, league=league)
+        team_a = Team.objects.create(society=soc_a, league=league)
         user = User.objects.create_user(username="useroff", role="athlete")
         from django.utils import timezone as tz
         match = Match.objects.create(league=league, home_team=team_h, away_team=team_a,
@@ -950,9 +950,9 @@ class SchemaV2ExtensionTestCase(TestCase):
         sport = Sport.objects.create(name="Pallanuoto", slug="pall-coach-test")
         soc_h = Society.objects.create(name="CoachHome", sport=sport, slug="coach-h")
         soc_a = Society.objects.create(name="CoachAway", sport=sport, slug="coach-a")
-        league = League.objects.create(name="CoachLega", sport=sport, category="SENIOR", slug="coach-lega")
-        team_h = Team.objects.create(society=soc_h, category="SENIOR", league=league)
-        team_a = Team.objects.create(society=soc_a, category="SENIOR", league=league)
+        league = League.objects.create(name="CoachLega", sport=sport, slug="coach-lega")
+        team_h = Team.objects.create(society=soc_h, league=league)
+        team_a = Team.objects.create(society=soc_a, league=league)
         user = User.objects.create_user(username="usercoach", role="athlete")
         from django.utils import timezone as tz
         match = Match.objects.create(league=league, home_team=team_h, away_team=team_a,

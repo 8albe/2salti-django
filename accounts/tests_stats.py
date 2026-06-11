@@ -22,13 +22,13 @@ class AthleteStatsPublishedFilterTest(TestCase):
             sport=self.sport, label='2025/2026', is_current=True
         )
         self.league = League.objects.create(
-            name="League Stats", sport=self.sport, category="SENIOR", slug="l-stats"
+            name="League Stats", sport=self.sport, slug="l-stats"
         )
         self.team_h = Team.objects.create(
-            society=self.soc_h, category="SENIOR", league=self.league, name="H"
+            society=self.soc_h, league=self.league, name="H"
         )
         self.team_a = Team.objects.create(
-            society=self.soc_a, category="SENIOR", league=self.league, name="A"
+            society=self.soc_a, league=self.league, name="A"
         )
 
         self.athlete = User.objects.create_user(

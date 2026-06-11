@@ -16,8 +16,8 @@ class MonitoringTestCase(TestCase):
         self.society_b = Society.objects.create(name="Monitor Team B", slug="m-team-b", sport=self.sport)
         
         self.league = League.objects.create(name="Monitor League", sport=self.sport, season="2023/24")
-        self.team_a = Team.objects.create(society=self.society, category="SENIOR", league=self.league)
-        self.team_b = Team.objects.create(society=self.society_b, category="SENIOR", league=self.league)
+        self.team_a = Team.objects.create(society=self.society, league=self.league)
+        self.team_b = Team.objects.create(society=self.society_b, league=self.league)
         
         self.match = Match.objects.create(
             home_team=self.team_a,

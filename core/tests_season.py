@@ -35,7 +35,7 @@ class LeagueSlugSanitizeTests(TestCase):
     def test_slug_has_no_slash_with_slash_season(self):
         sport = Sport.objects.create(name="Pallanuoto Slug Test")
         league = League.objects.create(
-            name="Serie A1", sport=sport, category="SENIOR", season="2025/2026"
+            name="Serie A1", sport=sport, season="2025/2026"
         )
         self.assertNotIn("/", league.slug)
         self.assertIn("2025-2026", league.slug)
@@ -111,12 +111,12 @@ class PopulateSeasonMigrationTest(TransactionTestCase):
 
         # PN: due label distinte; la label 2025/2026 compare su due leghe
         # diverse -> deve generare UNA sola Season (coppia distinta).
-        HLeague.objects.create(name="PN A", sport=sport_pn, category="SENIOR", season="2024/2025", slug="pn-a")
-        HLeague.objects.create(name="PN B", sport=sport_pn, category="SENIOR", season="2025/2026", slug="pn-b")
-        HLeague.objects.create(name="PN C", sport=sport_pn, category="U16", season="2025/2026", slug="pn-c")
+        HLeague.objects.create(name="PN A", sport=sport_pn, season="2024/2025", slug="pn-a")
+        HLeague.objects.create(name="PN B", sport=sport_pn, season="2025/2026", slug="pn-b")
+        HLeague.objects.create(name="PN C", sport=sport_pn, season="2025/2026", slug="pn-c")
 
         # BK: una sola label distinta.
-        HLeague.objects.create(name="BK A", sport=sport_bk, category="SENIOR", season="2023/2024", slug="bk-a")
+        HLeague.objects.create(name="BK A", sport=sport_bk, season="2023/2024", slug="bk-a")
 
         self.sport_pn_id = sport_pn.id
         self.sport_bk_id = sport_bk.id
@@ -162,8 +162,8 @@ class SportDetailCurrentSeasonViewTest(TestCase):
 
     def setUp(self):
         self.sport = Sport.objects.create(name="PN ViewTest", slug="pn-viewtest")
-        League.objects.create(name="L A", sport=self.sport, category="SENIOR", season="2024/2025", slug="vt-a")
-        League.objects.create(name="L B", sport=self.sport, category="SENIOR", season="2025/2026", slug="vt-b")
+        League.objects.create(name="L A", sport=self.sport, season="2024/2025", slug="vt-a")
+        League.objects.create(name="L B", sport=self.sport, season="2025/2026", slug="vt-b")
 
     def test_view_uses_season_label_when_current_exists(self):
         # Elezione esplicita su una label NON-MAX, per provare che la view legge
@@ -208,10 +208,10 @@ class BackfillSeasonFkMigrationTest(TransactionTestCase):
         sport_bk = HSport.objects.create(name="BK BFTest", slug="bk-bftest")
 
         # PN: 2025/2026 su due leghe distinte -> stessa Season -> stessa FK.
-        HLeague.objects.create(name="PN A", sport=sport_pn, category="SENIOR", season="2024/2025", slug="bf-pn-a")
-        HLeague.objects.create(name="PN B", sport=sport_pn, category="SENIOR", season="2025/2026", slug="bf-pn-b")
-        HLeague.objects.create(name="PN C", sport=sport_pn, category="U16", season="2025/2026", slug="bf-pn-c")
-        HLeague.objects.create(name="BK A", sport=sport_bk, category="SENIOR", season="2023/2024", slug="bf-bk-a")
+        HLeague.objects.create(name="PN A", sport=sport_pn, season="2024/2025", slug="bf-pn-a")
+        HLeague.objects.create(name="PN B", sport=sport_pn, season="2025/2026", slug="bf-pn-b")
+        HLeague.objects.create(name="PN C", sport=sport_pn, season="2025/2026", slug="bf-pn-c")
+        HLeague.objects.create(name="BK A", sport=sport_bk, season="2023/2024", slug="bf-bk-a")
 
         self.sport_pn_id = sport_pn.id
         self.sport_bk_id = sport_bk.id
@@ -266,7 +266,7 @@ class LeagueSeasonFkProtectTests(TestCase):
         sport = Sport.objects.create(name="PN ProtTest", slug="pn-prottest")
         season = Season.objects.create(sport=sport, label="2025/2026")
         League.objects.create(
-            name="PN A", sport=sport, category="SENIOR", season="2025/2026",
+            name="PN A", sport=sport, season="2025/2026",
             slug="prot-pn-a", season_fk=season,
         )
         with self.assertRaises(ProtectedError):

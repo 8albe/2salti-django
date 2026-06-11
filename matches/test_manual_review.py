@@ -12,10 +12,10 @@ class ManualReviewTest(TestCase):
         self.season = Season.objects.create(sport=self.sport, label='2025/2026', is_current=True)
         self.soc_a = Society.objects.create(name="Soc A", slug="soc-a", sport=self.sport)
         self.soc_b = Society.objects.create(name="Soc B", slug="soc-b", sport=self.sport)
-        self.league = League.objects.create(name="League 1", sport=self.sport, category="SENIOR", slug="l1")
+        self.league = League.objects.create(name="League 1", sport=self.sport, slug="l1")
         
-        self.team_a = Team.objects.create(society=self.soc_a, category="SENIOR", league=self.league, name="Team A")
-        self.team_b = Team.objects.create(society=self.soc_b, category="SENIOR", league=self.league, name="Team B")
+        self.team_a = Team.objects.create(society=self.soc_a, league=self.league, name="Team A")
+        self.team_b = Team.objects.create(society=self.soc_b, league=self.league, name="Team B")
         
         self.match = Match.objects.create(
             league=self.league,

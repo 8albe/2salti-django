@@ -19,7 +19,7 @@ class RBACTest(TestCase):
         Membership.objects.create(user=self.user_a, society=self.soc_a, role='PLAYER', is_active=True, season=self.season)
         
         # Training in Soc B
-        self.team_b = Team.objects.get_or_create(society=self.soc_b, category='SENIOR', slug='team-b')[0]
+        self.team_b = Team.objects.get_or_create(society=self.soc_b, slug='team-b')[0]
         now = timezone.now()
         self.tr_b = Training.objects.create(
             society=self.soc_b, team=self.team_b, title='B Training',

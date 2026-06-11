@@ -17,8 +17,8 @@ class OnboardingFlowTest(TestCase):
         self.season = Season.objects.create(
             sport=self.sport, label='2025/2026', is_current=True
         )
-        self.league = League.objects.create(name="Serie A1", sport=self.sport, category='SENIOR', season='2024-2025')
-        self.team = Team.objects.create(society=self.society, category='SENIOR', league=self.league)
+        self.league = League.objects.create(name="Serie A1", sport=self.sport, season='2024-2025')
+        self.team = Team.objects.create(society=self.society, league=self.league)
         
         # Utente Atleta da onboardare
         self.user = User.objects.create_user(

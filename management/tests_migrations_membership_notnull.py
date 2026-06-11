@@ -50,10 +50,10 @@ class MembershipSeasonNotNullMigrationTest(TransactionTestCase):
         self.season = self.Season.objects.create(
             sport=self.sport, label="2025/2026", is_current=True)
         self.league = self.League.objects.create(
-            name="Lega NN", sport=self.sport, category="SENIOR", season="2025/2026",
+            name="Lega NN", sport=self.sport, season="2025/2026",
             season_fk=self.season, slug="lega-nntest")
         self.team = self.Team.objects.create(
-            society=self.society, category="SENIOR", league=self.league,
+            society=self.society, league=self.league,
             name="Team NN", slug="team-nntest")
 
     def tearDown(self):

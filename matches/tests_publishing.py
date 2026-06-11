@@ -21,9 +21,9 @@ class PublishingServiceTestCase(TestCase):
         self.season = Season.objects.create(sport=self.sport, label='2025/2026', is_current=True)
         self.soc_home = Society.objects.create(name="Pro Recco", sport=self.sport, slug="pro-recco")
         self.soc_away = Society.objects.create(name="AN Brescia", sport=self.sport, slug="an-brescia")
-        self.league = League.objects.create(name="Serie A1", sport=self.sport, category="SENIOR", slug="serie-a1")
-        self.team_home = Team.objects.create(society=self.soc_home, category="SENIOR", league=self.league)
-        self.team_away = Team.objects.create(society=self.soc_away, category="SENIOR", league=self.league)
+        self.league = League.objects.create(name="Serie A1", sport=self.sport, slug="serie-a1")
+        self.team_home = Team.objects.create(society=self.soc_home, league=self.league)
+        self.team_away = Team.objects.create(society=self.soc_away, league=self.league)
         self.user = User.objects.create_superuser(username="admin", email="admin@test.com", password="password")
 
         self.match = Match.objects.create(

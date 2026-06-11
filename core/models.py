@@ -85,46 +85,58 @@ class Society(models.Model):
 
 
 class Team(models.Model):
-    """Squadra specifica di una società (es: Pro Recco Under 16)"""
-    CATEGORY_CHOICES = [
-        ('U10', 'Under 10'),
-        ('U12', 'Under 12'),
-        ('U14', 'Under 14'),
-        ('U16', 'Under 16'),
-        ('U18', 'Under 18'),
-        ('U20', 'Under 20'),
-        ('SENIOR', 'Prima Squadra'),
-    ]
-    
+    """Squadra specifica di una società (es: Pro Recco Allievi).
+
+    Macro 16 Fase 3: la categoria NON vive più sul team — la lega è la fonte
+    di verità grandi/giovanili (League.league_type). Il display di categoria
+    si deriva via category_label."""
+
     society = models.ForeignKey(Society, on_delete=models.CASCADE, related_name='teams')
-    category = models.CharField(max_length=10, choices=CATEGORY_CHOICES)
     league = models.ForeignKey('League', on_delete=models.SET_NULL, null=True, blank=True, related_name='teams')
-    
+
     # Auto-generated
-    name = models.CharField(max_length=200, blank=True, help_text="Auto-generato: Society + Category")
+    name = models.CharField(max_length=200, blank=True, help_text="Auto-generato: Society + tipo lega")
     slug = models.SlugField(unique=True, blank=True)
-    
+
+    @property
+    def category_label(self):
+        """Display categoria derivato dalla lega (fonte di verità).
+        Stringa vuota se il team non ha lega o la lega non è classificata."""
+        if self.league_id and self.league.league_type:
+            return self.league.league_type_label
+        return ''
+
     def save(self, *args, **kwargs):
         if not self.name:
-            if self.category == 'SENIOR':
-                self.name = self.society.name
+            if (
+                self.league_id
+                and self.league.league_type
+                and not self.league.is_senior_league
+            ):
+                # Giovanili: società + etichetta tradizionale (es. "Allievi").
+                self.name = f"{self.society.name} {self.league.league_type_label}"
             else:
-                self.name = f"{self.society.name} {self.get_category_display()}"
+                # Prima squadra / lega non classificata: nome società.
+                self.name = self.society.name
         if not self.slug:
-            self.slug = slugify(f"{self.society.slug}-{self.category}")
+            suffix = (
+                self.league.league_type.lower()
+                if self.league_id and self.league.league_type
+                else 'team'
+            )
+            self.slug = slugify(f"{self.society.slug}-{suffix}")
         super().save(*args, **kwargs)
-    
+
     def get_roster(self):
         """Ritorna rosa giocatori"""
         from accounts.models import AthleteProfile
         return AthleteProfile.objects.filter(current_team=self).select_related('user')
-    
+
     def __str__(self):
         return self.name
-    
+
     class Meta:
-        unique_together = ['society', 'category']
-        ordering = ['society', 'category']
+        ordering = ['society', 'name']
         verbose_name = "Squadra"
         verbose_name_plural = "👥 Squadre"
 
@@ -172,7 +184,6 @@ class League(models.Model):
 
     name = models.CharField(max_length=100, help_text="Es: Serie A1 Maschile")
     sport = models.ForeignKey(Sport, on_delete=models.CASCADE, related_name='leagues')
-    category = models.CharField(max_length=10, choices=Team.CATEGORY_CHOICES)
     # Tipo lega da lista chiusa. NULL = non classificata ("Null invece di
     # invenzione"): mai derivare il tipo indovinando, si classifica per nome
     # via data migration o a mano in admin.

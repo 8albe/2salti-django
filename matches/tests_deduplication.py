@@ -13,9 +13,9 @@ class MatchReportDeduplicationTest(TestCase):
         from core.models import Society
         self.sport = Sport.objects.create(name="Water Polo", slug="wp")
         self.society = Society.objects.create(name="Pro Recco Society", sport=self.sport, city="Recco")
-        self.league = League.objects.create(name="Serie A1", sport=self.sport, category='SENIOR')
-        self.team1 = Team.objects.create(society=self.society, category='SENIOR')
-        self.team2 = Team.objects.create(society=self.society, category='U20')
+        self.league = League.objects.create(name="Serie A1", sport=self.sport)
+        self.team1 = Team.objects.create(society=self.society, slug='dedup-team-1')
+        self.team2 = Team.objects.create(society=self.society, slug='dedup-team-2')
         self.match = Match.objects.create(
             league=self.league,
             home_team=self.team1,

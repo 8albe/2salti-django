@@ -28,7 +28,6 @@ class LeagueTypeModelTests(TestCase):
     def _league(self, league_type=None, **kw):
         # name unico: unique_together (name, season, group_name) su League.
         kw.setdefault("name", f"Lega LT {league_type or 'none'}")
-        kw.setdefault("category", "SENIOR")
         kw.setdefault("slug", f"lega-lt-{league_type or 'none'}")
         return League.objects.create(
             sport=self.sport, league_type=league_type, **kw
@@ -103,12 +102,10 @@ class ClassifyLeagueTypeByNameTests(TestCase):
     def test_classify_runpython_idempotent_and_null_safe(self):
         sport = Sport.objects.create(name="PN ClassTest", slug="pn-classtest")
         recognized = League.objects.create(
-            name="serie B Maschile", sport=sport, category="SENIOR",
-            slug="lt-b", league_type=None,
+            name="serie B Maschile", sport=sport, slug="lt-b", league_type=None,
         )
         umbrella = League.objects.create(
-            name="Senior", sport=sport, category="SENIOR",
-            slug="lt-senior", league_type=None,
+            name="Senior", sport=sport, slug="lt-senior", league_type=None,
         )
 
         from django.apps import apps
@@ -139,12 +136,11 @@ class RifusioneScaffoldingSeniorTests(TestCase):
             name="Soc Rif", slug="soc-rif", sport=self.sport, city="Roma"
         )
         self.umbrella = League.objects.create(
-            name="Senior", sport=self.sport, category="SENIOR",
-            season="2025/2026", season_fk=self.season, slug="senior-riftest",
+            name="Senior", sport=self.sport, season="2025/2026", season_fk=self.season, slug="senior-riftest",
             league_type=None,
         )
         self.team = Team.objects.create(
-            society=self.society, category="SENIOR", league=self.umbrella,
+            society=self.society, league=self.umbrella,
             name="Team Rif", slug="team-riftest",
         )
         self.standing = LeagueStanding.objects.create(
@@ -189,8 +185,7 @@ class RifusioneScaffoldingSeniorTests(TestCase):
         # Una lega legittimamente chiamata "Senior" ma GIA' classificata non
         # viene rifusa (filtro: league_type IS NULL).
         classified = League.objects.create(
-            name="Senior", sport=self.sport, category="SENIOR",
-            season="2024/2025", slug="senior-classificata", league_type="D",
+            name="Senior", sport=self.sport, season="2024/2025", slug="senior-classificata", league_type="D",
         )
         _rifusione.rifusione_scaffolding_senior(django_apps, None)
         classified.refresh_from_db()

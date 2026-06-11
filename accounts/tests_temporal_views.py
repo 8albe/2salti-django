@@ -28,10 +28,10 @@ class PlayerMembershipsOrderingTests(TestCase):
         self.season_prev = Season.objects.create(sport=self.sport, label='2024/2025', is_current=False)
         self.season_curr = Season.objects.create(sport=self.sport, label='2025/2026', is_current=True)
         self.league = League.objects.create(
-            name='Serie A1', sport=self.sport, category='SENIOR', season='2025-2026',
+            name='Serie A1', sport=self.sport, season='2025-2026',
         )
-        self.team_a = Team.objects.create(society=self.society, category='SENIOR', league=self.league)
-        self.team_b = Team.objects.create(society=self.society, category='U20', league=self.league)
+        self.team_a = Team.objects.create(society=self.society, league=self.league, slug='tmp-team-a')
+        self.team_b = Team.objects.create(society=self.society, league=self.league, slug='tmp-team-b')
         self.athlete = User.objects.create_user(
             username='atleta_test', password='pw', role='athlete',
             first_name='Mario', last_name='Rossi',
@@ -78,17 +78,17 @@ class CoachedDirectMatchesTemporalTests(TestCase):
         self.season_prev = Season.objects.create(sport=self.sport, label='2024/2025', is_current=False)
 
         self.league = League.objects.create(
-            name='Serie A1', sport=self.sport, category='SENIOR', season='2025-2026',
+            name='Serie A1', sport=self.sport, season='2025-2026',
             season_fk=self.season_curr,
         )
         # Lega di un'altra stagione, stessa squadra/avversario: serve a provare che
         # l'attribuzione è per stagione, non per squadra in assoluto.
         self.league_prev = League.objects.create(
-            name='Serie A1 (24/25)', sport=self.sport, category='SENIOR', season='2024-2025',
+            name='Serie A1 (24/25)', sport=self.sport, season='2024-2025',
             season_fk=self.season_prev,
         )
-        self.team_a = Team.objects.create(society=self.society, category='SENIOR', league=self.league)
-        self.opponent = Team.objects.create(society=self.opponent_society, category='SENIOR', league=self.league)
+        self.team_a = Team.objects.create(society=self.society, league=self.league)
+        self.opponent = Team.objects.create(society=self.opponent_society, league=self.league)
 
         self.coach = User.objects.create_user(
             username='coach_test', password='pw', role='coach',

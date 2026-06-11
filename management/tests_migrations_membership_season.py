@@ -53,10 +53,10 @@ class BackfillMembershipSeasonMigrationTest(TransactionTestCase):
             name="Soc1 BackfillTest", slug="soc1-bktest", sport=sport1, city="Roma")
         season1 = Season.objects.create(sport=sport1, label="2025/2026", is_current=True)
         league1 = League.objects.create(
-            name="Lega1", sport=sport1, category="SENIOR", season="2025/2026",
+            name="Lega1", sport=sport1, season="2025/2026",
             season_fk=season1, slug="lega1-bktest")
         team1 = Team.objects.create(
-            society=society1, category="SENIOR", league=league1, name="Team1", slug="team1-bktest")
+            society=society1, league=league1, name="Team1", slug="team1-bktest")
 
         # Sport 2: NESSUNA Season corrente -> ramo difensivo (resta NULL).
         sport2 = Sport.objects.create(name="Basket BackfillTest", slug="bk-bktest")

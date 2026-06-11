@@ -25,8 +25,8 @@ class OCRInfrastructureTest(TestCase):
         self.soc_a = Society.objects.create(name="Society A", sport=self.sport, city="Rome")
         self.soc_b = Society.objects.create(name="Society B", sport=self.sport, city="Milan")
         
-        self.home_team = Team.objects.create(society=self.soc_a, category='SENIOR')
-        self.away_team = Team.objects.create(society=self.soc_b, category='SENIOR')
+        self.home_team = Team.objects.create(society=self.soc_a)
+        self.away_team = Team.objects.create(society=self.soc_b)
         
         self.match = Match.objects.create(
             league=self.league,

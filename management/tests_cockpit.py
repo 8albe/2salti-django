@@ -16,8 +16,8 @@ class OpsCockpitTests(TestCase):
         # Base data
         self.sport = Sport.objects.create(name="Pallanuoto", slug="pallanuoto")
         self.society = Society.objects.create(name="Pro Recco", slug="pro-recco", sport=self.sport)
-        self.team = Team.objects.create(society=self.society, category="SENIOR")
-        self.league = League.objects.create(name="Serie A1", sport=self.sport, category="SENIOR", season="2024-2025")
+        self.team = Team.objects.create(society=self.society)
+        self.league = League.objects.create(name="Serie A1", sport=self.sport, season="2024-2025")
         
         self.match = Match.objects.create(
             league=self.league, home_team=self.team, away_team=self.team,

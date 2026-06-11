@@ -52,7 +52,6 @@ class Command(BaseCommand):
         league, _ = League.objects.get_or_create(
             name='Serie A1 Maschile',
             sport=sport,
-            category='SENIOR',
             season='2024-2025',
             level=1
         )
@@ -61,13 +60,11 @@ class Command(BaseCommand):
         # 4. SQUADRE
         pro_recco_senior, _ = Team.objects.get_or_create(
             society=pro_recco,
-            category='SENIOR',
             defaults={'league': league}
         )
         
         brescia_senior, _ = Team.objects.get_or_create(
             society=brescia,
-            category='SENIOR',
             defaults={'league': league}
         )
         self.stdout.write('✅ Squadre create')

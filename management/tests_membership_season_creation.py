@@ -43,15 +43,14 @@ class ResolveMembershipSeasonHelperTests(TestCase):
 
     def _league(self, season_fk, slug):
         return League.objects.create(
-            name="Serie A1", sport=self.sport, category='SENIOR',
-            season=season_fk.label, season_fk=season_fk, slug=slug,
+            name="Serie A1", sport=self.sport, season=season_fk.label, season_fk=season_fk, slug=slug,
         )
 
     def test_primary_via_team_league_season_fk(self):
         season = self._season('2025/2026', is_current=True)
         league = self._league(season, slug='a1-2526')
         team = Team.objects.create(
-            society=self.society, category='SENIOR', slug='t1', league=league
+            society=self.society, slug='t1', league=league
         )
 
         resolved = resolve_membership_season(
@@ -67,7 +66,7 @@ class ResolveMembershipSeasonHelperTests(TestCase):
         league_season = self._season('2024/2025', is_current=False)
         league = self._league(league_season, slug='a1-2425')
         team = Team.objects.create(
-            society=self.society, category='SENIOR', slug='t2', league=league
+            society=self.society, slug='t2', league=league
         )
 
         resolved = resolve_membership_season(
@@ -80,7 +79,7 @@ class ResolveMembershipSeasonHelperTests(TestCase):
         # Team senza lega -> fallback su Season is_current per society.sport.
         current = self._season('2025/2026', is_current=True)
         team = Team.objects.create(
-            society=self.society, category='SENIOR', slug='t3', league=None
+            society=self.society, slug='t3', league=None
         )
 
         resolved = resolve_membership_season(
@@ -102,7 +101,7 @@ class ResolveMembershipSeasonHelperTests(TestCase):
     def test_defensive_branch_returns_none(self):
         # Nessuna lega e nessuna Season is_current per lo sport -> None.
         team = Team.objects.create(
-            society=self.society, category='SENIOR', slug='t4', league=None
+            society=self.society, slug='t4', league=None
         )
 
         resolved = resolve_membership_season(
@@ -124,16 +123,15 @@ class MembershipCreationSeasonAwareTests(TestCase):
             sport=self.sport, label='2025/2026', is_current=True
         )
         self.league = League.objects.create(
-            name="Serie A1", sport=self.sport, category='SENIOR',
-            season='2025/2026', season_fk=self.season, slug='a1-2526',
+            name="Serie A1", sport=self.sport, season='2025/2026', season_fk=self.season, slug='a1-2526',
         )
         self.team = Team.objects.create(
-            society=self.society, category='SENIOR', slug='team-a',
+            society=self.society, slug='team-a',
             league=self.league,
         )
         # Team senza lega: forza il ramo fallback (is_current per sport).
         self.team_no_league = Team.objects.create(
-            society=self.society, category='U20', slug='team-b', league=None
+            society=self.society, slug='team-b', league=None
         )
         self.user = User.objects.create_user(username='athlete1', role='athlete')
 
@@ -267,7 +265,7 @@ class MembershipLookupSeasonAwareTests(TestCase):
             sport=self.sport, label='2025/2026', is_current=True
         )
         team = Team.objects.create(
-            society=self.society, category='SENIOR', slug='t-idem', league=None
+            society=self.society, slug='t-idem', league=None
         )
         ActivationCode.objects.create(
             code='IDEM-2', society=self.society, team=team,
@@ -297,7 +295,7 @@ class MembershipLookupSeasonAwareTests(TestCase):
             sport=self.sport, label='2024/2025', is_current=True
         )
         team = Team.objects.create(
-            society=self.society, category='SENIOR', slug='t-roll', league=None
+            society=self.society, slug='t-roll', league=None
         )
         ActivationCode.objects.create(
             code='ROLL-1', society=self.society, team=team,
@@ -334,7 +332,7 @@ class MembershipLookupSeasonAwareTests(TestCase):
         # ritorna None. Dal flip NOT NULL il redeem NON crea righe season=NULL:
         # fallisce con messaggio utente e nessuna Membership viene creata.
         team = Team.objects.create(
-            society=self.society, category='SENIOR', slug='t-none', league=None
+            society=self.society, slug='t-none', league=None
         )
         self.assertIsNone(
             resolve_membership_season(self.user, self.society, team, 'PLAYER')
@@ -357,7 +355,7 @@ class MembershipLookupSeasonAwareTests(TestCase):
         # Il path signal (save del profilo) e' fail-fast: misconfigurazione
         # da sanare, non un flusso utente — RuntimeError esplicito.
         team = Team.objects.create(
-            society=self.society, category='SENIOR', slug='t-none-2', league=None
+            society=self.society, slug='t-none-2', league=None
         )
         profile = self.user.athlete_profile
         profile.current_team = team

@@ -146,7 +146,7 @@ class Command(BaseCommand):
                 "name": t.name,
                 "society": t.society.name if t.society_id else None,
                 "league": t.league.name if t.league_id else None,
-                "category": t.category,
+                "category": t.league.league_type if t.league_id else None,
                 "active_memberships_count": t.memberships.filter(is_active=True).count(),
                 "matches_as_home": t.home_matches.count(),
                 "matches_as_away": t.away_matches.count(),

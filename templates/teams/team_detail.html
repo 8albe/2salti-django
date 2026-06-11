@@ -15,7 +15,7 @@
         {% endif %}
 
         <div>
-            <div class="text-sm font-mono text-slate-400 mb-1 tracking-wider uppercase">{{ team.get_category_display }}
+            <div class="text-sm font-mono text-slate-400 mb-1 tracking-wider uppercase">{{ team.category_label }}
             </div>
             <h1 class="text-5xl font-bold sport-accent mb-2">{{ team.name }}</h1>
 
@@ -43,7 +43,7 @@
             {% for other_team in other_teams %}
             <a href="{% url 'team_detail' other_team.slug %}"
                 class="shrink-0 px-4 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 hover:border-cyan-500/50 transition-all text-sm font-medium text-slate-300">
-                {{ other_team.get_category_display }}
+                {{ other_team.category_label }}
             </a>
             {% endfor %}
         </div>
@@ -88,7 +88,7 @@
 <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
     <!-- ROSA GIOCATORI -->
     <div class="lg:col-span-2">
-        <h2 class="text-2xl font-bold mb-6">Rosa {{ team.get_category_display }}</h2>
+        <h2 class="text-2xl font-bold mb-6">Rosa {{ team.category_label }}</h2>
 
         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
             {% for player_profile in roster %}

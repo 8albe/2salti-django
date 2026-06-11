@@ -10,9 +10,9 @@ class SEOTestCase(TestCase):
     def setUp(self):
         self.sport = Sport.objects.create(name="Pallanuoto", slug="pallanuoto")
         self.society = Society.objects.create(name="Pro Recco", slug="pro-recco", sport=self.sport)
-        self.league = League.objects.create(name="Serie A1", slug="serie-a1", sport=self.sport, season="2023/24")
-        self.team = Team.objects.create(society=self.society, category="SENIOR", league=self.league)
-        # self.team name and slug are auto-generated
+        self.league = League.objects.create(name="Serie A1", slug="serie-a1", sport=self.sport, season="2023/24", league_type='A1')
+        self.team = Team.objects.create(society=self.society, league=self.league)
+        # self.team name e slug auto-generati: slug = society.slug + tipo lega
         self.user = User.objects.create_user(username="testathlete", first_name="Test", last_name="Athlete", role="athlete")
         self.match = Match.objects.create(
             home_team=self.team,
@@ -36,7 +36,7 @@ class SEOTestCase(TestCase):
         self.assertIn(b'<?xml version="1.0" encoding="UTF-8"?>', response.content)
         self.assertIn(b'<urlset', response.content)
         self.assertIn(b'/league/1/standings/', response.content) # ID might be different but reverse uses ID
-        self.assertIn(b'/team/pro-recco-senior/', response.content)
+        self.assertIn(b'/team/pro-recco-a1/', response.content)
 
     def test_home_seo_tags(self):
         response = self.client.get(reverse('home'))

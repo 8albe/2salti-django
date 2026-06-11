@@ -72,13 +72,14 @@ class SeasonBonificaMigrationTest(TransactionTestCase):
 
         # (b) lega typo 2025-5026 + 1 standing -> CONVERT typo 2025/2026 lockstep
         self.league_b = League.objects.create(
-            name="Lega B", sport=sport, category="U16", season="2025-5026", slug="lega-b")
+            name="Lega B", sport=sport, season="2025-5026", slug="lega-b")
+        # Schema storico 0008: category esiste ancora (unique_together society+category).
         self.team_b = Team.objects.create(society=society, category="U16", league=self.league_b, name="Team B", slug="team-b")
         self.std_b = LeagueStanding.objects.create(league=self.league_b, team=self.team_b, season="2025-5026")
 
         # (c) lega 2024-2025 mal-datata CON team + Membership PLAYER attiva + standing
         self.league_c = League.objects.create(
-            name="Lega C", sport=sport, category="SENIOR", season="2024-2025", slug="lega-c")
+            name="Lega C", sport=sport, season="2024-2025", slug="lega-c")
         self.team_c = Team.objects.create(society=society, category="SENIOR", league=self.league_c, name="Team C", slug="team-c")
         self.std_c = LeagueStanding.objects.create(league=self.league_c, team=self.team_c, season="2024-2025")
         self.player = User.objects.create(username="player_migtest", role="athlete")
@@ -90,7 +91,7 @@ class SeasonBonificaMigrationTest(TransactionTestCase):
 
         # (d) lega 2024-2025 SENZA team E SENZA standing -> DELETE (orfana)
         self.league_d = League.objects.create(
-            name="Lega D", sport=sport, category="SENIOR", season="2024-2025", slug="lega-d")
+            name="Lega D", sport=sport, season="2024-2025", slug="lega-d")
 
         self.ids = {
             "a": self.league_a.id, "b": self.league_b.id, "c": self.league_c.id, "d": self.league_d.id,

@@ -9,9 +9,9 @@ class OCRHardeningTest(TestCase):
         self.sport = Sport.objects.create(name="WP", slug="wp-hard")
         self.soc_a = Society.objects.create(name="Pro Recco", slug="recco", sport=self.sport, city="Recco")
         self.soc_b = Society.objects.create(name="Pescara", slug="pescara", sport=self.sport, city="Pescara")
-        self.league = League.objects.create(name="Serie A1", sport=self.sport, category="SENIOR")
-        self.team_a = Team.objects.create(society=self.soc_a, category="SENIOR", name="Pro Recco")
-        self.team_b = Team.objects.create(society=self.soc_b, category="SENIOR", name="Pescara")
+        self.league = League.objects.create(name="Serie A1", sport=self.sport)
+        self.team_a = Team.objects.create(society=self.soc_a, name="Pro Recco")
+        self.team_b = Team.objects.create(society=self.soc_b, name="Pescara")
         
         self.context = {
             'home_team': "Pro Recco",

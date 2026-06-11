@@ -51,7 +51,7 @@
                     <select name="team_id" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-3 text-white focus:border-cyan-500 focus:ring-0 transition-colors">
                         <option value="">Seleziona Squadra...</option>
                         {% for team in teams %}
-                        <option value="{{ team.id }}">{{ team.society.name }} - {{ team.get_category_display }}</option>
+                        <option value="{{ team.id }}">{{ team.society.name }} - {{ team.category_label }}</option>
                         {% endfor %}
                     </select>
                 </div>

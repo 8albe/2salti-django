@@ -34,15 +34,15 @@ class SocietyAdmin(admin.ModelAdmin):
 
 @admin.register(Team)
 class TeamAdmin(admin.ModelAdmin):
-    list_display = ('name', 'society', 'category', 'league')
-    list_filter = ('category', 'society', 'league')
+    list_display = ('name', 'society', 'league')
+    list_filter = ('society', 'league')
     search_fields = ('name', 'society__name')
     readonly_fields = ('slug',)
 
 @admin.register(League)
 class LeagueAdmin(admin.ModelAdmin):
-    list_display = ('name', 'sport', 'category', 'season', 'group_name', 'status_integrita')
-    list_filter = ('sport', 'category', 'season')
+    list_display = ('name', 'sport', 'league_type', 'season', 'group_name', 'status_integrita')
+    list_filter = ('sport', 'league_type', 'season')
     search_fields = ('name', 'group_name')
     prepopulated_fields = {}
     readonly_fields = ('slug', 'needs_rebuild', 'status_integrita')

@@ -35,8 +35,7 @@ class Command(BaseCommand):
             )
             team, _ = Team.objects.get_or_create(
                 society=society,
-                category='SENIOR',
-            )
+                )
             teams_objs.append(team)
             self.stdout.write(f"✓ {team.name}")
 
@@ -45,7 +44,7 @@ class Command(BaseCommand):
             name="Serie A1 Maschile",
             season="2025-2026",
             sport=sport,
-            defaults={'slug': 'serie-a1-2025', 'category': 'SENIOR'}
+            defaults={'slug': 'serie-a1-2025'}
         )
         league.teams.set(teams_objs)
 

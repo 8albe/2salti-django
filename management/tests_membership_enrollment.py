@@ -26,7 +26,7 @@ class MembershipEnrollmentServiceTests(TestCase):
             name="Pro Recco", slug="pro-recco", sport=self.sport, city="Recco"
         )
         self.team = Team.objects.create(
-            society=self.society, category='SENIOR', slug='pro-recco-senior'
+            society=self.society, slug='pro-recco-senior'
         )
         # Season corrente: dal flip NOT NULL (2d-7) i creation-site la esigono.
         self.season = Season.objects.create(

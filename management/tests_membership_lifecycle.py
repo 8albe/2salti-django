@@ -28,7 +28,7 @@ class MembershipActiveQuerySetTests(TestCase):
             name="Pro Recco", slug="pro-recco", sport=self.sport, city="Recco"
         )
         self.team = Team.objects.create(
-            society=self.society, category='SENIOR', slug='pro-recco-senior'
+            society=self.society, slug='pro-recco-senior'
         )
         self.season_prev = Season.objects.create(
             sport=self.sport, label='2024/2025', is_current=False
@@ -101,10 +101,10 @@ class MembershipSignalCleanupTests(TestCase):
             sport=self.sport, label='2025/2026', is_current=True
         )
         self.team_a = Team.objects.create(
-            society=self.society, category='SENIOR', slug='team-a'
+            society=self.society, slug='team-a'
         )
         self.team_b = Team.objects.create(
-            society=self.society, category='U20', slug='team-b'
+            society=self.society, slug='team-b'
         )
         self.user = User.objects.create_user(username='athlete1', role='athlete')
 
@@ -280,7 +280,7 @@ class MembershipSignalCleanupTests(TestCase):
             name="Brescia", slug="brescia", sport=self.sport, city="Brescia"
         )
         team_other_society = Team.objects.create(
-            society=other_society, category='SENIOR', slug='brescia-senior'
+            society=other_society, slug='brescia-senior'
         )
 
         profile = self.user.athlete_profile
@@ -314,7 +314,7 @@ class MembershipSignalCleanupTests(TestCase):
         )
 
         team_c = Team.objects.create(
-            society=self.society, category='U18', slug='team-c'
+            society=self.society, slug='team-c'
         )
         profile.current_team = team_c
         profile.save()

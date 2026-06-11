@@ -21,7 +21,6 @@ class Command(BaseCommand):
             season='2025-2026',
             sport=sport,
             defaults={
-                'category': 'SENIOR', 
                 'level': 1,
                 'group_name': '' # Girone unico
             }
@@ -59,7 +58,6 @@ class Command(BaseCommand):
             # Crea Squadra Senior
             team, _ = Team.objects.get_or_create(
                 society=society,
-                category='SENIOR',
                 defaults={'league': league}
             )
             

@@ -15,9 +15,9 @@ class EntityBootstrapServiceTest(TestCase):
         self.sport = Sport.objects.create(name="Pallanuoto", slug="pallanuoto")
         self.soc_a = Society.objects.create(name="PlaceholderA", slug="placeholder-a", sport=self.sport, city="X")
         self.soc_b = Society.objects.create(name="PlaceholderB", slug="placeholder-b", sport=self.sport, city="X")
-        self.league = League.objects.create(name="TestLeague", sport=self.sport, category="SENIOR")
-        self.team_a = Team.objects.create(society=self.soc_a, category="SENIOR", name="PlaceholderA")
-        self.team_b = Team.objects.create(society=self.soc_b, category="SENIOR", name="PlaceholderB")
+        self.league = League.objects.create(name="TestLeague", sport=self.sport)
+        self.team_a = Team.objects.create(society=self.soc_a, name="PlaceholderA")
+        self.team_b = Team.objects.create(society=self.soc_b, name="PlaceholderB")
         self.match = Match.objects.create(
             league=self.league, home_team=self.team_a, away_team=self.team_b,
             match_date=timezone.now()
@@ -51,7 +51,7 @@ class EntityBootstrapServiceTest(TestCase):
         """One OCR team exists, other doesn't → one reuse, one create."""
         # Create one matching team
         soc = Society.objects.create(name="ExistingClub", slug="existingclub", sport=self.sport, city="Y")
-        Team.objects.create(society=soc, category="SENIOR", name="ExistingClub")
+        Team.objects.create(society=soc, name="ExistingClub")
 
         data = self._make_data("ExistingClub", "BrandNewClub")
         preview = EntityBootstrapService.preview_creation(data, self.match)
@@ -77,8 +77,8 @@ class EntityBootstrapServiceTest(TestCase):
         # Create two teams with same name (different societies)
         soc1 = Society.objects.create(name="AmbigTeam", slug="ambig-1", sport=self.sport, city="A")
         soc2 = Society.objects.create(name="AmbigTeam2", slug="ambig-2", sport=self.sport, city="B")
-        Team.objects.create(society=soc1, category="SENIOR", name="AmbigTeam")
-        Team.objects.create(society=soc2, category="SENIOR", name="AmbigTeam")
+        Team.objects.create(society=soc1, name="AmbigTeam")
+        Team.objects.create(society=soc2, name="AmbigTeam")
 
         data = self._make_data("AmbigTeam", "PlaceholderB")
         preview = EntityBootstrapService.preview_creation(data, self.match)
@@ -121,8 +121,8 @@ class EntityBootstrapServiceTest(TestCase):
         """Execute returns failure when ambiguity exists."""
         soc1 = Society.objects.create(name="DupName", slug="dup-1", sport=self.sport, city="A")
         soc2 = Society.objects.create(name="DupName2", slug="dup-2", sport=self.sport, city="B")
-        Team.objects.create(society=soc1, category="SENIOR", name="DupName")
-        Team.objects.create(society=soc2, category="SENIOR", name="DupName")
+        Team.objects.create(society=soc1, name="DupName")
+        Team.objects.create(society=soc2, name="DupName")
 
         data = self._make_data("DupName", "PlaceholderB")
         success, msg, warnings = EntityBootstrapService.execute_bootstrap(data, self.match)
@@ -136,9 +136,9 @@ class EntityBootstrapAdminIntegrationTest(TestCase):
         self.sport = Sport.objects.create(name="WP", slug="wp-boot")
         self.soc_a = Society.objects.create(name="TempA", slug="temp-a", sport=self.sport, city="X")
         self.soc_b = Society.objects.create(name="TempB", slug="temp-b", sport=self.sport, city="X")
-        self.league = League.objects.create(name="BootLeague", sport=self.sport, category="SENIOR")
-        self.team_a = Team.objects.create(society=self.soc_a, category="SENIOR", name="TempA")
-        self.team_b = Team.objects.create(society=self.soc_b, category="SENIOR", name="TempB")
+        self.league = League.objects.create(name="BootLeague", sport=self.sport)
+        self.team_a = Team.objects.create(society=self.soc_a, name="TempA")
+        self.team_b = Team.objects.create(society=self.soc_b, name="TempB")
         self.match = Match.objects.create(
             league=self.league, home_team=self.team_a, away_team=self.team_b,
             match_date=timezone.now()
