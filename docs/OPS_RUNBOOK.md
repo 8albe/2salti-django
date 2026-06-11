@@ -512,6 +512,7 @@ Sprint C §10.4 ha chiuso il debito principale (`Membership.start_date`/`end_dat
 - **Fix applicato:** `CheckConstraint` a livello DB (migration `0009`, commit `068ec8e`, constraint `membership_end_date_after_start`) — permissivo sui NULL: vincola `end_date >= start_date` solo quando entrambe le date sono valorizzate; più validator `Membership.clean()` lato model.
 - **Nota:** il constraint **decadrà col redesign del modello stagione** (rimozione di `start_date`/`end_date` da `Membership` in Fase 2) — vedi [syllabus Macro 16](syllabus/16_modello_stagione.md) §16.3.
 - **Priorità:** bassa.
+- **RITIRATO (Macro 16 Fase 2, 2026-06-11):** il redesign previsto è avvenuto — la migration `management/0014_remove_membership_dates` ha rimosso `start_date`/`end_date` e con loro il constraint `membership_end_date_after_start`. Il debito decade per costruzione: non esistono più date su `Membership`, l'asse temporale è la FK `season` (NOT NULL dalla `0015`).
 
 **DEBT-004 — Concorrenza redeem/approve sullo stesso user**
 
@@ -526,6 +527,7 @@ Sprint C §10.4 ha chiuso il debito principale (`Membership.start_date`/`end_dat
 - **Origine:** Macro 16 Fase 1b (commit `c7cef79`).
 - **Fix proposto:** aggiornare i leaf in lockstep con le nuove migration, o rendere il test leaf-agnostico (risoluzione dinamica del leaf invece dell'hardcoding).
 - **Priorità:** bassa — **non** scatta sulle migration additive già applicate (`0010` season, `0011` backfill, `0012` coach_change_note → i test reggono); scatterà con la rimozione di `start_date`/`end_date` (2d-6) e il flip `season NOT NULL` (2d-7).
+- **Aggiornamento 2026-06-11 (Macro 16 Fasi 2-4):** il lockstep è stato applicato ai punti previsti. `core/tests_migrations_season.py` ora **retrocede fisicamente anche management a `0009`** nel `migrate_from` (un pin al leaf è impossibile: trascinerebbe core oltre 0008 nel project_state) e risemina `Team.category` via modello storico 0008; `tests_season.BackfillSeasonFkMigrationTest` asserisce via modello storico a core@0014 (il reale ha `league_type`); il tearDown di `tests_migrations_membership_season` ripulisce il record difensivo season=NULL prima del forward (la `0015` è fail-fast sui NULL). Il debito resta APERTO come fragilità strutturale: ogni futura migration non-additiva su `User`/`Membership`/`League`/`Team` richiede lo stesso lockstep.
 
 ## 11. Sicurezza operativa e frontiera reversibile
 

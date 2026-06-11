@@ -143,6 +143,16 @@ ENVIRONMENT_NAME        # production
 
 ## Development Workflow
 
+### Modalità "Macro-intera (batch dev)"
+
+Quando il task lo dichiara esplicitamente, si lavora un'intera macro in batch sul dev senza chiedere autorizzazione fetta per fetta. Regole della modalità:
+
+- Auto-verifica a ogni step: suite verde dopo ogni fetta; per ogni migration (schema o dati) dry-run su una **copia scratch** del DB dev e verifica che lo SHA256 del DB dev reale sia invariato prima/dopo.
+- Ci si ferma solo in tre casi: (a) serve un comando riservato ad Alberto (sudo, backup DB, git push); (b) decisione di prodotto; (c) blocco vero. I bivi tecnici si risolvono con un default solido e si registrano.
+- Decision log obbligatorio: ogni bivio risolto va tracciato ("tecnico" / "possibile-prodotto") e consegnato a fine giro in italiano, in prosa, senza codice.
+- Prima della prima migration che scrive sui dati: fermarsi e far lanciare ad Alberto il backup del DB dev.
+- Nessun output di PII reale (nomi, email); pk, conteggi e stringhe stagione sì. Il logging per-record delle data migration logga pk + campi tecnici, mai nomi.
+
 ### Environment setup
 
 - Python 3.11+ required.
