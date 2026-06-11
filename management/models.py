@@ -1,4 +1,6 @@
+from django.core.exceptions import ValidationError
 from django.db import models
+from django.db.models import Q
 from django.conf import settings
 from django.utils import timezone
 from core.models import Society, Team
@@ -60,6 +62,31 @@ class Membership(models.Model):
     )
 
     is_active = models.BooleanField(default=True)
+
+    # ── Prestito strutturato (Macro 16 Fase 4, §16.5) ─────────────────────
+    # Unica eccezione a "una società per stagione": il giocatore in prestito
+    # mantiene tesseramento (e giovanili) nella società d'origine e gioca per
+    # la società di destinazione SOLO su una lega dei grandi (A1–D).
+    class LoanStatus(models.TextChoices):
+        # Etichetta semplice (attivo/concluso), NON macchina a stati:
+        # STATE_MACHINES.md non va toccato.
+        ACTIVE = 'ACTIVE', 'Attivo'
+        ENDED = 'ENDED', 'Concluso'
+
+    is_loan = models.BooleanField(
+        default=False,
+        help_text="Membership di prestito: il tesseramento resta alla società d'origine.",
+    )
+    tesseramento_society = models.ForeignKey(
+        Society, null=True, blank=True,
+        on_delete=models.PROTECT, related_name='loaned_out_memberships',
+        help_text="Società d'origine del tesseramento (solo per prestiti).",
+    )
+    loan_status = models.CharField(
+        max_length=10, choices=LoanStatus.choices, blank=True, default='',
+        help_text="Stato del prestito (etichetta, non macchina a stati). Vuoto per membership non-prestito.",
+    )
+
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -78,7 +105,68 @@ class Membership(models.Model):
                 fields=['user', 'society', 'team', 'role', 'season'],
                 name='uniq_membership_user_society_team_role_season',
             ),
+            # Fase 4: coerenza campi prestito a livello DB. Il vincolo
+            # cross-row ("vietata 2ª società ATTIVA per (user, season) salvo
+            # prestito") non è esprimibile come constraint Django: vive in
+            # clean() + flussi a successione (i signal chiudono la membership
+            # d'origine prima di aprire la nuova).
+            models.CheckConstraint(
+                check=(
+                    Q(is_loan=False, tesseramento_society__isnull=True, loan_status='')
+                    | (Q(is_loan=True, tesseramento_society__isnull=False) & ~Q(loan_status=''))
+                ),
+                name='membership_loan_fields_coherent',
+            ),
         ]
+
+    def clean(self):
+        super().clean()
+        if self.is_loan:
+            # Normalizzazione: un prestito nasce Attivo se non specificato.
+            if not self.loan_status:
+                self.loan_status = self.LoanStatus.ACTIVE
+            if self.tesseramento_society_id is None:
+                raise ValidationError({
+                    'tesseramento_society':
+                        "Un prestito richiede la società d'origine del tesseramento.",
+                })
+            if self.tesseramento_society_id == self.society_id:
+                raise ValidationError({
+                    'tesseramento_society':
+                        "La società d'origine del prestito deve essere diversa "
+                        "dalla società di destinazione.",
+                })
+            # Gate "dei grandi": prestito ammesso solo verso una squadra che
+            # gioca in una lega A1–D (mai giovanili, mai lega non classificata).
+            league = self.team.league if self.team_id else None
+            if league is None or not league.is_senior_league:
+                raise ValidationError({
+                    'team':
+                        "Il prestito è ammesso solo verso una squadra di una "
+                        "lega dei grandi (A1–D).",
+                })
+        else:
+            if self.tesseramento_society_id is not None or self.loan_status:
+                raise ValidationError(
+                    "Campi prestito valorizzati su una membership non di prestito."
+                )
+
+        # Vincolo "una società per stagione" (cross-row, non esprimibile come
+        # constraint DB): una seconda società ATTIVA nella stessa stagione è
+        # ammessa solo se questa membership è un prestito. Le righe chiuse
+        # (is_active=False) non contano: il trasferimento definitivo in-season
+        # è una successione (si chiude l'origine, si apre la nuova — D2).
+        if self.is_active and not self.is_loan and self.season_id:
+            conflict = Membership.objects.filter(
+                user=self.user, season=self.season,
+                is_active=True, is_loan=False,
+            ).exclude(society=self.society).exclude(pk=self.pk)
+            if conflict.exists():
+                raise ValidationError(
+                    "L'utente ha già una membership attiva in un'altra società "
+                    "per questa stagione: chiudere quella esistente "
+                    "(trasferimento) o marcare il prestito."
+                )
 
     def __str__(self):
         scope = self.team.name if self.team else self.society.name
