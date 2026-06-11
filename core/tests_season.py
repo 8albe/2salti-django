@@ -189,8 +189,9 @@ class BackfillSeasonFkMigrationTest(TransactionTestCase):
     0012 popola Season, 0013 aggiunge la colonna, 0014 collega le FK.
 
     Seeding con modelli STORICI a 0011 (il modello reale ha gia' season_fk,
-    assente nello schema storico). Le asserzioni girano a 0014, dove la colonna
-    esiste, quindi usano il modello reale League.
+    assente nello schema storico). Anche le asserzioni usano il modello STORICO
+    a 0014 (lockstep §10.7): il modello reale ha league_type (0015), assente
+    nello schema fisico a 0014.
     """
 
     migrate_initial = [("core", "0011_season_season_unique_season_per_sport_and_more")]
@@ -218,40 +219,44 @@ class BackfillSeasonFkMigrationTest(TransactionTestCase):
         executor.loader.build_graph()
         executor.migrate(self.migrate_to)
 
+        # Modelli storici a 0014 per asserzioni e re-run (lockstep §10.7).
+        self.new_apps = executor.loader.project_state(self.migrate_to).apps
+        self.HLeague = self.new_apps.get_model("core", "League")
+
     def tearDown(self):
         call_command("migrate", verbosity=0)
 
     def test_backfill_sets_correct_fk_per_league(self):
         # (a) ogni lega collegata alla Season con stessa (sport, label).
-        for league in League.objects.all():
+        for league in self.HLeague.objects.all():
             self.assertIsNotNone(league.season_fk_id)
             self.assertEqual(league.season_fk.sport_id, league.sport_id)
             self.assertEqual(league.season_fk.label, league.season)
         # Le due leghe PN 2025/2026 puntano alla stessa, unica Season.
-        pn_2526 = League.objects.filter(sport_id=self.sport_pn_id, season="2025/2026")
+        pn_2526 = self.HLeague.objects.filter(sport_id=self.sport_pn_id, season="2025/2026")
         self.assertEqual(pn_2526.count(), 2)
         self.assertEqual(len(set(pn_2526.values_list("season_fk_id", flat=True))), 1)
 
     def test_no_league_with_null_fk_on_seeded_data(self):
         # (b) zero leghe con season_fk NULL sui dati seminati.
-        self.assertEqual(League.objects.count(), 4)
-        self.assertEqual(League.objects.filter(season_fk__isnull=True).count(), 0)
+        self.assertEqual(self.HLeague.objects.count(), 4)
+        self.assertEqual(self.HLeague.objects.filter(season_fk__isnull=True).count(), 0)
 
     def test_backfill_idempotent(self):
         # (d) ri-eseguire il forward non cambia nulla.
-        before = dict(League.objects.values_list("id", "season_fk_id"))
-        _backfill_module.backfill_season_fk(django_apps, None)
-        after = dict(League.objects.values_list("id", "season_fk_id"))
+        before = dict(self.HLeague.objects.values_list("id", "season_fk_id"))
+        _backfill_module.backfill_season_fk(self.new_apps, None)
+        after = dict(self.HLeague.objects.values_list("id", "season_fk_id"))
         self.assertEqual(before, after)
-        self.assertEqual(League.objects.filter(season_fk__isnull=True).count(), 0)
+        self.assertEqual(self.HLeague.objects.filter(season_fk__isnull=True).count(), 0)
 
     def test_reverse_nulls_the_fk(self):
         # (e) il reverse di 0014 azzera tutte le FK (colonna ancora presente a 0013).
-        self.assertEqual(League.objects.filter(season_fk__isnull=False).count(), 4)
+        self.assertEqual(self.HLeague.objects.filter(season_fk__isnull=False).count(), 4)
         executor = MigrationExecutor(connection)
         executor.migrate([("core", "0013_link_league_to_season")])
-        self.assertEqual(League.objects.filter(season_fk__isnull=False).count(), 0)
-        self.assertEqual(League.objects.filter(season_fk__isnull=True).count(), 4)
+        self.assertEqual(self.HLeague.objects.filter(season_fk__isnull=False).count(), 0)
+        self.assertEqual(self.HLeague.objects.filter(season_fk__isnull=True).count(), 4)
 
 
 class LeagueSeasonFkProtectTests(TestCase):

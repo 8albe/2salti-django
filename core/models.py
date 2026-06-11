@@ -131,9 +131,55 @@ class Team(models.Model):
 
 class League(models.Model):
     """Campionato (es: Serie A1 Maschile - Girone A)"""
+
+    class LeagueType(models.TextChoices):
+        """Tipo lega (Macro 16 Fase 3, lista CHIUSA): A1–D = "dei grandi",
+        U10–U20 = giovanili. La lega è la fonte di verità grandi/giovanili.
+        Le label restano canoniche: il display tradizionale vive in
+        LEAGUE_TYPE_DISPLAY (dizionario in codice, modificabile senza
+        migration — decisione di prodotto D1 2026-06-11)."""
+        A1 = 'A1', 'A1'
+        A2 = 'A2', 'A2'
+        B = 'B', 'B'
+        C = 'C', 'C'
+        D = 'D', 'D'
+        U10 = 'U10', 'U10'
+        U12 = 'U12', 'U12'
+        U14 = 'U14', 'U14'
+        U16 = 'U16', 'U16'
+        U18 = 'U18', 'U18'
+        U20 = 'U20', 'U20'
+
+    # Tipi "dei grandi": gate del prestito (Fase 4). Il girone è una
+    # suddivisione DENTRO il tipo (group_name), non un tipo a sé.
+    SENIOR_LEAGUE_TYPES = frozenset({'A1', 'A2', 'B', 'C', 'D'})
+
+    # Display: etichette tradizionali italiane mappate 1:1 sul valore Under
+    # canonico; per i tipi dei grandi il display è "Serie <tipo>".
+    LEAGUE_TYPE_DISPLAY = {
+        'A1': 'Serie A1',
+        'A2': 'Serie A2',
+        'B': 'Serie B',
+        'C': 'Serie C',
+        'D': 'Serie D',
+        'U10': 'Pulcini',
+        'U12': 'Esordienti',
+        'U14': 'Ragazzi',
+        'U16': 'Allievi',
+        'U18': 'Juniores',
+        'U20': 'Under 20',
+    }
+
     name = models.CharField(max_length=100, help_text="Es: Serie A1 Maschile")
     sport = models.ForeignKey(Sport, on_delete=models.CASCADE, related_name='leagues')
     category = models.CharField(max_length=10, choices=Team.CATEGORY_CHOICES)
+    # Tipo lega da lista chiusa. NULL = non classificata ("Null invece di
+    # invenzione"): mai derivare il tipo indovinando, si classifica per nome
+    # via data migration o a mano in admin.
+    league_type = models.CharField(
+        max_length=3, choices=LeagueType.choices, null=True, blank=True,
+        help_text="Tipo lega (A1–D grandi, U10–U20 giovanili). Vuoto = non classificata.",
+    )
     season = models.CharField(max_length=9, default='2025/2026',
                               validators=[validate_season_format], help_text="Es: 2025/2026")
     # FK transitoria a Season (Macro 16 Fase 1b). Nullable per backfill rollback-safe;
@@ -164,7 +210,21 @@ class League(models.Model):
         if self.group_name:
             base += f" - {self.group_name}"
         return base
-    
+
+    @property
+    def is_senior_league(self):
+        """Lega "dei grandi" (A1–D)? Gate del prestito (Fase 4).
+        Una lega non classificata (league_type NULL) NON è dei grandi."""
+        return self.league_type in self.SENIOR_LEAGUE_TYPES
+
+    @property
+    def league_type_label(self):
+        """Display del tipo lega: etichetta tradizionale per le giovanili,
+        "Serie <tipo>" per i grandi, stringa vuota se non classificata."""
+        if not self.league_type:
+            return ''
+        return self.LEAGUE_TYPE_DISPLAY.get(self.league_type, self.league_type)
+
     def get_standings(self):
         """Ritorna classifica ordinata. Usa dati persistiti se presenti, altrimenti ricalcola."""
         persisted = self.persisted_standings.all().select_related('team')
