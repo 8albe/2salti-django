@@ -13,6 +13,7 @@ from django.utils import timezone
 
 from core.models import Team
 from management.models import ActivationCode, Membership, MembershipRequest
+from management.services.membership_season import resolve_membership_season
 from management.utils import log_action
 
 
@@ -65,13 +66,20 @@ def redeem_activation_code(user, code_string, request=None):
 
     role = _resolve_role(user)
 
+    # Dal flip NOT NULL (2d-7): senza stagione derivabile il tesseramento non
+    # puo' nascere — errore pulito all'utente invece di IntegrityError.
+    season = resolve_membership_season(
+        user, code_obj.society, code_obj.team, role)
+    if season is None:
+        return False, None, (
+            "Stagione corrente non configurata per questo sport: "
+            "contatta l'amministratore."
+        )
+
     with transaction.atomic():
         membership, created = Membership.objects.get_or_create(
-            user=user,
-            society=code_obj.society,
-            team=code_obj.team,
-            role=role,
-            defaults={'start_date': timezone.localdate()},
+            user=user, society=code_obj.society, team=code_obj.team,
+            role=role, season=season,
         )
         if created:
             code_obj.current_uses += 1

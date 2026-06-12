@@ -95,6 +95,21 @@ systemctl list-timers 2salti-dev-autopull.timer        # prossimo trigger
 
 Tempo tipico push → runtime aggiornato: meno di 3 minuti. La produzione resta manuale per disegno (vedi §2 e workflow A in §2.1).
 
+### 2.3 Lineage `prod` ↔ `origin/master` divergente by design — e chiusura FASE 3 git (2026-06-02)
+
+Il deploy di produzione `/opt/2salti-new/` **non pusha mai** per policy (vedi workflow A in §2.1: no push da prod). Di conseguenza la sua lineage `master` accumula commit prod-local — per esempio il merge `--no-ff` che chiude BUG-001, `01427d59` — che **non esistono e non sono raggiungibili** da `/home/alberto/` né da `origin`: in home `git cat-file -t 01427d59` (o `0876243a`) risponde `Not a valid object name`. È atteso, non un errore e non un history-rewrite.
+
+L'allineamento di `origin/master` si fa **ricostruendo** il merge `dev → master` da home e pushando da home, mai propagando le SHA di prod. Esito strutturale: `prod master` e `origin/master` restano **contenuto-equivalenti ma con SHA diverse**, by design. In una sessione futura, **non interpretare lo scarto di SHA prod ↔ origin come regressione o rewrite**: confrontare il *contenuto* (`git diff <sha_a> <sha_b>`, atteso vuoto), non le SHA.
+
+**Chiusura FASE 3 git (2026-06-02)** — i 4 debiti git (tracciati nella session note 28-mag, non nell'§10) risolti:
+
+1. `master` home behind prod di 1 commit → **CHIUSO**: home `master` ricostruito a `7d1d135` via merge `--no-ff dev→master`, contenuto-equivalente a prod.
+2. `origin/master` behind di 54 commit (Sprint A/B/C + BUG-001 + syllabus 12/14/15) → **CHIUSO**: pushato `c4b68da..7d1d135`; `git diff master b58506d` vuoto, suite 264 OK / 2 skipped.
+3. Branch `dev` locale residuo su `/opt/2salti-new/` (`6159c352`, artefatto storico) → **CHIUSO**: `git branch -D dev` su prod (HEAD prod = `master`, delete sicura).
+4. Untracked `find_coach.py` / `find_coach2.py` su `/opt/2salti-dev/` (script debug HEAD_COACH) → **CHIUSO**: rimossi.
+
+Questi erano debiti **git/infrastruttura**, distinti dai debiti di **codice** DEBT-001..004 in §10.6, che restano APERTI e invariati.
+
 ## 3. Trappole tecniche note
 
 ### 3.1 `git rm --cached` + file dirty = pull abortito
@@ -465,9 +480,9 @@ Scoperto il 25-mag durante l'implementazione di §5.2 (storico coach + partite d
 - Su prod: non verificato — richiede sessione dedicata con accesso esplicito al VPS.
 - Da fare: inventario utenti test su prod, cancellazione controllata.
 
-### 10.6 Debiti residui post-Sprint C — APERTI
+### 10.6 Debiti residui post-Sprint C — DEBT-001/002/004 APERTI
 
-Sprint C §10.4 ha chiuso il debito principale (`Membership.start_date`/`end_date` + filtro temporale partite coach). Restano in carico cinque item identificati durante la ricognizione iniziale e le estensioni di Step 3b/3c, non bloccanti per la chiusura dello sprint ma da tracciare.
+Sprint C §10.4 ha chiuso il debito principale (`Membership.start_date`/`end_date` + filtro temporale partite coach). Erano stati identificati cinque item durante la ricognizione iniziale e le estensioni di Step 3b/3c, non bloccanti per la chiusura dello sprint ma da tracciare. **BUG-001** (2026-05-28) e **DEBT-003** (Sprint D, 2026-06-06) sono ora ✅ CHIUSI; restano aperti **DEBT-001 / DEBT-002 / DEBT-004**.
 
 **BUG-001 — `templates/base.html` navbar: 500 su sport con 0 leghe — ✅ CHIUSO (Sprint D, 2026-05-28)**
 
@@ -490,12 +505,14 @@ Sprint C §10.4 ha chiuso il debito principale (`Membership.start_date`/`end_dat
 - **Fix proposto:** differenziare il signal per ruolo, o estendere `CoachProfile` con due FK separate (`current_head_team`, `current_assistant_team`).
 - **Priorità:** bassa — caso raro nel dominio sportivo coperto.
 
-**DEBT-003 — `Membership` con `end_date < start_date` (dati corrotti)**
+**DEBT-003 — `Membership` con `end_date < start_date` (dati corrotti) — ✅ CHIUSO (Sprint D, 2026-06-06)**
 
 - **Sintomo:** edit manuale via `op_admin_site` permette di salvare `Membership` con date incoerenti (chiusura prima dell'inizio).
 - **Origine:** rischio #5 di Step 3c, non risolto in scope.
-- **Fix proposto:** `CheckConstraint(check=Q(end_date__isnull=True) | Q(end_date__gte=F('start_date')), name='end_date_after_start')` a livello DB, o validator Django sul model (`clean()`).
+- **Fix applicato:** `CheckConstraint` a livello DB (migration `0009`, commit `068ec8e`, constraint `membership_end_date_after_start`) — permissivo sui NULL: vincola `end_date >= start_date` solo quando entrambe le date sono valorizzate; più validator `Membership.clean()` lato model.
+- **Nota:** il constraint **decadrà col redesign del modello stagione** (rimozione di `start_date`/`end_date` da `Membership` in Fase 2) — vedi [syllabus Macro 16](syllabus/16_modello_stagione.md) §16.3.
 - **Priorità:** bassa.
+- **RITIRATO (Macro 16 Fase 2, 2026-06-11):** il redesign previsto è avvenuto — la migration `management/0014_remove_membership_dates` ha rimosso `start_date`/`end_date` e con loro il constraint `membership_end_date_after_start`. Il debito decade per costruzione: non esistono più date su `Membership`, l'asse temporale è la FK `season` (NOT NULL dalla `0015`).
 
 **DEBT-004 — Concorrenza redeem/approve sullo stesso user**
 
@@ -503,6 +520,20 @@ Sprint C §10.4 ha chiuso il debito principale (`Membership.start_date`/`end_dat
 - **Origine:** rischio #3 emerso durante Step 3b extension.
 - **Fix proposto:** `select_for_update()` su `Membership` e profilo nel blocco transaction, oppure lock applicativo via cache/redis.
 - **Priorità:** bassa. SQLite (dev) serializza implicitamente; PostgreSQL (prod target futuro, §15.3) avrebbe row-level lock implicito ma andrebbe testato esplicitamente.
+
+### 10.7 Fragilità test migration Macro 16 — APERTO (introdotto Fase 1b, 2026-06-09)
+
+- **Sintomo:** i test in `core/tests_migrations_season.py` fissano i leaf `accounts@0005_staff_role_pii` e `management@0009_membership_end_date_constraint` nel `project_state` combinato. Si romperanno (errore di schema storico) **non** a ogni nuova migration, ma solo quando lo schema storico di `User`/`Membership` cambia in modo **non-additivo**: le `AddField` additive con default (es. `Membership.season`, migration `0010`) sono omettibili sugli `INSERT` dei modelli storici e **reggono**; rompono invece la **rimozione di colonne** (`start_date`/`end_date`, 2d-6) e il **flip a `NOT NULL`** di `season` (2d-7).
+- **Origine:** Macro 16 Fase 1b (commit `c7cef79`).
+- **Fix proposto:** aggiornare i leaf in lockstep con le nuove migration, o rendere il test leaf-agnostico (risoluzione dinamica del leaf invece dell'hardcoding).
+- **Priorità:** bassa — **non** scatta sulle migration additive già applicate (`0010` season, `0011` backfill, `0012` coach_change_note → i test reggono); scatterà con la rimozione di `start_date`/`end_date` (2d-6) e il flip `season NOT NULL` (2d-7).
+- **Aggiornamento 2026-06-11 (Macro 16 Fasi 2-4):** il lockstep è stato applicato ai punti previsti. `core/tests_migrations_season.py` ora **retrocede fisicamente anche management a `0009`** nel `migrate_from` (un pin al leaf è impossibile: trascinerebbe core oltre 0008 nel project_state) e risemina `Team.category` via modello storico 0008; `tests_season.BackfillSeasonFkMigrationTest` asserisce via modello storico a core@0014 (il reale ha `league_type`); il tearDown di `tests_migrations_membership_season` ripulisce il record difensivo season=NULL prima del forward (la `0015` è fail-fast sui NULL). Il debito resta APERTO come fragilità strutturale: ogni futura migration non-additiva su `User`/`Membership`/`League`/`Team` richiede lo stesso lockstep.
+
+### 10.8 Macro 16 — propagazione prod PENDENTE (2026-06-11)
+
+- **Stato:** Macro 16 è chiusa e su `dev` (`19fb44b`), dev box migrato (`management` leaf `0016`, `core` leaf `0018`). Prod `/opt/2salti-new/` è a `01427d59` e **non** ha Macro 16: né codice né migration.
+- **Propagazione:** segue il pattern §2.3 — ricostruzione `dev→master` da home e push da home, **mai** propagando le SHA prod-local. Il `migrate` su DB prod è **gated dopo backup** (Alberto, §11.2/§11.3).
+- **Trappola:** la history di `dev` è stata **riscritta con `git-filter-repo`** (rimozione binari >100MB); la ricostruzione di `master` deve quindi partire dal **nuovo** `dev`, non da SHA pre-riscrittura.
 
 ## 11. Sicurezza operativa e frontiera reversibile
 

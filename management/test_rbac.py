@@ -1,7 +1,7 @@
 from django.test import TestCase, Client
 from django.contrib.auth import get_user_model
 from django.utils import timezone
-from core.models import Sport, Society, Team
+from core.models import Season, Sport, Society, Team
 from management.models import Membership, Training, TrainingOccurrence
 from django.core.exceptions import PermissionDenied
 
@@ -15,10 +15,11 @@ class RBACTest(TestCase):
         
         # User in Soc A
         self.user_a = User.objects.create_user(username='user_a', role='athlete', identity_status='VERIFIED', subscription_status='ACTIVE', setup_completed=True)
-        Membership.objects.create(user=self.user_a, society=self.soc_a, role='PLAYER', is_active=True)
+        self.season = Season.objects.create(sport=self.sport, label='2025/2026', is_current=True)
+        Membership.objects.create(user=self.user_a, society=self.soc_a, role='PLAYER', is_active=True, season=self.season)
         
         # Training in Soc B
-        self.team_b = Team.objects.get_or_create(society=self.soc_b, category='SENIOR', slug='team-b')[0]
+        self.team_b = Team.objects.get_or_create(society=self.soc_b, slug='team-b')[0]
         now = timezone.now()
         self.tr_b = Training.objects.create(
             society=self.soc_b, team=self.team_b, title='B Training',

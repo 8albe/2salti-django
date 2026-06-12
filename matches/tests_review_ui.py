@@ -3,7 +3,7 @@ from django.test import TestCase, Client
 from django.urls import reverse
 from django.contrib.auth import get_user_model
 from matches.models import Match, MatchReport, MatchEvent
-from core.models import Sport, Society, Team, League
+from core.models import Season, Sport, Society, Team, League
 from django.utils import timezone
 
 User = get_user_model()
@@ -11,13 +11,14 @@ User = get_user_model()
 class EventsReviewUITest(TestCase):
     def setUp(self):
         self.sport = Sport.objects.create(name="Pallanuoto", slug="pallanuoto")
+        self.season = Season.objects.create(sport=self.sport, label='2025/2026', is_current=True)
         self.society_h = Society.objects.create(name="Pro Recco", sport=self.sport, slug="pro-recco")
         self.society_a = Society.objects.create(name="AN Brescia", sport=self.sport, slug="an-brescia")
         
-        self.league = League.objects.create(name="Serie A1", sport=self.sport, category="SENIOR", season="2024", slug="serie-a1")
+        self.league = League.objects.create(name="Serie A1", sport=self.sport, season="2024", slug="serie-a1")
         
-        self.team_h = Team.objects.create(society=self.society_h, league=self.league, category="SENIOR")
-        self.team_a = Team.objects.create(society=self.society_a, league=self.league, category="SENIOR")
+        self.team_h = Team.objects.create(society=self.society_h, league=self.league)
+        self.team_a = Team.objects.create(society=self.society_a, league=self.league)
         
         self.match = Match.objects.create(
             league=self.league,

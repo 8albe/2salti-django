@@ -118,9 +118,9 @@ class OCRQualityGateIntegrationTest(TestCase):
         self.sport = Sport.objects.create(name="WP", slug="wp-qg")
         self.soc_a = Society.objects.create(name="TempA", slug="temp-a", sport=self.sport, city="X")
         self.soc_b = Society.objects.create(name="TempB", slug="temp-b", sport=self.sport, city="X")
-        self.league = League.objects.create(name="BootLeague", sport=self.sport, category="SENIOR")
-        self.team_a = Team.objects.create(society=self.soc_a, category="SENIOR", name="TempA")
-        self.team_b = Team.objects.create(society=self.soc_b, category="SENIOR", name="TempB")
+        self.league = League.objects.create(name="BootLeague", sport=self.sport)
+        self.team_a = Team.objects.create(society=self.soc_a, name="TempA")
+        self.team_b = Team.objects.create(society=self.soc_b, name="TempB")
         self.match = Match.objects.create(
             league=self.league, home_team=self.team_a, away_team=self.team_b,
             match_date=timezone.now()

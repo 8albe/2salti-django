@@ -21,9 +21,9 @@ class StandingsTest(TestCase):
         self.sport = Sport.objects.create(name="WP", slug="wp")
         self.soc1 = Society.objects.create(name="Soc 1", slug="soc1", sport=self.sport)
         self.soc2 = Society.objects.create(name="Soc 2", slug="soc2", sport=self.sport)
-        self.league = League.objects.create(name="L1", sport=self.sport, category="SENIOR", slug="l1")
-        self.t1 = Team.objects.create(society=self.soc1, category="SENIOR", league=self.league, name="T1")
-        self.t2 = Team.objects.create(society=self.soc2, category="SENIOR", league=self.league, name="T2")
+        self.league = League.objects.create(name="L1", sport=self.sport, slug="l1")
+        self.t1 = Team.objects.create(society=self.soc1, league=self.league, name="T1")
+        self.t2 = Team.objects.create(society=self.soc2, league=self.league, name="T2")
 
     def test_standings_calculation(self):
         # Initial: everyone 0

@@ -14,9 +14,9 @@ class StatsTestCase(TestCase):
         # Setup basic data
         self.sport = Sport.objects.create(name="Pallanuoto", slug="pallanuoto")
         self.society = Society.objects.create(name="Pro Recco", sport=self.sport, slug="pro-recco")
-        self.league = League.objects.create(name="Serie A1", sport=self.sport, category="SENIOR", slug="serie-a1")
+        self.league = League.objects.create(name="Serie A1", sport=self.sport, slug="serie-a1")
 
-        self.team = Team.objects.create(society=self.society, category="SENIOR", league=self.league)
+        self.team = Team.objects.create(society=self.society, league=self.league)
 
         # Players
         self.p1 = User.objects.create_user(username="p1", first_name="Alessandro", last_name="Velotto", role="athlete")

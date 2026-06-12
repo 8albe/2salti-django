@@ -123,3 +123,9 @@ docs/CLAUDE.md
 # Per-machine editor/sync artifacts
 docs/.obsidian/
 docs/.stfolder/
+
+# fix post-incidente Macro 16: tooling e scratch fuori da git
+.antigravity-ide-server/
+audit_season_phase0.py
+dryrun_season_phase0.py
+predict_home.py

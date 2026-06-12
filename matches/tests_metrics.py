@@ -16,8 +16,8 @@ class PilotMetricsTest(TestCase):
         
         self.sport = Sport.objects.create(name="Pallanuoto", slug="pallanuoto")
         self.soc = Society.objects.create(name="Pro Recco", slug="pro-recco", sport=self.sport)
-        self.league = League.objects.create(name="Serie A1", sport=self.sport, category="SENIOR", season="2024-2025")
-        self.team = Team.objects.create(name="Team A", society=self.soc, category="SENIOR", league=self.league)
+        self.league = League.objects.create(name="Serie A1", sport=self.sport, season="2024-2025")
+        self.team = Team.objects.create(name="Team A", society=self.soc, league=self.league)
         
         self.match = Match.objects.create(
             home_team=self.team, 

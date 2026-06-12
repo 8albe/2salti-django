@@ -113,11 +113,20 @@ def sport_detail(request, slug):
             })
 
     all_sports = Sport.objects.filter(leagues__isnull=False).distinct().order_by('name')
-    current_season = (
-        sport.leagues.order_by('-season').first().season
-        if sport.leagues.exists()
-        else ''
-    )
+
+    from core.services.season_service import get_current_season
+    season = get_current_season(sport)
+    if season:
+        current_season = season.label
+    else:
+        # Fallback bit-identico al vecchio MAX lessicografico finche' Season non
+        # e' popolata per questo sport. Isolato nella view: il service non cambia
+        # contratto (resta Season | None).
+        current_season = (
+            sport.leagues.order_by('-season').first().season
+            if sport.leagues.exists()
+            else ''
+        )
 
     from core.services.seo_service import SEOService
 
@@ -148,12 +157,10 @@ def create_society(request):
             president_profile.managed_society = society
             president_profile.save()
             
-            # Crea automaticamente tutte le squadre (categorie)
-            for category_code, category_name in Team.CATEGORY_CHOICES:
-                Team.objects.create(
-                    society=society,
-                    category=category_code
-                )
+            # Fase 3 (Macro 16): niente più ladder di squadre per categoria —
+            # la categoria vive sulla lega. Si crea la sola prima squadra
+            # (league=None finché non viene iscritta a un campionato).
+            Team.objects.create(society=society)
             
             society.setup_completed = True
             society.save()
@@ -170,7 +177,7 @@ def create_society(request):
 def society_detail(request, slug):
     """Pagina società con tutte le squadre"""
     society = get_object_or_404(Society, slug=slug)
-    teams = society.teams.all().order_by('category')
+    teams = society.teams.all().order_by('name')
     staff = society.get_staff()
     
     return render(request, 'societies/society_detail.html', {
@@ -206,7 +213,7 @@ def team_detail(request, slug):
     ).distinct().order_by('-match_date')[:2]
 
     # Altre squadre della stessa società (per navigazione categorie)
-    other_teams = Team.objects.filter(society=team.society).exclude(id=team.id).order_by('category')
+    other_teams = Team.objects.filter(society=team.society).exclude(id=team.id).order_by('name')
 
     # Posizione in classifica
     standing_pos = None
@@ -228,7 +235,7 @@ def team_detail(request, slug):
         'standing_pos': standing_pos,
         'other_teams': other_teams,
         'sport_color': team.league.sport.hex_color if team.league and team.league.sport else team.society.sport.hex_color,
-        'seo_title': f"{team.name} - {team.league.name if team.league else team.get_category_display()}",
+        'seo_title': f"{team.name} - {team.league.name if team.league else team.society.name}",
         'seo_description': f"Dettagli, roster e risultati per {team.name}. Scopri la posizione in classifica e le prossime partite su 2salti.",
         'structured_data': [
             SEOService.get_team_schema(request, team),

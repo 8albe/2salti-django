@@ -14,8 +14,8 @@ class DataHardeningTestCase(TestCase):
         self.society_b = Society.objects.create(name="Team B", slug="team-b", sport=self.sport)
         
         self.league = League.objects.create(name="Serie A", sport=self.sport, season="2023/24")
-        self.team_a = Team.objects.create(society=self.society, category="SENIOR", league=self.league)
-        self.team_b = Team.objects.create(society=self.society_b, category="SENIOR", league=self.league)
+        self.team_a = Team.objects.create(society=self.society, league=self.league)
+        self.team_b = Team.objects.create(society=self.society_b, league=self.league)
         
         self.user = User.objects.create_superuser(username="admin", email="admin@test.com", password="password")
         

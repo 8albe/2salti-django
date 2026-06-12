@@ -81,4 +81,4 @@ KO residui sulla test suite e debiti tecnici aperti.
 
 ---
 
-← [Macro precedente](14_referto_digitale_mobile.md)
+← [Macro precedente](14_referto_digitale_mobile.md) · → [Macro successiva](16_modello_stagione.md)

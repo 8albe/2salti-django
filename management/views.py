@@ -412,14 +412,23 @@ def approve_membership(request, request_id):
         action = request.POST.get('action')
         if action == 'approve':
             from management.services.membership_enrollment import _sync_profile_denorm
+            from management.services.membership_season import resolve_membership_season
+            # Dal flip NOT NULL (2d-7): senza stagione derivabile il
+            # tesseramento non puo' nascere — la richiesta resta PENDING.
+            season = resolve_membership_season(
+                req.user, req.society, req.team, req.role)
+            if season is None:
+                messages.error(
+                    request,
+                    "Stagione corrente non configurata per questo sport: "
+                    "impossibile approvare la richiesta.",
+                )
+                return redirect('club_admin_dashboard')
             req.status = 'APPROVED'
             with transaction.atomic():
                 Membership.objects.get_or_create(
-                    user=req.user,
-                    society=req.society,
-                    team=req.team,
-                    role=req.role,
-                    defaults={'start_date': timezone.localdate()},
+                    user=req.user, society=req.society,
+                    team=req.team, role=req.role, season=season,
                 )
                 _sync_profile_denorm(req.user, req.role, req.team, req.society)
             messages.success(request, f"Membro {req.user.username} approvato.")

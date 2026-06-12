@@ -16,11 +16,10 @@ class EmailIngestionTestCase(TestCase):
         # Setup basic data
         self.sport = Sport.objects.create(name="Pallanuoto", slug="pallanuoto")
         self.society = Society.objects.create(name="Pro Recco", slug="pro-recco", sport=self.sport)
-        self.league = League.objects.create(name="Serie A1", sport=self.sport, category='SENIOR')
-        self.team_h = Team.objects.create(society=self.society, category='SENIOR', league=self.league)
+        self.league = League.objects.create(name="Serie A1", sport=self.sport)
+        self.team_h = Team.objects.create(society=self.society, league=self.league)
         self.team_a = Team.objects.create(
             society=Society.objects.create(name="AN Brescia", slug="an-brescia", sport=self.sport), 
-            category='SENIOR', 
             league=self.league
         )
         self.match = Match.objects.create(

@@ -13,7 +13,7 @@ class OpsDashboardTestCase(TestCase):
         self.sport = Sport.objects.create(name="OpsSport", slug="opssport")
         self.society = Society.objects.create(name="Ops Society", slug="ops-soc", sport=self.sport)
         self.league = League.objects.create(name="Ops League", sport=self.sport, season="2023/24")
-        self.team = Team.objects.create(society=self.society, category="SENIOR", league=self.league)
+        self.team = Team.objects.create(society=self.society, league=self.league)
         
         # Staff user
         self.staff_user = User.objects.create_superuser('ops_admin', 'ops@2salti.com', 'pass123')

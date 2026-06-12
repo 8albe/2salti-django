@@ -14,9 +14,9 @@ class NotificationTest(TestCase):
         self.sport = Sport.objects.create(name="Pallanuoto", slug="pallanuoto")
         self.society_h = Society.objects.create(name="Pro Recco", city="Recco", sport=self.sport)
         self.society_a = Society.objects.create(name="AN Brescia", city="Brescia", sport=self.sport)
-        self.league = League.objects.create(name="Serie A1", sport=self.sport, category="SENIOR")
-        self.team_h = Team.objects.create(society=self.society_h, category="SENIOR", league=self.league)
-        self.team_a = Team.objects.create(society=self.society_a, category="SENIOR", league=self.league)
+        self.league = League.objects.create(name="Serie A1", sport=self.sport)
+        self.team_h = Team.objects.create(society=self.society_h, league=self.league)
+        self.team_a = Team.objects.create(society=self.society_a, league=self.league)
         self.match = Match.objects.create(
             league=self.league,
             home_team=self.team_h,

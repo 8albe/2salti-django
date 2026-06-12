@@ -1,13 +1,14 @@
 from django.db import models
 from django.contrib.auth import get_user_model
 from core.models import Team
+from core.validators import validate_season_format
 
 User = get_user_model()
 
 
 class SeasonArchive(models.Model):
     """Archivio stagione passata - creato automaticamente a fine anno"""
-    season = models.CharField(max_length=9, help_text="Es: 2023-2024")
+    season = models.CharField(max_length=9, validators=[validate_season_format], help_text="Es: 2025/2026")
     entity_type = models.CharField(max_length=20, choices=[
         ('athlete', 'Atleta'),
         ('team', 'Squadra'),

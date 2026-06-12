@@ -27,7 +27,7 @@ Prima di iniziare qualunque task, identifica quale documento consultare.
 | Mapping termini blueprint ↔ modelli Django | [[DOMAIN_GLOSSARY.md]] | 30+ entità, note tecniche su Match.is_public e onboarding_state |
 | Procedure operative infrastruttura | [[OPS_RUNBOOK.md]] | Deploy, trappole tecniche, protocollo protected file, sicurezza |
 | Capire il "perché" di una decisione di prodotto | [[BLUEPRINT.md]] | visione, UX, business model (italiano) |
-| Roadmap e priorità feature | [[SYLLABUS.md]] | 15 macro-obiettivi funzionali con dettaglio in [docs/syllabus/](docs/syllabus/) |
+| Roadmap e priorità feature | [[SYLLABUS.md]] | 16 macro-obiettivi funzionali con dettaglio in [docs/syllabus/](docs/syllabus/) |
 | Regole, comandi, convenzioni di sviluppo | CLAUDE.md (questo file) | regole operative |
 
 In caso di contraddizione tra documenti: `STATE_MACHINES.md > DOMAIN_GLOSSARY.md > CLAUDE.md > BLUEPRINT.md` per questioni di codice; `BLUEPRINT.md` vince sulla visione di prodotto.
@@ -140,8 +140,20 @@ ENVIRONMENT_NAME        # production
 - Static files collected to `STATIC_ROOT` = `BASE_DIR / 'staticfiles'` (resolves to `/opt/2salti-new/staticfiles/` in the production deploy), served by nginx via `/static/` alias.
 - Media uploads stored at `MEDIA_ROOT` = `BASE_DIR / 'media'` (resolves to `/opt/2salti-new/media/` in the production deploy), served by nginx via `/media/` alias.
 - **Deploy flow**: commit on `dev` in `/home/alberto/` → `git push origin dev` → on the VPS `cd /opt/2salti-new && git pull` → `sudo systemctl restart 2salti` (or `reload` for non-runtime changes) → verify with `curl -I https://2salti.com/`. Both `/home/alberto/` and `/opt/2salti-new/` have `origin` pointed directly at `github.com/8albe/2salti-django.git` (since 25-apr-2026); the deploy does **not** pull from the home repo.
+- **Nessun ambiente auto-migra.** Il dev box `/opt/2salti-dev/` autopulla il codice, non il DB; prod `/opt/2salti-new/` è pull manuale. Il `migrate` è sempre manuale e gated dopo backup DB (Alberto). Dopo un pull che alza lo schema, il DB resta indietro finché non si migra a mano — atteso, non un bug.
 
 ## Development Workflow
+
+### Modalità "Macro-intera (batch dev)"
+
+Quando il task lo dichiara esplicitamente, si lavora un'intera macro in batch sul dev senza chiedere autorizzazione fetta per fetta. Regole della modalità:
+
+- Auto-verifica a ogni step: suite verde dopo ogni fetta; per ogni migration (schema o dati) dry-run su una **copia scratch** del DB dev e verifica che lo SHA256 del DB dev reale sia invariato prima/dopo.
+- Ci si ferma solo in tre casi: (a) serve un comando riservato ad Alberto (sudo, backup DB, git push); (b) decisione di prodotto; (c) blocco vero. I bivi tecnici si risolvono con un default solido e si registrano.
+- Decision log obbligatorio: ogni bivio risolto va tracciato ("tecnico" / "possibile-prodotto") e consegnato a fine giro in italiano, in prosa, senza codice.
+- Prima della prima migration che scrive sui dati: fermarsi e far lanciare ad Alberto il backup del DB dev.
+- Nessun output di PII reale (nomi, email); pk, conteggi e stringhe stagione sì. Il logging per-record delle data migration logga pk + campi tecnici, mai nomi.
+- Nei giri batch **mai** `git add .` / `git add -A`: aggiungere **per path esplicito** e verificare con `git status` / `git add --dry-run` prima del commit. (Origine 2026-06-11: binari `.antigravity-ide-server/` ~525MB + 3 scratch `.py` finiti in un commit per add troppo largo → push rifiutato `GH001`.)
 
 ### Environment setup
 

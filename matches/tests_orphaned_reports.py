@@ -12,8 +12,8 @@ class OrphanedReportsTests(TestCase):
         self.league = League.objects.create(name="L1", sport=self.sport, slug="l1")
         self.soc1 = Society.objects.create(name="S1", sport=self.sport, slug="s1")
         self.soc2 = Society.objects.create(name="S2", sport=self.sport, slug="s2")
-        self.t1 = Team.objects.create(society=self.soc1, category="U18", league=self.league)
-        self.t2 = Team.objects.create(society=self.soc2, category="U18", league=self.league)
+        self.t1 = Team.objects.create(society=self.soc1, league=self.league)
+        self.t2 = Team.objects.create(society=self.soc2, league=self.league)
         self.match = Match.objects.create(
             league=self.league, home_team=self.t1, away_team=self.t2, 
             match_date=timezone.now(), location="Piscina"

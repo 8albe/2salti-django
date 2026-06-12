@@ -17,8 +17,8 @@ class OpenAIProviderTest(TestCase):
         self.soc_home = Society.objects.create(name="Soc Home", sport=self.sport)
         self.soc_away = Society.objects.create(name="Soc Away", sport=self.sport)
         
-        self.home = Team.objects.create(society=self.soc_home, category='SENIOR')
-        self.away = Team.objects.create(society=self.soc_away, category='SENIOR')
+        self.home = Team.objects.create(society=self.soc_home)
+        self.away = Team.objects.create(society=self.soc_away)
         
         self.match = Match.objects.create(
             league=self.league,

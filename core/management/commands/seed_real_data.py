@@ -46,7 +46,7 @@ class Command(BaseCommand):
             # Create Senior Team
             team, _ = Team.objects.get_or_create(
                 society=society,
-                category='SENIOR',  # correct code
+                # correct code
                 defaults={'name': name}
             )
             teams_objs.append(team)

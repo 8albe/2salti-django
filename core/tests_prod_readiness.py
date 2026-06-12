@@ -12,7 +12,7 @@ class ProdReadinessTestCase(TestCase):
         self.sport, _ = Sport.objects.get_or_create(name="ProdSport", slug="prodsport")
         self.society, _ = Society.objects.get_or_create(name="Prod Society", slug="prod-soc", sport=self.sport)
         self.league, _ = League.objects.get_or_create(name="Prod League", sport=self.sport, season="2023/24")
-        self.team, _ = Team.objects.get_or_create(society=self.society, category="SENIOR", slug="prod-team-senior")
+        self.team, _ = Team.objects.get_or_create(society=self.society, slug="prod-team-senior")
         self.athlete, _ = User.objects.get_or_create(username="prod_athlete", role="athlete", first_name="Prod", setup_completed=True)
         # Match matches might not be easy to get_or_create due to complex fields
         self.match = Match.objects.create(home_team=self.team, away_team=self.team, league=self.league, match_date="2024-03-26T15:00:00Z")

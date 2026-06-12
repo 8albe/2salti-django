@@ -13,9 +13,9 @@ class MatchReportMediaTest(TestCase):
     def setUp(self):
         self.sport, _ = Sport.objects.get_or_create(name="SportTest", slug="sporttest")
         self.society, _ = Society.objects.get_or_create(name="SocTest", slug="soctest", sport=self.sport)
-        self.league, _ = League.objects.get_or_create(name="LeagueTest", sport=self.sport, category="SENIOR")
-        self.home_team, _ = Team.objects.get_or_create(society=self.society, category="SENIOR")
-        self.away_team, _ = Team.objects.get_or_create(society=self.society, category="U18")
+        self.league, _ = League.objects.get_or_create(name="LeagueTest", sport=self.sport)
+        self.home_team, _ = Team.objects.get_or_create(society=self.society)
+        self.away_team, _ = Team.objects.get_or_create(society=self.society)
         self.match = Match.objects.create(
             league=self.league,
             home_team=self.home_team,

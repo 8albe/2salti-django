@@ -186,7 +186,6 @@ class EntityBootstrapService:
                 )
                 team = Team.objects.create(
                     society=society,
-                    category="SENIOR",
                     name=name,
                     league=match.league,
                 )

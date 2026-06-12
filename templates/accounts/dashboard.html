@@ -138,7 +138,7 @@
                             </div>
                             <div class="flex-1 min-w-0">
                                 <h4 class="font-bold text-white truncate group-hover:text-cyan-400 transition-colors">{{ current_team.society.name }}</h4>
-                                <p class="text-xs text-slate-500">{{ current_team.get_category_display }} • <span class="text-cyan-500 font-bold">La tua squadra</span></p>
+                                <p class="text-xs text-slate-500">{{ current_team.category_label }} • <span class="text-cyan-500 font-bold">La tua squadra</span></p>
                             </div>
                             <span class="text-slate-600 group-hover:translate-x-1 transition-transform">→</span>
                         </div>
@@ -154,7 +154,7 @@
                             </div>
                             <div class="flex-1 min-w-0">
                                 <h4 class="font-bold text-white truncate group-hover:text-cyan-400 transition-colors">{{ team.society.name }}</h4>
-                                <p class="text-xs text-slate-500">{{ team.get_category_display }} • {{ team.league.name|default:"Amichevole" }}</p>
+                                <p class="text-xs text-slate-500">{{ team.category_label }} • {{ team.league.name|default:"Amichevole" }}</p>
                             </div>
                             <span class="text-slate-600 group-hover:translate-x-1 transition-transform">→</span>
                         </div>

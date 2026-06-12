@@ -1,7 +1,7 @@
 from django.test import TestCase, Client
 from django.urls import reverse
 from django.contrib.auth import get_user_model
-from core.models import Sport, Society, Team, League
+from core.models import Season, Sport, Society, Team, League
 from management.models import ActivationCode, Membership, MembershipRequest
 import datetime
 from django.utils import timezone
@@ -13,8 +13,12 @@ class OnboardingFlowTest(TestCase):
         self.client = Client()
         self.sport = Sport.objects.create(name="Pallanuoto", slug="pallanuoto")
         self.society = Society.objects.create(name="Pro Recco", slug="pro-recco", sport=self.sport)
-        self.league = League.objects.create(name="Serie A1", sport=self.sport, category='SENIOR', season='2024-2025')
-        self.team = Team.objects.create(society=self.society, category='SENIOR', league=self.league)
+        # Season corrente: dal flip NOT NULL (2d-7) i creation-site la esigono.
+        self.season = Season.objects.create(
+            sport=self.sport, label='2025/2026', is_current=True
+        )
+        self.league = League.objects.create(name="Serie A1", sport=self.sport, season='2024-2025')
+        self.team = Team.objects.create(society=self.society, league=self.league)
         
         # Utente Atleta da onboardare
         self.user = User.objects.create_user(

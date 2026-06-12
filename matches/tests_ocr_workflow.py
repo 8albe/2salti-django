@@ -14,8 +14,8 @@ class OCRWorkflowTestCase(TestCase):
     def setUp(self):
         self.sport = Sport.objects.create(name="Pallanuoto", slug="pallanuoto")
         self.society = Society.objects.create(name="Pro Recco", sport=self.sport, slug="pro-recco")
-        self.league = League.objects.create(name="Serie A1", sport=self.sport, category="SENIOR", slug="serie-a1")
-        self.team = Team.objects.create(society=self.society, category="SENIOR", league=self.league)
+        self.league = League.objects.create(name="Serie A1", sport=self.sport, slug="serie-a1")
+        self.team = Team.objects.create(society=self.society, league=self.league)
         self.user = User.objects.create_user(
             username="admin",
             is_staff=True,
@@ -25,7 +25,6 @@ class OCRWorkflowTestCase(TestCase):
         )
         self.team2 = Team.objects.create(
             society=Society.objects.create(name="AN Brescia", sport=self.sport, slug="an-brescia"),
-            category="SENIOR",
             league=self.league
         )
         self.match = Match.objects.create(

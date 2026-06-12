@@ -12,7 +12,7 @@ class StructuredDataTestCase(TestCase):
         self.sport = Sport.objects.create(name="SchemaSport", slug="schemasport")
         self.society = Society.objects.create(name="Schema Team A", slug="s-team-a", sport=self.sport)
         self.league = League.objects.create(name="Schema League", sport=self.sport, season="2023/24")
-        self.team = Team.objects.create(society=self.society, category="SENIOR", league=self.league, slug="s-team-a")
+        self.team = Team.objects.create(society=self.society, league=self.league, slug="s-team-a")
         
     def test_home_has_structured_data(self):
         response = self.client.get(reverse('home'))
@@ -24,7 +24,7 @@ class StructuredDataTestCase(TestCase):
     def test_match_detail_has_structured_data(self):
         team_b = Team.objects.create(
             society=Society.objects.create(name="Schema Team B", slug="s-team-b", sport=self.sport),
-            category="SENIOR", league=self.league
+            league=self.league
         )
         match = Match.objects.create(
             home_team=self.team, away_team=team_b, league=self.league,

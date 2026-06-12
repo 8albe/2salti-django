@@ -2,6 +2,8 @@ from django.db import models
 from django.utils.text import slugify
 from django.contrib.auth import get_user_model
 
+from core.validators import validate_season_format
+
 User = get_user_model()
 
 
@@ -83,56 +85,121 @@ class Society(models.Model):
 
 
 class Team(models.Model):
-    """Squadra specifica di una società (es: Pro Recco Under 16)"""
-    CATEGORY_CHOICES = [
-        ('U10', 'Under 10'),
-        ('U12', 'Under 12'),
-        ('U14', 'Under 14'),
-        ('U16', 'Under 16'),
-        ('U18', 'Under 18'),
-        ('U20', 'Under 20'),
-        ('SENIOR', 'Prima Squadra'),
-    ]
-    
+    """Squadra specifica di una società (es: Pro Recco Allievi).
+
+    Macro 16 Fase 3: la categoria NON vive più sul team — la lega è la fonte
+    di verità grandi/giovanili (League.league_type). Il display di categoria
+    si deriva via category_label."""
+
     society = models.ForeignKey(Society, on_delete=models.CASCADE, related_name='teams')
-    category = models.CharField(max_length=10, choices=CATEGORY_CHOICES)
     league = models.ForeignKey('League', on_delete=models.SET_NULL, null=True, blank=True, related_name='teams')
-    
+
     # Auto-generated
-    name = models.CharField(max_length=200, blank=True, help_text="Auto-generato: Society + Category")
+    name = models.CharField(max_length=200, blank=True, help_text="Auto-generato: Society + tipo lega")
     slug = models.SlugField(unique=True, blank=True)
-    
+
+    @property
+    def category_label(self):
+        """Display categoria derivato dalla lega (fonte di verità).
+        Stringa vuota se il team non ha lega o la lega non è classificata."""
+        if self.league_id and self.league.league_type:
+            return self.league.league_type_label
+        return ''
+
     def save(self, *args, **kwargs):
         if not self.name:
-            if self.category == 'SENIOR':
-                self.name = self.society.name
+            if (
+                self.league_id
+                and self.league.league_type
+                and not self.league.is_senior_league
+            ):
+                # Giovanili: società + etichetta tradizionale (es. "Allievi").
+                self.name = f"{self.society.name} {self.league.league_type_label}"
             else:
-                self.name = f"{self.society.name} {self.get_category_display()}"
+                # Prima squadra / lega non classificata: nome società.
+                self.name = self.society.name
         if not self.slug:
-            self.slug = slugify(f"{self.society.slug}-{self.category}")
+            suffix = (
+                self.league.league_type.lower()
+                if self.league_id and self.league.league_type
+                else 'team'
+            )
+            self.slug = slugify(f"{self.society.slug}-{suffix}")
         super().save(*args, **kwargs)
-    
+
     def get_roster(self):
         """Ritorna rosa giocatori"""
         from accounts.models import AthleteProfile
         return AthleteProfile.objects.filter(current_team=self).select_related('user')
-    
+
     def __str__(self):
         return self.name
-    
+
     class Meta:
-        unique_together = ['society', 'category']
-        ordering = ['society', 'category']
+        ordering = ['society', 'name']
         verbose_name = "Squadra"
         verbose_name_plural = "👥 Squadre"
 
 
 class League(models.Model):
     """Campionato (es: Serie A1 Maschile - Girone A)"""
+
+    class LeagueType(models.TextChoices):
+        """Tipo lega (Macro 16 Fase 3, lista CHIUSA): A1–D = "dei grandi",
+        U10–U20 = giovanili. La lega è la fonte di verità grandi/giovanili.
+        Le label restano canoniche: il display tradizionale vive in
+        LEAGUE_TYPE_DISPLAY (dizionario in codice, modificabile senza
+        migration — decisione di prodotto D1 2026-06-11)."""
+        A1 = 'A1', 'A1'
+        A2 = 'A2', 'A2'
+        B = 'B', 'B'
+        C = 'C', 'C'
+        D = 'D', 'D'
+        U10 = 'U10', 'U10'
+        U12 = 'U12', 'U12'
+        U14 = 'U14', 'U14'
+        U16 = 'U16', 'U16'
+        U18 = 'U18', 'U18'
+        U20 = 'U20', 'U20'
+
+    # Tipi "dei grandi": gate del prestito (Fase 4). Il girone è una
+    # suddivisione DENTRO il tipo (group_name), non un tipo a sé.
+    SENIOR_LEAGUE_TYPES = frozenset({'A1', 'A2', 'B', 'C', 'D'})
+
+    # Display: etichette tradizionali italiane mappate 1:1 sul valore Under
+    # canonico; per i tipi dei grandi il display è "Serie <tipo>".
+    LEAGUE_TYPE_DISPLAY = {
+        'A1': 'Serie A1',
+        'A2': 'Serie A2',
+        'B': 'Serie B',
+        'C': 'Serie C',
+        'D': 'Serie D',
+        'U10': 'Pulcini',
+        'U12': 'Esordienti',
+        'U14': 'Ragazzi',
+        'U16': 'Allievi',
+        'U18': 'Juniores',
+        'U20': 'Under 20',
+    }
+
     name = models.CharField(max_length=100, help_text="Es: Serie A1 Maschile")
     sport = models.ForeignKey(Sport, on_delete=models.CASCADE, related_name='leagues')
-    category = models.CharField(max_length=10, choices=Team.CATEGORY_CHOICES)
-    season = models.CharField(max_length=9, default='2024-2025', help_text="Es: 2024-2025")
+    # Tipo lega da lista chiusa. NULL = non classificata ("Null invece di
+    # invenzione"): mai derivare il tipo indovinando, si classifica per nome
+    # via data migration o a mano in admin.
+    league_type = models.CharField(
+        max_length=3, choices=LeagueType.choices, null=True, blank=True,
+        help_text="Tipo lega (A1–D grandi, U10–U20 giovanili). Vuoto = non classificata.",
+    )
+    season = models.CharField(max_length=9, default='2025/2026',
+                              validators=[validate_season_format], help_text="Es: 2025/2026")
+    # FK transitoria a Season (Macro 16 Fase 1b). Nullable per backfill rollback-safe;
+    # la stringa `season` resta intatta finche' la Fase 2 non la rimuove, momento in cui
+    # questo campo verra' rinominato `season`. PROTECT: una Season con leghe collegate
+    # non dev'essere cancellabile.
+    season_fk = models.ForeignKey('Season', on_delete=models.PROTECT, null=True, blank=True,
+                                  related_name='leagues',
+                                  help_text="Stagione (FK transitoria, Fase 1b)")
     group_name = models.CharField(max_length=50, blank=True, help_text="Es: Girone A, Girone B")
     
     # Metadati
@@ -145,15 +212,30 @@ class League(models.Model):
 
     def save(self, *args, **kwargs):
         if not self.slug:
-            self.slug = slugify(f"{self.name}-{self.season}-{self.group_name}")
+            season_slug = (self.season or "").replace("/", "-")
+            self.slug = slugify(f"{self.name}-{season_slug}-{self.group_name}")
         super().save(*args, **kwargs)
-    
+
     def __str__(self):
         base = f"{self.name} {self.season}"
         if self.group_name:
             base += f" - {self.group_name}"
         return base
-    
+
+    @property
+    def is_senior_league(self):
+        """Lega "dei grandi" (A1–D)? Gate del prestito (Fase 4).
+        Una lega non classificata (league_type NULL) NON è dei grandi."""
+        return self.league_type in self.SENIOR_LEAGUE_TYPES
+
+    @property
+    def league_type_label(self):
+        """Display del tipo lega: etichetta tradizionale per le giovanili,
+        "Serie <tipo>" per i grandi, stringa vuota se non classificata."""
+        if not self.league_type:
+            return ''
+        return self.LEAGUE_TYPE_DISPLAY.get(self.league_type, self.league_type)
+
     def get_standings(self):
         """Ritorna classifica ordinata. Usa dati persistiti se presenti, altrimenti ricalcola."""
         persisted = self.persisted_standings.all().select_related('team')
@@ -237,7 +319,7 @@ class LeagueStanding(models.Model):
     """Classifica persistita per evitare ricalcoli costosi"""
     league = models.ForeignKey(League, on_delete=models.CASCADE, related_name='persisted_standings')
     team = models.ForeignKey(Team, on_delete=models.CASCADE, related_name='persisted_standings')
-    season = models.CharField(max_length=9, help_text="Es: 2024-2025")
+    season = models.CharField(max_length=9, validators=[validate_season_format], help_text="Es: 2025/2026")
     
     played = models.IntegerField(default=0)
     won = models.IntegerField(default=0)
@@ -258,3 +340,38 @@ class LeagueStanding(models.Model):
 
     def __str__(self):
         return f"{self.team.name} - {self.league.name} ({self.points} pts)"
+
+
+class Season(models.Model):
+    """Stagione di prima classe, per-sport. Fonte di verita' per l'elezione
+    della stagione corrente (sostituisce il MAX lessicografico su stringa).
+
+    NB (Fase 1a-i): nessuna FK da League verso questo modello ancora; la
+    stringa League.season resta la fonte dati. La FK arrivera' in 1b.
+    """
+    sport = models.ForeignKey(Sport, on_delete=models.CASCADE, related_name='seasons')
+    label = models.CharField(max_length=9, validators=[validate_season_format], help_text="Es: 2025/2026")
+    is_current = models.BooleanField(default=False, help_text="Stagione corrente per questo sport")
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['sport', '-label']
+        verbose_name = "Stagione"
+        verbose_name_plural = "🗓 Stagioni"
+        constraints = [
+            models.UniqueConstraint(
+                fields=['sport', 'label'],
+                name='unique_season_per_sport',
+            ),
+            models.UniqueConstraint(
+                fields=['sport'],
+                condition=models.Q(is_current=True),
+                name='unique_current_season_per_sport',
+            ),
+        ]
+
+    def __str__(self):
+        marker = " (corrente)" if self.is_current else ""
+        return f"{self.sport.name} {self.label}{marker}"
