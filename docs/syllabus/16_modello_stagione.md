@@ -1,6 +1,6 @@
 ## 16. Modello stagione e tesseramento per stagione
 
-Stato: ✅ **Implementata su dev** (giro Macro-intera batch, 2026-06-11). Propagazione a prod ancora da fare (giro master, §11.3 OPS_RUNBOOK).
+Stato: ✅ **Implementata su dev** (giro Macro-intera batch, 2026-06-11). **Propagata su PROD il 2026-06-12** (merge `7d8a937f` su origin/master — OPS_RUNBOOK §10.8).
 
 Redesign del modello stagione in 5 fasi: la **stagione diventa l'asse** del tesseramento (non più le date libere), la **lega** è la fonte di verità per la distinzione grandi/giovanili e si introduce il **prestito strutturato**. Le decisioni di prodotto sono **chiuse** (Sprint D 2026-06-06 + D1–D4 del 2026-06-11); le Fasi 2/3/4 sono implementate su dev (suite 336 OK).
 
@@ -8,7 +8,7 @@ Redesign del modello stagione in 5 fasi: la **stagione diventa l'asse** del tess
 
 ### 16.1 Bonifica dati (Fase 0)
 
-Stato: ✅ **implementata** (dev + home, 2026-06-07). Propagazione a prod ancora da fare (giro master, §11.3).
+Stato: ✅ **implementata** (dev + home, 2026-06-07). Propagata su prod il 2026-06-12 (§10.8).
 
 Decisioni chiuse:
 
