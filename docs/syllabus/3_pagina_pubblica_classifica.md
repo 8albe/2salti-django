@@ -1,6 +1,6 @@
 ## 3. Pagina pubblica della classifica
 
-Stato: 🔄 In corso
+Stato: 🔄 In corso (filtro stagione completo; unico residuo: modello Venue/Impianto, differito)
 
 Classifica per campionato/stagione: punti, gol fatti/subiti, partite giocate/vinte/perse/pareggiate. Filtrabile per stagione.
 
@@ -14,12 +14,10 @@ Classifica per campionato/stagione: punti, gol fatti/subiti, partite giocate/vin
 ### 3.2 Vista pubblica
 
 - [x] Tabella classifica con colonne PG/V/N/P/GF/GS/PT
-- [ ] Filtro per stagione (oggi `League.season` è CharField)
-  - Bloccato: nessuna League storica nel DB dev. Richiede modello Season autonomo (gap §10) — deferire a sprint futuro.
-- [ ] Modello `Season` autonomo (gap blueprint §10)
-  - Gap §10 blueprint — fuori scope Sprint A.
+- [x] Filtro per stagione (classifica pubblica `sport_detail`, commit f2fbe83; pagina Partite `sport_matches` + date_picker, commit 62c582c)
+- [x] Modello `Season` autonomo — soddisfatto dalla Macro 16 (Season implementato, live su prod 2026-06-12, §10.8); blocco precedente rimosso
 - [ ] Modello `Venue/Impianto` autonomo (gap blueprint §10 — oggi `Match.location` CharField)
-  - Gap §10 blueprint — fuori scope Sprint A.
+  - Rimandato (deciso): si affronterà quando servirà popolare il sito con dati reali. Unica voce della macro con schema-change/migration.
 
 ---
 
