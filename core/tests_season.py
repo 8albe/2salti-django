@@ -183,6 +183,63 @@ class SportDetailCurrentSeasonViewTest(TestCase):
         self.assertEqual(resp.context["current_season"], "2025/2026")
 
 
+class SportDetailSeasonSelectorViewTest(TestCase):
+    """Macro 3 fetta 1: selettore stagione sulla classifica pubblica
+    (sport_detail). Il filtro lavora su League.season; il default e' la
+    Season corrente, sovrascrivibile via querystring ?season=."""
+
+    def setUp(self):
+        self.sport = Sport.objects.create(name="PN SelTest", slug="pn-seltest")
+        League.objects.create(name="L vecchia", sport=self.sport, season="2024/2025", slug="st-old")
+        League.objects.create(name="L nuova", sport=self.sport, season="2025/2026", slug="st-new")
+        # Stagione corrente = 2025/2026 (NON la richiesta nel caso (a)), cosi'
+        # un ?season=2024/2025 prova che la querystring sovrascrive il default.
+        Season.objects.create(sport=self.sport, label="2024/2025", is_current=False)
+        Season.objects.create(sport=self.sport, label="2025/2026", is_current=True)
+
+    def test_available_seasons_distinct_desc(self):
+        resp = self.client.get(reverse("sport_detail", args=[self.sport.slug]))
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.context["available_seasons"], ["2025/2026", "2024/2025"])
+
+    def test_querystring_overrides_default(self):
+        # (a) ?season valido (e diverso dalla corrente) -> selezione esplicita.
+        resp = self.client.get(
+            reverse("sport_detail", args=[self.sport.slug]), {"season": "2024/2025"}
+        )
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.context["selected_season"], "2024/2025")
+        # current_season resta invariato (chiave preservata per i test esistenti).
+        self.assertEqual(resp.context["current_season"], "2025/2026")
+
+    def test_default_is_current_season(self):
+        # (b) ?season assente -> default = Season corrente.
+        resp = self.client.get(reverse("sport_detail", args=[self.sport.slug]))
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.context["selected_season"], "2025/2026")
+        self.assertEqual(resp.context["selected_season"], resp.context["current_season"])
+
+    def test_invalid_season_falls_back_without_error(self):
+        # (c) ?season non in available_seasons -> fallback alla corrente, 200.
+        resp = self.client.get(
+            reverse("sport_detail", args=[self.sport.slug]), {"season": "1999/2000"}
+        )
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.context["selected_season"], "2025/2026")
+
+    def test_selector_rendered_with_multiple_seasons(self):
+        resp = self.client.get(reverse("sport_detail", args=[self.sport.slug]))
+        self.assertContains(resp, 'id="season-select"')
+
+    def test_no_selector_and_200_without_leagues(self):
+        # (d) sport senza leghe -> 200, nessun <select>, available_seasons vuoto.
+        empty_sport = Sport.objects.create(name="PN Vuoto", slug="pn-vuoto")
+        resp = self.client.get(reverse("sport_detail", args=[empty_sport.slug]))
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.context["available_seasons"], [])
+        self.assertNotContains(resp, 'id="season-select"')
+
+
 class BackfillSeasonFkMigrationTest(TransactionTestCase):
     """Test della data-migration 0014 (backfill League.season_fk) con
     MigrationExecutor. Rewind a 0011, seeding storico di leghe, forward a 0014:
