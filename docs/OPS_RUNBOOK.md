@@ -112,6 +112,20 @@ Questi erano debiti **git/infrastruttura**, distinti dai debiti di **codice** DE
 
 **Aggiornamento 2026-06-12 (propagazione Macro 16, §10.8):** prod è stato riagganciato a `origin/master` via `git fetch` + `git reset --hard origin/master` — ora prod HEAD e `origin/master` sono **SHA-identici** (`7d8a937f`) e la lineage prod-local accumulata (incluso `01427d59`) è stata abbandonata. La regola di questa sezione — confrontare il **contenuto**, non le SHA — resta valida per eventuali future divergenze.
 
+### 2.4 Deploy reale con `dev` ↔ `master` divergenti — merge `--no-ff` (2026-06-19)
+
+Quando `master` ha accumulato merge pubblici **mai rifusi in `dev`** e `dev` ha il payload nuovo, i due branch sono **divergenti** (la merge-base reale non è il tip di nessuno dei due) e il deploy **non** è un fast-forward. Procedura usata per il giro slug `core/0019` + Macro 3 filtro stagione:
+
+- **Test-merge in worktree scratch** prima del merge reale: si verifica il tree risultante senza sporcare i branch.
+- **Merge `--no-ff` `dev` → `master`** (vero merge, niente ff): il tree finale deve risultare **`== dev`** su tutti i path del payload. Nessuna riscrittura di storia. Esito di questo giro: `master` = `e0c928f` (commit di merge), `dev` resta al suo tip — **contenuto-equivalenti, SHA diverse** (coerente con §2.3).
+- **Dry-run della migration** su **copia scratch del DB prod**, verificando **SHA-256 del DB prod reale invariato** prima/dopo il dry-run.
+- **Backup fresco e separato** pre-apply (`db.sqlite3.bak.predeploy-YYYYMMDD`), distinto dai backup di deploy precedenti, che restano intoccati.
+- **`migrate` scoped alla singola migration** (`migrate core 0019`), non `migrate` globale.
+
+**Gotcha — verificare la merge-base reale, non la narrativa.** La session note (o il contesto di sessione) può contenere affermazioni topologiche **errate**: in questo giro "`dev` discende da `master`" era falso (erano divergenti dalla merge-base `b6d8ae2`). Prima di scegliere ff vs merge, controllare `git merge-base dev master` e `git log --oneline master ^dev` / `dev ^master`; **mai** dedurre dal racconto.
+
+**Gotcha — `curl -k` maschera lo stato reale del certificato.** Un `curl -k` "funziona" anche con un certificato scaduto: non è una verifica TLS. Per confermare l'SSL usare `openssl s_client -connect host:443 -servername host </dev/null | openssl x509 -noout -dates -issuer`, non dedurre da un `curl -k`.
+
 ## 3. Trappole tecniche note
 
 ### 3.1 `git rm --cached` + file dirty = pull abortito
@@ -540,12 +554,13 @@ Sprint C §10.4 ha chiuso il debito principale (`Membership.start_date`/`end_dat
 
 **CHIUSO 2026-06-12 — propagazione eseguita.** Merge `--no-ff` dev→master da home e push (`origin/master` = `7d8a937f`); deploy su `/opt/2salti-new/` in modalità speciale `git fetch` + `git reset --hard origin/master` (**NO pull**). Backup DB prod pre-migrate: `db.sqlite3.bak.20260612-130226`. 21 migrazioni applicate (stop→migrate→start), numeri **identici al dry-run**. Smoke: `ops_check --mode afternoon` GREEN, 0 findings; sito HTTP/2 200. **Nota di realtà:** allo step 3 prod risultava "ahead of origin/master by 54 commits" (lineage prod-local di §2.3), **non** HEAD orfana pura come previsto; il `reset --hard` ha comunque riagganciato correttamente a `7d8a937f`.
 
-### 10.9 Certificato SSL 2salti.com SCADUTO — APERTO URGENTE (scoperto 2026-06-12)
+### 10.9 Certificato SSL 2salti.com — ✅ CHIUSO (rinnovato 2026-06-14, verificato 2026-06-19)
 
 - **Sintomo:** `curl` senza `-k` su `https://2salti.com/` fallisce con "certificate has expired"; un browser reale mostra l'avviso di sicurezza. Scoperto durante lo smoke test post-propagazione Macro 16.
 - **NON legato al deploy:** il giro 2026-06-12 non ha toccato Nginx né TLS.
 - **Da fare:** `certbot renew` + reload nginx; indagare perché il rinnovo automatico non è scattato (timer certbot fermo/fallito?).
 - **Esecuzione:** tutto sudo → Alberto (§11.2).
+- **CHIUSO:** rinnovato il 2026-06-14 (`certbot renew`; causa-radice: `certbot.timer` Dummy → automazione via `/etc/cron.d/certbot-2salti` scoped ai domini di Alberto). **Verificato 2026-06-19** con `openssl s_client` + `x509 -dates`: `notBefore` Jun 14 2026, `notAfter` Sep 12 2026, issuer Let's Encrypt. Il `curl -k` usato in diagnosi era prudenza superflua, **non** un certificato scaduto.
 
 ## 11. Sicurezza operativa e frontiera reversibile
 
