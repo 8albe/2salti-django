@@ -19,13 +19,31 @@ from django.test import TransactionTestCase
 # il modello reale core.League ha ora season_fk, assente nello schema 0008/0010.
 
 
+def _current_leaf(loader, app_label):
+    """Risolve dinamicamente il leaf corrente di un'app dal grafo migration.
+
+    Sostituisce l'hardcoding della stringa di migration leaf: una nuova
+    migration sull'app sposta il leaf, ma il test continua a targettare lo
+    schema fisico corrente (== leaf) senza lockstep manuale. Si applica SOLO
+    alle app che nel test restano allo schema fisico corrente (accounts, mai
+    retrocessa); NON agli anchor storici (core@0008/0010, management@0009) che
+    sono semantici e devono restare fissi.
+    """
+    leaves = loader.graph.leaf_nodes(app_label)
+    assert len(leaves) == 1, (
+        f"atteso 1 leaf per '{app_label}', trovati {len(leaves)}: {leaves}"
+    )
+    return leaves[0]
+
+
 class SeasonBonificaMigrationTest(TransactionTestCase):
-    # Lockstep §10.7 (Fase 2): management viene RETROCESSO fisicamente a 0009
-    # insieme a core. Dal leaf 0014 le colonne start_date/end_date non esistono
-    # piu', ma il pin storico 0009 le emette negli INSERT; un pin management al
-    # leaf e' impossibile perche' trascinerebbe core oltre 0008 nel
-    # project_state (management/0010+ dipende da core.Season). Si riallineano
-    # quindi schema fisico e modello storico retrocedendo entrambi.
+    # §10.7: management viene RETROCESSO fisicamente a 0009 insieme a core. Da
+    # management/0014_remove_membership_dates le colonne start_date/end_date non
+    # esistono piu', ma il pin storico 0009 le emette negli INSERT; un pin
+    # management al leaf e' impossibile perche' trascinerebbe core oltre 0008 nel
+    # project_state (management/0010+ dipende da core.Season). 0009 e' percio' un
+    # anchor storico semantico (NON un leaf): resta hardcoded di proposito. Si
+    # riallineano schema fisico e modello storico retrocedendo core e management.
     migrate_from = [
         ("core", "0008_alter_league_options_alter_sport_options_and_more"),
         ("management", "0009_membership_end_date_constraint"),
@@ -42,13 +60,16 @@ class SeasonBonificaMigrationTest(TransactionTestCase):
         # 0008/0010): un seeding/una query col modello reale emetterebbe
         # season_fk_id e fallirebbe ("no such column"). Si usa un project_state
         # combinato che riproduce il DB reale dopo il rewind del SOLO core a 0008:
-        # accounts e management restano ai loro leaf (non vengono mai retrocessi),
-        # quindi vanno targettati ai leaf per avere User/Membership con lo schema
-        # fisico corrente (es. accounts.User.identity_status, esistente da 0003).
-        # Tutti i modelli provengono cosi' dallo stesso registro storico: niente
-        # ibridi, FK coerenti dentro lo stesso apps registry.
+        # core e management vengono retrocessi (anchor storici, vedi sopra),
+        # mentre accounts NON viene mai retrocesso e resta allo schema fisico
+        # corrente. Per questo accounts va targettato al suo LEAF (User con i
+        # campi correnti, es. identity_status): il leaf e' risolto in modo
+        # dinamico (_current_leaf) invece che con la stringa fissa, cosi' una
+        # futura migration accounts non rompe il test ne' richiede lockstep
+        # manuale. Tutti i modelli provengono cosi' dallo stesso registro
+        # storico: niente ibridi, FK coerenti dentro lo stesso apps registry.
         old_apps = executor.loader.project_state(
-            self.migrate_from + [("accounts", "0005_staff_role_pii")]
+            self.migrate_from + [_current_leaf(executor.loader, "accounts")]
         ).apps
         Sport = old_apps.get_model("core", "Sport")
         Society = old_apps.get_model("core", "Society")
