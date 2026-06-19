@@ -538,6 +538,37 @@ Sprint C §10.4 ha chiuso il debito principale (`Membership.start_date`/`end_dat
 - **Fix proposto:** `select_for_update()` su `Membership` e profilo nel blocco transaction, oppure lock applicativo via cache/redis.
 - **Priorità:** bassa. SQLite (dev) serializza implicitamente; PostgreSQL (prod target futuro, §15.3) avrebbe row-level lock implicito ma andrebbe testato esplicitamente.
 
+### §10.6 — Chiusura debiti membership (giro batch 2026-06-19)
+
+**DEBT-001 — Rientro cross-stagione → CHIUSO (assorbito Macro 16).**
+Il rientro di un utente nella stessa società/squadra/ruolo in una stagione
+diversa non è più un caso speciale: è una riga distinta permessa dalla
+UniqueConstraint(user, society, team, role, season) introdotta in Macro 16
+Fase 2. La stessa stagione resta correttamente bloccata. Nessuna modifica di
+codice necessaria — chiusura per costruzione. Regression test:
+management/tests_membership_debts.py::Debt001CrossSeasonReentryTests.
+
+**DEBT-002 — Dual-role coach → CHIUSO (signal role-aware).**
+Il signal sync_coach_membership hardcodava il ruolo HEAD_COACH: un coach con
+sola membership ASSISTANT_COACH si vedeva fabbricare una HEAD_COACH spuria al
+salvataggio del profilo. Reso role-differentiated: il signal deriva i ruoli
+coach dalle membership attive e sincronizza ciascuno in isolamento; HEAD_COACH
+e ASSISTANT_COACH coesistono senza chiusura/duplicazione reciproca. Default
+HEAD_COACH se nessuna membership coach pregressa (backward-compat onboarding).
+Nessun cambiamento di schema, nessuna 2-FK su CoachProfile. Regression test:
+Debt002DualRoleCoachTests (coesistenza, no-spurious, default head).
+
+**DEBT-004 — Race redeem/approve → CHIUSO con nota di limitazione.**
+Applicato select_for_update() difensivo sul lock di riga in approve_membership
+(MembershipRequest) e in redeem_activation_code (ActivationCode). Corretto il
+sub-bug "status APPROVED persistito fuori dal blocco atomico": la transizione di
+stato e la creazione della Membership sono ora un'unica unità atomica (prima la
+Membership poteva restare orfana se il save dello stato falliva). LIMITAZIONE:
+la race concorrente in sé NON è falsificabile su SQLite — i write sono
+serializzati a livello DB e select_for_update() è un no-op; il lock è un fix
+difensivo valido per PostgreSQL in produzione. Il test copre il sub-bug di
+atomicità in modo deterministico. Regression test: Debt004ApproveAtomicityTests.
+
 ### 10.7 Fragilità test migration Macro 16 — APERTO (introdotto Fase 1b, 2026-06-09)
 
 - **Sintomo:** i test in `core/tests_migrations_season.py` fissano i leaf `accounts@0005_staff_role_pii` e `management@0009_membership_end_date_constraint` nel `project_state` combinato. Si romperanno (errore di schema storico) **non** a ogni nuova migration, ma solo quando lo schema storico di `User`/`Membership` cambia in modo **non-additivo**: le `AddField` additive con default (es. `Membership.season`, migration `0010`) sono omettibili sugli `INSERT` dei modelli storici e **reggono**; rompono invece la **rimozione di colonne** (`start_date`/`end_date`, 2d-6) e il **flip a `NOT NULL`** di `season` (2d-7).
