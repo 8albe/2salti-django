@@ -108,7 +108,7 @@ L'allineamento di `origin/master` si fa **ricostruendo** il merge `dev → maste
 3. Branch `dev` locale residuo su `/opt/2salti-new/` (`6159c352`, artefatto storico) → **CHIUSO**: `git branch -D dev` su prod (HEAD prod = `master`, delete sicura).
 4. Untracked `find_coach.py` / `find_coach2.py` su `/opt/2salti-dev/` (script debug HEAD_COACH) → **CHIUSO**: rimossi.
 
-Questi erano debiti **git/infrastruttura**, distinti dai debiti di **codice** DEBT-001..004 in §10.6, che restano APERTI e invariati.
+Questi erano debiti **git/infrastruttura**, distinti dai debiti di **codice** DEBT-001..004 in §10.6, che sono stati CHIUSI il 2026-06-19 (vedi §10.6).
 
 **Aggiornamento 2026-06-12 (propagazione Macro 16, §10.8):** prod è stato riagganciato a `origin/master` via `git fetch` + `git reset --hard origin/master` — ora prod HEAD e `origin/master` sono **SHA-identici** (`7d8a937f`) e la lineage prod-local accumulata (incluso `01427d59`) è stata abbandonata. La regola di questa sezione — confrontare il **contenuto**, non le SHA — resta valida per eventuali future divergenze.
 
@@ -497,7 +497,7 @@ Scoperto il 25-mag durante l'implementazione di §5.2 (storico coach + partite d
 - Da fare: inventario utenti test su prod, cancellazione controllata.
 - Aggiornamento 2026-06-12: prod ora migrato a Macro 16 (§10.8) — gli eventuali dati test sono passati per le data migration (canonicalizzazione season, backfill); la voce resta APERTA.
 
-### 10.6 Debiti residui post-Sprint C — DEBT-001/002/004 APERTI
+### 10.6 Debiti residui post-Sprint C — DEBT-001/002/004 — CHIUSI 2026-06-19
 
 Sprint C §10.4 ha chiuso il debito principale (`Membership.start_date`/`end_date` + filtro temporale partite coach). Erano stati identificati cinque item durante la ricognizione iniziale e le estensioni di Step 3b/3c, non bloccanti per la chiusura dello sprint ma da tracciare. **BUG-001** (2026-05-28) e **DEBT-003** (Sprint D, 2026-06-06) sono ora ✅ CHIUSI; restano aperti **DEBT-001 / DEBT-002 / DEBT-004**.
 
