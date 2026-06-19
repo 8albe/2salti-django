@@ -424,18 +424,34 @@ def approve_membership(request, request_id):
                     "impossibile approvare la richiesta.",
                 )
                 return redirect('club_admin_dashboard')
-            req.status = 'APPROVED'
             with transaction.atomic():
-                Membership.objects.get_or_create(
-                    user=req.user, society=req.society,
-                    team=req.team, role=req.role, season=season,
+                # DEBT-004: lock della richiesta per serializzare approvazioni
+                # concorrenti (doppio submit / due presidenti). Su SQLite è un
+                # no-op (write serializzati a livello DB), difensivo per Postgres.
+                locked_req = (
+                    MembershipRequest.objects
+                    .select_for_update()
+                    .get(pk=req.pk)
                 )
-                _sync_profile_denorm(req.user, req.role, req.team, req.society)
-            messages.success(request, f"Membro {req.user.username} approvato.")
+                Membership.objects.get_or_create(
+                    user=locked_req.user, society=locked_req.society,
+                    team=locked_req.team, role=locked_req.role, season=season,
+                )
+                _sync_profile_denorm(
+                    locked_req.user, locked_req.role,
+                    locked_req.team, locked_req.society,
+                )
+                # Sub-bug DEBT-004: la transizione APPROVED va persistita NELLO
+                # STESSO atomic della creazione Membership — o entrambe o
+                # nessuna. Prima era settata fuori e salvata in coda, lasciando
+                # una finestra di Membership orfana se il save falliva.
+                locked_req.status = 'APPROVED'
+                locked_req.save()
+            messages.success(request, f"Membro {locked_req.user.username} approvato.")
         else:
             req.status = 'REJECTED'
+            req.save()
             messages.warning(request, f"Richiesta di {req.user.username} respinta.")
-        req.save()
     return redirect('club_admin_dashboard')
 
 import random

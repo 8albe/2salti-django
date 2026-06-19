@@ -77,6 +77,15 @@ def redeem_activation_code(user, code_string, request=None):
         )
 
     with transaction.atomic():
+        # DEBT-004: lock della riga ActivationCode per serializzare riscatti
+        # concorrenti — la verifica esaurimento + l'incremento di current_uses
+        # devono essere atomici (altrimenti lost-update / over-redemption oltre
+        # max_uses). Su SQLite è un no-op (write serializzati a livello DB),
+        # difensivo per PostgreSQL in produzione.
+        code_obj = ActivationCode.objects.select_for_update().get(pk=code_obj.pk)
+        if code_obj.current_uses >= code_obj.max_uses:
+            return False, None, "Codice esaurito."
+
         membership, created = Membership.objects.get_or_create(
             user=user, society=code_obj.society, team=code_obj.team,
             role=role, season=season,

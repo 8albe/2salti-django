@@ -112,16 +112,41 @@ def sync_athlete_membership(sender, instance, **kwargs):
         _close_all_role_memberships(instance.user, 'PLAYER')
 
 
+COACH_ROLES = ('HEAD_COACH', 'ASSISTANT_COACH')
+
+
 @receiver(post_save, sender=CoachProfile)
 def sync_coach_membership(sender, instance, **kwargs):
+    """Sincronizza la/le Membership coach derivando il ruolo dai dati esistenti.
+
+    DEBT-002: un CoachProfile può corrispondere a più ruoli coach
+    (HEAD_COACH e/o ASSISTANT_COACH) sullo stesso utente — non esiste un campo
+    di ruolo sul profilo (niente schema-change, niente 2-FK). Il signal è quindi
+    *role-differentiated*: deriva i ruoli effettivi dalle Membership coach attive
+    e sincronizza CIASCUNO in isolamento (le helper sono già role-scoped), così
+    che la chiusura/apertura di un ruolo non azzeri né duplichi l'altro.
+
+    Senza Membership coach pregresse il default è HEAD_COACH: un coach in
+    onboarding nasce capo-allenatore (backward-compat con il flusso pre-DEBT-002).
+    """
+    user = instance.user
+    roles = set(
+        Membership.objects.filter(
+            user=user, role__in=COACH_ROLES, is_active=True,
+        ).values_list('role', flat=True)
+    ) or {'HEAD_COACH'}
+
     if instance.current_team:
         society = instance.current_team.society
         with transaction.atomic():
-            _close_other_team_memberships(
-                instance.user, 'HEAD_COACH', new_team=instance.current_team,
-            )
-            _open_or_reopen_membership(
-                instance.user, society, instance.current_team, 'HEAD_COACH',
-            )
+            for role in roles:
+                _close_other_team_memberships(
+                    user, role, new_team=instance.current_team,
+                )
+                _open_or_reopen_membership(
+                    user, society, instance.current_team, role,
+                )
     else:
-        _close_all_role_memberships(instance.user, 'HEAD_COACH')
+        with transaction.atomic():
+            for role in roles:
+                _close_all_role_memberships(user, role)
