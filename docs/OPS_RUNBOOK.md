@@ -680,3 +680,116 @@ Regola: oltre le 6 ore di sessione attiva, tornare a chiedere conferma esplicita
 Quando l'agente propone più opzioni all'utente, il framing del wording è esso stesso una forma di scelta. Mettere l'opzione preferita per prima nella lista, evidenziarla in grassetto, marcarla "(Recommended)", o presentare le altre come "da giustificare" mentre la preferita appare "naturale", non è neutrale — è una preferenza camuffata da scelta libera. Ed è una forma di disonestà sottile: l'utente non si accorge del bias e finisce per scegliere ciò che l'agente avrebbe scelto comunque, ma con l'illusione di averlo deciso lui.
 
 Regola: o le opzioni sono presentate in modo genuinamente neutro (ordinamento neutro, pari peso visivo, descrizione bilanciata di pro/contro), o il bias va dichiarato esplicitamente come tale ("io preferirei A perché X, ma Y e Z sono alternative valide e legittime"). Nascondere la preferenza dietro una struttura che sembra neutra è la versione più insidiosa del problema, perché toglie all'utente la possibilità di accettare o rifiutare il bias consapevolmente. Pattern osservato il 2 maggio 2026 e corretto in tempo reale dopo che Alberto ha segnalato la dinamica.
+
+## Appendice A — Archivio debiti e fragilità risolti
+
+Voci di §10 chiuse e verificate, spostate qui dalla testa del file per tenere
+`## 10. Debiti aperti` ridotto a ciò che è davvero aperto. Niente è cancellato:
+ogni voce conserva cosa era, come è stata chiusa, e dove vive nel codice/test.
+Il dettaglio blow-by-blow resta recuperabile da git e dalle session note; qui
+sta il razionale che spiega perché il codice attuale è fatto così. Gli
+identificatori §10.x sono preservati perché §2.3 e §10.5 vi puntano.
+
+### §10.1 Report PUBLISHED con blocker quality gate — CHIUSO 2026-05-02
+*Cosa era:* 4 `MatchReport` PUBLISHED con `created_events_count=0` e `score>0`
+(stat atleti a zero, classifiche corrette perché calcolate da `match.score`, non
+dagli eventi); causa OCRQualityGate half-shipped + drop silenzioso di eventi senza
+`player_id` riconciliato in `publishing_service.py`.
+*Chiuso:* Policy A strict (commit `c787b11`) — `schema.py` conta solo eventi con
+`player`/`player_name` valorizzato; `publishing_service.py` fa `set_rollback(True)`
+se `created_events_count==0 & score>0` anche con `force=True` (audit
+`action='abort_zero_events'`). I 4 referti esistenti revertati PUBLISHED→NEEDS_REVIEW
+(id 7,8,10,11) da Alberto.
+*Vive in:* `matches/services/schema.py`, `publishing_service.py`.
+*Residuo prodotto (aperto):* se un revert dovesse togliere anche il punteggio dalla
+classifica serve modifica a `standings_service` — decisione rinviata.
+
+### §10.2 Audit trail non visibile nella review page admin — CHIUSO 2026-05-10
+*Cosa era:* la review page admin non mostrava le entry `MatchReportAuditLog` pur
+presenti nel DB (zero impatto funzionale, solo visibilità reviewer).
+*Chiuso:* commit `a9ca246` — aggiunta query `report_audit_logs` nel context di
+`review_view()` + scritture audit `review_opened`/`save_draft`/`validate`; il
+blocco template esisteva già (classico "1,2,4 senza 3", §3.11).
+*Vive in:* `matches/admin.py`, `templates/admin/matches/matchreport/review.html`.
+
+### §10.3 EXTENDED_EVENT_TYPES non allineato a event_types.py — CHIUSO 2026-05-10
+*Cosa era:* whitelist parallela in `schema.py` non derivata dall'autorità centrale
+`event_types.py`; un `EXCLUSION_BRUTAL` passava il validator ma non veniva conteggiato
+da stats/match detail.
+*Chiuso:* commit `b97e9e5` — event types ridotti ai 5 canonici (GOAL, EXCLUSION_20,
+YELLOW_CARD, RED_CARD, TIMEOUT) + OTHER catch-all; eliminato `EXTENDED_EVENT_TYPES`
+(codice morto), allineati prompt OCR e consumer.
+*Vive in:* `matches/services/schema.py`, `vision_providers.py`, `ocr_providers/openai.py`.
+
+### §10.4 Membership senza start_date/end_date — CHIUSO Sprint C (2026-05-27/28), poi superato da Macro 16
+*Cosa era:* `Membership` senza intervallo di tenure → storico coach ordinabile solo
+per `created_at`, partite dirette non filtrabili per periodo.
+*Chiuso (Sprint C):* aggiunti `start_date`/`end_date` + `MembershipQuerySet.active_at(date)`
++ filtro temporale su `coached_matches`/`direct_matches` (commit `0f6ca64`, `6e0243e`,
+`0eeff1a`, `0db9307`, `cbb1491`).
+*Superato:* Macro 16 Fase 2 ha **rimosso** `start_date`/`end_date` da `Membership`
+(migration `management/0014`); l'asse temporale è ora la FK `season` (NOT NULL dalla
+`0015`). I follow-up sono confluiti in §10.6.
+*Vive in:* `management/models.py` (storico in git), `accounts/views.py`,
+test `management.tests_membership_dates`, `accounts.tests_temporal_views`.
+
+### §10.6 Debiti residui post-Sprint C (BUG-001, DEBT-001/002/003/004) — CHIUSI 2026-06-19
+*Cosa era:* cinque item tracciati durante Sprint C, non bloccanti.
+- **BUG-001** — 500 su `base.html` con sport a 0 leghe (`VariableDoesNotExist` su
+  `sport.leagues.first.slug`, il `|default` non protegge). **Chiuso (Sprint D, commit
+  dev `5eaab746`):** guard `{% if sport.leagues.exists %}` in `templates/base.html`;
+  regression `core/tests_navbar.py`.
+- **DEBT-001** — `unique_together (user,society,team,role)` bloccava il rientro storico.
+  **Chiuso (assorbito Macro 16):** sostituito da `UniqueConstraint(user,society,team,role,
+  season)` → rientro in stagione diversa = riga distinta, stessa stagione resta bloccata.
+  No codice. Test `management/tests_membership_debts.py::Debt001CrossSeasonReentryTests`.
+- **DEBT-002** — dual-role coach: `sync_coach_membership` hardcodava `HEAD_COACH` e
+  fabbricava una HEAD_COACH spuria a un coach solo-assistant. **Chiuso rendendo il signal
+  role-aware** (deriva i ruoli coach dalle membership attive e sincronizza ciascuno in
+  isolamento; HEAD_COACH e ASSISTANT_COACH coesistono; default HEAD_COACH se nessuna
+  membership coach pregressa). **Nessuna 2-FK su `CoachProfile`, nessun cambio schema.**
+  Test `Debt002DualRoleCoachTests`.
+- **DEBT-003** — `Membership` con `end_date < start_date`. **Chiuso poi RITIRATO:**
+  `CheckConstraint membership_end_date_after_start` (migration `0009`, commit `068ec8e`)
+  decaduto quando Macro 16 Fase 2 (`management/0014`) ha rimosso le date.
+- **DEBT-004** — race redeem/approve su stesso user. **Chiuso con limitazione:**
+  `select_for_update()` difensivo in `approve_membership` e `redeem_activation_code`,
+  e transizione-stato + creazione Membership rese un'unica unità atomica (prima la
+  Membership poteva restare orfana). La race in sé NON è falsificabile su SQLite
+  (write serializzati, `select_for_update` no-op); fix valido per PostgreSQL prod. Il
+  test copre il sub-bug di atomicità in modo deterministico. Test `Debt004ApproveAtomicityTests`.
+*Vive in:* `management/models.py` (signal `sync_coach_membership`), `management/services`
+(approve/redeem), `templates/base.html`, `management/tests_membership_debts.py`.
+
+### §10.7 Fragilità test migration Macro 16 (leaf hardcoded) — CHIUSO 2026-06-19
+*Cosa era:* `core/tests_migrations_season.py` pinnava il leaf `accounts@0005_staff_role_pii`
+in `project_state`; poiché accounts non viene retrocessa e resta al leaf fisico, la prima
+migration accounts non-additiva avrebbe spostato il leaf lasciando il modello storico a
+0005 → mismatch schema → lockstep manuale test↔migration a ogni migration. Introdotto Fase
+1b (commit `c7cef79`, 2026-06-09); lockstep manuale applicato il 2026-06-11 (Fasi 2-4).
+*Chiuso:* reso **leaf-agnostic** — il leaf accounts è risolto a runtime via
+`loader.graph.leaf_nodes("accounts")` (helper `_current_leaf`, assert leaf unico). Stessi
+assert, ma il test segue il leaf da solo: nessuna migration accounts futura tocca più il
+test. NO-SCHEMA, test-only.
+*Anchor intenzionali (non debito):* i pin `core@0008`/`core@0010` (pre/post-bonifica) e
+`management@0009` (rewind imposto da `management/0010+ → core.Season`) NON sono leaf ma
+anchor storici semantici → restano hardcoded di proposito (management 0014→0016 senza rotture).
+*Vive in:* `core/tests_migrations_season.py::SeasonBonificaMigrationTest` (5 test); suite
+core/accounts/management 177/177.
+
+### §10.8 Macro 16 — propagazione prod — CHIUSO 2026-06-12
+*Cosa era:* Macro 16 chiusa su `dev`/dev-box ma prod `/opt/2salti-new/` a `01427d59` senza
+codice né migration; propagazione da fare via pattern §2.3 (no SHA prod-local), history `dev`
+riscritta con `git-filter-repo`.
+*Chiuso:* merge `--no-ff` dev→master da home + push; deploy su prod via `git fetch` +
+`git reset --hard origin/master` (NO pull). Backup DB pre-migrate; 21 migrazioni applicate
+(numeri identici al dry-run); smoke `ops_check --mode afternoon` GREEN, HTTP/2 200.
+*Nota:* allo step 3 prod risultava "ahead by 54 commits" (lineage prod-local §2.3), non HEAD
+orfana pura; il `reset --hard` ha riagganciato correttamente.
+
+### §10.9 Certificato SSL 2salti.com — CHIUSO 2026-06-14 (verificato 2026-06-19)
+*Cosa era:* certificato scaduto (curl senza `-k` falliva), scoperto allo smoke post-Macro 16;
+non legato al deploy. Causa-radice: `certbot.timer` Dummy.
+*Chiuso:* `certbot renew` + automazione via `/etc/cron.d/certbot-2salti` scoped ai domini di
+Alberto; verificato con `openssl s_client`/`x509 -dates` (valido 2026-06-14 → 2026-09-12,
+Let's Encrypt). Il `curl -k` in diagnosi era prudenza superflua.
