@@ -569,13 +569,33 @@ serializzati a livello DB e select_for_update() è un no-op; il lock è un fix
 difensivo valido per PostgreSQL in produzione. Il test copre il sub-bug di
 atomicità in modo deterministico. Regression test: Debt004ApproveAtomicityTests.
 
-### 10.7 Fragilità test migration Macro 16 — APERTO (introdotto Fase 1b, 2026-06-09)
+### §10.7 — Fragilità test migration (leaf hardcoded) — CHIUSO (2026-06-19)
 
-- **Sintomo:** i test in `core/tests_migrations_season.py` fissano i leaf `accounts@0005_staff_role_pii` e `management@0009_membership_end_date_constraint` nel `project_state` combinato. Si romperanno (errore di schema storico) **non** a ogni nuova migration, ma solo quando lo schema storico di `User`/`Membership` cambia in modo **non-additivo**: le `AddField` additive con default (es. `Membership.season`, migration `0010`) sono omettibili sugli `INSERT` dei modelli storici e **reggono**; rompono invece la **rimozione di colonne** (`start_date`/`end_date`, 2d-6) e il **flip a `NOT NULL`** di `season` (2d-7).
-- **Origine:** Macro 16 Fase 1b (commit `c7cef79`).
-- **Fix proposto:** aggiornare i leaf in lockstep con le nuove migration, o rendere il test leaf-agnostico (risoluzione dinamica del leaf invece dell'hardcoding).
-- **Priorità:** bassa — **non** scatta sulle migration additive già applicate (`0010` season, `0011` backfill, `0012` coach_change_note → i test reggono); scatterà con la rimozione di `start_date`/`end_date` (2d-6) e il flip `season NOT NULL` (2d-7).
-- **Aggiornamento 2026-06-11 (Macro 16 Fasi 2-4):** il lockstep è stato applicato ai punti previsti. `core/tests_migrations_season.py` ora **retrocede fisicamente anche management a `0009`** nel `migrate_from` (un pin al leaf è impossibile: trascinerebbe core oltre 0008 nel project_state) e risemina `Team.category` via modello storico 0008; `tests_season.BackfillSeasonFkMigrationTest` asserisce via modello storico a core@0014 (il reale ha `league_type`); il tearDown di `tests_migrations_membership_season` ripulisce il record difensivo season=NULL prima del forward (la `0015` è fail-fast sui NULL). Il debito resta APERTO come fragilità strutturale: ogni futura migration non-additiva su `User`/`Membership`/`League`/`Team` richiede lo stesso lockstep.
+**Era fragile.** `core/tests_migrations_season.py` (test della data migration
+`core/0009_bonifica_season_slash`) targettava l'app `accounts` con la stringa
+di migration leaf fissa `0005_staff_role_pii` dentro `project_state(...)`.
+accounts nel test non viene mai retrocessa e resta allo schema fisico corrente
+(= leaf): col pin fisso, la prima migration accounts non-additiva avrebbe
+spostato il leaf fisico lasciando il modello storico a 0005 → mismatch schema
+("no such column") → test rotto → lockstep manuale test↔migration a ogni
+nuova migration accounts.
+
+**Ora è leaf-agnostic.** Il leaf accounts è risolto dinamicamente da
+`loader.graph.leaf_nodes("accounts")` (helper `_current_leaf`, con assert di
+leaf unico). Il test esercita lo stesso identico stato di migration e gli stessi
+assert; semplicemente segue il leaf da solo. Una futura migration accounts non
+richiede più alcuna modifica al test.
+
+**Test interessato.** `core.tests_migrations_season.SeasonBonificaMigrationTest`
+(5 test) — invariati negli assert. Suite core/accounts/management: 177/177 verde;
+`makemigrations --check` pulito; `manage.py check` 0 issue. NO-SCHEMA, test-only.
+
+**Precisazione (non più un debito).** Gli altri pin del test — `core@0008`/
+`core@0010` (pre/post-bonifica) e `management@0009` (rewind target imposto dalla
+dipendenza `management/0010+ → core.Season`) — NON sono leaf ma anchor storici
+semantici: restano hardcoded di proposito e sono immuni ai movimenti del leaf
+(management è passato da 0014 a 0016 senza rompere il test). Nessun lockstep
+manuale residuo.
 
 ### 10.8 Macro 16 — propagazione prod — ✅ CHIUSO (2026-06-12)
 
