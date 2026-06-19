@@ -85,7 +85,36 @@ def sport_detail(request, slug):
     sport = get_object_or_404(Sport, slug=slug)
     now = timezone.now()
 
-    leagues = sport.leagues.all().prefetch_related(
+    # Stagione corrente per-sport (Macro 16): default del selettore stagione.
+    from core.services.season_service import get_current_season
+    season = get_current_season(sport)
+    if season:
+        current_season = season.label
+    else:
+        # Fallback bit-identico al vecchio MAX lessicografico finche' Season non
+        # e' popolata per questo sport. Isolato nella view: il service non cambia
+        # contratto (resta Season | None).
+        current_season = (
+            sport.leagues.order_by('-season').first().season
+            if sport.leagues.exists()
+            else ''
+        )
+
+    # Macro 3: selettore stagione sulla classifica pubblica. La fonte dati e' la
+    # stringa League.season (League e' gia' per-stagione, unique su name+season+
+    # group_name); LeagueStanding.season non entra nel filtro perche'
+    # get_standings() scopa gia' per lega. Niente FK, niente migration.
+    available_seasons = list(
+        sport.leagues.values_list('season', flat=True).distinct().order_by('-season')
+    )
+    requested_season = request.GET.get('season')
+    if requested_season in available_seasons:
+        selected_season = requested_season
+    else:
+        # Assente o non valido -> default alla stagione corrente.
+        selected_season = current_season
+
+    leagues = sport.leagues.filter(season=selected_season).prefetch_related(
         'matches__home_team__society',
         'matches__away_team__society',
     )
@@ -114,20 +143,6 @@ def sport_detail(request, slug):
 
     all_sports = Sport.objects.filter(leagues__isnull=False).distinct().order_by('name')
 
-    from core.services.season_service import get_current_season
-    season = get_current_season(sport)
-    if season:
-        current_season = season.label
-    else:
-        # Fallback bit-identico al vecchio MAX lessicografico finche' Season non
-        # e' popolata per questo sport. Isolato nella view: il service non cambia
-        # contratto (resta Season | None).
-        current_season = (
-            sport.leagues.order_by('-season').first().season
-            if sport.leagues.exists()
-            else ''
-        )
-
     from core.services.seo_service import SEOService
 
     return render(request, 'sport/sport_detail.html', {
@@ -136,6 +151,8 @@ def sport_detail(request, slug):
         'sport_color': sport.hex_color,
         'all_sports': all_sports,
         'current_season': current_season,
+        'available_seasons': available_seasons,
+        'selected_season': selected_season,
         'seo_title': f"Campionati e Classifiche {sport.name}",
         'seo_description': f"Tutte le classifiche e i risultati per il mondo {sport.name}. Segui la tua squadra su 2salti.",
         'structured_data': SEOService.get_breadcrumb_schema(request, [(sport.name, request.path)])

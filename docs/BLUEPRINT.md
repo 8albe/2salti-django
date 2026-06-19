@@ -466,7 +466,7 @@ Per evitare caos, il database deve riflettere entità reali e relazioni chiare.
 
 ### 10.1 Modello stagione e tesseramento
 
-> Decisione di prodotto **chiusa** (Sprint D, 2026-06-06). Non ancora implementata — vedi [SYLLABUS](SYLLABUS.md) Macro 16.
+> Decisione di prodotto **chiusa** (Sprint D, 2026-06-06). **Implementata** (dev 2026-06-11, live su prod 2026-06-12) — vedi [SYLLABUS](SYLLABUS.md) Macro 16.
 
 Il dominio adotta la **stagione come asse** del tesseramento, non più le date libere:
 

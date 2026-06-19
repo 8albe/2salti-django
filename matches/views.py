@@ -236,15 +236,43 @@ def league_statistics(request, league_slug):
 
 
 def sport_matches(request, sport_slug):
-    """Lista di tutte le partite di uno sport (filtrate per data)"""
+    """Lista di tutte le partite di uno sport (filtrate per stagione e data)"""
     from core.models import Sport
     from core.utils import get_calendar_dates
+    from core.services.season_service import get_current_season
     from django.utils import timezone
     import datetime
-    
+
     sport = get_object_or_404(Sport, slug=sport_slug)
-    
-    # Gestione Data
+
+    # Stagione corrente per-sport (Macro 16): default del selettore stagione.
+    season = get_current_season(sport)
+    if season:
+        current_season = season.label
+    else:
+        # Fallback bit-identico al MAX lessicografico finche' Season non e'
+        # popolata per questo sport (stesso pattern di sport_detail / fetta 1).
+        current_season = (
+            sport.leagues.order_by('-season').first().season
+            if sport.leagues.exists()
+            else ''
+        )
+
+    # Macro 3 fetta 2: selettore stagione sulla pagina pubblica Partite. Stessa
+    # fonte dati della fetta 1: la stringa League.season (League e' gia'
+    # per-stagione). Il filtro stagione e' il filtro grossolano; il filtro data
+    # (?date=) resta sotto-filtro per-giorno. Niente FK, niente migration.
+    available_seasons = list(
+        sport.leagues.values_list('season', flat=True).distinct().order_by('-season')
+    )
+    requested_season = request.GET.get('season')
+    if requested_season in available_seasons:
+        selected_season = requested_season
+    else:
+        # Assente o non valido -> default alla stagione corrente.
+        selected_season = current_season
+
+    # Gestione Data (sotto-filtro invariato rispetto alla versione precedente).
     today = timezone.now().date()
     date_str = request.GET.get('date')
     if date_str:
@@ -259,20 +287,23 @@ def sport_matches(request, sport_slug):
 
     matches = Match.objects.filter(
         league__sport=sport,
+        league__season=selected_season,
         match_date__date=selected_date
     ).select_related(
-        'home_team__society', 
-        'away_team__society', 
+        'home_team__society',
+        'away_team__society',
         'league'
     ).order_by('match_date')
-    
+
     return render(request, 'sport/sport_matches.html', {
-        'sport': sport, 
-        'matches': matches, 
+        'sport': sport,
+        'matches': matches,
         'sport_color': sport.hex_color,
         'calendar_dates': calendar_dates,
         'selected_date': selected_date,
         'today': today,
+        'available_seasons': available_seasons,
+        'selected_season': selected_season,
         'seo_title': f"Risultati e Calendario {sport.name}",
         'seo_description': f"Tutti i risultati e le prossime partite di {sport.name}. Calendario completo e tabellini su 2salti.",
     })

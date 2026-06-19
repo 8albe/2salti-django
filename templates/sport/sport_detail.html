@@ -19,9 +19,22 @@
 </nav>
 {% endif %}
 
-<div class="mb-8">
-    <h1 class="text-4xl font-bold sport-accent mb-2">{{ sport.name }}</h1>
-    <p class="text-slate-400">Stagione {{ current_season|default:"Corrente" }}</p>
+<div class="mb-8 flex flex-wrap items-center justify-between gap-4">
+    <div>
+        <h1 class="text-4xl font-bold sport-accent mb-2">{{ sport.name }}</h1>
+        <p class="text-slate-400">Stagione {{ selected_season|default:current_season|default:"Corrente" }}</p>
+    </div>
+    {% if available_seasons|length > 1 %}
+    <form method="get" class="shrink-0">
+        <label for="season-select" class="sr-only">Seleziona stagione</label>
+        <select id="season-select" name="season" onchange="this.form.submit()"
+                class="glass-panel px-4 py-2 rounded-full border border-white/10 text-slate-200 text-sm bg-slate-900/50 focus:border-cyan-400/50 focus:outline-none">
+            {% for s in available_seasons %}
+            <option value="{{ s }}" {% if s == selected_season %}selected{% endif %}>Stagione {{ s }}</option>
+            {% endfor %}
+        </select>
+    </form>
+    {% endif %}
 </div>
 
 <!-- QUICK LINKS -->

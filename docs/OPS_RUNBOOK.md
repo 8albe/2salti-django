@@ -110,6 +110,8 @@ L'allineamento di `origin/master` si fa **ricostruendo** il merge `dev → maste
 
 Questi erano debiti **git/infrastruttura**, distinti dai debiti di **codice** DEBT-001..004 in §10.6, che restano APERTI e invariati.
 
+**Aggiornamento 2026-06-12 (propagazione Macro 16, §10.8):** prod è stato riagganciato a `origin/master` via `git fetch` + `git reset --hard origin/master` — ora prod HEAD e `origin/master` sono **SHA-identici** (`7d8a937f`) e la lineage prod-local accumulata (incluso `01427d59`) è stata abbandonata. La regola di questa sezione — confrontare il **contenuto**, non le SHA — resta valida per eventuali future divergenze.
+
 ## 3. Trappole tecniche note
 
 ### 3.1 `git rm --cached` + file dirty = pull abortito
@@ -479,6 +481,7 @@ Scoperto il 25-mag durante l'implementazione di §5.2 (storico coach + partite d
 - Su dev: admin_bot cancellato, rimasto solo albe_admin come superuser. Nessuna società test trovata.
 - Su prod: non verificato — richiede sessione dedicata con accesso esplicito al VPS.
 - Da fare: inventario utenti test su prod, cancellazione controllata.
+- Aggiornamento 2026-06-12: prod ora migrato a Macro 16 (§10.8) — gli eventuali dati test sono passati per le data migration (canonicalizzazione season, backfill); la voce resta APERTA.
 
 ### 10.6 Debiti residui post-Sprint C — DEBT-001/002/004 APERTI
 
@@ -529,11 +532,20 @@ Sprint C §10.4 ha chiuso il debito principale (`Membership.start_date`/`end_dat
 - **Priorità:** bassa — **non** scatta sulle migration additive già applicate (`0010` season, `0011` backfill, `0012` coach_change_note → i test reggono); scatterà con la rimozione di `start_date`/`end_date` (2d-6) e il flip `season NOT NULL` (2d-7).
 - **Aggiornamento 2026-06-11 (Macro 16 Fasi 2-4):** il lockstep è stato applicato ai punti previsti. `core/tests_migrations_season.py` ora **retrocede fisicamente anche management a `0009`** nel `migrate_from` (un pin al leaf è impossibile: trascinerebbe core oltre 0008 nel project_state) e risemina `Team.category` via modello storico 0008; `tests_season.BackfillSeasonFkMigrationTest` asserisce via modello storico a core@0014 (il reale ha `league_type`); il tearDown di `tests_migrations_membership_season` ripulisce il record difensivo season=NULL prima del forward (la `0015` è fail-fast sui NULL). Il debito resta APERTO come fragilità strutturale: ogni futura migration non-additiva su `User`/`Membership`/`League`/`Team` richiede lo stesso lockstep.
 
-### 10.8 Macro 16 — propagazione prod PENDENTE (2026-06-11)
+### 10.8 Macro 16 — propagazione prod — ✅ CHIUSO (2026-06-12)
 
 - **Stato:** Macro 16 è chiusa e su `dev` (`19fb44b`), dev box migrato (`management` leaf `0016`, `core` leaf `0018`). Prod `/opt/2salti-new/` è a `01427d59` e **non** ha Macro 16: né codice né migration.
 - **Propagazione:** segue il pattern §2.3 — ricostruzione `dev→master` da home e push da home, **mai** propagando le SHA prod-local. Il `migrate` su DB prod è **gated dopo backup** (Alberto, §11.2/§11.3).
 - **Trappola:** la history di `dev` è stata **riscritta con `git-filter-repo`** (rimozione binari >100MB); la ricostruzione di `master` deve quindi partire dal **nuovo** `dev`, non da SHA pre-riscrittura.
+
+**CHIUSO 2026-06-12 — propagazione eseguita.** Merge `--no-ff` dev→master da home e push (`origin/master` = `7d8a937f`); deploy su `/opt/2salti-new/` in modalità speciale `git fetch` + `git reset --hard origin/master` (**NO pull**). Backup DB prod pre-migrate: `db.sqlite3.bak.20260612-130226`. 21 migrazioni applicate (stop→migrate→start), numeri **identici al dry-run**. Smoke: `ops_check --mode afternoon` GREEN, 0 findings; sito HTTP/2 200. **Nota di realtà:** allo step 3 prod risultava "ahead of origin/master by 54 commits" (lineage prod-local di §2.3), **non** HEAD orfana pura come previsto; il `reset --hard` ha comunque riagganciato correttamente a `7d8a937f`.
+
+### 10.9 Certificato SSL 2salti.com SCADUTO — APERTO URGENTE (scoperto 2026-06-12)
+
+- **Sintomo:** `curl` senza `-k` su `https://2salti.com/` fallisce con "certificate has expired"; un browser reale mostra l'avviso di sicurezza. Scoperto durante lo smoke test post-propagazione Macro 16.
+- **NON legato al deploy:** il giro 2026-06-12 non ha toccato Nginx né TLS.
+- **Da fare:** `certbot renew` + reload nginx; indagare perché il rinnovo automatico non è scattato (timer certbot fermo/fallito?).
+- **Esecuzione:** tutto sudo → Alberto (§11.2).
 
 ## 11. Sicurezza operativa e frontiera reversibile
 
