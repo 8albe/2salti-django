@@ -140,7 +140,7 @@ ENVIRONMENT_NAME        # production
 - Static files collected to `STATIC_ROOT` = `BASE_DIR / 'staticfiles'` (resolves to `/opt/2salti-new/staticfiles/` in the production deploy), served by nginx via `/static/` alias.
 - Media uploads stored at `MEDIA_ROOT` = `BASE_DIR / 'media'` (resolves to `/opt/2salti-new/media/` in the production deploy), served by nginx via `/media/` alias.
 - **Deploy flow**: commit on `dev` in `/home/alberto/` → `git push origin dev` → on the VPS `cd /opt/2salti-new && git pull` → `sudo systemctl restart 2salti` (or `reload` for non-runtime changes) → verify with `curl -I https://2salti.com/`. Both `/home/alberto/` and `/opt/2salti-new/` have `origin` pointed directly at `github.com/8albe/2salti-django.git` (since 25-apr-2026); the deploy does **not** pull from the home repo.
-- **Nessun ambiente auto-migra.** Il dev box `/opt/2salti-dev/` autopulla il codice, non il DB; prod `/opt/2salti-new/` è pull manuale. Il `migrate` è sempre manuale e gated dopo backup DB (Alberto). Dopo un pull che alza lo schema, il DB resta indietro finché non si migra a mano — atteso, non un bug.
+- **Auto-migrate solo su dev.** Il dev box `/opt/2salti-dev/` **auto-migra** via `2salti-dev-autopull.service` (pull `--ff-only` → `migrate --noinput` → `collectstatic --noinput` → reload gunicorn; data-migration incluse; dettaglio in [docs/OPS_RUNBOOK.md](docs/OPS_RUNBOOK.md) §2.2). Prod `/opt/2salti-new/` resta **pull e `migrate` manuali**, gated dopo backup DB (Alberto). Dopo un pull che alza lo schema su prod, il DB resta indietro finché non si migra a mano — atteso, non un bug.
 
 ## Development Workflow
 

@@ -434,6 +434,25 @@ Registro vivo di problemi noti che richiedono follow-up. Non sono trappole (§3)
 - Da fare: inventario utenti test su prod, cancellazione controllata.
 - Aggiornamento 2026-06-12: prod ora migrato a Macro 16 (§10.8) — gli eventuali dati test sono passati per le data migration (canonicalizzazione season, backfill); la voce resta APERTA.
 
+### 10.10 Loop onboarding presidente self-service (PROD) — APERTO (scoperto 2026-06-20)
+- `create_society` non è in `allowed_urls` del middleware onboarding (`accounts/middleware.py`): un presidente in `MEMBERSHIP_PENDING` (società non ancora creata) viene rediretto a `onboarding_membership` → `ERR_TOO_MANY_REDIRECTS`. Sistemico, pre-esistente, tocca **prod**.
+- Fix tocca `accounts/middleware.py` (**protected file**) → richiede autorizzazione esplicita. Priorità **alta** (blocca l'onboarding presidente reale).
+
+### 10.11 `_society_recipients` — candidato debito INVESTIGATO, non riproduce (2026-06-20)
+*Sospetto iniziale (test 7b):* notifica vouching alla società mai recapitata; ipotesi che `getattr(society, 'president', None)` puntasse a una relation inesistente.
+*Verifica a runtime:* `society.president` è il reverse OneToOne di `PresidentProfile.managed_society` (`related_name='president'`); in questo Django `RelatedObjectDoesNotExist` è sottoclasse di `AttributeError`, quindi `getattr(..., None)` ritorna `None` senza sollevare. `_society_recipients` ritorna `[society.email]`, `[president.user.email]` o `[]` correttamente. **Nessun bug.**
+*Causa reale del sintomo:* SMTP dev non configurato → vedi §10.12.
+
+### 10.12 SMTP dev non configurato — APERTO (scoperto 2026-06-20)
+- `EMAIL_BACKEND=smtp` su `localhost:25` senza server → le email best-effort (incluse vouching/certificazione) saltano silenziosamente (gestite via `_safe_send`, ma nessun recapito). È la causa reale del sintomo "notifica società non arrivata" osservato in test 7b.
+- Da fare: configurare console/file backend su dev + monitoraggio warning `[certification]` in prod.
+
+### 10.13 API `/accounts/api/...` fuori whitelist onboarding — APERTO (scoperto 2026-06-20)
+- L'esenzione middleware è `request.path.startswith('/api/')`, ma gli endpoint AJAX accounts (`search-athlete` e simili) stanno sotto `/accounts/api/...` → non coperti → intercettati durante onboarding e rediretti (ritornano HTML invece di JSON). Pre-esistente. Mitigabile lato client con header `X-Requested-With: XMLHttpRequest` (già esentato dal middleware).
+
+### 10.14 Git credential helper instabile sul VPS — APERTO (scoperto 2026-06-20)
+- `~/.git-credentials` presente ma `credential.helper` non attivo → `git push` fallisce con 401 finché non si riattiva `store`. Da capire se qualcosa resetta la config git sul VPS condiviso.
+
 ## 11. Sicurezza operativa e frontiera reversibile
 
 Questa sezione codifica le regole di sicurezza operativa emerse dalle sessioni di aprile-maggio 2026, e in particolare consolidate dopo l'incidente del 4 maggio 2026 in cui una password sudo in chiaro è stata trovata nella history pubblica del repo (`install_service.sh`, commit `473c296` del 15 marzo 2026). La regola madre è che le operazioni con effetti permanenti, distruttivi o privilegiati passano per Alberto e mai per l'agente, e che i segreti non transitano mai in contesti condivisi.
