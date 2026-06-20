@@ -12,6 +12,7 @@ import logging
 
 from django.conf import settings
 from django.core.mail import send_mail
+from django.db import transaction
 from django.urls import reverse
 
 from accounts.models import User
@@ -29,6 +30,32 @@ def _society_recipients(society):
     if president and president.user and president.user.email:
         return [president.user.email]
     return []
+
+
+def _safe_send(*, subject, message, recipient_list, log_ref):
+    """Invio email best-effort. Un fallimento (SMTP irraggiungibile, indirizzo
+    vuoto) viene loggato ma NON propagato: la notifica è un side effect non
+    critico e non deve rompere la transizione di stato né produrre un 500.
+
+    Si usa try/except mirato invece di fail_silently=True per lasciare una
+    traccia ops (warning) del mancato invio — coerente col fallback già usato
+    quando non esistono destinatari. Niente PII nei log: solo il riferimento
+    tecnico (cert pk). Ritorna True se l'email è partita, False altrimenti.
+    """
+    if not recipient_list:
+        return False
+    try:
+        send_mail(
+            subject, message, settings.DEFAULT_FROM_EMAIL,
+            recipient_list, fail_silently=False,
+        )
+        return True
+    except Exception:
+        logger.warning(
+            "[certification] invio email fallito (%s): notifica non recapitata",
+            log_ref, exc_info=True,
+        )
+        return False
 
 
 def _resolve_society_for_child(child):
@@ -70,16 +97,22 @@ def request_certification(parent, child):
             "corrente: impossibile inoltrare la richiesta."
         )
 
-    cert = ParentCertification.objects.create(
-        parent=parent, child=child, society=society,
-        status=ParentCertification.Status.RICHIESTA_INVIATA,
-    )
+    # Creazione + transizione RICHIESTA_INVIATA -> IN_ATTESA_SOCIETA atomiche
+    # (disciplina DEBT-004). L'email di vouching alla società è side effect non
+    # critico e va FUORI dal blocco: un SMTP irraggiungibile non deve lasciare
+    # la cert appena creata bloccata a RICHIESTA_INVIATA né produrre un 500.
+    with transaction.atomic():
+        cert = ParentCertification.objects.create(
+            parent=parent, child=child, society=society,
+            status=ParentCertification.Status.RICHIESTA_INVIATA,
+        )
+        cert.mark_in_attesa_societa()
 
     recipients = _society_recipients(society)
     if recipients:
         parent_name = parent.get_full_name() or parent.username
         child_name = child.get_full_name() or child.username
-        send_mail(
+        _safe_send(
             subject=f"[2salti] Richiesta certificazione genitore — {society.name}",
             message=(
                 f"La società {society.name} ha ricevuto una richiesta di "
@@ -90,9 +123,8 @@ def request_certification(parent, child):
                 f"corrispondono, conferma la richiesta dal pannello società; "
                 f"in caso contrario, rifiutala.\n"
             ),
-            from_email=settings.DEFAULT_FROM_EMAIL,
             recipient_list=recipients,
-            fail_silently=False,
+            log_ref=f"cert pk={cert.pk} request-vouching",
         )
     else:
         logger.warning(
@@ -101,7 +133,6 @@ def request_certification(parent, child):
             society.pk, cert.pk,
         )
 
-    cert.mark_in_attesa_societa()
     logger.info("[certification] cert pk=%s -> IN_ATTESA_SOCIETA", cert.pk)
     return True, cert, None
 
@@ -112,17 +143,26 @@ def confirm_certification(cert, request=None):
 
     Returns: (ok, cert, error).
     """
+    # Transizione atomica IN_ATTESA_SOCIETA -> IN_ATTESA_CLICK_GENITORE
+    # (CONFERMATA_SOCIETA è uno stato intermedio transiente). Disciplina
+    # DEBT-004: nessun save parziale fuori dal blocco. Su re-submit (stato non
+    # più IN_ATTESA_SOCIETA) conferma_societa() alza ValueError: lo catturiamo e
+    # restituiamo l'errore senza propagare né lasciare stato a metà.
     try:
-        cert.conferma_societa()
+        with transaction.atomic():
+            cert.conferma_societa()
+            cert.mark_in_attesa_click()
     except ValueError as exc:
         return False, cert, str(exc)
 
+    # Email NON critica e FUORI dalla transizione: un SMTP irraggiungibile non
+    # deve annullare la conferma né produrre un 500 (era la causa del bug).
     link_path = reverse('certify_parent', args=[cert.token])
     link = request.build_absolute_uri(link_path) if request is not None else link_path
 
     if cert.parent.email:
         child_name = cert.child.get_full_name() or cert.child.username
-        send_mail(
+        _safe_send(
             subject="[2salti] Conferma la tua certificazione genitore",
             message=(
                 f"La società {cert.society.name} ha confermato la tua richiesta "
@@ -131,9 +171,8 @@ def confirm_certification(cert, request=None):
                 f"clicca sul link entro {cert_validity_days()} giorni:\n\n{link}\n\n"
                 f"Se non hai richiesto tu questa certificazione, ignora questa email.\n"
             ),
-            from_email=settings.DEFAULT_FROM_EMAIL,
             recipient_list=[cert.parent.email],
-            fail_silently=False,
+            log_ref=f"cert pk={cert.pk} confirm-link",
         )
     else:
         logger.warning(
@@ -141,21 +180,24 @@ def confirm_certification(cert, request=None):
             cert.parent_id, cert.pk,
         )
 
-    cert.mark_in_attesa_click()
     logger.info("[certification] cert pk=%s -> IN_ATTESA_CLICK_GENITORE", cert.pk)
     return True, cert, None
 
 
 def reject_certification(cert):
     """La società nega il match. Stato → RIFIUTATA, notifica il genitore."""
+    # Transizione atomica; email best-effort fuori dal blocco. Un SMTP
+    # irraggiungibile non deve trasformare il rifiuto in un 500 (era il bug):
+    # lo stato passa comunque a RIFIUTATA e la notifica mancata viene loggata.
     try:
-        cert.rifiuta_societa()
+        with transaction.atomic():
+            cert.rifiuta_societa()
     except ValueError as exc:
         return False, cert, str(exc)
 
     if cert.parent.email:
         child_name = cert.child.get_full_name() or cert.child.username
-        send_mail(
+        _safe_send(
             subject="[2salti] Esito richiesta certificazione genitore",
             message=(
                 f"La società {cert.society.name} non ha potuto confermare la tua "
@@ -163,9 +205,8 @@ def reject_certification(cert):
                 f"L'accesso ai dati non è stato attivato. Per riprovare, invia una "
                 f"nuova richiesta dopo aver verificato i dati con la società.\n"
             ),
-            from_email=settings.DEFAULT_FROM_EMAIL,
             recipient_list=[cert.parent.email],
-            fail_silently=False,
+            log_ref=f"cert pk={cert.pk} reject-notice",
         )
     logger.info("[certification] cert pk=%s -> RIFIUTATA", cert.pk)
     return True, cert, None

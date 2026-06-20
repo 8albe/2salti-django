@@ -649,12 +649,17 @@ def confirm_parent_certification(request, cert_id):
     """La società conferma il match nome+email: genera token e invia il link al
     genitore."""
     from .services import certification_service
+    from .models import ParentCertification
 
     cert = _get_society_cert(request, cert_id)
     if request.method == 'POST':
         ok, _, err = certification_service.confirm_certification(cert, request=request)
         if ok:
             messages.success(request, "Certificazione confermata: link inviato al genitore.")
+        elif cert.status != ParentCertification.Status.IN_ATTESA_SOCIETA:
+            # Re-submit: la richiesta è già stata confermata (doppio click /
+            # doppia POST). Niente errore tecnico crudo, solo un avviso.
+            messages.warning(request, "Richiesta già confermata.")
         else:
             messages.error(request, err or "Impossibile confermare la richiesta.")
     return redirect('parent_certifications_list')

@@ -1,6 +1,7 @@
 """Test Macro 7b: ParentCertification — macchina a stati, service email,
 endpoint click pubblico, gate helper is_certified_parent_of."""
 from datetime import timedelta
+from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
 from django.core import mail
@@ -249,6 +250,83 @@ class SocietyViewTest(CertBase):
         self.assertEqual(cert.status, ParentCertification.Status.RIFIUTATA)
 
 
+class SocietyViewResilienceTest(CertBase):
+    """Regressione Macro 7b: il pannello società deve restare coerente anche
+    quando l'invio email fallisce (SMTP irraggiungibile in dev) o l'azione
+    viene ri-eseguita (doppia POST). Questi casi NON erano coperti: i test
+    giravano su backend locmem (send_mail non solleva mai) e con submit singolo.
+    """
+
+    def setUp(self):
+        super().setUp()
+        self.client = Client()
+        self.president = User.objects.create_user(
+            username='presidente', password='pw', role='president',
+            identity_status='VERIFIED', subscription_status='ACTIVE',
+            setup_completed=True,
+        )
+        pp = self.president.president_profile
+        pp.managed_society = self.society
+        pp.save()
+        Membership.objects.create(
+            user=self.president, society=self.society, team=None,
+            role='PRESIDENT', season=self.season, is_active=True,
+        )
+        self.client.login(username='presidente', password='pw')
+
+    def _pending_cert(self):
+        _, cert, _ = svc.request_certification(self.parent, self.child)
+        return cert
+
+    def test_conferma_con_smtp_down_non_crasha_e_stato_coerente(self):
+        """Email irraggiungibile: nessun 500, stato avanza pulito a
+        IN_ATTESA_CLICK_GENITORE (mai bloccato a metà su CONFERMATA_SOCIETA)."""
+        cert = self._pending_cert()
+        with patch(
+            'management.services.certification_service.send_mail',
+            side_effect=ConnectionRefusedError("dev: nessun SMTP su localhost:25"),
+        ):
+            resp = self.client.post(
+                reverse('confirm_parent_certification', args=[cert.id]))
+        self.assertEqual(resp.status_code, 302)
+        cert.refresh_from_db()
+        self.assertEqual(
+            cert.status, ParentCertification.Status.IN_ATTESA_CLICK_GENITORE)
+
+    def test_doppio_submit_conferma_non_propaga_eccezione_e_avvisa(self):
+        """Seconda POST di conferma: niente errore tecnico crudo, avviso
+        'già confermata', stato invariato."""
+        cert = self._pending_cert()
+        self.client.post(reverse('confirm_parent_certification', args=[cert.id]))
+        cert.refresh_from_db()
+        self.assertEqual(
+            cert.status, ParentCertification.Status.IN_ATTESA_CLICK_GENITORE)
+
+        resp = self.client.post(
+            reverse('confirm_parent_certification', args=[cert.id]), follow=True)
+        self.assertEqual(resp.status_code, 200)
+        cert.refresh_from_db()
+        self.assertEqual(
+            cert.status, ParentCertification.Status.IN_ATTESA_CLICK_GENITORE)
+        msgs = [m.message for m in resp.context['messages']]
+        self.assertIn("Richiesta già confermata.", msgs)
+
+    def test_rifiuto_con_smtp_down_non_da_500(self):
+        """Email irraggiungibile: nessun 500, stato → RIFIUTATA."""
+        cert = self._pending_cert()
+        with patch(
+            'management.services.certification_service.send_mail',
+            side_effect=ConnectionRefusedError("dev: nessun SMTP su localhost:25"),
+        ):
+            resp = self.client.post(
+                reverse('reject_parent_certification', args=[cert.id]), follow=True)
+        self.assertEqual(resp.status_code, 200)
+        cert.refresh_from_db()
+        self.assertEqual(cert.status, ParentCertification.Status.RIFIUTATA)
+        msgs = [m.message for m in resp.context['messages']]
+        self.assertIn("Richiesta di certificazione rifiutata.", msgs)
+
+
 class ParentRequestViewTest(CertBase):
     def setUp(self):
         super().setUp()
@@ -265,3 +343,22 @@ class ParentRequestViewTest(CertBase):
         self.client.login(username='figlio', password='pw')
         resp = self.client.get(reverse('request_certification'))
         self.assertEqual(resp.status_code, 403)
+
+    def test_richiesta_con_smtp_down_non_da_500(self):
+        """Società con email valorizzata (CertBase) + SMTP irraggiungibile: la
+        POST non deve dare 500; la richiesta risulta creata in IN_ATTESA_SOCIETA
+        (non bloccata a RICHIESTA_INVIATA) e il genitore vede il messaggio di
+        successo. L'email alla società è side-effect non critico."""
+        self.client.login(username='genitore', password='pw')
+        with patch(
+            'management.services.certification_service.send_mail',
+            side_effect=ConnectionRefusedError("dev: nessun SMTP su localhost:25"),
+        ):
+            resp = self.client.post(
+                reverse('request_certification'),
+                {'child_id': self.child.id}, follow=True)
+        self.assertEqual(resp.status_code, 200)
+        cert = ParentCertification.objects.get(parent=self.parent, child=self.child)
+        self.assertEqual(cert.status, ParentCertification.Status.IN_ATTESA_SOCIETA)
+        msgs = [m.message for m in resp.context['messages']]
+        self.assertTrue(any("Richiesta inviata" in m for m in msgs), msgs)
