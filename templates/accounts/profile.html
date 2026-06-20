@@ -388,8 +388,8 @@
 {% endfor %}
 {% else %}
 <div class="bg-slate-900 rounded-xl p-6 border border-slate-800 text-center text-slate-400">
-    Nessuna squadra seguita. <a href="#" class="text-cyan-400 hover:underline">Aggiungine
-        una</a>.
+    Nessuna squadra seguita. {% if request.user == profile_user %}<a href="{% url 'edit_profile' %}" class="text-cyan-400 hover:underline">Aggiungine
+        una</a>.{% endif %}
 </div>
 {% endif %}
 {% endif %}
