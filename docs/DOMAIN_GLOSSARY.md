@@ -82,8 +82,8 @@ Questo documento è il ponte tra il linguaggio di prodotto usato nel blueprint (
 | Bacheca squadra / Comunicazioni | `Post`, `Comment` | management | ✅ | Post e commenti per bacheca società/squadra |
 | Chat di squadra | `ChatMessage` | management | 📋 | Messaggistica istantanea squadra; non menzionata nel blueprint come funzionalità distinta |
 | Widget / Dashboard personalizzata | — | — | ❌ | Blueprint §7.1, §12; sistema slot riordinabili per utenti Premium; nessun modello preferenze |
-| Profilo fan / genitore | `FanProfile` | accounts | ❌ | Pianificato (Macro 7a); oggi `User.role='fan'` senza profilo dedicato. "Follow atleti" = riuso di `favorite_players` esistente (M2M self su `User`). |
-| Certificazione genitore | `ParentCertification` (pianificato) | accounts/management | ❌ | Society-vouching via email; design macchina a stati in BLUEPRINT §7.7. Pianificato Macro 7b. |
+| Profilo fan / genitore | `FanProfile` | accounts | ✅ | Implementato (Macro 7a); 1:1 con `User`. "Follow atleti" = riuso di `favorite_players` (M2M self su `User`), multi-follow. |
+| Certificazione genitore | `ParentCertification` | management | ✅ | Implementato (Macro 7b). Society-vouching via email; macchina a stati in BLUEPRINT §7.7. |
 | Giuria (ruolo) | `User.role` (non presente come valore) | accounts | ❌ | Il blueprint distingue "Giuria (Cert)" come ruolo; nel codice i valori di role sono athlete/coach/referee/fan/president — nessun valore "jury" o "giuria" |
 
 ---

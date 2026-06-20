@@ -33,7 +33,7 @@ Punto d'ingresso operativo del progetto. Per la visione di prodotto vedi [BLUEPR
 ## 6. Pagina profilo pubblica dei presidenti / dirigenti ✅
 → [Dettaglio](syllabus/6_profilo_presidenti.md)
 
-## 7. Profilo fan/genitore: follow + certificazione genitore ⏳
+## 7. Profilo fan/genitore: follow + certificazione genitore 🔄
 → [Dettaglio](syllabus/7_profilo_fan.md)
 
 ## 8. OCR — Perfezionamento e affidabilità 🔄
