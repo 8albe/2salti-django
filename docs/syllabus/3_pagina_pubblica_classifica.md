@@ -1,6 +1,6 @@
 ## 3. Pagina pubblica della classifica
 
-Stato: 🔄 In corso (filtro stagione completo e **LIVE su prod 2026-06-19**; unico residuo: modello Venue/Impianto, differito)
+Stato: 🧊 Differito (tutto il pubblicabile è **LIVE su prod 2026-06-19**; unico residuo — modello Venue/Impianto — rinviato per scelta finché non serviranno dati reali: deferimento di sequenza, non lavoro mancante)
 
 Classifica per campionato/stagione: punti, gol fatti/subiti, partite giocate/vinte/perse/pareggiate. Filtrabile per stagione.
 

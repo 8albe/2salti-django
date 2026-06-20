@@ -1,6 +1,6 @@
 ## 12. Live Alerts e notifiche push
 
-Stato: 🔄 In corso
+Stato: 🧊 Differito (fonti trigger pronte; manca solo il push: gating Premium dipende dalla Macro 10 non pronta + infrastruttura push da provisionare)
 
 Notifiche push per risultati live, variazioni orario, convocazioni. Gated Premium.
 

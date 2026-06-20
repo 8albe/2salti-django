@@ -1,6 +1,6 @@
 # SYLLABUS — Roadmap operativa 2salti
 
-Aggiornato: 2026-06-19
+Aggiornato: 2026-06-20
 
 Punto d'ingresso operativo del progetto. Per la visione di prodotto vedi [BLUEPRINT.md](BLUEPRINT.md).
 
@@ -11,7 +11,7 @@ Punto d'ingresso operativo del progetto. Per la visione di prodotto vedi [BLUEPR
 - ✅ Completato — tutti i task sono [x]; il blocco verrà rimosso nella sessione successiva
 - 🔄 In corso — almeno un task [x] e almeno uno [ ]
 - ⏳ Da fare — nessun task ancora iniziato
-- 🧊 Differito — decisioni di prodotto complete; implementazione rinviata per dipendenza esterna
+- 🧊 Differito — fermo per dipendenza esterna o di sequenza (infrastruttura, accordo esterno, decisione a monte, un'altra macro non pronta) o pianificato esplicitamente dopo il resto del syllabus; non è candidato finché non cambia la causa che lo blocca
 
 ---
 
@@ -21,10 +21,10 @@ Punto d'ingresso operativo del progetto. Per la visione di prodotto vedi [BLUEPR
 ## 2. Pagina pubblica delle partite ✅
 → [Dettaglio](syllabus/2_pagina_pubblica_partite.md)
 
-## 3. Pagina pubblica della classifica 🔄
+## 3. Pagina pubblica della classifica 🧊
 → [Dettaglio](syllabus/3_pagina_pubblica_classifica.md)
 
-## 4. Pagina profilo pubblica degli atleti 🔄
+## 4. Pagina profilo pubblica degli atleti 🧊
 → [Dettaglio](syllabus/4_profilo_atleti.md)
 
 ## 5. Pagina profilo pubblica degli allenatori ✅
@@ -45,13 +45,13 @@ Punto d'ingresso operativo del progetto. Per la visione di prodotto vedi [BLUEPR
 ## 10. Subscription e piani (three-tier) 🔄
 → [Dettaglio](syllabus/10_subscription_piani.md)
 
-## 11. Media Gallery e AI Tagging ⏳
+## 11. Media Gallery e AI Tagging 🧊
 → [Dettaglio](syllabus/11_media_gallery.md)
 
-## 12. Live Alerts e notifiche push 🔄
+## 12. Live Alerts e notifiche push 🧊
 → [Dettaglio](syllabus/12_live_alerts.md)
 
-## 13. Season Archive e Season Recap PDF 🔄
+## 13. Season Archive e Season Recap PDF 🧊
 → [Dettaglio](syllabus/13_season_archive.md)
 
 ## 14. Referto digitale mobile (Jury App) 🧊
