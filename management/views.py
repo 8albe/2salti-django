@@ -187,6 +187,7 @@ def bacheca_view(request, team_slug=None):
     """
     if team_slug:
         team = get_object_or_404(Team, slug=team_slug)
+        society = team.society
         # Filtra post della squadra + broadcast societari
         posts = Post.objects.filter(
             models.Q(team=team) | models.Q(is_broadcast=True, society=team.society)

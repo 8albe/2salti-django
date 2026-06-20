@@ -48,3 +48,19 @@ class BachecaPresidentNoMembershipTests(TestCase):
         # il template deve compilare e renderizzare → 200.
         resp = self.client.get(reverse("bacheca_globale"))
         self.assertEqual(resp.status_code, 200)
+
+    def test_bacheca_team_no_longer_raises_nameerror(self):
+        # Regression del NameError nel ramo `if team_slug:` di bacheca_view:
+        # `society` ora viene assegnata da team.society prima dell'uso.
+        # NB: il rendering completo della bacheca di team resta bloccato da un
+        # TERZO bug pre-esistente, fuori dal perimetro C+D e registrato nel
+        # report ({% url 'chat_team' %} in bacheca.html:14 → URL inesistente,
+        # il nome reale è 'chat_view' → NoReverseMatch). Tolleriamo quella sola
+        # eccezione; un NameError tornerebbe a propagarsi e a far fallire il
+        # test. Quando il bug 3 sarà chiuso, questo GET tornerà 200.
+        from django.urls import NoReverseMatch
+        try:
+            resp = self.client.get(reverse("bacheca_team", args=[self.team.slug]))
+        except NoReverseMatch:
+            return
+        self.assertEqual(resp.status_code, 200)
