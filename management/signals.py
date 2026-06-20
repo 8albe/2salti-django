@@ -85,14 +85,17 @@ def _open_or_reopen_membership(user, society, team, role):
 
 @receiver(post_save, sender=PresidentProfile)
 def sync_president_membership(sender, instance, **kwargs):
+    # §10.10 — Presidente de-vincolato dalla stagione: NON si apre più una
+    # Membership PRESIDENT (era l'unica sorgente del RuntimeError "no season
+    # derivable" su create_society quando lo sport non aveva una Season corrente).
+    # Il ruolo PRESIDENT è ora derivato a runtime da president_profile.managed_society
+    # nel layer RBAC (permissions.get_roles). Resta solo il cleanup delle righe
+    # storiche: chiudere le PRESIDENT stantie quando la società gestita cambia o
+    # viene rimossa, così che lo storico non resti "aperto".
     if instance.managed_society:
-        with transaction.atomic():
-            _close_stale_president_memberships(
-                instance.user, instance.managed_society,
-            )
-            _open_or_reopen_membership(
-                instance.user, instance.managed_society, None, 'PRESIDENT',
-            )
+        _close_stale_president_memberships(
+            instance.user, instance.managed_society,
+        )
     else:
         _close_all_role_memberships(instance.user, 'PRESIDENT')
 

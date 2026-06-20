@@ -265,14 +265,22 @@ def post_create(request, team_id=None):
             society = get_society_context(request)
         
         # RBAC Check (PRD 5.2)
+        # §10.10 — Presidente de-vincolato: senza Membership PRESIDENT il diritto
+        # deriva da president_profile.managed_society (== società del post). Questo
+        # flag sostituisce anche il vecchio request.user_membership.role == 'PRESIDENT'
+        # nel campo is_broadcast, che su user_membership None sollevava AttributeError (500).
+        managed = getattr(getattr(request.user, 'president_profile', None), 'managed_society', None)
+        is_president = managed is not None and managed == society
+        if request.user_membership and request.user_membership.role == 'PRESIDENT':
+            is_president = True
+
         can_post = False
         if request.user.is_superuser:
             can_post = True
-        elif request.user_membership:
-            if request.user_membership.role == 'PRESIDENT':
-                can_post = True
-            elif team and request.user_membership.team == team and request.user_membership.role in ['HEAD_COACH', 'ASSISTANT_COACH']:
-                can_post = True
+        elif is_president:
+            can_post = True
+        elif request.user_membership and team and request.user_membership.team == team and request.user_membership.role in ['HEAD_COACH', 'ASSISTANT_COACH']:
+            can_post = True
 
         if not can_post:
             messages.error(request, "Non hai i permessi per postare qui.")
@@ -285,7 +293,7 @@ def post_create(request, team_id=None):
             title=title,
             content=content,
             is_pinned=is_pinned,
-            is_broadcast=is_broadcast if request.user_membership.role == 'PRESIDENT' else False
+            is_broadcast=is_broadcast if is_president else False
         )
         
         log_action(request.user, society, "CREATE_POST", target=post, request=request)
@@ -299,7 +307,7 @@ def chat_view(request, team_slug):
     """
     team = get_object_or_404(Team, slug=team_slug)
     membership = get_membership_context(request, team=team)
-    
+
     # Verifica che l'utente sia membro della squadra o presidente
     can_access = False
     if request.user.is_superuser:
@@ -309,7 +317,12 @@ def chat_view(request, team_slug):
             can_access = True
         elif membership.team == team:
             can_access = True
-            
+
+    # §10.10 — Presidente de-vincolato: accesso via president_profile.managed_society.
+    managed = getattr(getattr(request.user, 'president_profile', None), 'managed_society', None)
+    if managed is not None and managed == team.society:
+        can_access = True
+
     if not can_access:
         messages.error(request, "Non hai accesso alla chat di questa squadra.")
         return redirect('home')
@@ -327,7 +340,7 @@ def chat_message_add(request, team_id):
     # RBAC Check
     team = get_object_or_404(Team, id=team_id)
     membership = get_membership_context(request, team=team)
-    
+
     can_access = False
     if request.user.is_superuser:
         can_access = True
@@ -336,7 +349,12 @@ def chat_message_add(request, team_id):
             can_access = True
         elif membership.team == team:
             can_access = True
-            
+
+    # §10.10 — Presidente de-vincolato: write-path simmetrico a chat_view.
+    managed = getattr(getattr(request.user, 'president_profile', None), 'managed_society', None)
+    if managed is not None and managed == team.society:
+        can_access = True
+
     if not can_access:
         raise PermissionDenied
 

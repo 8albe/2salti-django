@@ -145,15 +145,28 @@ class MembershipCreationSeasonAwareTests(TestCase):
         m = Membership.objects.get(user=self.user, role='PLAYER')
         self.assertEqual(m.season, self.season)
 
-    def test_signal_path_president_team_none_uses_fallback(self):
+    def test_president_managed_society_does_not_open_membership(self):
+        # §10.10 — Presidente de-vincolato dalla stagione: assegnare managed_society
+        # NON apre piu' una Membership PRESIDENT e NON solleva, nemmeno quando lo
+        # sport della societa' non ha una Season corrente (era l'origine del
+        # RuntimeError "no season derivable" che faceva fallire create_society).
+        # Il ruolo PRESIDENT e' ora derivato a runtime in permissions.get_roles.
+        seasonless_sport = Sport.objects.create(
+            name='Sport Senza Stagione', slug='zz-noseason-sport',
+        )
+        seasonless_society = Society.objects.create(
+            name='No Season FC', slug='zz-no-season-fc',
+            sport=seasonless_sport, city='Roma',
+        )
         prez = User.objects.create_user(username='prez', role='president')
         profile = prez.president_profile
-        profile.managed_society = self.society
-        profile.save()
 
-        m = Membership.objects.get(user=prez, role='PRESIDENT')
-        self.assertIsNone(m.team)
-        self.assertEqual(m.season, self.season)  # fallback is_current
+        profile.managed_society = seasonless_society
+        profile.save()  # non deve sollevare RuntimeError
+
+        self.assertFalse(
+            Membership.objects.filter(user=prez, role='PRESIDENT').exists()
+        )
 
     # ── redeem activation code ───────────────────────────────────────────────
 

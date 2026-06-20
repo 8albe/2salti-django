@@ -79,8 +79,22 @@ def get_roles(user, society=None, team=None):
         # Se controlliamo il team, includiamo anche i ruoli a livello di società (es: Presidente)
         from django.db.models import Q
         qs = qs.filter(Q(team=team) | Q(team__isnull=True))
-    
-    return list(qs.values_list('role', flat=True))
+
+    roles = list(qs.values_list('role', flat=True))
+
+    # Fallback presidente de-vincolato (§10.10): dal Macro 7 il presidente non
+    # possiede più una Membership PRESIDENT stagionale — il suo ruolo deriva da
+    # president_profile.managed_society. Se la società gestita coincide con quella
+    # in scope (o lo scope è globale, society=None) si inietta 'PRESIDENT' così che
+    # role_required([... 'PRESIDENT' ...]) non lo escluda. getattr a doppio salto:
+    # il reverse OneToOne assente solleva RelatedObjectDoesNotExist (sottoclasse di
+    # AttributeError), quindi degrada a None senza eccezione (stesso idioma di hasattr).
+    if 'PRESIDENT' not in roles:
+        managed = getattr(getattr(user, 'president_profile', None), 'managed_society', None)
+        if managed is not None and (society is None or managed == society):
+            roles.append('PRESIDENT')
+
+    return roles
 
 # Decoratori per Views
 
