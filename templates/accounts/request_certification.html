@@ -1,0 +1,87 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="max-w-2xl mx-auto py-10 px-4">
+    <h1 class="text-3xl font-extrabold text-white mb-2">Certificazione Genitore</h1>
+    <p class="text-slate-400 mb-8">Dichiara tuo figlio (atleta già presente sul sistema). La sua società verificherà i tuoi dati; al tuo click sul link che riceverai via email, l'accesso ai suoi dati sarà attivo.</p>
+
+    {% if messages %}
+    <div class="mb-6 space-y-2">
+        {% for message in messages %}
+        <div class="px-4 py-3 rounded-lg bg-slate-800 border border-slate-700 text-sm text-slate-200">{{ message }}</div>
+        {% endfor %}
+    </div>
+    {% endif %}
+
+    <form method="post" class="bg-slate-900 rounded-xl p-6 border border-slate-800 mb-10">
+        {% csrf_token %}
+        <label class="block text-sm font-medium text-slate-300 mb-2">Figlio (atleta)</label>
+        <div class="relative">
+            <input type="text" id="child-search-input" autocomplete="off"
+                placeholder="Scrivi nome e cognome del figlio..."
+                class="w-full bg-slate-800 border border-slate-600 rounded-lg px-4 py-2 text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500">
+            <div id="child-results" class="hidden absolute z-10 w-full mt-1 bg-slate-800 border border-slate-600 rounded-lg shadow-xl max-h-48 overflow-y-auto"></div>
+        </div>
+        <input type="hidden" name="child_id" id="child-id">
+        <p id="child-selected" class="text-sm text-cyan-400 mt-2 hidden"></p>
+
+        <button type="submit" class="mt-6 px-6 py-2 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white font-bold">Invia richiesta</button>
+    </form>
+
+    {% if certifications %}
+    <h2 class="text-xl font-bold text-white mb-4">Le tue richieste</h2>
+    <div class="space-y-2">
+        {% for cert in certifications %}
+        <div class="bg-slate-900/60 rounded-lg p-3 border border-slate-800 flex items-center justify-between text-sm">
+            <span class="text-slate-300">{{ cert.child.get_full_name|default:cert.child.username }} — {{ cert.society.name }}</span>
+            <span class="text-slate-400">{{ cert.get_status_display }}</span>
+        </div>
+        {% endfor %}
+    </div>
+    {% endif %}
+</div>
+
+<script>
+(function () {
+    const input = document.getElementById('child-search-input');
+    const results = document.getElementById('child-results');
+    const childId = document.getElementById('child-id');
+    const selected = document.getElementById('child-selected');
+    if (!input) return;
+    let t;
+    input.addEventListener('input', function () {
+        clearTimeout(t);
+        const q = this.value.trim();
+        if (q.length < 2) { results.classList.add('hidden'); return; }
+        t = setTimeout(async () => {
+            const resp = await fetch(`/accounts/api/search-athlete/?q=${encodeURIComponent(q)}`);
+            const athletes = await resp.json();
+            results.innerHTML = '';
+            if (!athletes.length) {
+                results.innerHTML = '<div class="px-4 py-3 text-slate-400 text-sm">Nessun atleta trovato</div>';
+            } else {
+                athletes.forEach(a => {
+                    const div = document.createElement('div');
+                    div.className = 'px-4 py-3 hover:bg-slate-700 cursor-pointer text-sm border-b border-slate-700 last:border-0';
+                    div.innerHTML = `<span class="font-bold text-white"></span> <span class="text-slate-400 text-xs ml-2"></span>`;
+                    div.children[0].textContent = a.full_name;
+                    div.children[1].textContent = a.team || '';
+                    div.addEventListener('click', () => {
+                        childId.value = a.id;
+                        input.value = a.full_name;
+                        results.classList.add('hidden');
+                        selected.textContent = `✅ Figlio selezionato: ${a.full_name}`;
+                        selected.classList.remove('hidden');
+                    });
+                    results.appendChild(div);
+                });
+            }
+            results.classList.remove('hidden');
+        }, 350);
+    });
+    document.addEventListener('click', e => {
+        if (!input.contains(e.target) && !results.contains(e.target)) results.classList.add('hidden');
+    });
+})();
+</script>
+{% endblock %}

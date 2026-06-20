@@ -597,3 +597,93 @@ def ops_cockpit(request):
         'oldest_unpublished': oldest_unpublished,
         'latest_published': latest_published,
     })
+
+
+# ======================================================================
+# Certificazione genitore (Macro 7b, BLUEPRINT §7.7)
+# ======================================================================
+
+@login_required
+@role_required(['PRESIDENT'])
+def parent_certifications_list(request):
+    """Pannello società: elenco richieste di certificazione genitore in arrivo,
+    con azioni Conferma / Rifiuta sulle richieste in attesa."""
+    from .models import ParentCertification
+
+    society = get_society_context(request)
+    if not society:
+        return redirect('home')
+
+    pending = ParentCertification.objects.filter(
+        society=society,
+        status=ParentCertification.Status.IN_ATTESA_SOCIETA,
+    ).select_related('parent', 'child').order_by('-requested_at')
+
+    history = ParentCertification.objects.filter(society=society).exclude(
+        status=ParentCertification.Status.IN_ATTESA_SOCIETA,
+    ).select_related('parent', 'child').order_by('-requested_at')[:50]
+
+    return render(request, 'management/club_admin/parent_certifications.html', {
+        'society': society,
+        'pending_certifications': pending,
+        'history_certifications': history,
+    })
+
+
+def _get_society_cert(request, cert_id):
+    """Recupera una ParentCertification garantendo che appartenga alla società
+    gestita dall'utente. PermissionDenied altrimenti."""
+    from .models import ParentCertification
+
+    society = get_society_context(request)
+    if not society and hasattr(request.user, 'president_profile'):
+        society = request.user.president_profile.managed_society
+    if not society:
+        raise PermissionDenied
+    return get_object_or_404(ParentCertification, id=cert_id, society=society)
+
+
+@login_required
+@role_required(['PRESIDENT'])
+def confirm_parent_certification(request, cert_id):
+    """La società conferma il match nome+email: genera token e invia il link al
+    genitore."""
+    from .services import certification_service
+
+    cert = _get_society_cert(request, cert_id)
+    if request.method == 'POST':
+        ok, _, err = certification_service.confirm_certification(cert, request=request)
+        if ok:
+            messages.success(request, "Certificazione confermata: link inviato al genitore.")
+        else:
+            messages.error(request, err or "Impossibile confermare la richiesta.")
+    return redirect('parent_certifications_list')
+
+
+@login_required
+@role_required(['PRESIDENT'])
+def reject_parent_certification(request, cert_id):
+    """La società nega il match: la richiesta diventa RIFIUTATA."""
+    from .services import certification_service
+
+    cert = _get_society_cert(request, cert_id)
+    if request.method == 'POST':
+        ok, _, err = certification_service.reject_certification(cert)
+        if ok:
+            messages.warning(request, "Richiesta di certificazione rifiutata.")
+        else:
+            messages.error(request, err or "Impossibile rifiutare la richiesta.")
+    return redirect('parent_certifications_list')
+
+
+def certify_parent(request, token):
+    """Endpoint pubblico: il genitore clicca il link ricevuto via email. Token
+    valido → CERTIFICATA; scaduto → SCADUTA. Nessun login richiesto."""
+    from .services import certification_service
+
+    ok, cert, err = certification_service.certify_by_token(token)
+    return render(request, 'management/certify_parent_result.html', {
+        'ok': ok,
+        'error': err,
+        'certification': cert,
+    }, status=200 if ok else 400)

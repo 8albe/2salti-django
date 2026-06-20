@@ -110,6 +110,23 @@ class User(AbstractUser):
         return 'COMPLETED'
 
     
+    def is_certified_parent_of(self, athlete):
+        """Gate accesso dati figlio (Macro 7b).
+
+        True se esiste una ParentCertification CERTIFICATA tra questo utente
+        (genitore) e l'atleta indicato. Import lazy di management per non creare
+        dipendenza circolare accounts→management a livello di modulo.
+        Ortogonale all'onboarding: non tocca onboarding_state.
+        """
+        if athlete is None or getattr(athlete, 'pk', None) is None:
+            return False
+        from management.models import ParentCertification
+        return ParentCertification.objects.filter(
+            parent=self,
+            child=athlete,
+            status=ParentCertification.Status.CERTIFICATA,
+        ).exists()
+
     def __str__(self):
         return f"{self.username} ({self.get_role_display()})"
 
@@ -150,6 +167,24 @@ class AthleteProfile(models.Model):
     
     def __str__(self):
         return f"Atleta: {self.user.get_full_name()}"
+
+
+class FanProfile(models.Model):
+    """Profilo fan/genitore - shell 1:1 con User (Macro 7a).
+
+    L'anagrafica resta su User; il follow agli atleti resta su
+    User.favorite_players (M2M self). Questo modello esiste per uniformare il
+    pattern ruolo↔profilo (come AthleteProfile/CoachProfile/...) e per offrire
+    un punto d'aggancio a dati fan-specifici futuri. Creato automaticamente via
+    signal per i nuovi role='fan' e via backfill per quelli esistenti.
+    """
+    user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='fan_profile')
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"Fan: {self.user.get_full_name() or self.user.username}"
 
 
 class CoachProfile(models.Model):
@@ -260,3 +295,5 @@ def create_user_profile(sender, instance, created, **kwargs):
             RefereeProfile.objects.create(user=instance)
         elif instance.role == 'president':
             PresidentProfile.objects.create(user=instance)
+        elif instance.role == 'fan':
+            FanProfile.objects.create(user=instance)
