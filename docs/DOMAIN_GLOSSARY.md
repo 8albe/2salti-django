@@ -66,7 +66,7 @@ Questo documento è il ponte tra il linguaggio di prodotto usato nel blueprint (
 | Referto Digitale In-App | `MatchReport` con `source_channel='DIGITAL'` | matches | ✅ | Stesso modello `MatchReport`, non una classe separata; source_channel discrimina |
 | Pipeline OCR / Workflow referto | `MatchReport.status` TextChoices | matches | ✅ | Stati: DRAFT, UPLOADED, PROCESSING, EXTRACTED, VALIDATED, PUBLISHED, NEEDS_REVIEW, REJECTED |
 | Onboarding utente | `User.onboarding_state` (property calcolata) | accounts | ✅ | **Non è un campo DB** — è una property che aggrega identity_status + subscription_status + setup_completed; vedi STATE_MACHINES.md §2 |
-| Verifica identità (SPID/CIE) | `User.identity_status` + `User.identity_verified_at` | accounts | 🟡 | Campo presente; il flusso SPID/CIE reale non è implementato — la verifica è oggi manuale via vista `verify_identity()` |
+| Verifica identità (email a click) | `User.identity_status` + `User.identity_verified_at` | accounts | 🟡 | Campo presente; SPID/CIE **accantonato** (pivot 2026-06-19). Modello target: conferma a click su link email; oggi `verify_identity()` è manuale via admin. |
 | Ruolo utente | `User.role` (CharField) | accounts | ✅ | Valori: athlete, coach, referee, fan, president |
 | Ruolo staff RBAC | `User.staff_role` (CharField) | accounts | ✅ | Valori: NONE, UPLOADER, REVIEWER, PUBLISHER, SUPERADMIN; vedi STATE_MACHINES.md §3 |
 | Membership (appartenenza squadra) | `Membership` | management | ✅ | Lega User a Society+Team con role: PRESIDENT, HEAD_COACH, ASSISTANT_COACH, PLAYER. **Redesign Macro 16 — implementato su dev (2026-06-11; prod allineata 2026-06-12):** campo `Membership.season` (FK a `Season`, NOT NULL da migration `0015`), nuova unique key 5-field `(user, society, team, role, season)`, rimozione di `start_date`/`end_date` (migration `0014`). |
@@ -82,6 +82,8 @@ Questo documento è il ponte tra il linguaggio di prodotto usato nel blueprint (
 | Bacheca squadra / Comunicazioni | `Post`, `Comment` | management | ✅ | Post e commenti per bacheca società/squadra |
 | Chat di squadra | `ChatMessage` | management | 📋 | Messaggistica istantanea squadra; non menzionata nel blueprint come funzionalità distinta |
 | Widget / Dashboard personalizzata | — | — | ❌ | Blueprint §7.1, §12; sistema slot riordinabili per utenti Premium; nessun modello preferenze |
+| Profilo fan / genitore | `FanProfile` | accounts | ❌ | Pianificato (Macro 7a); oggi `User.role='fan'` senza profilo dedicato. "Follow atleti" = riuso di `favorite_players` esistente (M2M self su `User`). |
+| Certificazione genitore | `ParentCertification` (pianificato) | accounts/management | ❌ | Society-vouching via email; design macchina a stati in BLUEPRINT §7.7. Pianificato Macro 7b. |
 | Giuria (ruolo) | `User.role` (non presente come valore) | accounts | ❌ | Il blueprint distingue "Giuria (Cert)" come ruolo; nel codice i valori di role sono athlete/coach/referee/fan/president — nessun valore "jury" o "giuria" |
 
 ---
