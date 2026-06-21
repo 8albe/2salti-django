@@ -435,7 +435,7 @@ Il punto strutturale, simmetrico alla sezione 2, è che il versionamento del 25 
 ## 10. Debiti aperti
 
 Registro vivo di problemi noti che richiedono follow-up. Non sono trappole (§3) né bug attivi: sono incoerenze scoperte ma non risolte, da affrontare in sessioni dedicate.
-> Le voci §10.1-10.4, §10.6-10.9 sono CHIUSE e archiviate in Appendice A, che ne conserva razionale, commit e test. Qui resta solo ciò che è ancora aperto.
+> Le voci §10.1-10.4, §10.6-10.11, §10.13 sono CHIUSE e archiviate in Appendice A, che ne conserva razionale, commit e test. Qui resta solo ciò che è ancora aperto.
 
 ### 10.5 Pulizia utenti/società di test su prod — APERTO (scoperto 26-mag in Sprint B)
 
@@ -444,25 +444,14 @@ Registro vivo di problemi noti che richiedono follow-up. Non sono trappole (§3)
 - Da fare: inventario utenti test su prod, cancellazione controllata.
 - Aggiornamento 2026-06-12: prod ora migrato a Macro 16 (§10.8) — gli eventuali dati test sono passati per le data migration (canonicalizzazione season, backfill); la voce resta APERTA.
 
-### 10.10 Loop onboarding presidente self-service (PROD) — APERTO (scoperto 2026-06-20)
-- `create_society` non è in `allowed_urls` del middleware onboarding (`accounts/middleware.py`): un presidente in `MEMBERSHIP_PENDING` (società non ancora creata) viene rediretto a `onboarding_membership` → `ERR_TOO_MANY_REDIRECTS`. Sistemico, pre-esistente, tocca **prod**.
-- Fix tocca `accounts/middleware.py` (**protected file**) → richiede autorizzazione esplicita. Priorità **alta** (blocca l'onboarding presidente reale).
-- **Aggiornamento 2026-06-21:** risolto **su dev** — `create_society` aggiunto alla whitelist del middleware onboarding (`e4f1efc`); presidente de-vincolato da `Membership` PRESIDENT, RBAC derivato da `managed_society` (`08f8830`). Loop verificato chiuso **sul solo dev** (suite `management` 126 GREEN). I 3 bug bacheca emersi durante la verifica sono chiusi su dev (`50e3396`/`17edacc`/`6a42763`; dettaglio nella session note 2026-06-20(2)). **Prod resta a `e0c928f`**: il fix tocca `accounts/middleware.py` (protected file) e il deploy è gated su Alberto → la voce **resta APERTA su prod**. Per §5, "CHIUSO end-to-end" solo dopo deploy prod + verifica.
-
-### 10.11 `_society_recipients` — candidato debito INVESTIGATO, non riproduce (2026-06-20)
-*Sospetto iniziale (test 7b):* notifica vouching alla società mai recapitata; ipotesi che `getattr(society, 'president', None)` puntasse a una relation inesistente.
-*Verifica a runtime:* `society.president` è il reverse OneToOne di `PresidentProfile.managed_society` (`related_name='president'`); in questo Django `RelatedObjectDoesNotExist` è sottoclasse di `AttributeError`, quindi `getattr(..., None)` ritorna `None` senza sollevare. `_society_recipients` ritorna `[society.email]`, `[president.user.email]` o `[]` correttamente. **Nessun bug.**
-*Causa reale del sintomo:* SMTP dev non configurato → vedi §10.12.
-
-### 10.12 SMTP dev non configurato — APERTO (scoperto 2026-06-20)
+### 10.12 SMTP non configurato — lato-dev FATTO, coda SMTP-prod APERTA (scoperto 2026-06-20)
 - `EMAIL_BACKEND=smtp` su `localhost:25` senza server → le email best-effort (incluse vouching/certificazione) saltano silenziosamente (gestite via `_safe_send`, ma nessun recapito). È la causa reale del sintomo "notifica società non arrivata" osservato in test 7b.
 - Da fare: configurare console/file backend su dev + monitoraggio warning `[certification]` in prod.
-
-### 10.13 API `/accounts/api/...` fuori whitelist onboarding — APERTO (scoperto 2026-06-20)
-- L'esenzione middleware è `request.path.startswith('/api/')`, ma gli endpoint AJAX accounts (`search-athlete` e simili) stanno sotto `/accounts/api/...` → non coperti → intercettati durante onboarding e rediretti (ritornano HTML invece di JSON). Pre-esistente. Mitigabile lato client con header `X-Requested-With: XMLHttpRequest` (già esentato dal middleware).
+- **Aggiornamento 2026-06-21:** lato-dev **FATTO** — `EMAIL_BACKEND` console di default in dev, env-gated fail-safe (`baa69b3`), su prod con deploy `f697c0f`. **Resta APERTA la coda SMTP-prod reale**: serve un provider email (SMTP/relay) per recapitare davvero vouching/certificazione in produzione; finché non c'è, in prod le email best-effort continuano a saltare silenziosamente. Da fare: scegliere provider, configurare credenziali in `.env` (rotazione via §11.1), monitorare warning `[certification]`.
 
 ### 10.14 Git credential helper instabile sul VPS — APERTO (scoperto 2026-06-20)
 - `~/.git-credentials` presente ma `credential.helper` non attivo → `git push` fallisce con 401 finché non si riattiva `store`. Da capire se qualcosa resetta la config git sul VPS condiviso.
+- **Aggiornamento 2026-06-21:** il deploy del 2026-06-21 (push `dev` + operazioni git) è passato **senza 401**, sia in lettura sia in scrittura. La causa-radice (cosa resetta `credential.helper` sul VPS condiviso) **resta da capire** — non investigata. La voce **resta APERTA**: oggi ha retto, ma il meccanismo che la rompe non è stato identificato.
 
 ## 11. Sicurezza operativa e frontiera reversibile
 
@@ -644,3 +633,47 @@ non legato al deploy. Causa-radice: `certbot.timer` Dummy.
 *Chiuso:* `certbot renew` + automazione via `/etc/cron.d/certbot-2salti` scoped ai domini di
 Alberto; verificato con `openssl s_client`/`x509 -dates` (valido 2026-06-14 → 2026-09-12,
 Let's Encrypt). Il `curl -k` in diagnosi era prudenza superflua.
+
+### §10.10 Loop onboarding presidente self-service (PROD) — CHIUSO 2026-06-21
+*Cosa era:* `create_society` non in `allowed_urls` del middleware onboarding
+(`accounts/middleware.py`): un presidente in `MEMBERSHIP_PENDING` (società non ancora
+creata) veniva rediretto a `onboarding_membership` → `ERR_TOO_MANY_REDIRECTS`. Sistemico,
+pre-esistente, su **prod**. Scoperto 2026-06-20.
+*Chiuso:* deploy `f697c0f` su prod (merge `dev`→`master` `--no-ff`); 3 migration applicate
+`[X]`, backfill 7/7 `FanProfile` = dry-run, gunicorn sano, smoke pubblico GREEN. Commit
+chiave: `e4f1efc` (`create_society` aggiunto alla whitelist del middleware) + `08f8830`
+(presidente de-vincolato da `Membership` PRESIDENT, RBAC derivato da `managed_society`); i
+3 fix bacheca emersi in verifica `50e3396`/`17edacc`/`6a42763`.
+*Nota onesta:* riprova autenticata su prod (login presidente `managed_society`-only) **non
+eseguita di proposito**, per non creare account fittizi su produzione. Comportamento
+verificato end-to-end su dev (Antigravity Check 1–3, sessione 2026-06-20); codice in prod
+bit-identico a dev (tree del merge identico, suite 221 verde sul merge di prova). Riprova
+demandata al primo login reale di un presidente. Per §5 è una chiusura solida proprio
+perché dichiara il suo unico angolo non coperto: chi rilegge il runbook non deve dedurre
+"verificato col login in prod" — la verità è dev verde + codice identico, riprova al primo
+presidente reale.
+*Vive in:* `accounts/middleware.py` (whitelist onboarding), `management/services` (RBAC da
+`managed_society`); regression suite `management` 126 GREEN su dev.
+
+### §10.11 `_society_recipients` — candidato debito INVESTIGATO, no-bug — CHIUSA 2026-06-21
+*Cosa era:* sospetto (test 7b) che la notifica vouching alla società non fosse recapitata
+perché `getattr(society, 'president', None)` puntava a una relation inesistente.
+*Chiusa (no-bug):* `society.president` è il reverse OneToOne di
+`PresidentProfile.managed_society` (`related_name='president'`); in questo Django
+`RelatedObjectDoesNotExist` è sottoclasse di `AttributeError`, quindi `getattr(..., None)`
+ritorna `None` senza sollevare. `_society_recipients` ritorna `[society.email]`,
+`[president.user.email]` o `[]` correttamente. **Nessun bug**: il sintomo reale è assorbito
+da §10.12 (SMTP non configurato), non da un difetto di codice.
+
+### §10.13 API `/accounts/api/...` fuori whitelist onboarding — CHIUSO 2026-06-21
+*Cosa era:* l'esenzione middleware `request.path.startswith('/api/')` non copriva gli
+endpoint AJAX accounts sotto `/accounts/api/...` (`search-athlete` e simili) → intercettati
+durante onboarding e rediretti (HTML invece di JSON). Pre-esistente, scoperto 2026-06-20.
+*Chiuso:* `/accounts/api/` aggiunto alla whitelist del redirect middleware (commit
+`04cc484`); su prod con deploy `f697c0f`.
+
+### Cosmetico — tag `{{ }}` template spezzati su due righe — CHIUSO 2026-06-21
+*Cosa era:* 10 tag di template `{{ ... }}` spezzati su due righe (refuso cosmetico, **non**
+una voce §10 tracciata) che rendevano letterale il markup in pagina.
+*Chiuso:* 10 tag ricomposti su riga singola (commit `35ae324`); verificato in prod via HTTP
+e Antigravity Test 2. Fix chiuso, non un debito residuo.
