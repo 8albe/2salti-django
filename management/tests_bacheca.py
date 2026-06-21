@@ -57,3 +57,8 @@ class BachecaPresidentNoMembershipTests(TestCase):
         # La bacheca di team deve compilare e renderizzare → 200.
         resp = self.client.get(reverse("bacheca_team", args=[self.team.slug]))
         self.assertEqual(resp.status_code, 200)
+        # Content check del tag ricomposto `{{ team.name|default:"Societaria" }}`
+        # (bacheca.html:8, cosmetico): il valore reale deve comparire, non il letterale.
+        html = resp.content.decode()
+        self.assertIn(self.team.name, html)
+        self.assertNotIn("team.name|default", html)
