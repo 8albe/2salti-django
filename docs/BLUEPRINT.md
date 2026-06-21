@@ -581,13 +581,26 @@ La base tecnica già impostata su server Hetzner può restare il punto di parten
 
 La grafica di 2salti deve sembrare sportiva ma non caotica, moderna ma non giocattolo. La sensazione giusta è quella di una piattaforma dati affidabile, con energia sportiva e leggibilità prima di tutto.
 
+### Stack di frontend e design token
+
+Il frontend è **Django server-rendered** (template + Gunicorn/Nginx) con **Tailwind CSS** come sistema di utility. Non è una SPA React: le pagine sono HTML generato dal server, arricchito da Tailwind per layout, spaziature e temi.
+
+- **Build, non CDN.** In produzione Tailwind è un build compilato (CLI/PostCSS con scansione dei template e purge delle classi inutilizzate), non `cdn.tailwindcss.com`. Il CDN è accettabile solo in sviluppo locale.
+- **Token come unica fonte di verità.** Colori, spaziature, tipografia, raggi e ombre vivono in `tailwind.config` (più le variabili CSS per i temi). Nessun valore esadecimale o di spacing hardcoded sparso nei template: ogni pagina consuma gli stessi token. È questo che impedisce alle pagine di divergere tra loro mentre il prodotto cresce a macro.
+- **Una sola direzione estetica.** Si sceglie una direzione e la si tiene su tutte le pagine: niente stile reinventato view per view. La coerenza tra pagine vale più della singola pagina "bella".
+
 ### Direzione visiva
 
-- **Palette**: primaria basata su blue + navy, con teal, orange e green come colori funzionali.
-- **Card**: arrotondate, sfondi molto puliti, ampio respiro tra moduli.
-- **Tipografia**: titoli grandi e netti; testo secondario più morbido, mai grigio troppo scarico.
+- **Palette**: base scura su navy profondo (slate-950, `#020617`), coerente con l'identità blu+navy del progetto, e base chiara su slate-50 (`#F8FAFC`). Il **blu** è il colore di marca primario (link, stati attivi, CTA); **teal, orange e green** sono accenti funzionali (positivo / avviso / stato). Gli accenti sono effettivamente usati: la piattaforma non deve apparire monocromatica o neutra.
+- **Tipografia**: **Inter** per body e dati (massima leggibilità delle tabelle), **Outfit** per i titoli (personalità). L'accoppiata è identica in dark e light: i titoli restano in Outfit in **entrambi** i temi, senza regressioni a Inter nel tema chiaro.
+- **Card**: arrotondate, sfondi molto puliti, bordi leggeri, ampio respiro tra moduli.
 - **Grafici**: pochi ma chiari; tabelle pulite, con varianti card su mobile.
-- **Dark mode**: coerente, non improvvisata — contrasto alto, stessi componenti, stessi spazi.
+- **Dark mode**: i due temi condividono lo **stesso set di token e gli stessi componenti**; cambiano solo i valori di colore. Contrasto alto, stessi spazi, nessuna improvvisazione. Il toggle è sempre nell'header.
+
+### Struttura di pagina e stati vuoti
+
+- **Header + footer su ogni pagina pubblica.** L'header è sticky con logo, navigazione sportiva, ricerca e toggle tema. Ogni pagina pubblica si chiude con un **footer** reale (link essenziali, note legali, contatti, stato progetto): senza, la pagina sembra troncata e "sospesa".
+- **Stati vuoti curati.** Quando un dato manca — tipico a inizio stagione, con classifiche a zero e nessun gol registrato — la pagina non mostra testo nudo. Presenta uno stato vuoto curato: micro-illustrazione o icona, copy che spiega *perché* è vuoto (es. "Stagione 2025/2026 non ancora iniziata") ed eventuale CTA verso dati disponibili (stagione precedente, altra lega). Lo stato vuoto è un componente riusabile, non una stringa scritta a mano pagina per pagina. È la concretizzazione del principio "nessuna pagina pubblica deve sembrare rotta quando il dato manca".
 
 ### Widget Layout System
 
@@ -604,10 +617,19 @@ Le preferenze sono persistite per utente in `user_preferences`. La personalizzaz
 - Ricerca e cambio tema sempre accessibili nell'header.
 - Da guest e da utente loggato il sito deve essere riconoscibile come la stessa piattaforma, ma con gerarchie e moduli diversi: da pubblico scoperta e consultazione; da autenticato azione, personalizzazione e strumenti.
 - Ogni pagina dati deve mostrare contesto: stagione, competizione, data ultimo aggiornamento.
-- Nessuna pagina pubblica deve sembrare rotta quando il dato manca: usare stati vuoti curati e copy chiaro.
+- Nessuna pagina pubblica deve sembrare rotta quando il dato manca: vale lo standard "Struttura di pagina e stati vuoti" qui sopra.
 - Filtri semplici, visibili e coerenti tra partite, classifiche e statistiche.
 - AI search bar sempre visibile nell'header o nella sidebar.
 - Risposte AI con breakdown opzionale dei dati sorgente.
+- Accessibilità di base garantita: ogni campo form ha `id`/`name` e label associata; navigazione da tastiera e focus visibili.
+
+### Come si mantiene la coerenza
+
+La qualità del frontend si tiene su tre piani distinti, da non confondere:
+
+- **Igiene di codice e build** (Tailwind compilato, token centralizzati, titoli Outfit coerenti tra i temi, `id`/`name` sui form): è lavoro di codice puro, non richiede strumenti di design.
+- **Coerenza e identità**: garantite dai token in `tailwind.config` come fonte unica, applicati a tutte le pagine.
+- **Componenti visivi nuovi e autoconclusi** (stati vuoti, footer, hero): l'output Tailwind è portabile nei template Django, quindi strumenti come Claude Design possono servire come esplorazione visiva. Restano ispirazione, non handoff automatico: il codice finale vive nei template.
 
 ## 13. Modello di business (Three-Tier)
 
