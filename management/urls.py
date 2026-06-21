@@ -18,4 +18,10 @@ urlpatterns = [
     path('club-admin/generate-code/', views.generate_code, name='generate_code'),
     path('staff-dashboard/', views.staff_dashboard, name='staff_dashboard'),
     path('ops-cockpit/', views.ops_cockpit, name='ops_cockpit'),
+
+    # Certificazione genitore (Macro 7b)
+    path('club-admin/certifications/', views.parent_certifications_list, name='parent_certifications_list'),
+    path('club-admin/certification/<int:cert_id>/confirm/', views.confirm_parent_certification, name='confirm_parent_certification'),
+    path('club-admin/certification/<int:cert_id>/reject/', views.reject_parent_certification, name='reject_parent_certification'),
+    path('certify/<str:token>/', views.certify_parent, name='certify_parent'),
 ]

@@ -1,12 +1,17 @@
-from django.shortcuts import render, get_object_or_404
+import logging
+from django.shortcuts import render, get_object_or_404, redirect
 from django.utils import timezone
 from django.http import JsonResponse
+from django.db import transaction
+from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from .services.dashboard_service import DashboardService
 from .models import Sport, Society, Team, League
 from matches.models import Match, MatchReport
 from accounts.models import User
 from .forms import SocietySetupForm
+
+logger = logging.getLogger(__name__)
 
 def home(request):
     """Homepage con lista sport e partite filtrate per data"""
@@ -167,24 +172,39 @@ def create_society(request):
     if request.method == 'POST':
         form = SocietySetupForm(request.POST, request.FILES)
         if form.is_valid():
-            society = form.save()
-            
-            # Collega società al presidente
-            president_profile = request.user.president_profile
-            president_profile.managed_society = society
-            president_profile.save()
-            
-            # Fase 3 (Macro 16): niente più ladder di squadre per categoria —
-            # la categoria vive sulla lega. Si crea la sola prima squadra
-            # (league=None finché non viene iscritta a un campionato).
-            Team.objects.create(society=society)
-            
-            society.setup_completed = True
-            society.save()
-            
-            request.user.setup_completed = True
-            request.user.save()
-            
+            try:
+                with transaction.atomic():
+                    society = form.save()
+
+                    # Collega società al presidente
+                    president_profile = request.user.president_profile
+                    president_profile.managed_society = society
+                    president_profile.save()
+
+                    # Fase 3 (Macro 16): niente più ladder di squadre per categoria —
+                    # la categoria vive sulla lega. Si crea la sola prima squadra
+                    # (league=None finché non viene iscritta a un campionato).
+                    Team.objects.create(society=society)
+
+                    society.setup_completed = True
+                    society.save()
+
+                    request.user.setup_completed = True
+                    request.user.save()
+            except Exception:
+                # L'atomic garantisce il rollback di società/team/profilo:
+                # nessuna entità orfana resta a DB. Si mostra un errore
+                # leggibile e si ri-renderizza la form invece di propagare il 500.
+                logger.exception(
+                    "create_society failed for user=%s", request.user.pk
+                )
+                messages.error(
+                    request,
+                    "Si è verificato un errore durante la creazione della società. "
+                    "Riprova o contatta l'amministratore.",
+                )
+                return render(request, 'societies/society_setup.html', {'form': form})
+
             return redirect('society_detail', slug=society.slug)
     else:
         form = SocietySetupForm()

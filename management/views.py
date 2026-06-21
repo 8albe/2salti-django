@@ -187,6 +187,7 @@ def bacheca_view(request, team_slug=None):
     """
     if team_slug:
         team = get_object_or_404(Team, slug=team_slug)
+        society = team.society
         # Filtra post della squadra + broadcast societari
         posts = Post.objects.filter(
             models.Q(team=team) | models.Q(is_broadcast=True, society=team.society)
@@ -265,14 +266,22 @@ def post_create(request, team_id=None):
             society = get_society_context(request)
         
         # RBAC Check (PRD 5.2)
+        # §10.10 — Presidente de-vincolato: senza Membership PRESIDENT il diritto
+        # deriva da president_profile.managed_society (== società del post). Questo
+        # flag sostituisce anche il vecchio request.user_membership.role == 'PRESIDENT'
+        # nel campo is_broadcast, che su user_membership None sollevava AttributeError (500).
+        managed = getattr(getattr(request.user, 'president_profile', None), 'managed_society', None)
+        is_president = managed is not None and managed == society
+        if request.user_membership and request.user_membership.role == 'PRESIDENT':
+            is_president = True
+
         can_post = False
         if request.user.is_superuser:
             can_post = True
-        elif request.user_membership:
-            if request.user_membership.role == 'PRESIDENT':
-                can_post = True
-            elif team and request.user_membership.team == team and request.user_membership.role in ['HEAD_COACH', 'ASSISTANT_COACH']:
-                can_post = True
+        elif is_president:
+            can_post = True
+        elif request.user_membership and team and request.user_membership.team == team and request.user_membership.role in ['HEAD_COACH', 'ASSISTANT_COACH']:
+            can_post = True
 
         if not can_post:
             messages.error(request, "Non hai i permessi per postare qui.")
@@ -285,7 +294,7 @@ def post_create(request, team_id=None):
             title=title,
             content=content,
             is_pinned=is_pinned,
-            is_broadcast=is_broadcast if request.user_membership.role == 'PRESIDENT' else False
+            is_broadcast=is_broadcast if is_president else False
         )
         
         log_action(request.user, society, "CREATE_POST", target=post, request=request)
@@ -299,7 +308,7 @@ def chat_view(request, team_slug):
     """
     team = get_object_or_404(Team, slug=team_slug)
     membership = get_membership_context(request, team=team)
-    
+
     # Verifica che l'utente sia membro della squadra o presidente
     can_access = False
     if request.user.is_superuser:
@@ -309,7 +318,12 @@ def chat_view(request, team_slug):
             can_access = True
         elif membership.team == team:
             can_access = True
-            
+
+    # §10.10 — Presidente de-vincolato: accesso via president_profile.managed_society.
+    managed = getattr(getattr(request.user, 'president_profile', None), 'managed_society', None)
+    if managed is not None and managed == team.society:
+        can_access = True
+
     if not can_access:
         messages.error(request, "Non hai accesso alla chat di questa squadra.")
         return redirect('home')
@@ -327,7 +341,7 @@ def chat_message_add(request, team_id):
     # RBAC Check
     team = get_object_or_404(Team, id=team_id)
     membership = get_membership_context(request, team=team)
-    
+
     can_access = False
     if request.user.is_superuser:
         can_access = True
@@ -336,7 +350,12 @@ def chat_message_add(request, team_id):
             can_access = True
         elif membership.team == team:
             can_access = True
-            
+
+    # §10.10 — Presidente de-vincolato: write-path simmetrico a chat_view.
+    managed = getattr(getattr(request.user, 'president_profile', None), 'managed_society', None)
+    if managed is not None and managed == team.society:
+        can_access = True
+
     if not can_access:
         raise PermissionDenied
 
@@ -424,18 +443,34 @@ def approve_membership(request, request_id):
                     "impossibile approvare la richiesta.",
                 )
                 return redirect('club_admin_dashboard')
-            req.status = 'APPROVED'
             with transaction.atomic():
-                Membership.objects.get_or_create(
-                    user=req.user, society=req.society,
-                    team=req.team, role=req.role, season=season,
+                # DEBT-004: lock della richiesta per serializzare approvazioni
+                # concorrenti (doppio submit / due presidenti). Su SQLite è un
+                # no-op (write serializzati a livello DB), difensivo per Postgres.
+                locked_req = (
+                    MembershipRequest.objects
+                    .select_for_update()
+                    .get(pk=req.pk)
                 )
-                _sync_profile_denorm(req.user, req.role, req.team, req.society)
-            messages.success(request, f"Membro {req.user.username} approvato.")
+                Membership.objects.get_or_create(
+                    user=locked_req.user, society=locked_req.society,
+                    team=locked_req.team, role=locked_req.role, season=season,
+                )
+                _sync_profile_denorm(
+                    locked_req.user, locked_req.role,
+                    locked_req.team, locked_req.society,
+                )
+                # Sub-bug DEBT-004: la transizione APPROVED va persistita NELLO
+                # STESSO atomic della creazione Membership — o entrambe o
+                # nessuna. Prima era settata fuori e salvata in coda, lasciando
+                # una finestra di Membership orfana se il save falliva.
+                locked_req.status = 'APPROVED'
+                locked_req.save()
+            messages.success(request, f"Membro {locked_req.user.username} approvato.")
         else:
             req.status = 'REJECTED'
+            req.save()
             messages.warning(request, f"Richiesta di {req.user.username} respinta.")
-        req.save()
     return redirect('club_admin_dashboard')
 
 import random
@@ -581,3 +616,98 @@ def ops_cockpit(request):
         'oldest_unpublished': oldest_unpublished,
         'latest_published': latest_published,
     })
+
+
+# ======================================================================
+# Certificazione genitore (Macro 7b, BLUEPRINT §7.7)
+# ======================================================================
+
+@login_required
+@role_required(['PRESIDENT'])
+def parent_certifications_list(request):
+    """Pannello società: elenco richieste di certificazione genitore in arrivo,
+    con azioni Conferma / Rifiuta sulle richieste in attesa."""
+    from .models import ParentCertification
+
+    society = get_society_context(request)
+    if not society:
+        return redirect('home')
+
+    pending = ParentCertification.objects.filter(
+        society=society,
+        status=ParentCertification.Status.IN_ATTESA_SOCIETA,
+    ).select_related('parent', 'child').order_by('-requested_at')
+
+    history = ParentCertification.objects.filter(society=society).exclude(
+        status=ParentCertification.Status.IN_ATTESA_SOCIETA,
+    ).select_related('parent', 'child').order_by('-requested_at')[:50]
+
+    return render(request, 'management/club_admin/parent_certifications.html', {
+        'society': society,
+        'pending_certifications': pending,
+        'history_certifications': history,
+    })
+
+
+def _get_society_cert(request, cert_id):
+    """Recupera una ParentCertification garantendo che appartenga alla società
+    gestita dall'utente. PermissionDenied altrimenti."""
+    from .models import ParentCertification
+
+    society = get_society_context(request)
+    if not society and hasattr(request.user, 'president_profile'):
+        society = request.user.president_profile.managed_society
+    if not society:
+        raise PermissionDenied
+    return get_object_or_404(ParentCertification, id=cert_id, society=society)
+
+
+@login_required
+@role_required(['PRESIDENT'])
+def confirm_parent_certification(request, cert_id):
+    """La società conferma il match nome+email: genera token e invia il link al
+    genitore."""
+    from .services import certification_service
+    from .models import ParentCertification
+
+    cert = _get_society_cert(request, cert_id)
+    if request.method == 'POST':
+        ok, _, err = certification_service.confirm_certification(cert, request=request)
+        if ok:
+            messages.success(request, "Certificazione confermata: link inviato al genitore.")
+        elif cert.status != ParentCertification.Status.IN_ATTESA_SOCIETA:
+            # Re-submit: la richiesta è già stata confermata (doppio click /
+            # doppia POST). Niente errore tecnico crudo, solo un avviso.
+            messages.warning(request, "Richiesta già confermata.")
+        else:
+            messages.error(request, err or "Impossibile confermare la richiesta.")
+    return redirect('parent_certifications_list')
+
+
+@login_required
+@role_required(['PRESIDENT'])
+def reject_parent_certification(request, cert_id):
+    """La società nega il match: la richiesta diventa RIFIUTATA."""
+    from .services import certification_service
+
+    cert = _get_society_cert(request, cert_id)
+    if request.method == 'POST':
+        ok, _, err = certification_service.reject_certification(cert)
+        if ok:
+            messages.warning(request, "Richiesta di certificazione rifiutata.")
+        else:
+            messages.error(request, err or "Impossibile rifiutare la richiesta.")
+    return redirect('parent_certifications_list')
+
+
+def certify_parent(request, token):
+    """Endpoint pubblico: il genitore clicca il link ricevuto via email. Token
+    valido → CERTIFICATA; scaduto → SCADUTA. Nessun login richiesto."""
+    from .services import certification_service
+
+    ok, cert, err = certification_service.certify_by_token(token)
+    return render(request, 'management/certify_parent_result.html', {
+        'ok': ok,
+        'error': err,
+        'certification': cert,
+    }, status=200 if ok else 400)

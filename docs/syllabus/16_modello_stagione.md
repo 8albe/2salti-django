@@ -114,4 +114,4 @@ Task implementativi:
 
 ---
 
-← [Macro precedente](15_stabilita_tecnica.md)
+← [Macro precedente](15_stabilita_tecnica.md) · → [Macro successiva](17_frontend_design_system.md)

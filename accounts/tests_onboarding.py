@@ -133,3 +133,33 @@ class OnboardingFlowTest(TestCase):
         # Verifica che la dashboard sia accessibile
         response = self.client.get(reverse('dashboard'))
         self.assertEqual(response.status_code, 200)
+
+
+class OnboardingMiddlewareApiExemptionTest(TestCase):
+    """§10.13: le API AJAX sotto /accounts/api/ non devono essere redirette dal
+    middleware onboarding, anche senza header XMLHttpRequest. La sentinella
+    anti-loop (le pagine protette restano redirette) deve restare intatta."""
+
+    def setUp(self):
+        self.client = Client()
+        self.user = User.objects.create_user(
+            username='test_onb', password='password123', role='athlete',
+            first_name='Test', last_name='Onb',
+        )
+        self.client.login(username='test_onb', password='password123')
+
+    def test_user_is_in_onboarding(self):
+        # Presupposto: utente nuovo = onboarding pendente (sentinella attiva).
+        self.assertEqual(self.user.onboarding_state, 'IDENTITY_PENDING')
+
+    def test_protected_page_still_redirects(self):
+        # Sentinella anti-loop: una pagina protetta resta redirette al funnel.
+        response = self.client.get(reverse('dashboard'))
+        self.assertRedirects(response, reverse('verify_identity'))
+
+    def test_accounts_api_not_redirected_without_ajax_header(self):
+        # /accounts/api/ esentato dal prefisso, SENZA header XMLHttpRequest:
+        # deve servire la view (200 JSON), non un redirect al funnel.
+        response = self.client.get(reverse('api_teams_by_league'))
+        self.assertEqual(response.status_code, 200)
+        self.assertNotIn('Location', response)

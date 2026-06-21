@@ -45,9 +45,9 @@
                     <input type="hidden" name="favorite_team" id="favorite-team-hidden">
                 </div>
 
-                <!-- Ricerca atleta -->
+                <!-- Ricerca atleti (multi-follow: più figli/atleti) -->
                 <div>
-                    <label class="block text-sm font-medium text-slate-300 mb-2">Atleta Preferito</label>
+                    <label class="block text-sm font-medium text-slate-300 mb-2">Atleti Seguiti</label>
                     <div class="relative">
                         <input type="text" id="athlete-search-input" autocomplete="off"
                             placeholder="Scrivi nome e cognome dell'atleta..."
@@ -56,8 +56,17 @@
                             class="hidden absolute z-10 w-full mt-1 bg-slate-800 border border-slate-600 rounded-lg shadow-xl max-h-48 overflow-y-auto">
                         </div>
                     </div>
-                    <input type="hidden" name="favorite_player_id" id="favorite-player-id">
-                    <p id="selected-athlete-label" class="text-sm text-cyan-400 mt-2 hidden"></p>
+                    <p class="text-xs text-slate-500 mt-1">Puoi seguire più atleti (es. più figli). Clicca su un risultato per aggiungerlo.</p>
+                    <!-- Chip degli atleti selezionati: ogni chip porta un hidden favorite_player_id -->
+                    <div id="selected-athletes" class="flex flex-wrap gap-2 mt-3">
+                        {% for p in followed_players %}
+                        <span class="athlete-chip inline-flex items-center gap-2 bg-cyan-500/10 border border-cyan-500/40 text-cyan-300 text-sm rounded-full px-3 py-1" data-id="{{ p.id }}">
+                            <input type="hidden" name="favorite_player_id" value="{{ p.id }}">
+                            <span>{{ p.full_name }}</span>
+                            <button type="button" class="remove-chip text-cyan-400 hover:text-red-400 font-bold leading-none">&times;</button>
+                        </span>
+                        {% endfor %}
+                    </div>
                 </div>
             </div>
 
@@ -178,18 +187,32 @@
     // ============================================
     const athleteSearchInput = document.getElementById('athlete-search-input');
     const athleteResults = document.getElementById('athlete-results');
-    const favoritePlayerId = document.getElementById('favorite-player-id');
-    const selectedAthleteLabel = document.getElementById('selected-athlete-label');
+    const selectedAthletes = document.getElementById('selected-athletes');
 
-    if (athleteSearchInput) {
-        // INIT: Se c'è già un atleta selezionato
-        window.addEventListener('load', () => {
-            if (favoritePlayerId.value && athleteSearchInput.value) {
-                selectedAthleteLabel.textContent = `✅ Atleta selezionato: ${athleteSearchInput.value}`;
-                selectedAthleteLabel.classList.remove('hidden');
+    // Multi-follow: aggiunge un chip (con hidden favorite_player_id) se non già presente.
+    function addAthleteChip(id, fullName) {
+        if (!selectedAthletes) return;
+        if (selectedAthletes.querySelector(`.athlete-chip[data-id="${id}"]`)) return;
+        const chip = document.createElement('span');
+        chip.className = 'athlete-chip inline-flex items-center gap-2 bg-cyan-500/10 border border-cyan-500/40 text-cyan-300 text-sm rounded-full px-3 py-1';
+        chip.setAttribute('data-id', id);
+        chip.innerHTML = `<input type="hidden" name="favorite_player_id" value="${id}">`
+            + `<span></span>`
+            + `<button type="button" class="remove-chip text-cyan-400 hover:text-red-400 font-bold leading-none">&times;</button>`;
+        chip.querySelector('span').textContent = fullName;
+        selectedAthletes.appendChild(chip);
+    }
+
+    if (selectedAthletes) {
+        // Rimozione chip (delega: vale anche per i chip pre-renderizzati lato server)
+        selectedAthletes.addEventListener('click', function (e) {
+            if (e.target.classList.contains('remove-chip')) {
+                e.target.closest('.athlete-chip').remove();
             }
         });
+    }
 
+    if (athleteSearchInput) {
         let searchTimeout;
         athleteSearchInput.addEventListener('input', function () {
             clearTimeout(searchTimeout);
@@ -211,11 +234,9 @@
                             div.className = 'px-4 py-3 hover:bg-slate-700 cursor-pointer text-sm border-b border-slate-700 last:border-0';
                             div.innerHTML = `<span class="font-bold text-white">${a.full_name}</span> <span class="text-slate-400 text-xs ml-2">${a.team || 'Squadra non specificata'}</span>`;
                             div.addEventListener('click', () => {
-                                favoritePlayerId.value = a.id;
-                                athleteSearchInput.value = a.full_name;
+                                addAthleteChip(a.id, a.full_name);
+                                athleteSearchInput.value = '';
                                 athleteResults.classList.add('hidden');
-                                selectedAthleteLabel.textContent = `✅ Atleta selezionato: ${a.full_name}`;
-                                selectedAthleteLabel.classList.remove('hidden');
                             });
                             athleteResults.appendChild(div);
                         });

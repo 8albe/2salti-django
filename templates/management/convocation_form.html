@@ -29,16 +29,14 @@
         <div class="grid grid-cols-2 gap-6 text-sm">
             <div>
                 <p class="text-gray-400 mb-1">Capitano / Vice</p>
-                <p class="text-white font-semibold">{{ previous_conv.capitano.get_full_name|default:"-" }} / {{
-                    previous_conv.vicecapitano.get_full_name|default:"-" }}</p>
+                <p class="text-white font-semibold">{{ previous_conv.capitano.get_full_name|default:"-" }} / {{ previous_conv.vicecapitano.get_full_name|default:"-" }}</p>
             </div>
             <div>
                 <p class="text-gray-400 mb-1">Titolari</p>
                 <div class="flex flex-wrap gap-2">
                     {% for n in previous_conv.nominees.all %}
                     {% if n.is_starter %}
-                    <span class="bg-white/10 px-2 py-0.5 rounded text-[10px] text-white">{{ n.player.get_full_name
-                        }}</span>
+                    <span class="bg-white/10 px-2 py-0.5 rounded text-[10px] text-white">{{ n.player.get_full_name }}</span>
                     {% endif %}
                     {% endfor %}
                 </div>

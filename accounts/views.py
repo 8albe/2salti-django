@@ -7,6 +7,16 @@ from matches.models import Match, MatchReport
 from management.models import Membership
 from django.db import models
 
+
+def _followed_players_for(user):
+    """Lista atleti seguiti (multi-follow Macro 7a) per pre-popolare i chip nel
+    form fan. Ritorna dict {id, full_name} ordinati per cognome/nome."""
+    return [
+        {'id': p.id, 'full_name': p.get_full_name() or p.username}
+        for p in user.favorite_players.filter(role='athlete').order_by('last_name', 'first_name')
+    ]
+
+
 def signup(request):
     """Registrazione con scelta ruolo"""
     if request.method == 'POST':
@@ -80,13 +90,12 @@ def setup_wizard(request):
                         user.favorite_teams.set([team])
                     except Team.DoesNotExist:
                         pass
-                player_id = request.POST.get('favorite_player_id')
-                if player_id:
-                    try:
-                        player = User.objects.get(id=player_id, role='athlete')
-                        user.favorite_players.set([player])
-                    except User.DoesNotExist:
-                        pass
+                # Multi-follow (Macro 7a): il form invia N hidden favorite_player_id;
+                # .set sull'intero insieme selezionato supporta sia l'aggiunta di
+                # più atleti/figli sia la rimozione, ed è idempotente.
+                player_ids = request.POST.getlist('favorite_player_id')
+                players = list(User.objects.filter(id__in=player_ids, role='athlete'))
+                user.favorite_players.set(players)
             user.setup_completed = True
             user.save()
             
@@ -98,21 +107,18 @@ def setup_wizard(request):
         initial_data = {}
         if user.role == 'fan':
             fav_team = user.favorite_teams.first()
-            fav_player = user.favorite_players.first()
             if fav_team:
                 initial_data['league'] = fav_team.league_id
                 initial_data['favorite_team'] = fav_team.id
-            if fav_player:
-                initial_data['favorite_player_id'] = fav_player.id
-                initial_data['athlete_search'] = fav_player.get_full_name()
-        
+
         form = FormClass(instance=profile, initial=initial_data) if profile else FormClass(initial=initial_data)
         user_form = UserSetupForm(instance=user)
-    
+
     return render(request, 'accounts/setup_wizard.html', {
         'form': form,
         'user_form': user_form,
         'role': user.get_role_display(),
+        'followed_players': _followed_players_for(user) if user.role == 'fan' else [],
         'seo_title': f"Configura Profilo {user.get_role_display()} | 2salti",
     })
 
@@ -327,26 +333,19 @@ def edit_profile(request):
                         user.favorite_teams.set([team])
                     except Team.DoesNotExist:
                         pass
-                player_id = request.POST.get('favorite_player_id')
-                if player_id:
-                    try:
-                        player = User.objects.get(id=player_id, role='athlete')
-                        user.favorite_players.set([player])
-                    except User.DoesNotExist:
-                        pass
+                # Multi-follow (Macro 7a): vedi setup_wizard.
+                player_ids = request.POST.getlist('favorite_player_id')
+                players = list(User.objects.filter(id__in=player_ids, role='athlete'))
+                user.favorite_players.set(players)
             user.save()
             return redirect('profile', username=user.username)
     else:
         initial_data = {}
         if user.role == 'fan':
             fav_team = user.favorite_teams.first()
-            fav_player = user.favorite_players.first()
             if fav_team:
                 initial_data['league'] = fav_team.league_id
                 initial_data['favorite_team'] = fav_team.id
-            if fav_player:
-                initial_data['favorite_player_id'] = fav_player.id
-                initial_data['athlete_search'] = fav_player.get_full_name()
 
         form = FormClass(instance=profile, initial=initial_data) if profile else FormClass(initial=initial_data)
         user_form = UserSetupForm(instance=user)
@@ -355,6 +354,7 @@ def edit_profile(request):
         'form': form,
         'user_form': user_form,
         'role': user.get_role_display(),
+        'followed_players': _followed_players_for(user) if user.role == 'fan' else [],
         'editing': True,
     })
 
@@ -543,6 +543,42 @@ def profile(request, username):
         return render(request, 'accounts/athlete_profile.html', context)
         
     return render(request, 'accounts/profile.html', context)
+
+
+@login_required
+def request_certification(request):
+    """Vista genitore (role='fan'): dichiara un figlio (atleta già nel sistema)
+    e avvia la certificazione society-vouching (Macro 7b). Riusa la ricerca
+    atleti di api_search_athlete per selezionare il figlio."""
+    from django.contrib import messages
+
+    user = request.user
+    if user.role != 'fan':
+        from django.core.exceptions import PermissionDenied
+        raise PermissionDenied
+
+    if request.method == 'POST':
+        from management.services.certification_service import request_certification as svc_request
+        child_id = request.POST.get('child_id')
+        child = User.objects.filter(id=child_id, role='athlete').first() if child_id else None
+        ok, cert, err = svc_request(user, child)
+        if ok:
+            messages.success(
+                request,
+                "Richiesta inviata alla società. Riceverai un'email con il link "
+                "di conferma appena la società verificherà i tuoi dati.",
+            )
+            return redirect('profile', username=user.username)
+        messages.error(request, err or "Impossibile inviare la richiesta.")
+
+    # Certificazioni già in corso/concluse per questo genitore
+    from management.models import ParentCertification
+    certifications = ParentCertification.objects.filter(parent=user).select_related('child', 'society')
+
+    return render(request, 'accounts/request_certification.html', {
+        'certifications': certifications,
+        'seo_title': "Certificazione Genitore | 2salti",
+    })
 
 
 # ======================

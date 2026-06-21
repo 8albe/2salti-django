@@ -1,6 +1,6 @@
 ## 4. Pagina profilo pubblica degli atleti
 
-Stato: 🔄 In corso
+Stato: 🧊 Differito (unico residuo «minuti giocati» bloccato a monte: richiede eventi SUB_IN/SUB_OUT oggi inesistenti)
 
 Anagrafica, squadra attuale, storico squadre, statistiche (gol, presenze, minuti), ruolo.
 

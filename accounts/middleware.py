@@ -19,12 +19,19 @@ class OnboardingMiddleware(MiddlewareMixin):
             reverse('onboarding_membership'),
             reverse('claim_profile'),
             reverse('team_access'),
+            reverse('create_society'),
             reverse('logout'),
             # Aggiungere altri se necessario (es: static, media, api di ricerca)
         ]
         
         # AJAX e API non dovrebbero essere redirette dal middleware (gestite a livello di vista)
-        if request.path.startswith('/api/') or request.headers.get('x-requested-with') == 'XMLHttpRequest':
+        # §10.13: /accounts/api/ è una API AJAX (teams-by-league, search-athlete,
+        # search-profile-claim) usata DENTRO il funnel onboarding; va esentata dal
+        # redirect anche quando il client non manda l'header XMLHttpRequest.
+        # Prefisso stretto e specifico, voce additiva e minima.
+        if (request.path.startswith('/api/')
+                or request.path.startswith('/accounts/api/')
+                or request.headers.get('x-requested-with') == 'XMLHttpRequest'):
             return None
 
         # Se l'utente è in un URL permesso o è uno staff/superadmin, non fare nulla

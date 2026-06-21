@@ -1,6 +1,6 @@
 ## 13. Season Archive e Season Recap PDF
 
-Stato: 🔄 In corso
+Stato: 🧊 Differito (archivio fatto; Recap PDF gated Premium dipende dalla Macro 10 non pronta + decisione privacy minori pendente)
 
 Archivio stagioni chiuse, generazione PDF riepilogo stagione. Recap PDF gated Premium.
 

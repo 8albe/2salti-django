@@ -17,6 +17,7 @@ Implementazione Freemium / Premium / Club Pro come da blueprint §6. Attualmente
 - [ ] Gating feature server-side per piano (Chatbot, Live Alerts, Media upload, Recap PDF)
 - [ ] Pricing definitivo Premium Utente e Club Pro (bloccato — validazione product owner)
 - [ ] Modello revenue projection (stima ricavi annui per piano)
+- [ ] Eccezione pilota: Zero9 comped (no Club Pro), ricavi da sponsor — escludere dal modello revenue Club Pro
 
 ### 10.3 User Onboarding
 
@@ -30,8 +31,8 @@ Implementazione Freemium / Premium / Club Pro come da blueprint §6. Attualmente
 
 - [x] Campo `User.identity_status` (UNVERIFIED/VERIFIED) + `User.identity_verified_at`
 - [x] Vista `verify_identity()` manuale via admin
-- [ ] Integrazione SPID/CIE come metodo primario (blueprint §7.3)
-- [ ] Fallback documento + selfie / video-selfie per casi eccezionali
+- [ ] ~~Integrazione SPID/CIE come metodo primario~~ **Accantonato (pivot 2026-06-19): SPID/CIE abbandonato per attrito.**
+- [ ] Verifica identità a click su email (invio link → conferma → `identity_status=VERIFIED`)
 
 ### 10.5 Membership Management
 

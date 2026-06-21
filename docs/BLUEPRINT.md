@@ -24,6 +24,13 @@ La pallanuoto e il primo sport di rollout, non il limite del prodotto. La direzi
 - Include un motore di interrogazione AI (AI Stats Engine) che funge da router intelligente e motore di risposte in linguaggio naturale.
 - Sito pubblico e area autenticata non sono la stessa esperienza: la parte pubblica massimizza scoperta e trasparenza del dato, la parte loggata mostra dati personali, funzioni private e strumenti di ruolo.
 
+### Strategia di rollout a imbuto
+
+- Il prodotto **largo** online è basico: risultati partite + campionati pubblici per tutte le società (parità funzionale con 1x2 oggi).
+- Il **sistema-società completo** (tutto il blueprint: bacheca, shop, sponsor, membership, dashboard) si costruisce ma si **accende solo per la prima società pilota (Zero9 Roma)** per ~1 anno.
+- Le altre società, in questa fase, hanno **solo i risultati pubblici**.
+- Quando entreranno nuove società, si **clona e personalizza** il setup pilota.
+
 ### Principi fissi di progetto
 
 - Null invece di invenzione: se un campo non e leggibile, il sistema lo segnala e non lo indovina.
@@ -275,7 +282,7 @@ Prima della personalizzazione Premium, ogni utente riceve un setup di default ba
 | Ruolo | Dashboard Default (Widget) | Header / Navigazione | Permessi RBAC | Notifiche Default |
 | --- | --- | --- | --- | --- |
 | **Atleta** | Ultime gare, Stats personali, Prossimo match | Mio Profilo, Team | Lettura area team | Risultati, Variazioni orario |
-| **Genitore** | Squadra figlio, Calendario, Bacheca | Figli, Team, Shop | Lettura area team | Alert live match, Bacheca |
+| **Genitore** | Squadra figlio, Calendario, Bacheca | Figli, Team, Shop | Lettura area team (figlio) **previa certificazione** (§7.7) | Alert live match, Bacheca |
 | **Allenatore** | Roster, Registro presenze, Stats team | Gestione Team, Dati | Scrittura area team | Report partita post-match |
 | **Dirigente** | KPI Club, Richieste membership, Sponsor | Club Admin, Shop Admin | Gestione Club | Nuove richieste, Alert Shop |
 | **Arbitro** | Mie designazioni, Storico, Rimborsi | Archivio Arbitrale | Update match assigned | Nuove designazioni |
@@ -292,7 +299,7 @@ Esperienza differenziata tra Guest e Autenticato:
 
 **Sequenza di onboarding**:
 1. Registrazione account base (Email/Password).
-2. Verifica identità (SPID/CIE come primario; fallback doc+selfie).
+2. Verifica identità con click di conferma su email (l'utente clicca il link ricevuto e l'iter prosegue). SPID/CIE accantonato per eccesso di attrito.
 3. Selezione Piano: Freemium (gratis), Premium o Club Pro.
 4. Claim del profilo sportivo (Ricerca e richiesta possesso).
 5. Autenticazione con la squadra: Tramite codice fornito dal club o richiesta manuale al Club Admin.
@@ -300,9 +307,10 @@ Esperienza differenziata tra Guest e Autenticato:
 
 ### 7.3 Regole di verifica e privacy
 
-- Il club admin deve poter controllare il pacchetto di verifica del richiedente, ma in una schermata dedicata e tracciata: dati essenziali sempre visibili, documento completo apribile solo quando serve davvero e con audit log.
-- L'identità personale non basta mai per l'accesso ai dati privati: deve esistere anche un collegamento sportivo valido tra utente, squadra, stagione e ruolo.
+- Il sistema non archivia prove d'identità (documenti, selfie): la verifica passa per un click di conferma su email. Dove serve un controllo di merito (es. genitore→figlio) è la società a fare il match contro il proprio gestionale; il sistema inoltra e registra l'esito, con audit log.
+- L'identità confermata via email non basta mai per l'accesso ai dati privati: deve esistere anche un collegamento sportivo valido tra utente, squadra, stagione e ruolo.
 - Per i minorenni: richiesto opt-in esplicito del genitore per Media Gallery e tagging.
+- **Certificazione genitore (society-vouching via email)**: il genitore dichiara il figlio; il sito notifica la società; la società verifica nome+email del genitore contro il proprio gestionale; se conferma, il sito invia al genitore una mail con link; al click, l'accesso ai dati/servizi del figlio si attiva. Il sistema non archivia prove d'identità: inoltra la richiesta e registra l'esito; il match lo fa un umano della società. Macchina a stati: vedi §7.7 (design pianificato).
 - Tema dark/light, recupero password, sessioni e messaggi di errore restano parte del modulo account, ma non devono alterare la gerarchia di sicurezza.
 
 ### 7.4 Referto Digitale In-App
@@ -345,6 +353,42 @@ Spazio dedicato ai contenuti multimediali della partita.
 - **AI Pipeline**: Face detection + match automatico con il roster ufficiale della partita.
 - **Tagging**: I tag validati alimentano le gallery personali nei profili atleta. Prevedere una coda di review (almeno inizialmente manuale o semi-automatica) per evitare mis-tagging.
 - **Privacy Minorenni**: Richiesto opt-in esplicito del genitore per upload e tagging. L'atleta può sempre esercitare l'opt-out globale o per singolo contenuto.
+
+### 7.7 Certificazione genitore (society-vouching) — design pianificato
+
+> **Design pianificato (Macro 7b), non ancora implementato a codice.** Modello target `ParentCertification`. Questa macchina a stati **non** è in STATE_MACHINES.md (che resta solo as-built): vive qui finché non esiste a codice.
+
+Flusso: il genitore dichiara il figlio; il sito notifica la società; la società verifica nome+email del genitore contro il proprio gestionale; se conferma, il sito invia al genitore una mail con link; al click, l'accesso ai dati/servizi del figlio si attiva. Il sistema non archivia prove d'identità: inoltra la richiesta e registra l'esito; il match lo fa un umano della società.
+
+**Stati**
+
+| Valore | Label | Descrizione | Iniziale? | Finale? |
+|---|---|---|---|---|
+| `RICHIESTA_INVIATA` | Richiesta inviata | Genitore ha dichiarato il figlio; mail di notifica inviata alla società | Sì | No |
+| `IN_ATTESA_SOCIETA` | In attesa società | In attesa che la società verifichi nome+email genitore contro il gestionale | No | No |
+| `CONFERMATA_SOCIETA` | Confermata società | Società ha riconosciuto il match; il sito invia al genitore la mail con link | No | No |
+| `IN_ATTESA_CLICK_GENITORE` | In attesa click | Link inviato, in attesa che il genitore clicchi | No | No |
+| `CERTIFICATA` | Certificata | Genitore ha cliccato; accesso ai dati/servizi del figlio attivo | No | Sì |
+| `RIFIUTATA` | Rifiutata | Società non trova il match → fine | No | Sì |
+| `SCADUTA` | Scaduta | Link non cliccato entro la finestra → fine (richiede nuova richiesta) | No | Sì |
+
+**Transizioni**
+
+| Da | A | Trigger | Side effects |
+|---|---|---|---|
+| — | `RICHIESTA_INVIATA` | Genitore dichiara il figlio | Email di vouching alla società; log esito |
+| `RICHIESTA_INVIATA` | `IN_ATTESA_SOCIETA` | Invio email completato | — |
+| `IN_ATTESA_SOCIETA` | `CONFERMATA_SOCIETA` | Società conferma il match | Generazione token link; invio mail al genitore |
+| `IN_ATTESA_SOCIETA` | `RIFIUTATA` | Società nega il match | Notifica al genitore; nessun accesso |
+| `CONFERMATA_SOCIETA` | `IN_ATTESA_CLICK_GENITORE` | Mail con link inviata | — |
+| `IN_ATTESA_CLICK_GENITORE` | `CERTIFICATA` | Genitore clicca il link valido | Attiva accesso ai dati/servizi del figlio; log |
+| `IN_ATTESA_CLICK_GENITORE` | `SCADUTA` | Finestra di validità scaduta | Link invalidato |
+
+**Guardrails**
+
+- Il sistema **non archivia** prove d'identità: il match nome+email è fatto da un umano della società sul proprio gestionale; 2salti inoltra e registra l'esito.
+- Macchina **ortogonale** all'onboarding (STATE_MACHINES.md §2): il genitore resta `role='fan'` e raggiunge `COMPLETED` con sola email+setup; la certificazione è un gate **aggiuntivo** sull'accesso ai dati del figlio, non uno step di `onboarding_state`.
+- `RIFIUTATA`/`SCADUTA` sono finali: l'accesso non si attiva; serve una nuova richiesta.
 
 ## 8. Dashboard admin e workflow editoriale
 
@@ -537,13 +581,26 @@ La base tecnica già impostata su server Hetzner può restare il punto di parten
 
 La grafica di 2salti deve sembrare sportiva ma non caotica, moderna ma non giocattolo. La sensazione giusta è quella di una piattaforma dati affidabile, con energia sportiva e leggibilità prima di tutto.
 
+### Stack di frontend e design token
+
+Il frontend è **Django server-rendered** (template + Gunicorn/Nginx) con **Tailwind CSS** come sistema di utility. Non è una SPA React: le pagine sono HTML generato dal server, arricchito da Tailwind per layout, spaziature e temi.
+
+- **Build, non CDN.** In produzione Tailwind è un build compilato (CLI/PostCSS con scansione dei template e purge delle classi inutilizzate), non `cdn.tailwindcss.com`. Il CDN è accettabile solo in sviluppo locale.
+- **Token come unica fonte di verità.** Colori, spaziature, tipografia, raggi e ombre vivono in `tailwind.config` (più le variabili CSS per i temi). Nessun valore esadecimale o di spacing hardcoded sparso nei template: ogni pagina consuma gli stessi token. È questo che impedisce alle pagine di divergere tra loro mentre il prodotto cresce a macro.
+- **Una sola direzione estetica.** Si sceglie una direzione e la si tiene su tutte le pagine: niente stile reinventato view per view. La coerenza tra pagine vale più della singola pagina "bella".
+
 ### Direzione visiva
 
-- **Palette**: primaria basata su blue + navy, con teal, orange e green come colori funzionali.
-- **Card**: arrotondate, sfondi molto puliti, ampio respiro tra moduli.
-- **Tipografia**: titoli grandi e netti; testo secondario più morbido, mai grigio troppo scarico.
+- **Palette**: base scura su navy profondo (slate-950, `#020617`), coerente con l'identità blu+navy del progetto, e base chiara su slate-50 (`#F8FAFC`). Il **blu** è il colore di marca primario (link, stati attivi, CTA); **teal, orange e green** sono accenti funzionali (positivo / avviso / stato). Gli accenti sono effettivamente usati: la piattaforma non deve apparire monocromatica o neutra.
+- **Tipografia**: **Inter** per body e dati (massima leggibilità delle tabelle), **Outfit** per i titoli (personalità). L'accoppiata è identica in dark e light: i titoli restano in Outfit in **entrambi** i temi, senza regressioni a Inter nel tema chiaro.
+- **Card**: arrotondate, sfondi molto puliti, bordi leggeri, ampio respiro tra moduli.
 - **Grafici**: pochi ma chiari; tabelle pulite, con varianti card su mobile.
-- **Dark mode**: coerente, non improvvisata — contrasto alto, stessi componenti, stessi spazi.
+- **Dark mode**: i due temi condividono lo **stesso set di token e gli stessi componenti**; cambiano solo i valori di colore. Contrasto alto, stessi spazi, nessuna improvvisazione. Il toggle è sempre nell'header.
+
+### Struttura di pagina e stati vuoti
+
+- **Header + footer su ogni pagina pubblica.** L'header è sticky con logo, navigazione sportiva, ricerca e toggle tema. Ogni pagina pubblica si chiude con un **footer** reale (link essenziali, note legali, contatti, stato progetto): senza, la pagina sembra troncata e "sospesa".
+- **Stati vuoti curati.** Quando un dato manca — tipico a inizio stagione, con classifiche a zero e nessun gol registrato — la pagina non mostra testo nudo. Presenta uno stato vuoto curato: micro-illustrazione o icona, copy che spiega *perché* è vuoto (es. "Stagione 2025/2026 non ancora iniziata") ed eventuale CTA verso dati disponibili (stagione precedente, altra lega). Lo stato vuoto è un componente riusabile, non una stringa scritta a mano pagina per pagina. È la concretizzazione del principio "nessuna pagina pubblica deve sembrare rotta quando il dato manca".
 
 ### Widget Layout System
 
@@ -560,10 +617,19 @@ Le preferenze sono persistite per utente in `user_preferences`. La personalizzaz
 - Ricerca e cambio tema sempre accessibili nell'header.
 - Da guest e da utente loggato il sito deve essere riconoscibile come la stessa piattaforma, ma con gerarchie e moduli diversi: da pubblico scoperta e consultazione; da autenticato azione, personalizzazione e strumenti.
 - Ogni pagina dati deve mostrare contesto: stagione, competizione, data ultimo aggiornamento.
-- Nessuna pagina pubblica deve sembrare rotta quando il dato manca: usare stati vuoti curati e copy chiaro.
+- Nessuna pagina pubblica deve sembrare rotta quando il dato manca: vale lo standard "Struttura di pagina e stati vuoti" qui sopra.
 - Filtri semplici, visibili e coerenti tra partite, classifiche e statistiche.
 - AI search bar sempre visibile nell'header o nella sidebar.
 - Risposte AI con breakdown opzionale dei dati sorgente.
+- Accessibilità di base garantita: ogni campo form ha `id`/`name` e label associata; navigazione da tastiera e focus visibili.
+
+### Come si mantiene la coerenza
+
+La qualità del frontend si tiene su tre piani distinti, da non confondere:
+
+- **Igiene di codice e build** (Tailwind compilato, token centralizzati, titoli Outfit coerenti tra i temi, `id`/`name` sui form): è lavoro di codice puro, non richiede strumenti di design.
+- **Coerenza e identità**: garantite dai token in `tailwind.config` come fonte unica, applicati a tutte le pagine.
+- **Componenti visivi nuovi e autoconclusi** (stati vuoti, footer, hero): l'output Tailwind è portabile nei template Django, quindi strumenti come Claude Design possono servire come esplorazione visiva. Restano ispirazione, non handoff automatico: il codice finale vive nei template.
 
 ## 13. Modello di business (Three-Tier)
 
@@ -579,13 +645,14 @@ Il modello economico si basa su tre piani paralleli che sbloccano diverse profon
 
 - **Utente Premium**: paga per servizi avanzati personali (Alerts, Chatbot, Gallery, Season Recap, personalizzazione).
 - **Società (Club Pro)**: paga per visibilità (Sponsor, pagina società), gestione operativa (Shop vetrina) e comunicazione diretta (Bacheca push).
+- **Eccezione pilota (Zero9 Roma)**: la società pilota è **comped a vita** perché fa da cavia del sistema-società completo. Su Zero9 i ricavi vengono dagli sponsor/aziende. È l'**unica** eccezione al modello Club Pro: non lo ribalta.
 - **Giuria certificata**: utilizzo del Referto Digitale sempre gratuito, via token match-specific emesso dalla federazione/lega.
 - **Fruizione contenuti**: la lettura della bacheca e la consultazione dati base restano gratis per tutti gli utenti iscritti alla società (anche Freemium). Le notifiche push sulla bacheca arrivano solo ai Premium.
 
 ### Funnel di attivazione
 
 1. Registrazione account base (email + password o OAuth).
-2. Verifica identità personale (SPID/CIE primario; fallback documento + selfie per stranieri, minorenni, casi speciali).
+2. Verifica identità tramite click di conferma su email (stesso meccanismo per tutti; nessun documento archiviato).
 3. Selezione piano: Freemium (gratis) attivato subito; Premium o Club Pro richiedono pagamento.
 4. Claim del profilo sportivo (ricerca profilo e richiesta di possesso).
 5. Accesso squadra tramite codice fornito dal club o richiesta manuale notificata al club admin.
@@ -594,7 +661,7 @@ Il modello economico si basa su tre piani paralleli che sbloccano diverse profon
 ### Priorità di esecuzione
 
 1. **Nucleo affidabile del dato**: Referto Digitale (form mobile, offline, PIN), OCR fallback, validazione, database e profili sportivi pre-caricati.
-2. **Modulo account**: registrazione, SPID/CIE, fallback documento, pagamento tre piani.
+2. **Modulo account**: registrazione, verifica email a click, pagamento tre piani.
 3. **Claim e membership**: ricerca profilo, codici di attivazione, notifiche al club admin, approvazioni e revoche.
 4. **Area pubblica robusta e dashboard private** per ruoli verificati, con distinzione netta tra guest, Freemium, Premium e Club Pro.
 5. **Crescita**: nuovi sport oltre la pallanuoto, mobile/PWA, analytics più profonde, integrazioni future.
@@ -611,9 +678,10 @@ Il modello economico si basa su tre piani paralleli che sbloccano diverse profon
 - **Firma referto**: PIN arbitro rende il referto immutabile post-firma; correzioni successive solo via admin con audit log completo.
 - **AI Tagging Media Gallery**: detection automatica + coda di review manuale; opt-in esplicito per minorenni, opt-out disponibile per ogni atleta.
 - **Profili sportivi creati dal sistema**: gli utenti non creano da zero il proprio profilo sportivo, lo rivendicano.
-- **Verifica identità**: SPID/CIE primario; fallback documento + selfie / video-selfie per casi eccezionali.
-- **Accesso dati privati**: richiede SEMPRE entrambe le condizioni — identità verificata + membership sportiva approvata.
+- **Verifica identità**: verifica leggera a click su email (l'utente clicca il link e parte l'iter). SPID/CIE e documento+selfie accantonati per eccesso di attrito.
+- **Accesso dati privati**: richiede SEMPRE due condizioni — email confermata + collegamento sportivo valido (membership approvata; per il genitore ai dati del figlio: certificazione society-vouching `CERTIFICATA`).
 - **Multi-sport by design**: pallanuoto è il primo rollout, non il limite. Naming, navigazione, design system, dominio devono restare estendibili ad altri sport.
+- **Rollout a imbuto**: largo = risultati pubblici per tutti; sistema-società completo acceso solo per il pilota Zero9 (~1 anno), poi clonato per le nuove società. Vedi §1 "Strategia di rollout a imbuto".
 
 ---
 
@@ -626,7 +694,7 @@ Il modello economico si basa su tre piani paralleli che sbloccano diverse profon
 - **[Gallery]** Moderazione contenuti: Segnalazione automatica o dashboard manuale Club Admin?
 - **[Chatbot]** Function calling aperto (Opzione A) vs Lista chiusa whitelist comandi (Opzione B).
 - **[Privacy]** Season Recap minorenni: Opt-in richiesto per generazione PDF o solo per condivisione?
-- **[Identity]** Chi valida manualmente i documenti nel fallback SPID (Documento+Selfie)? (2salti Staff / Club Admin?)
+- **[Identity]** ✅ **SUPERATO (pivot 2026-06-19):** niente documenti da validare. La verifica è a click su email; il controllo di merito esiste solo nel flusso genitore→figlio e lo fa la società contro il proprio gestionale.
 
 ---
 

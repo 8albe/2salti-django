@@ -1,9 +1,17 @@
+import uuid
+from datetime import timedelta
+
 from django.core.exceptions import ValidationError
 from django.db import models
 from django.db.models import Q
 from django.conf import settings
 from django.utils import timezone
 from core.models import Society, Team
+
+# Finestra di validità del link inviato al genitore (Macro 7b §7.7). Oltre
+# questa, la certificazione scade e richiede una nuova richiesta. Costante
+# configurabile centralmente.
+CERTIFICATION_LINK_VALIDITY_DAYS = 7
 
 
 class MembershipQuerySet(models.QuerySet):
@@ -614,3 +622,154 @@ class PilotReview(models.Model):
 
     def __str__(self):
         return f"{self.get_review_type_display()} — {self.review_date} ({self.recommendation})"
+
+
+class ParentCertification(models.Model):
+    """Certificazione genitore (society-vouching via email) — Macro 7b.
+
+    Macchina a stati come da BLUEPRINT §7.7. ORTOGONALE all'onboarding: il
+    genitore resta role='fan' e raggiunge COMPLETED con sola email+setup; questa
+    è un gate AGGIUNTIVO sull'accesso ai dati del figlio (vedi
+    User.is_certified_parent_of), non uno step di onboarding_state.
+
+    Sede: management (non accounts) perché è una relazione cross-app
+    parent↔child↔Society e il workflow lato società (Conferma/Rifiuta) vive qui,
+    accanto a Membership e al club admin.
+
+    Il sistema NON archivia prove d'identità: inoltra la richiesta alla società e
+    registra l'esito; il match nome+email lo fa un umano della società sul
+    proprio gestionale.
+    """
+
+    class Status(models.TextChoices):
+        RICHIESTA_INVIATA = 'RICHIESTA_INVIATA', 'Richiesta inviata'
+        IN_ATTESA_SOCIETA = 'IN_ATTESA_SOCIETA', 'In attesa società'
+        CONFERMATA_SOCIETA = 'CONFERMATA_SOCIETA', 'Confermata società'
+        IN_ATTESA_CLICK_GENITORE = 'IN_ATTESA_CLICK_GENITORE', 'In attesa click'
+        CERTIFICATA = 'CERTIFICATA', 'Certificata'
+        RIFIUTATA = 'RIFIUTATA', 'Rifiutata'
+        SCADUTA = 'SCADUTA', 'Scaduta'
+
+    FINAL_STATUSES = {Status.CERTIFICATA, Status.RIFIUTATA, Status.SCADUTA}
+
+    parent = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE,
+        related_name='parent_certifications',
+        help_text="Il genitore/fan che richiede la certificazione.",
+    )
+    child = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE,
+        related_name='child_certifications',
+        help_text="L'atleta figlio (già nel sistema): v1 solo atleti esistenti.",
+    )
+    society = models.ForeignKey(
+        Society, on_delete=models.CASCADE, related_name='parent_certifications',
+        help_text="Società destinataria: quella in cui il figlio è tesserato.",
+    )
+
+    status = models.CharField(
+        max_length=30, choices=Status.choices, default=Status.RICHIESTA_INVIATA,
+    )
+
+    # Token del link inviato al genitore (generato alla conferma società).
+    token = models.CharField(max_length=64, blank=True, default='', db_index=True)
+    token_expires_at = models.DateTimeField(null=True, blank=True)
+
+    note = models.TextField(blank=True, default='')
+
+    requested_at = models.DateTimeField(auto_now_add=True)
+    society_responded_at = models.DateTimeField(null=True, blank=True)
+    certified_at = models.DateTimeField(null=True, blank=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-requested_at']
+        verbose_name = "Certificazione genitore"
+        verbose_name_plural = "Certificazioni genitore"
+        constraints = [
+            # Una sola certificazione NON finale per coppia (parent, child):
+            # evita richieste duplicate aperte in parallelo. Le righe finali
+            # (CERTIFICATA/RIFIUTATA/SCADUTA) non contano: si può ri-richiedere.
+            models.UniqueConstraint(
+                fields=['parent', 'child'],
+                condition=~Q(status__in=['CERTIFICATA', 'RIFIUTATA', 'SCADUTA']),
+                name='uniq_parentcert_open_per_parent_child',
+            ),
+        ]
+
+    def __str__(self):
+        return f"Cert {self.parent_id}->{self.child_id} [{self.get_status_display()}]"
+
+    # ── Macchina a stati (BLUEPRINT §7.7) ────────────────────────────────
+    # Ogni metodo valida lo stato di partenza e alza ValueError sulle
+    # transizioni non ammesse. Nessun side effect di email qui: l'invio è
+    # orchestrato dal certification_service, che chiama questi metodi.
+
+    @property
+    def is_final(self):
+        return self.status in self.FINAL_STATUSES
+
+    @property
+    def is_link_expired(self):
+        if self.token_expires_at is None:
+            return False
+        return timezone.now() > self.token_expires_at
+
+    def _require(self, expected):
+        if self.status != expected:
+            raise ValueError(
+                f"Transizione non valida: atteso {expected}, trovato {self.status}"
+            )
+
+    def mark_in_attesa_societa(self, save=True):
+        """RICHIESTA_INVIATA → IN_ATTESA_SOCIETA (email di vouching inviata)."""
+        self._require(self.Status.RICHIESTA_INVIATA)
+        self.status = self.Status.IN_ATTESA_SOCIETA
+        if save:
+            self.save(update_fields=['status', 'updated_at'])
+
+    def conferma_societa(self, save=True):
+        """IN_ATTESA_SOCIETA → CONFERMATA_SOCIETA. Genera token e scadenza."""
+        self._require(self.Status.IN_ATTESA_SOCIETA)
+        self.status = self.Status.CONFERMATA_SOCIETA
+        self.token = uuid.uuid4().hex
+        self.token_expires_at = timezone.now() + timedelta(
+            days=CERTIFICATION_LINK_VALIDITY_DAYS)
+        self.society_responded_at = timezone.now()
+        if save:
+            self.save(update_fields=[
+                'status', 'token', 'token_expires_at',
+                'society_responded_at', 'updated_at',
+            ])
+
+    def rifiuta_societa(self, save=True):
+        """IN_ATTESA_SOCIETA → RIFIUTATA (finale)."""
+        self._require(self.Status.IN_ATTESA_SOCIETA)
+        self.status = self.Status.RIFIUTATA
+        self.society_responded_at = timezone.now()
+        if save:
+            self.save(update_fields=['status', 'society_responded_at', 'updated_at'])
+
+    def mark_in_attesa_click(self, save=True):
+        """CONFERMATA_SOCIETA → IN_ATTESA_CLICK_GENITORE (mail con link inviata)."""
+        self._require(self.Status.CONFERMATA_SOCIETA)
+        self.status = self.Status.IN_ATTESA_CLICK_GENITORE
+        if save:
+            self.save(update_fields=['status', 'updated_at'])
+
+    def certifica_via_click(self, save=True):
+        """IN_ATTESA_CLICK_GENITORE → CERTIFICATA (link valido cliccato)."""
+        self._require(self.Status.IN_ATTESA_CLICK_GENITORE)
+        if self.is_link_expired:
+            raise ValueError("Link scaduto: impossibile certificare.")
+        self.status = self.Status.CERTIFICATA
+        self.certified_at = timezone.now()
+        if save:
+            self.save(update_fields=['status', 'certified_at', 'updated_at'])
+
+    def scadi(self, save=True):
+        """IN_ATTESA_CLICK_GENITORE → SCADUTA (finestra di validità superata)."""
+        self._require(self.Status.IN_ATTESA_CLICK_GENITORE)
+        self.status = self.Status.SCADUTA
+        if save:
+            self.save(update_fields=['status', 'updated_at'])

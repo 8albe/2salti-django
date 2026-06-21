@@ -12,6 +12,7 @@ urlpatterns = [
     path('dashboard/', views.dashboard, name='dashboard'),
     path('edit/', views.edit_profile, name='edit_profile'),
     path('profile/<str:username>/', views.profile, name='profile'),
+    path('request-certification/', views.request_certification, name='request_certification'),
     path('login/', auth_views.LoginView.as_view(template_name='accounts/login.html'), name='login'),
     path('logout/', auth_views.LogoutView.as_view(), name='logout'),
     # AJAX endpoints

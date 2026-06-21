@@ -85,14 +85,17 @@ def _open_or_reopen_membership(user, society, team, role):
 
 @receiver(post_save, sender=PresidentProfile)
 def sync_president_membership(sender, instance, **kwargs):
+    # §10.10 — Presidente de-vincolato dalla stagione: NON si apre più una
+    # Membership PRESIDENT (era l'unica sorgente del RuntimeError "no season
+    # derivable" su create_society quando lo sport non aveva una Season corrente).
+    # Il ruolo PRESIDENT è ora derivato a runtime da president_profile.managed_society
+    # nel layer RBAC (permissions.get_roles). Resta solo il cleanup delle righe
+    # storiche: chiudere le PRESIDENT stantie quando la società gestita cambia o
+    # viene rimossa, così che lo storico non resti "aperto".
     if instance.managed_society:
-        with transaction.atomic():
-            _close_stale_president_memberships(
-                instance.user, instance.managed_society,
-            )
-            _open_or_reopen_membership(
-                instance.user, instance.managed_society, None, 'PRESIDENT',
-            )
+        _close_stale_president_memberships(
+            instance.user, instance.managed_society,
+        )
     else:
         _close_all_role_memberships(instance.user, 'PRESIDENT')
 
@@ -112,16 +115,41 @@ def sync_athlete_membership(sender, instance, **kwargs):
         _close_all_role_memberships(instance.user, 'PLAYER')
 
 
+COACH_ROLES = ('HEAD_COACH', 'ASSISTANT_COACH')
+
+
 @receiver(post_save, sender=CoachProfile)
 def sync_coach_membership(sender, instance, **kwargs):
+    """Sincronizza la/le Membership coach derivando il ruolo dai dati esistenti.
+
+    DEBT-002: un CoachProfile può corrispondere a più ruoli coach
+    (HEAD_COACH e/o ASSISTANT_COACH) sullo stesso utente — non esiste un campo
+    di ruolo sul profilo (niente schema-change, niente 2-FK). Il signal è quindi
+    *role-differentiated*: deriva i ruoli effettivi dalle Membership coach attive
+    e sincronizza CIASCUNO in isolamento (le helper sono già role-scoped), così
+    che la chiusura/apertura di un ruolo non azzeri né duplichi l'altro.
+
+    Senza Membership coach pregresse il default è HEAD_COACH: un coach in
+    onboarding nasce capo-allenatore (backward-compat con il flusso pre-DEBT-002).
+    """
+    user = instance.user
+    roles = set(
+        Membership.objects.filter(
+            user=user, role__in=COACH_ROLES, is_active=True,
+        ).values_list('role', flat=True)
+    ) or {'HEAD_COACH'}
+
     if instance.current_team:
         society = instance.current_team.society
         with transaction.atomic():
-            _close_other_team_memberships(
-                instance.user, 'HEAD_COACH', new_team=instance.current_team,
-            )
-            _open_or_reopen_membership(
-                instance.user, society, instance.current_team, 'HEAD_COACH',
-            )
+            for role in roles:
+                _close_other_team_memberships(
+                    user, role, new_team=instance.current_team,
+                )
+                _open_or_reopen_membership(
+                    user, society, instance.current_team, role,
+                )
     else:
-        _close_all_role_memberships(instance.user, 'HEAD_COACH')
+        with transaction.atomic():
+            for role in roles:
+                _close_all_role_memberships(user, role)

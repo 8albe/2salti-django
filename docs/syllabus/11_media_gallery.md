@@ -1,6 +1,6 @@
 ## 11. Media Gallery e AI Tagging
 
-Stato: ⏳ Da fare
+Stato: 🧊 Differito (storage bucket+CDN da provisionare; upload gated Premium dipende dalla Macro 10 non pronta; decisione moderazione pendente)
 
 Upload foto/video partite, tagging automatico giocatori con AI, visualizzazione pubblica. Solo Premium per upload.
 

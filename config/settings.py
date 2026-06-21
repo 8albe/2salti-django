@@ -100,10 +100,18 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 AUTH_USER_MODEL = 'accounts.User'
 
 # Email
-EMAIL_BACKEND = os.getenv(
-    "EMAIL_BACKEND",
-    "django.core.mail.backends.smtp.EmailBackend",
+# §10.12-dev: in dev il backend di default è la console (le email finiscono su
+# stdout), così sparisce il rumore ConnectionRefusedError quando non c'è un SMTP
+# raggiungibile. Gate fail-safe: si passa a console SOLO per token di ambiente
+# esplicitamente dev; qualunque altro valore — incluso "production" o
+# ENVIRONMENT_NAME assente — resta sullo SMTP backend (prod invariato). Resta
+# comunque sovrascrivibile via env var EMAIL_BACKEND (stessa logica env-driven).
+_email_backend_default = (
+    "django.core.mail.backends.console.EmailBackend"
+    if os.getenv("ENVIRONMENT_NAME", "").lower() in ("development", "dev", "local")
+    else "django.core.mail.backends.smtp.EmailBackend"
 )
+EMAIL_BACKEND = os.getenv("EMAIL_BACKEND", _email_backend_default)
 EMAIL_HOST = os.getenv("EMAIL_HOST", "localhost")
 EMAIL_PORT = int(os.getenv("EMAIL_PORT", "25"))
 EMAIL_USE_TLS = os.getenv("EMAIL_USE_TLS", "False").lower() == "true"
@@ -114,6 +122,41 @@ DEFAULT_FROM_EMAIL = os.getenv("DEFAULT_FROM_EMAIL", "webmaster@localhost")
 SERVER_EMAIL = os.getenv("SERVER_EMAIL", DEFAULT_FROM_EMAIL)
 EMAIL_TIMEOUT = 10
 EMAIL_USE_LOCALTIME = True
+
+# Logging
+# Un console handler su stderr fa emergere le traceback dei 500
+# (django.request ERROR) nel log di gunicorn (error.log in prod, journald in
+# dev), indipendentemente da DEBUG e senza dipendere dall'invio email a
+# mail_admins — la consegna SMTP è un problema separato (OPS_RUNBOOK §10.12).
+# disable_existing_loggers=False per non spegnere i logger di Django/terze parti.
+LOGGING = {
+    "version": 1,
+    "disable_existing_loggers": False,
+    "formatters": {
+        "verbose": {
+            "format": "[{asctime}] {levelname} {name}: {message}",
+            "style": "{",
+        },
+    },
+    "handlers": {
+        "console": {
+            "class": "logging.StreamHandler",
+            "stream": "ext://sys.stderr",
+            "formatter": "verbose",
+        },
+    },
+    "root": {
+        "handlers": ["console"],
+        "level": "WARNING",
+    },
+    "loggers": {
+        "django.request": {
+            "handlers": ["console"],
+            "level": "ERROR",
+            "propagate": False,
+        },
+    },
+}
 
 # --- OCR PROVIDER CONFIGURATION ---
 # Supported providers: 'mock', 'gpt4o'
