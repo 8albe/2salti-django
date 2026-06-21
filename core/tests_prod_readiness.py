@@ -1,4 +1,7 @@
-from django.test import TestCase, override_settings
+import logging
+
+from django.conf import settings
+from django.test import TestCase, SimpleTestCase, override_settings
 from django.urls import reverse
 from django.contrib.auth import get_user_model
 from core.models import Sport, Society, Team, League
@@ -6,6 +9,33 @@ from matches.models import Match
 import xml.etree.ElementTree as ET
 
 User = get_user_model()
+
+
+class LoggingConfigTestCase(SimpleTestCase):
+    """Garantisce che le traceback dei 500 (django.request ERROR) emergano su
+    stderr via console handler, indipendentemente da DEBUG e senza dipendere
+    dall'invio email a mail_admins (consegna SMTP: problema separato, §10.12)."""
+
+    def test_console_handler_su_stderr_definito(self):
+        handler = settings.LOGGING["handlers"]["console"]
+        self.assertEqual(handler["class"], "logging.StreamHandler")
+        self.assertEqual(handler["stream"], "ext://sys.stderr")
+
+    def test_django_request_logger_agganciato_a_console_in_error(self):
+        logger = logging.getLogger("django.request")
+        self.assertEqual(logger.level, logging.ERROR)
+        self.assertTrue(
+            any(isinstance(h, logging.StreamHandler) for h in logger.handlers),
+            "django.request deve avere un StreamHandler agganciato",
+        )
+
+    def test_un_error_su_django_request_viene_propagato(self):
+        # assertLogs aggancia un proprio handler al logger: verifica non
+        # fragile (non legge stderr reale) che l'ERROR fluisca nel logging.
+        logger = logging.getLogger("django.request")
+        with self.assertLogs("django.request", level="ERROR") as cm:
+            logger.error("synthetic 500 for logging-config test")
+        self.assertTrue(any("synthetic 500" in m for m in cm.output))
 
 class ProdReadinessTestCase(TestCase):
     def setUp(self):

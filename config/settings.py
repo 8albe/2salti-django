@@ -115,6 +115,41 @@ SERVER_EMAIL = os.getenv("SERVER_EMAIL", DEFAULT_FROM_EMAIL)
 EMAIL_TIMEOUT = 10
 EMAIL_USE_LOCALTIME = True
 
+# Logging
+# Un console handler su stderr fa emergere le traceback dei 500
+# (django.request ERROR) nel log di gunicorn (error.log in prod, journald in
+# dev), indipendentemente da DEBUG e senza dipendere dall'invio email a
+# mail_admins — la consegna SMTP è un problema separato (OPS_RUNBOOK §10.12).
+# disable_existing_loggers=False per non spegnere i logger di Django/terze parti.
+LOGGING = {
+    "version": 1,
+    "disable_existing_loggers": False,
+    "formatters": {
+        "verbose": {
+            "format": "[{asctime}] {levelname} {name}: {message}",
+            "style": "{",
+        },
+    },
+    "handlers": {
+        "console": {
+            "class": "logging.StreamHandler",
+            "stream": "ext://sys.stderr",
+            "formatter": "verbose",
+        },
+    },
+    "root": {
+        "handlers": ["console"],
+        "level": "WARNING",
+    },
+    "loggers": {
+        "django.request": {
+            "handlers": ["console"],
+            "level": "ERROR",
+            "propagate": False,
+        },
+    },
+}
+
 # --- OCR PROVIDER CONFIGURATION ---
 # Supported providers: 'mock', 'gpt4o'
 OCR_PROVIDER = os.getenv("OCR_PROVIDER", "mock")
