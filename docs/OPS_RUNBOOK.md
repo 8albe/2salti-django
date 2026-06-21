@@ -281,6 +281,14 @@ Quando in un blocco di codice o in un test trovi una sequenza numerica con un bu
 
 Cosa fare: quando vedi una sequenza numerata con un buco, prima di assumere che il buco sia intenzionale, fare `git log -p --follow <file>` cercando il pattern del numero mancante. Se il pezzo c'era ed è stato rimosso, decidere se va ripristinato o se la numerazione va riallineata per riflettere la nuova realtà. Il salto silenzioso fra due numeri è quasi sempre debito tecnico, raramente intenzione.
 
+### 3.12 Due `CLAUDE.md` (per scelta, non un errore)
+
+Esistono due `CLAUDE.md` e devono coesistere:
+- `CLAUDE.md` alla **root** del repo — tracciato, canonico, auto-caricato da Claude Code.
+- `docs/CLAUDE.md` — **untracked**, copia esposta a Obsidian via Syncthing perché sia leggibile lì.
+
+`docs/CLAUDE.md` va tenuto allineato alla root ogni volta che la root cambia. Non è un bug: non segnalarlo come discrepanza in recon, non aggiungerlo a git, non cancellarlo.
+
 ## 4. Pulizia repo: history vs indice corrente
 
 Sono due operazioni distinte che affrontano due problemi distinti, e confonderle è un errore di categoria. È esattamente l'errore commesso il 22 aprile 2026 sulla chiusura del problema #7 e corretto il 23 aprile; la lezione merita di vivere in un posto stabile.
