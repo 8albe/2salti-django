@@ -435,7 +435,7 @@ Il punto strutturale, simmetrico alla sezione 2, è che il versionamento del 25 
 ## 10. Debiti aperti
 
 Registro vivo di problemi noti che richiedono follow-up. Non sono trappole (§3) né bug attivi: sono incoerenze scoperte ma non risolte, da affrontare in sessioni dedicate.
-> Le voci §10.1-10.4, §10.6-10.11, §10.13 sono CHIUSE e archiviate in Appendice A, che ne conserva razionale, commit e test. Qui resta solo ciò che è ancora aperto.
+> Le voci §10.1-10.4, §10.6-10.13 sono CHIUSE e archiviate in Appendice A, che ne conserva razionale, commit e test. Qui resta solo ciò che è ancora aperto.
 
 ### 10.5 Pulizia utenti/società di test su prod — APERTO (scoperto 26-mag in Sprint B)
 
@@ -443,11 +443,6 @@ Registro vivo di problemi noti che richiedono follow-up. Non sono trappole (§3)
 - Su prod: non verificato — richiede sessione dedicata con accesso esplicito al VPS.
 - Da fare: inventario utenti test su prod, cancellazione controllata.
 - Aggiornamento 2026-06-12: prod ora migrato a Macro 16 (§10.8) — gli eventuali dati test sono passati per le data migration (canonicalizzazione season, backfill); la voce resta APERTA.
-
-### 10.12 SMTP non configurato — lato-dev FATTO, coda SMTP-prod APERTA (scoperto 2026-06-20)
-- `EMAIL_BACKEND=smtp` su `localhost:25` senza server → le email best-effort (incluse vouching/certificazione) saltano silenziosamente (gestite via `_safe_send`, ma nessun recapito). È la causa reale del sintomo "notifica società non arrivata" osservato in test 7b.
-- Da fare: configurare console/file backend su dev + monitoraggio warning `[certification]` in prod.
-- **Aggiornamento 2026-06-21:** lato-dev **FATTO** — `EMAIL_BACKEND` console di default in dev, env-gated fail-safe (`baa69b3`), su prod con deploy `f697c0f`. **Resta APERTA la coda SMTP-prod reale**: serve un provider email (SMTP/relay) per recapitare davvero vouching/certificazione in produzione; finché non c'è, in prod le email best-effort continuano a saltare silenziosamente. Da fare: scegliere provider, configurare credenziali in `.env` (rotazione via §11.1), monitorare warning `[certification]`.
 
 ### 10.14 Git credential helper sul VPS — RISOLTA in diagnosi read-only (2026-06-21)
 - `~/.git-credentials` presente ma `credential.helper` non attivo → `git push` fallisce con 401 finché non si riattiva `store`. Da capire se qualcosa resetta la config git sul VPS condiviso.
@@ -672,6 +667,20 @@ perché `getattr(society, 'president', None)` puntava a una relation inesistente
 ritorna `None` senza sollevare. `_society_recipients` ritorna `[society.email]`,
 `[president.user.email]` o `[]` correttamente. **Nessun bug**: il sintomo reale è assorbito
 da §10.12 (SMTP non configurato), non da un difetto di codice.
+
+### §10.12 SMTP non configurato — CHIUSO 2026-06-21 (dev console + prod Brevo)
+*Cosa era:* `EMAIL_BACKEND=smtp` su `localhost:25` senza server → le email best-effort
+(incluse vouching/certificazione) saltavano silenziosamente (gestite via `_safe_send`,
+nessun recapito). Causa reale del sintomo "notifica società non arrivata" (test 7b, vedi §10.11).
+*Chiuso in due tempi:*
+- **Lato-dev** (`baa69b3`, su prod con deploy `f697c0f`): `EMAIL_BACKEND` console di default
+  in dev, env-gated fail-safe.
+- **Lato-prod** (2026-06-21): migrazione da Gmail App Password → **Brevo SMTP**. Prod spedisce
+  via `smtp-relay.brevo.com` da `noreply@2salti.com`, dominio `2salti.com` autenticato
+  (SPF/DKIM/DMARC su Aruba: TXT `brevo-code`, CNAME `brevo1`/`brevo2` `_domainkey`, TXT `_dmarc`,
+  TXT SPF). Verificato con test reale: consegna in inbox confermata. La certificazione genitore
+  ora recapita davvero in produzione.
+*Rotazione credenziali:* via §11.1 (Brevo SMTP key in `.env`, mai in chat/log).
 
 ### §10.13 API `/accounts/api/...` fuori whitelist onboarding — CHIUSO 2026-06-21
 *Cosa era:* l'esenzione middleware `request.path.startswith('/api/')` non copriva gli
