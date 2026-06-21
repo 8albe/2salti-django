@@ -149,7 +149,7 @@ ENVIRONMENT_NAME        # production
 Quando il task lo dichiara esplicitamente, si lavora un'intera macro in batch sul dev senza chiedere autorizzazione fetta per fetta. Regole della modalità:
 
 - Auto-verifica a ogni step: suite verde dopo ogni fetta; per ogni migration (schema o dati) dry-run su una **copia scratch** del DB dev e verifica che lo SHA256 del DB dev reale sia invariato prima/dopo.
-- Ci si ferma solo in tre casi: (a) serve un comando riservato ad Alberto (sudo, backup DB, git push); (b) decisione di prodotto; (c) blocco vero. I bivi tecnici si risolvono con un default solido e si registrano.
+- Ci si ferma solo in tre casi: (a) serve un comando riservato ad Alberto (sudo, backup DB, git push verso prod/master); (b) decisione di prodotto; (c) blocco vero. I bivi tecnici si risolvono con un default solido e si registrano.
 - Decision log obbligatorio: ogni bivio risolto va tracciato ("tecnico" / "possibile-prodotto") e consegnato a fine giro in italiano, in prosa, senza codice.
 - Prima della prima migration che scrive sui dati: fermarsi e far lanciare ad Alberto il backup del DB dev.
 - Nessun output di PII reale (nomi, email); pk, conteggi e stringhe stagione sì. Il logging per-record delle data migration logga pk + campi tecnici, mai nomi.
@@ -173,6 +173,7 @@ Quando il task lo dichiara esplicitamente, si lavora un'intera macro in batch su
 - Branch naming: `feature/<short-name>`, `fix/<short-name>`, `chore/<short-name>`.
 - Commit messages in Italian, imperative mood: "aggiungi validazione OCR", not "added OCR validation".
 - One migration per feature, with a descriptive name.
+- Il `git push origin dev` lo esegue Claude Code in autonomia (Opzione 1, dal 2026-06-21). Il `git push` verso prod/`master` resta di Alberto.
 - Before every commit:
 ```bash
   python manage.py check

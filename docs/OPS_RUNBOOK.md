@@ -126,6 +126,8 @@ Quando `master` ha accumulato merge pubblici **mai rifusi in `dev`** e `dev` ha 
 
 **Gotcha — `curl -k` maschera lo stato reale del certificato.** Un `curl -k` "funziona" anche con un certificato scaduto: non è una verifica TLS. Per confermare l'SSL usare `openssl s_client -connect host:443 -servername host </dev/null | openssl x509 -noout -dates -issuer`, non dedurre da un `curl -k`.
 
+**Gotcha — il delta `master..dev` si calcola solo da `/home/alberto/`.** I conteggi `git rev-list --count master..dev` / `git log master..dev` sono affidabili **solo nella home**, dove `master` e `origin/master` sono freschi (oggi entrambi `e0c928f`, merge-base `7df3643a`, delta reale **23 commit**). Sul **dev box** `/opt/2salti-dev/` i ref `master`/`origin/master` sono **stantii** (l'autopull aggiorna solo `dev`) → lo stesso comando lì restituisce numeri **spuri molto più alti**. Prima di citare un delta in una nota, calcolarlo **dalla home**, mai dal dev box.
+
 ## 3. Trappole tecniche note
 
 ### 3.1 `git rm --cached` + file dirty = pull abortito
@@ -285,7 +287,7 @@ Cosa fare: quando vedi una sequenza numerata con un buco, prima di assumere che 
 
 Esistono due `CLAUDE.md` e devono coesistere:
 - `CLAUDE.md` alla **root** del repo — tracciato, canonico, auto-caricato da Claude Code.
-- `docs/CLAUDE.md` — **untracked**, copia esposta a Obsidian via Syncthing perché sia leggibile lì.
+- `docs/CLAUDE.md` — **gitignored** (`.gitignore:121`), copia esposta a Obsidian via Syncthing perché sia leggibile lì.
 
 `docs/CLAUDE.md` va tenuto allineato alla root ogni volta che la root cambia. Non è un bug: non segnalarlo come discrepanza in recon, non aggiungerlo a git, non cancellarlo.
 
@@ -445,6 +447,7 @@ Registro vivo di problemi noti che richiedono follow-up. Non sono trappole (§3)
 ### 10.10 Loop onboarding presidente self-service (PROD) — APERTO (scoperto 2026-06-20)
 - `create_society` non è in `allowed_urls` del middleware onboarding (`accounts/middleware.py`): un presidente in `MEMBERSHIP_PENDING` (società non ancora creata) viene rediretto a `onboarding_membership` → `ERR_TOO_MANY_REDIRECTS`. Sistemico, pre-esistente, tocca **prod**.
 - Fix tocca `accounts/middleware.py` (**protected file**) → richiede autorizzazione esplicita. Priorità **alta** (blocca l'onboarding presidente reale).
+- **Aggiornamento 2026-06-21:** risolto **su dev** — `create_society` aggiunto alla whitelist del middleware onboarding (`e4f1efc`); presidente de-vincolato da `Membership` PRESIDENT, RBAC derivato da `managed_society` (`08f8830`). Loop verificato chiuso **sul solo dev** (suite `management` 126 GREEN). I 3 bug bacheca emersi durante la verifica sono chiusi su dev (`50e3396`/`17edacc`/`6a42763`; dettaglio nella session note 2026-06-20(2)). **Prod resta a `e0c928f`**: il fix tocca `accounts/middleware.py` (protected file) e il deploy è gated su Alberto → la voce **resta APERTA su prod**. Per §5, "CHIUSO end-to-end" solo dopo deploy prod + verifica.
 
 ### 10.11 `_society_recipients` — candidato debito INVESTIGATO, non riproduce (2026-06-20)
 *Sospetto iniziale (test 7b):* notifica vouching alla società mai recapitata; ipotesi che `getattr(society, 'president', None)` puntasse a una relation inesistente.

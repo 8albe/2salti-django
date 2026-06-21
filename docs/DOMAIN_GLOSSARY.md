@@ -28,7 +28,7 @@ Questo documento è il ponte tra il linguaggio di prodotto usato nel blueprint (
 | Atleta (profilo sportivo) | `AthleteProfile` | accounts | accounts/models.py | ✅ | OneToOne con User; stats calcolate (total_goals, total_matches, total_expulsions) |
 | Allenatore / Coach | `CoachProfile` | accounts | accounts/models.py | ✅ | OneToOne con User; specialization, years_experience |
 | Arbitro / Referee | `RefereeProfile` | accounts | accounts/models.py | ✅ | OneToOne con User; license_number, total_matches_officiated |
-| Presidente | `PresidentProfile` | accounts | accounts/models.py | ✅ | OneToOne con User; punta a managed_society |
+| Presidente | `PresidentProfile` | accounts | accounts/models.py | ✅ | OneToOne con User; punta a `managed_society`. **RBAC presidente derivato da `managed_society`, non da una `Membership` ruolo PRESIDENT** (de-vincolato da stagione, `08f8830`, 2026-06-20). |
 | Evento partita | `MatchEvent` | matches | matches/models.py | ✅ | event_type codificato; blueprint §10 chiama la tabella "Match_Events" |
 | Configurazione evento per sport | `SportEventConfig` | matches | matches/models.py | 📋 | Mappa event_code → label per sport; non menzionato nel blueprint |
 | Classifica | `LeagueStanding` | core | core/models.py | ✅ | Tabella denormalizzata persistita; mai scrivere direttamente — usare `standings_service` |
