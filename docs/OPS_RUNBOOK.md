@@ -291,6 +291,15 @@ Esistono due `CLAUDE.md` e devono coesistere:
 
 `docs/CLAUDE.md` va tenuto allineato alla root ogni volta che la root cambia. Non è un bug: non segnalarlo come discrepanza in recon, non aggiungerlo a git, non cancellarlo.
 
+### 3.13 Credential helper `store`: 401 se deploy come utente ≠ `alberto` o se `~/.git-credentials` viene resettato
+
+L'autenticazione `git push`/`fetch` sul VPS verso `github.com/8albe/2salti-django.git` (remote **HTTPS**) si appoggia a `credential.helper=store`, configurato nel `.gitconfig` di `alberto`, con il PAT in chiaro in `~/.git-credentials` (perms `0600 alberto:alberto`). Tutti e tre i repo (`/home/alberto`, `/opt/2salti-dev`, `/opt/2salti-new`) ereditano lo stesso global, senza override locale. Quando funziona, il meccanismo è silenzioso e non-interattivo: **"niente 401" è il suo comportamento normale, non un'anomalia**. Ma ha due punti di rottura permanenti — non sono debito da risolvere, sono comportamenti noti da conoscere:
+
+1. **Deploy eseguito con utente ≠ `alberto` o con HOME diverso** (es. via `sudo`/root): l'helper `store` vive nel `.gitconfig` di `alberto`, root non lo vede (`sudo -H git -C /opt/2salti-new config --get-all credential.helper` → exit 1, nessuna riga; `/root/.git-credentials` assente). Un `git push` lanciato come root fa **401** anche se da `alberto` funziona.
+2. **Reset/cancellazione di `~/.git-credentials`** o cambio dei suoi permessi: senza il file (o se non più leggibile da `alberto`), `store` non ha nulla da restituire → prompt interattivo o **401**.
+
+Quindi: se un deploy che prima passava comincia a fare 401, prima di sospettare GitHub o il token, controllare *con quale utente* gira il comando e che `~/.git-credentials` di `alberto` esista con perms `0600`. La diagnosi read-only completa del meccanismo (più la mitigazione del PAT applicata il 2026-06-21) è archiviata in Appendice A §10.14.
+
 ## 4. Pulizia repo: history vs indice corrente
 
 Sono due operazioni distinte che affrontano due problemi distinti, e confonderle è un errore di categoria. È esattamente l'errore commesso il 22 aprile 2026 sulla chiusura del problema #7 e corretto il 23 aprile; la lezione merita di vivere in un posto stabile.
@@ -435,7 +444,7 @@ Il punto strutturale, simmetrico alla sezione 2, è che il versionamento del 25 
 ## 10. Debiti aperti
 
 Registro vivo di problemi noti che richiedono follow-up. Non sono trappole (§3) né bug attivi: sono incoerenze scoperte ma non risolte, da affrontare in sessioni dedicate.
-> Le voci §10.1-10.4, §10.6-10.13 sono CHIUSE e archiviate in Appendice A, che ne conserva razionale, commit e test. Qui resta solo ciò che è ancora aperto.
+> Le voci §10.1-10.4, §10.6-10.14 sono CHIUSE e archiviate in Appendice A, che ne conserva razionale, commit e test. Qui resta solo ciò che è ancora aperto.
 
 ### 10.5 Pulizia utenti/società di test su prod — APERTO (scoperto 26-mag in Sprint B)
 
@@ -443,18 +452,6 @@ Registro vivo di problemi noti che richiedono follow-up. Non sono trappole (§3)
 - Su prod: non verificato — richiede sessione dedicata con accesso esplicito al VPS.
 - Da fare: inventario utenti test su prod, cancellazione controllata.
 - Aggiornamento 2026-06-12: prod ora migrato a Macro 16 (§10.8) — gli eventuali dati test sono passati per le data migration (canonicalizzazione season, backfill); la voce resta APERTA.
-
-### 10.14 Git credential helper sul VPS — RISOLTA in diagnosi read-only (2026-06-21)
-- `~/.git-credentials` presente ma `credential.helper` non attivo → `git push` fallisce con 401 finché non si riattiva `store`. Da capire se qualcosa resetta la config git sul VPS condiviso.
-- **Aggiornamento 2026-06-21:** il deploy del 2026-06-21 (push `dev` + operazioni git) è passato **senza 401**, sia in lettura sia in scrittura. La causa-radice (cosa resetta `credential.helper` sul VPS condiviso) **resta da capire** — non investigata. La voce **resta APERTA**: oggi ha retto, ma il meccanismo che la rompe non è stato identificato.
-- **Diagnosi read-only 2026-06-21 (nessun segreto esposto) — voce RISOLTA:** il meccanismo attivo è `credential.helper=store` (origine `/home/alberto/.gitconfig`) + PAT in chiaro in `~/.git-credentials` (perms `0600 alberto:alberto`), remote **HTTPS** `https://github.com/8albe/2salti-django.git` (URL pulito, nessun token embeddato). Tutti e tre i repo (`/home/alberto`, `/opt/2salti-dev`, `/opt/2salti-new`) ereditano lo stesso global, nessun override locale, nessun `url.insteadOf`.
-  - **"Niente 401" è il comportamento NORMALE di `store`, non un'anomalia:** restituisce il token valido in modo non-interattivo. Non c'è nulla che "resetti" la config: la voce originale partiva da una premessa errata.
-  - **Nota mtime:** `~/.git-credentials` ha mtime `2026-06-21 11:08`, corrispondente al push POST-deploy di `3bcbbd8` (il merge di deploy `f697c0f` è delle 10:41). `store` riscrive il file a ogni auth riuscita → la mtime fotografa l'**ultima** op autenticata, **non** una scrittura pre-deploy: il PAT **preesisteva** al deploy (già valido prima delle 10:41), non è fresco di stamattina.
-  - **Root a secco:** `/root/.git-credentials` **assente**; `sudo -H git -C /opt/2salti-new config --get-all credential.helper` → exit=1, nessuna riga (root non vede `store`, che sta nel `.gitconfig` di `alberto`). Un deploy eseguito **come root** farebbe 401.
-  - **Chiave SSH** `id_ed25519_github_8albe` presente in `~/.ssh` ma **non attiva** (remote HTTPS, nessun `~/.ssh/config` che la mappi su github.com): alternativa latente, non il meccanismo che ha coperto il deploy.
-  - **Fragilità monitorabili (in ordine di probabilità):** (1) **scadenza/revoca del PAT** → 401 al primo deploy successivo (data di expiry **da appuntare**, non verificata in questo giro); (2) deploy eseguito con **utente ≠ `alberto`** o **HOME diverso** (es. via `sudo`/root) → helper non risolto → 401; (3) **reset/cancellazione di `~/.git-credentials`** o cambio permessi → prompt/401.
-  - **Mitigazione opzionale durevole:** migrare a **SSH** (chiave `id_ed25519_github_8albe` già presente) — servirebbe `~/.ssh/config` con stanza `Host github.com` + remote in forma SSH; eliminerebbe la dipendenza dal PAT in chiaro e dalla sua scadenza.
-  - **Aggiornamento 2026-06-21 (mitigazione applicata):** la **fragilità #1** (scadenza/revoca del PAT) è stata **risolta**. Il token in uso era un PAT **classic** `2salti-hetzner-push` con scope `repo` (accesso a tutti i repo) e scadenza **20 lug 2026**; è stato sostituito da un PAT **fine-grained** limitato al solo repo `8albe/2salti-django` (permesso **Contents: read/write**), scadenza **21 giu 2027**. Backup di `~/.git-credentials` in `~/.git-credentials.bak.20260621`, sostituita solo la stringa token nella riga esistente (username `8albe` e struttura HTTPS invariati), perms `0600` riapplicati; `git -C /home/alberto fetch origin` di verifica **senza 401**; vecchio classic **revocato** su GitHub (esposizione scope-largo chiusa). Il meccanismo resta invariato (`store` / HTTPS / PAT in chiaro come `alberto`), ma il token è ora fine-grained, single-repo, e il classic scope-`repo` non esiste più. Le **fragilità #2** (utente ≠ `alberto` / HOME diverso) e **#3** (reset/cancellazione di `~/.git-credentials`) **restano invariate**; la mitigazione **SSH** resta opzionale e non implementata.
 
 ## 11. Sicurezza operativa e frontiera reversibile
 
@@ -694,3 +691,28 @@ durante onboarding e rediretti (HTML invece di JSON). Pre-esistente, scoperto 20
 una voce §10 tracciata) che rendevano letterale il markup in pagina.
 *Chiuso:* 10 tag ricomposti su riga singola (commit `35ae324`); verificato in prod via HTTP
 e Antigravity Test 2. Fix chiuso, non un debito residuo.
+
+### §10.14 Git credential helper sul VPS — CHIUSO 2026-06-21 (diagnosticato + fragilità #1 mitigata)
+*Cosa era:* sospetto che qualcosa "resettasse" `credential.helper` sul VPS condiviso facendo
+fallire `git push` con 401, da cui la domanda "cosa resetta la config git". Premessa errata: vedi
+diagnosi.
+*Diagnosi (read-only, nessun segreto esposto):* il meccanismo attivo è `credential.helper=store`
+(global, `/home/alberto/.gitconfig`) + PAT in chiaro in `~/.git-credentials` (perms `0600
+alberto:alberto`), remote **HTTPS** `https://github.com/8albe/2salti-django.git` (URL pulito, nessun
+token embeddato). Tutti e tre i repo (`/home/alberto`, `/opt/2salti-dev`, `/opt/2salti-new`) ereditano
+lo stesso global, nessun override locale, nessun `url.insteadOf`. **"Niente 401" è il comportamento
+NORMALE di `store`**, non un'anomalia: restituisce il token in modo non-interattivo. La voce originale
+partiva da una premessa errata — non c'è nulla che resetti la config. (mtime di `~/.git-credentials` =
+ultima auth riuscita, non una scrittura pre-deploy → il PAT preesisteva al deploy; chiave SSH
+`id_ed25519_github_8albe` presente in `~/.ssh` ma non attiva, alternativa latente.)
+*Mitigazione applicata (fragilità #1 — scadenza/revoca del PAT):* il token era un PAT **classic**
+`2salti-hetzner-push` con scope `repo` (tutti i repo), scad. **20 lug 2026**; sostituito da un PAT
+**fine-grained** limitato al solo `8albe/2salti-django` (**Contents: read/write**), scad. **21 giu 2027**.
+Backup di `~/.git-credentials` in `~/.git-credentials.bak.20260621`, sostituita solo la stringa token
+nella riga esistente (username `8albe` e struttura HTTPS invariati), perms `0600` riapplicati; `fetch`
+di verifica **senza 401**; vecchio classic **revocato** su GitHub (esposizione scope-largo chiusa).
+Meccanismo invariato (`store`/HTTPS/PAT in chiaro come `alberto`), ma token ora fine-grained single-repo.
+*Fragilità residue (non debito, avvertenze permanenti):* #2 (deploy con utente ≠ `alberto`/HOME diverso
+→ 401) e #3 (reset/cancellazione di `~/.git-credentials` → 401) sono ricollocate come trappola operativa
+in **§3.13**. La mitigazione **SSH** (chiave già presente) resta opzionale, non implementata.
+*Rotazione credenziali:* via §11.1.
