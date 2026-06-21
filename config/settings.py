@@ -100,10 +100,18 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 AUTH_USER_MODEL = 'accounts.User'
 
 # Email
-EMAIL_BACKEND = os.getenv(
-    "EMAIL_BACKEND",
-    "django.core.mail.backends.smtp.EmailBackend",
+# §10.12-dev: in dev il backend di default è la console (le email finiscono su
+# stdout), così sparisce il rumore ConnectionRefusedError quando non c'è un SMTP
+# raggiungibile. Gate fail-safe: si passa a console SOLO per token di ambiente
+# esplicitamente dev; qualunque altro valore — incluso "production" o
+# ENVIRONMENT_NAME assente — resta sullo SMTP backend (prod invariato). Resta
+# comunque sovrascrivibile via env var EMAIL_BACKEND (stessa logica env-driven).
+_email_backend_default = (
+    "django.core.mail.backends.console.EmailBackend"
+    if os.getenv("ENVIRONMENT_NAME", "").lower() in ("development", "dev", "local")
+    else "django.core.mail.backends.smtp.EmailBackend"
 )
+EMAIL_BACKEND = os.getenv("EMAIL_BACKEND", _email_backend_default)
 EMAIL_HOST = os.getenv("EMAIL_HOST", "localhost")
 EMAIL_PORT = int(os.getenv("EMAIL_PORT", "25"))
 EMAIL_USE_TLS = os.getenv("EMAIL_USE_TLS", "False").lower() == "true"
