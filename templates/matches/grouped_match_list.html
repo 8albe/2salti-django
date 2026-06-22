@@ -66,9 +66,7 @@
 </div>
 
 {% if not matches %}
-<div class="glass-panel p-12 text-center border-dashed border-2 border-slate-700/50">
-    <div class="text-4xl mb-4 opacity-50 grayscale">📅</div>
-    <h3 class="text-lg font-bold text-white mb-2">Nessuna partita</h3>
-    <p class="text-slate-400">Non ci sono partite in programma per {{ selected_date|date:"l d F" }}.</p>
-</div>
+{% with datestr=selected_date|date:"l d F" %}
+{% include 'components/_empty_state.html' with icon="📅" title="Nessuna partita" message="Non ci sono partite in programma per "|add:datestr|add:"." %}
+{% endwith %}
 {% endif %}
