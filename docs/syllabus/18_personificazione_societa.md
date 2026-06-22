@@ -1,8 +1,8 @@
 ## 18. Personificazione società (presidente)
 
-Stato: ⏳ Da fare (design pianificato — **non as-built**)
+Stato: 🔄 In corso (implementato su `dev`, **non ancora verificato e2e né in prod**)
 
-> **Design pianificato, non ancora implementato a codice.** Il flusso `MembershipRequest` per il presidente **non esiste** a codice. La macchina a stati relativa **non** va in STATE_MACHINES.md (che resta solo as-built) finché non esiste a codice. Dettaglio di prodotto in [BLUEPRINT.md](../BLUEPRINT.md) §7.2.
+> **Implementato a codice su `dev`** (commit `feat(macro18)`), suite verde. Il flusso riusa `MembershipRequest` con `role='PRESIDENT'` come discriminatore. **Non ancora CHIUSO:** mancano la verifica e2e (Antigravity) e l'applicazione del diff alla whitelist del middleware (`accounts/middleware.py`, protected, in attesa di Alberto) — senza quel diff la landing presidente va in loop di redirect su `dev`. La macchina a stati **non** va ancora in STATE_MACHINES.md finché non è verificata. Dettaglio di prodotto in [BLUEPRINT.md](../BLUEPRINT.md) §7.2.
 
 Il presidente non crea una società da zero né la rivendica liberamente: la **sceglie da una lista**, **richiede l'accesso**, l'admin (Alberto) approva, poi rifinisce un setup pre-esistente.
 
@@ -14,9 +14,9 @@ Il presidente non crea una società da zero né la rivendica liberamente: la **s
 
 ### 18.2 Nodi tecnici aperti (da risolvere in implementazione)
 
-- [ ] **Side-effect all'approvazione.** `APPROVED` → `PresidentProfile.managed_society` valorizzato.
-- [ ] **Vincolo 1:1 `managed_society`.** Gestito applicativamente: due presidenti sulla stessa società = **errore gestito**, non `IntegrityError` grezzo. Se aggiungere anche un constraint DB (OneToOne a livello schema) è una decisione da prendere in fase di implementazione.
-- [ ] **Setup di rifinitura con email società obbligatoria.** Dopo l'approvazione il presidente rifinisce la società pre-esistente e **deve** valorizzare l'email di contatto. Guardrail anti-notifica-muta: garantisce che `_society_recipients` (`management/services/certification_service.py`) non sia mai vuoto per una società personificata, chiudendo by-design il debito [OPS_RUNBOOK.md](../OPS_RUNBOOK.md) §10.11.
+- [x] **Side-effect all'approvazione.** `APPROVED` → `PresidentProfile.managed_society` valorizzato, dentro `transaction.atomic()`, **nessuna Membership PRESIDENT** (decisione #2). Implementato in `management/services/president_personification.py` (`approve_president_request`), action admin-gated su `op_admin_site`.
+- [x] **Vincolo 1:1 `managed_society`.** Gestito applicativamente: la società già con presidente → reject leggibile "Questa società ha già un presidente assegnato.", **non** `IntegrityError` grezzo. Constraint DB (OneToOne) già presente a schema, **invariato**: nessuna migrazione. Test `test_approve_one_to_one_guard_clean_reject`.
+- [x] **Setup di rifinitura con email società obbligatoria.** `SocietySetupForm.email` reso obbligatorio (campo modello invariato, no migrazione); `create_society` rifinisce la società pre-esistente quando il presidente è già agganciato. Garantisce che `_society_recipients` (`management/services/certification_service.py`) non sia mai vuoto per una società personificata, chiudendo by-design il debito [OPS_RUNBOOK.md](../OPS_RUNBOOK.md) §10.11.
 
 ### 18.3 Riferimenti incrociati
 

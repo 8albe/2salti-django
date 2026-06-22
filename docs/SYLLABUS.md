@@ -66,5 +66,5 @@ Punto d'ingresso operativo del progetto. Per la visione di prodotto vedi [BLUEPR
 ## 17. Frontend & Design System ⏳
 → [Dettaglio](syllabus/17_frontend_design_system.md)
 
-## 18. Personificazione società (presidente) ⏳
+## 18. Personificazione società (presidente) 🔄
 → [Dettaglio](syllabus/18_personificazione_societa.md)
