@@ -348,12 +348,16 @@ body {
    Il dark resta intatto (tutto scopato a [data-theme="light"]).
    Specificità: base (0,2,1) batte le utility (0,1,0); la ri-afferma
    (0,3,1) batte la base — vince a prescindere dall'ordine, senza !important. */
-[data-theme="light"] main .text-white {
-    color: var(--text-main);
+[data-theme="light"] main .text-white,
+[data-theme="light"] main .text-slate-100,
+[data-theme="light"] main .text-slate-200 {
+    color: var(--text-main);          /* "quasi bianco" usato come testo primario */
 }
+[data-theme="light"] main .text-slate-300,
 [data-theme="light"] main .text-slate-400,
-[data-theme="light"] main .text-slate-300 {
-    color: var(--text-muted);
+[data-theme="light"] main .text-gray-300,
+[data-theme="light"] main .text-gray-400 {
+    color: var(--text-muted);         /* muted: tutta la fascia slate/gray chiara */
 }
 
 /* Ri-afferma testo bianco sui fondi PIENI accent/scuri (bottoni, badge, pill).
@@ -381,10 +385,73 @@ body {
     color: #fff;
 }
 
-/* Testo muted su pill scure piene (es. filtri report_queue, bg-slate-800):
-   nel chiaro la pill resta scura, quindi il muted resta chiaro. */
+/* Testo muted sullo STESSO elemento di una pill scura piena (es. filtri
+   report_queue bg-slate-800; messaggi bg-slate-800 text-slate-200): nel chiaro
+   la pill resta scura, quindi il testo resta chiaro. */
+[data-theme="light"] main .text-slate-200[class*="bg-slate-7"],
+[data-theme="light"] main .text-slate-200[class*="bg-slate-8"],
+[data-theme="light"] main .text-slate-200[class*="bg-slate-9"],
+[data-theme="light"] main .text-slate-300[class*="bg-slate-7"],
+[data-theme="light"] main .text-slate-300[class*="bg-slate-8"],
+[data-theme="light"] main .text-slate-300[class*="bg-slate-9"],
 [data-theme="light"] main .text-slate-400[class*="bg-slate-7"],
 [data-theme="light"] main .text-slate-400[class*="bg-slate-8"],
 [data-theme="light"] main .text-slate-400[class*="bg-slate-9"] {
     color: #94a3b8;
+}
+
+/* ================================
+   Tema chiaro: ISOLE SCURE dentro il contenuto (17.7).
+   Alcune superfici restano scure ANCHE nel tema chiaro per design (hero card,
+   alcune card a fondo slate pieno). Lì la rimappatura del testo sopra renderebbe
+   il testo scuro su fondo scuro = illeggibile. Qui ri-affermo il testo chiaro
+   per i discendenti (e per gli elementi stessi) di queste isole. Due famiglie:
+   - `.dark-surface`: marker esplicito sulle hero card, dove il fondo scuro è un
+     <div> gradient figlio assoluto (from-slate-950) e NON una classe bg sul
+     contenitore del testo: serve un hook esplicito.
+   - `[class~="bg-slate-700|800|900|950"]`: card a fondo slate scuro PIENO. Il
+     selettore `~=` matcha SOLO il token esatto, così esclude i fondi traslucidi
+     dei glass-panel (bg-slate-900/50, /30) che nel chiaro restano chiari e che
+     NON vanno ri-scuriti (pagine già verdi: Risultati, sport, classifiche).
+   Il dark resta intatto (tutto scopato a [data-theme="light"]). */
+[data-theme="light"] main .dark-surface .text-white,
+[data-theme="light"] main .dark-surface.text-white,
+[data-theme="light"] main [class~="bg-slate-700"] .text-white,
+[data-theme="light"] main [class~="bg-slate-800"] .text-white,
+[data-theme="light"] main [class~="bg-slate-900"] .text-white,
+[data-theme="light"] main [class~="bg-slate-950"] .text-white {
+    color: #fff;
+}
+[data-theme="light"] main .dark-surface .text-slate-100,
+[data-theme="light"] main .dark-surface .text-slate-200,
+[data-theme="light"] main .dark-surface .text-slate-300,
+[data-theme="light"] main .dark-surface .text-slate-400,
+[data-theme="light"] main .dark-surface .text-gray-300,
+[data-theme="light"] main .dark-surface .text-gray-400,
+[data-theme="light"] main [class~="bg-slate-700"] .text-slate-100,
+[data-theme="light"] main [class~="bg-slate-700"] .text-slate-200,
+[data-theme="light"] main [class~="bg-slate-700"] .text-slate-300,
+[data-theme="light"] main [class~="bg-slate-700"] .text-slate-400,
+[data-theme="light"] main [class~="bg-slate-800"] .text-slate-100,
+[data-theme="light"] main [class~="bg-slate-800"] .text-slate-200,
+[data-theme="light"] main [class~="bg-slate-800"] .text-slate-300,
+[data-theme="light"] main [class~="bg-slate-800"] .text-slate-400,
+[data-theme="light"] main [class~="bg-slate-900"] .text-slate-100,
+[data-theme="light"] main [class~="bg-slate-900"] .text-slate-200,
+[data-theme="light"] main [class~="bg-slate-900"] .text-slate-300,
+[data-theme="light"] main [class~="bg-slate-900"] .text-slate-400,
+[data-theme="light"] main [class~="bg-slate-950"] .text-slate-300,
+[data-theme="light"] main [class~="bg-slate-950"] .text-slate-400 {
+    color: #94a3b8;                   /* muted chiaro come nel dark */
+}
+
+/* ================================
+   Tema chiaro: hover del date picker (17.7).
+   I giorni non selezionati hanno `hover:text-white`: nel chiaro, all'hover, il
+   testo lampeggiava bianco su fondo chiaro (hover:bg-white/5). Lo rimappo, ma
+   SOLO dentro la striscia del calendario (.date-strip), per non toccare l'hover
+   delle pill scure di report_queue (bg-slate-800 hover:text-white, che vogliono
+   bianco al passaggio). */
+[data-theme="light"] main .date-strip .hover\:text-white:hover {
+    color: var(--text-main);
 }
