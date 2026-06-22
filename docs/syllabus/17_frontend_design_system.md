@@ -1,6 +1,12 @@
 ## 17. Frontend & Design System
 
-Stato: ⏳ Da fare
+Stato: 🔄 In corso
+
+> Nota stato (2026-06-22): lo scaffolding è **già parziale** in `templates/base.html`
+> e `static/css/style.css` — token colore, font Inter+Outfit, `tailwind.config`
+> inline letta dal CDN, theme-toggle + `data-theme`, header sticky e footer
+> esistono già. La macro **non** parte da zero: l'unico step davvero intatto è
+> 17.1 (rimozione CDN + pipeline compilata), fuori da questa pass per scelta.
 
 Concretizzazione operativa del Cap. 12 del BLUEPRINT: portare tutte le
 pagine sotto un'unica direzione estetica, con build e token come fonte
