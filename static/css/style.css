@@ -334,3 +334,57 @@ body {
 [data-theme="light"] aside nav .text-white {
     color: #0f172a;
 }
+
+/* ================================
+   Tema chiaro: leggibilità testo del contenuto <main> (17.6).
+   Stesso meccanismo della nav (17.5) ma esteso al contenuto: i titoli,
+   i nomi squadra, i punteggi, le label del date picker e gli empty-state
+   usano utility Tailwind tarate sul fondo scuro (text-white, text-slate-400):
+   sul tema chiaro spariscono (bianco-su-chiaro, slate-400 ~2,3:1).
+   Qui, SOLO nel chiaro e SOLO dentro <main>, rimappo il testo bianco/muted
+   sui token chiari (--text-main / --text-muted). Poi ri-affermo il testo
+   chiaro dove l'elemento ha un fondo PIENO accent o scuro (bottoni, badge,
+   pill scure): nel chiaro restano colorati/scuri e vogliono testo bianco.
+   Il dark resta intatto (tutto scopato a [data-theme="light"]).
+   Specificità: base (0,2,1) batte le utility (0,1,0); la ri-afferma
+   (0,3,1) batte la base — vince a prescindere dall'ordine, senza !important. */
+[data-theme="light"] main .text-white {
+    color: var(--text-main);
+}
+[data-theme="light"] main .text-slate-400,
+[data-theme="light"] main .text-slate-300 {
+    color: var(--text-muted);
+}
+
+/* Ri-afferma testo bianco sui fondi PIENI accent/scuri (bottoni, badge, pill).
+   I fondi traslucidi (bg-white/5, bg-cyan-500/10) NON sono qui di proposito:
+   nel chiaro restano chiari, quindi il testo va scuro (es. giorno selezionato
+   del date picker, bg-white/5). I fondi slate scuri pieni (7/8/9) sì. */
+[data-theme="light"] main .text-white[class*="bg-cyan-"],
+[data-theme="light"] main .text-white[class*="bg-blue-"],
+[data-theme="light"] main .text-white[class*="bg-indigo-"],
+[data-theme="light"] main .text-white[class*="bg-sky-"],
+[data-theme="light"] main .text-white[class*="bg-green-"],
+[data-theme="light"] main .text-white[class*="bg-emerald-"],
+[data-theme="light"] main .text-white[class*="bg-teal-"],
+[data-theme="light"] main .text-white[class*="bg-red-"],
+[data-theme="light"] main .text-white[class*="bg-rose-"],
+[data-theme="light"] main .text-white[class*="bg-purple-"],
+[data-theme="light"] main .text-white[class*="bg-violet-"],
+[data-theme="light"] main .text-white[class*="bg-pink-"],
+[data-theme="light"] main .text-white[class*="bg-amber-"],
+[data-theme="light"] main .text-white[class*="bg-orange-"],
+[data-theme="light"] main .text-white[class*="bg-slate-7"],
+[data-theme="light"] main .text-white[class*="bg-slate-8"],
+[data-theme="light"] main .text-white[class*="bg-slate-9"],
+[data-theme="light"] main .text-white[class*="bg-gradient"] {
+    color: #fff;
+}
+
+/* Testo muted su pill scure piene (es. filtri report_queue, bg-slate-800):
+   nel chiaro la pill resta scura, quindi il muted resta chiaro. */
+[data-theme="light"] main .text-slate-400[class*="bg-slate-7"],
+[data-theme="light"] main .text-slate-400[class*="bg-slate-8"],
+[data-theme="light"] main .text-slate-400[class*="bg-slate-9"] {
+    color: #94a3b8;
+}
