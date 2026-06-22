@@ -31,6 +31,8 @@ La pallanuoto e il primo sport di rollout, non il limite del prodotto. La direzi
 - Le altre società, in questa fase, hanno **solo i risultati pubblici**.
 - Quando entreranno nuove società, si **clona e personalizza** il setup pilota.
 
+- **Genesi società via calendario di lega — differita (dipendenza federale FIN).** Il modello a regime ("le partite di una stagione esistono già programmate, e da lì si estraggono le società personificabili") è la direzione voluta ma **fuori dal percorso critico**: l'import del calendario non esiste a codice e si costruirà solo dopo un accordo con la federazione (FIN). Nel frattempo le società di partenza nascono come oggi (referti OCR / seed mirato; es. Zero9 seminata a mano su dev in stagione 2026/2027). Coerente con la Macro 14, già marcata differita 🧊.
+
 ### Principi fissi di progetto
 
 - Null invece di invenzione: se un campo non e leggibile, il sistema lo segnala e non lo indovina.
@@ -305,6 +307,8 @@ Esperienza differenziata tra Guest e Autenticato:
 5. Autenticazione con la squadra: Tramite codice fornito dal club o richiesta manuale al Club Admin.
 6. Accesso completo post-approvazione.
 
+**Personificazione società (presidente) — design pianificato, non as-built.** Per il ruolo presidente la "rivendicazione" del punto 4 non è creazione ex-novo né claim libero, ma **scelta da una lista + autorizzazione admin**: il presidente sceglie la propria società tra quelle con almeno una squadra in un campionato (lista **indipendente dalla stagione corrente** — anche stagioni future), invia una richiesta riusando `MembershipRequest` (pattern di approvazione atomica con lock già in `management/views.py`); all'approvazione l'admin valorizza `PresidentProfile.managed_society` (1:1, vincolo gestito applicativamente: doppio presidente = errore gestito, non `IntegrityError` grezzo). Questo flusso **supera l'attuale `create_society`** (che crea `Society` ex-novo) e riallinea il codice al principio §14 "gli utenti non creano da zero, rivendicano" — oggi disatteso dall'as-built. Dettaglio e nodi aperti: SYLLABUS Macro 18. Macchina a stati: assente da STATE_MACHINES.md finché non esiste a codice.
+
 ### 7.3 Regole di verifica e privacy
 
 - Il sistema non archivia prove d'identità (documenti, selfie): la verifica passa per un click di conferma su email. Dove serve un controllo di merito (es. genitore→figlio) è la società a fare il match contro il proprio gestionale; il sistema inoltra e registra l'esito, con audit log.
@@ -389,6 +393,7 @@ Flusso: il genitore dichiara il figlio; il sito notifica la società; la societ�
 - Il sistema **non archivia** prove d'identità: il match nome+email è fatto da un umano della società sul proprio gestionale; 2salti inoltra e registra l'esito.
 - Macchina **ortogonale** all'onboarding (STATE_MACHINES.md §2): il genitore resta `role='fan'` e raggiunge `COMPLETED` con sola email+setup; la certificazione è un gate **aggiuntivo** sull'accesso ai dati del figlio, non uno step di `onboarding_state`.
 - `RIFIUTATA`/`SCADUTA` sono finali: l'accesso non si attiva; serve una nuova richiesta.
+- **Email società sempre valorizzata (design pianificato).** La notifica di vouching parte verso `_society_recipients` (`management/services/certification_service.py`); perché non sia mai vuota per una società personificata, il setup di rifinitura post-approvazione del presidente (§7.2, SYLLABUS Macro 18) **richiede obbligatoriamente** l'email di contatto della società. Chiude by-design il debito OPS_RUNBOOK §10.11.
 
 ## 8. Dashboard admin e workflow editoriale
 
