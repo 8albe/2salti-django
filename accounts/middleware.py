@@ -20,6 +20,7 @@ class OnboardingMiddleware(MiddlewareMixin):
             reverse('claim_profile'),
             reverse('team_access'),
             reverse('create_society'),
+	    reverse('choose_society'),
             reverse('logout'),
             # Aggiungere altri se necessario (es: static, media, api di ricerca)
         ]
