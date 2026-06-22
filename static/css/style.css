@@ -553,3 +553,23 @@ body {
 [data-theme="light"] aside input[type="text"] {
     color: var(--text-main);
 }
+
+/* ================================================================
+   TEMA CHIARO 17.8.1 — <select> glass bg-slate-900/50 (fix mirato).
+   Correzione di diagnosi rispetto a 17.8: bg-slate-900/50 NON e' una superficie
+   chiara nel tema chiaro (slate-900 al 50% su fondo chiaro = grigio-scuro). Sul
+   <select> il rendering nativo lo lascia scuro, e il remap base 17.8 vi forzava
+   testo scuro -> scuro-su-scuro illeggibile (confermato a browser: select
+   "Stagione" sport_matches/sport_detail, "team"/"role" generate_code).
+   Qui, SOLO sui <select> col token ESATTO bg-slate-900/50 (i 4 select), forzo
+   una superficie chiara coerente coi glass-panel vicini + testo scuro = alto
+   contrasto pieno (niente grigio-medio ambiguo). Il selettore richiede `select`:
+   i <div> glass con la stessa classe (profile, report_review, team_detail,
+   sport_detail, grouped_match_list) restano intatti = verdi. color-scheme:light
+   e' best-effort per rendere chiaro anche il menu nativo aperto.
+   Additivo: non riapre nessuna regola categoriale gia' verde. */
+[data-theme="light"] main select[class~="bg-slate-900/50"] {
+    background-color: var(--glass-bg);   /* superficie chiara, come i glass vicini */
+    color: var(--text-main);             /* testo scuro, alto contrasto */
+    color-scheme: light;                 /* best-effort sul menu nativo aperto */
+}
