@@ -43,13 +43,19 @@ body {
     background-attachment: fixed;
 }
 
-/* Typography (17.3): titles always Outfit, body/data Inter.
+/* Typography (17.3/17.5): titles always Outfit, body/data Inter.
    Theme-independent — Tailwind Preflight makes headings inherit the body
-   font (Inter) by default, so without this rule headings render Inter in
-   BOTH themes unless they carry .font-display. This forces Outfit on every
-   heading regardless of [data-theme]. Utility .font-display kept for inline
-   (non-heading) titles. */
-h1, h2, h3, h4, h5, h6,
+   font (Inter) by default (Preflight sets font-family only on `html`, never
+   on h1-h6), so without this rule headings render Inter in BOTH themes
+   unless they carry .font-display.
+   17.5: the heading selector is scoped under :root to raise its specificity
+   to (0,1,1). This makes it beat any Tailwind font-family utility — e.g. a
+   stray .font-sans (0,1,0) — that the CDN injects LATER in the cascade,
+   without resorting to !important. :root (= <html>) always matches and does
+   NOT depend on the JS-set [data-theme] attribute, so it survives JS-off. */
+:root h1, :root h2, :root h3, :root h4, :root h5, :root h6 {
+    font-family: 'Outfit', sans-serif;
+}
 .font-display {
     font-family: 'Outfit', sans-serif;
 }

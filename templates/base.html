@@ -45,7 +45,10 @@
     <script src="https://cdn.tailwindcss.com"></script>
 
     <!-- Custom CSS -->
-    <link rel="stylesheet" href="{% static 'css/style.css' %}">
+    <!-- ?v= forza il refresh della cache browser sui deploy CSS: senza,
+         il browser serviva uno style.css cache-ato pre-17.3 (heading in Inter).
+         Va incrementato a ogni modifica di style.css. -->
+    <link rel="stylesheet" href="{% static 'css/style.css' %}?v=175">
 
     <script>
         tailwind.config = {
