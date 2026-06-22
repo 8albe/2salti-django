@@ -7,6 +7,7 @@ from accounts import views as account_views
 urlpatterns = [
     path('', views.home, name='home'),
     path('sport/<slug:slug>/', views.sport_detail, name='sport_detail'),
+    path('society/choose/', views.choose_society, name='choose_society'),
     path('society/create/', views.create_society, name='create_society'),
     path('society/<slug:slug>/', views.society_detail, name='society_detail'),
     path('team/<slug:slug>/', views.team_detail, name='team_detail'),

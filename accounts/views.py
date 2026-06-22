@@ -67,8 +67,10 @@ def setup_wizard(request):
         except:
             return redirect('claim_profile')
     elif user.role == 'president':
-        # Il presidente deve creare la società
-        return redirect('create_society')
+        # Macro 18: il presidente NON crea da zero — sceglie la società da una
+        # lista e richiede l'accesso (create_society resta come rifinitura post
+        # approvazione, raggiunta da choose_society).
+        return redirect('choose_society')
     else:  # fan
         FormClass = FanSetupForm
     
@@ -311,7 +313,8 @@ def edit_profile(request):
         profile = user.referee_profile
         FormClass = RefereeSetupForm
     elif user.role == 'president':
-        return redirect('create_society')
+        # Macro 18: landing presidente -> scegli società + richiedi accesso.
+        return redirect('choose_society')
     else:  # fan
         FormClass = FanSetupForm
 

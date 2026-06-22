@@ -1,0 +1,63 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="max-w-3xl mx-auto">
+    <div class="text-center mb-8">
+        <h1 class="text-3xl font-bold mb-2">Scegli la tua Società</h1>
+        <p class="text-slate-400">
+            Seleziona la società che vuoi gestire e richiedi l'accesso.
+            Un amministratore verificherà la richiesta.
+        </p>
+    </div>
+
+    {% if messages %}
+        {% for message in messages %}
+            <div class="mb-4 rounded-lg p-3 text-sm border
+                {% if message.tags == 'error' %}bg-red-900/20 border-red-500/30 text-red-200
+                {% else %}bg-green-900/20 border-green-500/30 text-green-200{% endif %}">
+                {{ message }}
+            </div>
+        {% endfor %}
+    {% endif %}
+
+    {% if pending %}
+        <div class="bg-slate-900 rounded-xl p-8 border border-yellow-500/30 text-center">
+            <p class="text-2xl mb-2">⏳</p>
+            <h2 class="text-xl font-semibold mb-2">Richiesta in attesa</h2>
+            <p class="text-slate-300">
+                Hai richiesto di gestire <strong>{{ pending.society.name }}</strong>.
+                La richiesta è in attesa di approvazione da parte di un amministratore.
+                Ti avviseremo via email appena sarà approvata.
+            </p>
+        </div>
+    {% else %}
+        <div class="bg-slate-900 rounded-xl p-8 border border-slate-700">
+            <form method="post">
+                {% csrf_token %}
+                <label for="society_id" class="block text-sm font-medium text-slate-300 mb-2">
+                    Società
+                </label>
+                <select id="society_id" name="society_id" required
+                        class="w-full bg-slate-800 border border-slate-600 rounded-lg p-3 text-white mb-6">
+                    <option value="">— Seleziona una società —</option>
+                    {% for society in societies %}
+                        <option value="{{ society.id }}">{{ society.name }} — {{ society.city }}</option>
+                    {% endfor %}
+                </select>
+
+                {% if not societies %}
+                    <p class="text-slate-400 text-sm mb-6">
+                        Nessuna società disponibile al momento. Le società compaiono qui
+                        una volta caricati campionati e squadre.
+                    </p>
+                {% endif %}
+
+                <button type="submit"
+                        class="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-4 rounded-lg transition-colors">
+                    Richiedi accesso
+                </button>
+            </form>
+        </div>
+    {% endif %}
+</div>
+{% endblock %}
