@@ -15,22 +15,35 @@ di verità unica. Il "perché" sta nel blueprint; qui stanno gli step.
 > Nota: gli step 17.1–17.3 e 17.7 non sono solo-doc quando verranno
 > eseguiti — toccheranno `templates/`, `static/` e `tailwind.config`.
 
+> Avanzamento (2026-06-22, solo `dev`, HEAD `8ea6e16`, prod invariato
+> a `f697c0f`): chiusi e verificati e2e su `dev` (Antigravity, pubbliche +
+> login, dark invariato) il blocco tipografia (17.3), il consolidamento
+> token in `style.css` — parte CSS-vars dei temi (17.2), il componente
+> empty-state (17.4, solo il componente) e la leggibilità del tema chiaro /
+> direzione estetica unica (17.8 + 17.8.1). Restano aperti: empty-state
+> esteso a classifica/dashboard/profilo + unificazione `sport_detail`
+> (17.4), accessibilità base (17.7), footer reale (17.5, previa decisione
+> contenuti), token in `tailwind.config` + audit hex hardcoded (17.2,
+> gated su 17.1), pipeline compilata e rimozione CDN (17.1, gated sulla
+> decisione toolchain/deploy di Alberto). La macro resta 🔄 — è chiuso il
+> blocco tema chiaro, non l'intera macro.
+
 ### 17.1 Pipeline Tailwind compilata
 - [ ] Build Tailwind via CLI/PostCSS con scansione dei template e purge delle classi inutilizzate
 - [ ] Rimuovere `cdn.tailwindcss.com` in produzione; CDN ammesso solo in dev locale
 
 ### 17.2 Design token centralizzati
 - [ ] Spostare colori (navy/slate-950, slate-50, blu di marca, accenti teal/orange/green), spacing, tipografia, raggi e ombre in `tailwind.config`
-- [ ] Variabili CSS per i temi
+- [x] Variabili CSS per i temi — consolidate in `style.css` (2026-06-22, `dev`)
 - [ ] Audit ed eliminazione di hex/spacing hardcoded sparsi nei template
 
 ### 17.3 Tipografia
-- [ ] Caricare Inter (body/dati) + Outfit (titoli)
-- [ ] Fix regressione: i titoli restano Outfit in entrambi i temi (no fallback a Inter nel tema chiaro)
+- [x] Caricare Inter (body/dati) + Outfit (titoli)
+- [x] Fix regressione: i titoli restano Outfit in entrambi i temi (no fallback a Inter nel tema chiaro) — chiuso e verificato e2e (2026-06-22, `dev`)
 
 ### 17.4 Componente stato-vuoto riusabile
-- [ ] Componente unico (icona/illustrazione + copy che spiega il perché + CTA opzionale)
-- [ ] Applicarlo ovunque il dato possa mancare (classifiche a zero, nessun gol a inizio stagione)
+- [x] Componente unico (icona/illustrazione + copy che spiega il perché + CTA opzionale) — `templates/components/_empty_state.html` (2026-06-22, `dev`)
+- [ ] Applicarlo ovunque il dato possa mancare (classifiche a zero, nessun gol a inizio stagione) — applicato alle 2 liste partite; restano classifica/dashboard/profilo
 
 ### 17.5 Struttura di pagina
 - [ ] Footer reale su tutte le pagine pubbliche
@@ -45,8 +58,11 @@ di verità unica. Il "perché" sta nel blueprint; qui stanno gli step.
 - [ ] Navigazione da tastiera e focus visibili
 
 ### 17.8 Direzione estetica unica
-- [ ] Audit dei template per divergenze view-per-view
-- [ ] Allineare tutte le pagine a un'unica direzione estetica
+- [x] Audit dei template per divergenze view-per-view — chiuso e verificato e2e (2026-06-22, `dev`)
+- [x] Allineare tutte le pagine a un'unica direzione estetica — leggibilità tema chiaro chiusa, dark invariato (2026-06-22, `dev`)
+
+#### 17.8.1 Leggibilità tema chiaro
+- [x] Isole scure marcate `.dark-surface` (fix container-keyed); `<select>` glass `bg-slate-900/50` trattati come isole (fondo chiaro + testo scuro); chip annidati, nav header/sidebar e input navbar leggibili nel chiaro — chiuso e verificato e2e (2026-06-22, `dev`, CSS `?v=179`)
 
 ---
 
