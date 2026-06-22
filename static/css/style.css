@@ -27,6 +27,17 @@ body {
     overflow-x: hidden;
 }
 
+/* Typography (17.3): titles always Outfit, body/data Inter.
+   Theme-independent — Tailwind Preflight makes headings inherit the body
+   font (Inter) by default, so without this rule headings render Inter in
+   BOTH themes unless they carry .font-display. This forces Outfit on every
+   heading regardless of [data-theme]. Utility .font-display kept for inline
+   (non-heading) titles. */
+h1, h2, h3, h4, h5, h6,
+.font-display {
+    font-family: 'Outfit', sans-serif;
+}
+
 /* Glassmorphism */
 .glass {
     background: var(--bg-card);
