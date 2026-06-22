@@ -521,6 +521,12 @@ Quando l'agente propone più opzioni all'utente, il framing del wording è esso 
 
 Regola: o le opzioni sono presentate in modo genuinamente neutro (ordinamento neutro, pari peso visivo, descrizione bilanciata di pro/contro), o il bias va dichiarato esplicitamente come tale ("io preferirei A perché X, ma Y e Z sono alternative valide e legittime"). Nascondere la preferenza dietro una struttura che sembra neutra è la versione più insidiosa del problema, perché toglie all'utente la possibilità di accettare o rifiutare il bias consapevolmente. Pattern osservato il 2 maggio 2026 e corretto in tempo reale dopo che Alberto ha segnalato la dinamica.
 
+### 12.8 Cache-busting manuale del CSS: bumpare `?v=N` a ogni modifica di `style.css`
+
+Il link a `static/css/style.css` in `templates/base.html` porta un query string `?v=N` usato come cache-buster manuale (al 2026-06-22 è `?v=179`). Non è automatico: finché non esiste la pipeline compilata (Macro 17.1), il numero **va incrementato a mano** a ogni modifica di `style.css`, altrimenti browser e CDN possono continuare a servire la versione precedente del foglio di stile anche dopo un deploy andato a buon fine. È il complemento server-side della §12.1 (lì si disattiva la cache del browser in verifica; qui si forza il refresh per tutti gli utenti).
+
+Cosa fare: quando si tocca `style.css`, nello stesso commit bumpare `?v=N` in `base.html`. La Macro 17.1 (pipeline Tailwind compilata con hashing degli asset) supera del tutto questa procedura manuale.
+
 ## Appendice A — Archivio debiti e fragilità risolti
 
 Voci di §10 chiuse e verificate, spostate qui dalla testa del file per tenere
