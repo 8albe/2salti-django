@@ -18,17 +18,26 @@
     --glass-bg: rgba(15, 23, 42, 0.7);
     --glass-border: rgba(255, 255, 255, 0.08);
     --sidebar-bg: rgba(15, 23, 42, 0.9);
+    --glass-shadow: none;          /* dark: nessuna ombra glass (invariato) */
 }
 
+/* Tema chiaro (17.5): ridisegno del glass.
+   Prima: --glass-bg white 0.8 (quasi opaco) su bg quasi-bianco #f8fafc +
+   --glass-border 0.05 (invisibile) => superfici come blocchi piatti, blur
+   impercettibile. Ora: pagina leggermente più fredda, glass più trasparente
+   (blur percepibile), bordo slate leggero ma visibile e un'ombra morbida per
+   staccare la superficie dal fondo. Stesso linguaggio del dark, adattato al
+   chiaro. Il dark resta intatto. */
 [data-theme="light"] {
-    --bg-dark: #f8fafc;
-    --bg-card: rgba(255, 255, 255, 0.6);
-    --bg-panel: rgba(241, 245, 249, 0.8);
+    --bg-dark: #eef2f7;
+    --bg-card: rgba(255, 255, 255, 0.55);
+    --bg-panel: rgba(255, 255, 255, 0.6);
     --text-main: #0f172a;
-    --text-muted: #64748b;
-    --glass-bg: rgba(255, 255, 255, 0.8);
-    --glass-border: rgba(0, 0, 0, 0.05);
-    --sidebar-bg: rgba(241, 245, 249, 0.9);
+    --text-muted: #475569;                       /* slate-600: +contrasto vs #64748b */
+    --glass-bg: rgba(255, 255, 255, 0.55);       /* era 0.8 opaco -> 0.55 traslucido */
+    --glass-border: rgba(15, 23, 42, 0.12);      /* era rgba(0,0,0,0.05) invisibile */
+    --sidebar-bg: rgba(255, 255, 255, 0.6);
+    --glass-shadow: 0 4px 24px rgba(15, 23, 42, 0.08);  /* lift morbido, solo chiaro */
 }
 
 body {
@@ -66,6 +75,7 @@ body {
     backdrop-filter: blur(16px);
     -webkit-backdrop-filter: blur(16px);
     border: 1px solid var(--glass-border);
+    box-shadow: var(--glass-shadow);   /* none nel dark, lift morbido nel chiaro */
 }
 
 .glass-panel {
@@ -293,4 +303,34 @@ body {
     .container { padding-left: 1rem; padding-right: 1rem; }
     h1 { font-size: 1.5rem !important; }
     .p-8 { padding: 1.5rem !important; }
+}
+
+/* ================================
+   Tema chiaro: contrasto nav header/sidebar (17.5).
+   I link nav usano utility Tailwind pensate per fondo scuro
+   (text-slate-400 / hover:text-white / text-cyan-400): su fondo chiaro
+   diventano illeggibili (il bianco sparisce, il ciano-400 ha ~1.5:1).
+   Qui le rimappo SOLO nel tema chiaro, scopate a header/aside per non
+   toccare bottoni accent (es. "Accedi" bianco su gradiente ciano).
+   Le specificità (>= 0,2,x) battono le utility (0,1,0) senza !important.
+   Il dark resta intatto. */
+
+/* Header top-nav */
+[data-theme="light"] header .nav-link-premium {
+    color: #475569;                 /* slate-600, ~7:1 su fondo chiaro */
+}
+[data-theme="light"] header .nav-link-premium:hover {
+    color: #0f172a;                 /* slate-900 invece di white */
+}
+[data-theme="light"] header .nav-link-premium.text-cyan-400 {
+    color: #0e7490;                 /* cyan-700: accent leggibile su chiaro */
+}
+
+/* Sidebar nav: link attivi (ciano) e nomi squadra (text-white -> scuro).
+   Limitato a `aside nav` per escludere il bottone "Accedi" (fuori da nav). */
+[data-theme="light"] aside nav .text-cyan-400 {
+    color: #0e7490;
+}
+[data-theme="light"] aside nav .text-white {
+    color: #0f172a;
 }
