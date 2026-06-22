@@ -1,8 +1,10 @@
 ## 18. Personificazione società (presidente)
 
-Stato: 🔄 In corso (implementato su `dev`, **non ancora verificato e2e né in prod**)
+Stato: ✅ CHIUSO (verificato e2e su `dev` il 2026-06-22, **non ancora propagato a prod**)
 
-> **Implementato a codice su `dev`** (commit `feat(macro18)`), suite verde. Il flusso riusa `MembershipRequest` con `role='PRESIDENT'` come discriminatore. **Non ancora CHIUSO:** mancano la verifica e2e (Antigravity) e l'applicazione del diff alla whitelist del middleware (`accounts/middleware.py`, protected, in attesa di Alberto) — senza quel diff la landing presidente va in loop di redirect su `dev`. La macchina a stati **non** va ancora in STATE_MACHINES.md finché non è verificata. Dettaglio di prodotto in [BLUEPRINT.md](../BLUEPRINT.md) §7.2.
+_Verifica 2026-06-22 (`dev`): e2e Antigravity 6 step (happy path pres3→De Akker, guard 1:1 su Zero9 respinto col messaggio applicativo, email società obbligatoria attiva) + suite 414 verde + check DB (`managed_society` valorizzato, 0 Membership PRESIDENT, guard 1:1 ok)._
+
+> **Implementato e verificato e2e su `dev`** (commit `feat(macro18)`; whitelist `choose_society` nel middleware `accounts/middleware.py` applicata in `941706f`), suite verde. Il flusso riusa `MembershipRequest` con `role='PRESIDENT'` come discriminatore. **CHIUSO su `dev`:** e2e Antigravity 6 step verde, suite 414 verde, check DB conforme; **non ancora propagato a prod**. La macchina a stati è ora verificata e può essere portata in STATE_MACHINES.md. Dettaglio di prodotto in [BLUEPRINT.md](../BLUEPRINT.md) §7.2.
 
 Il presidente non crea una società da zero né la rivendica liberamente: la **sceglie da una lista**, **richiede l'accesso**, l'admin (Alberto) approva, poi rifinisce un setup pre-esistente.
 

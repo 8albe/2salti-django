@@ -1,6 +1,6 @@
 # SYLLABUS — Roadmap operativa 2salti
 
-Aggiornato: 2026-06-20
+Aggiornato: 2026-06-22
 
 Punto d'ingresso operativo del progetto. Per la visione di prodotto vedi [BLUEPRINT.md](BLUEPRINT.md).
 
@@ -66,5 +66,5 @@ Punto d'ingresso operativo del progetto. Per la visione di prodotto vedi [BLUEPR
 ## 17. Frontend & Design System ⏳
 → [Dettaglio](syllabus/17_frontend_design_system.md)
 
-## 18. Personificazione società (presidente) 🔄
-→ [Dettaglio](syllabus/18_personificazione_societa.md)
+## 18. Personificazione società (presidente) ✅
+→ [Dettaglio](syllabus/18_personificazione_societa.md) — verificato e2e su `dev` (2026-06-22), non ancora propagato a prod

@@ -664,7 +664,7 @@ perché `getattr(society, 'president', None)` puntava a una relation inesistente
 ritorna `None` senza sollevare. `_society_recipients` ritorna `[society.email]`,
 `[president.user.email]` o `[]` correttamente. **Nessun bug**: il sintomo reale è assorbito
 da §10.12 (SMTP non configurato), non da un difetto di codice.
-*Chiusura by-design (design pianificato, non a codice):* il caso `[]` (notifica muta) per una società personificata sarà eliminato alla radice dal setup di personificazione presidente, che rende **obbligatoria** l'email società (BLUEPRINT §7.2 / §7.7; SYLLABUS Macro 18).
+*Chiusura by-design (implementato e verificato e2e su `dev`, non ancora in prod):* il caso `[]` (notifica muta) per una società personificata è eliminato alla radice dal setup di personificazione presidente, che rende **obbligatoria** l'email società (BLUEPRINT §7.2 / §7.7; SYLLABUS Macro 18).
 
 ### §10.12 SMTP non configurato — CHIUSO 2026-06-21 (dev console + prod Brevo)
 *Cosa era:* `EMAIL_BACKEND=smtp` su `localhost:25` senza server → le email best-effort
