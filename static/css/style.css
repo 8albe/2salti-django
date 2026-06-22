@@ -1,14 +1,23 @@
 /* 1x2 Codex - Neon Dark Theme */
 
+/* ================================
+   DESIGN TOKENS — single source of truth (17.2)
+   Solo --sport-color resta inline in base.html perché Django-rendered
+   per-sport. Valori canonici = quelli effettivi pre-consolidamento
+   (l'inline <style> di base.html vinceva sul cascade).
+   ================================ */
 :root {
     --bg-dark: #020617;
     --bg-card: rgba(15, 23, 42, 0.6);
     --bg-panel: rgba(30, 41, 59, 0.4);
     --accent-primary: #06b6d4;
     --accent-secondary: #8b5cf6;
-    --text-main: #e2e8f0;
+    --accent-glow: rgba(6, 182, 212, 0.3);
+    --text-main: #f1f5f9;
     --text-muted: #94a3b8;
-    --glass-border: rgba(255, 255, 255, 0.1);
+    --glass-bg: rgba(15, 23, 42, 0.7);
+    --glass-border: rgba(255, 255, 255, 0.08);
+    --sidebar-bg: rgba(15, 23, 42, 0.9);
 }
 
 [data-theme="light"] {
@@ -17,7 +26,9 @@
     --bg-panel: rgba(241, 245, 249, 0.8);
     --text-main: #0f172a;
     --text-muted: #64748b;
+    --glass-bg: rgba(255, 255, 255, 0.8);
     --glass-border: rgba(0, 0, 0, 0.05);
+    --sidebar-bg: rgba(241, 245, 249, 0.9);
 }
 
 body {
@@ -25,6 +36,11 @@ body {
     color: var(--text-main);
     font-family: 'Inter', sans-serif;
     overflow-x: hidden;
+    transition: background-color 0.3s ease, color 0.3s ease;
+    background-image:
+        radial-gradient(at 0% 0%, rgba(6, 182, 212, 0.05) 0px, transparent 50%),
+        radial-gradient(at 100% 0%, rgba(139, 92, 246, 0.05) 0px, transparent 50%);
+    background-attachment: fixed;
 }
 
 /* Typography (17.3): titles always Outfit, body/data Inter.
@@ -40,9 +56,9 @@ h1, h2, h3, h4, h5, h6,
 
 /* Glassmorphism */
 .glass {
-    background: var(--bg-card);
-    backdrop-filter: blur(12px);
-    -webkit-backdrop-filter: blur(12px);
+    background: var(--glass-bg);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
     border: 1px solid var(--glass-border);
 }
 
@@ -197,11 +213,11 @@ h1, h2, h3, h4, h5, h6,
 
 /* PREMIUM ADDITIONS */
 .glass-premium {
-    background: linear-gradient(135deg, rgba(255,255,255,0.05) 0%, rgba(255,255,255,0.01) 100%);
+    background: linear-gradient(135deg, rgba(255,255,255,0.05) 0%, rgba(255,255,255,0) 100%);
     backdrop-filter: blur(20px);
     -webkit-backdrop-filter: blur(20px);
     border: 1px solid rgba(255,255,255,0.1);
-    box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.3);
+    box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
 }
 
 .timeline-line {
@@ -233,4 +249,42 @@ h1, h2, h3, h4, h5, h6,
 .hover-lift:hover {
     transform: translateY(-4px);
     box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.3);
+}
+
+/* ================================
+   Relocated from base.html inline <style> (17.2 consolidation).
+   --sport-color resta inline in base.html (Django-rendered per-sport).
+   ================================ */
+.sport-text { color: var(--sport-color); }
+
+.sport-bg-glow {
+    background-color: var(--sport-color);
+    box-shadow: 0 0 25px var(--sport-color);
+}
+
+/* Nav hover underline */
+.nav-link-premium {
+    position: relative;
+    transition: all 0.3s ease;
+}
+.nav-link-premium::after {
+    content: '';
+    position: absolute;
+    bottom: -4px;
+    left: 0;
+    width: 0;
+    height: 2px;
+    background: var(--sport-color);
+    transition: width 0.3s ease;
+}
+.nav-link-premium:hover::after {
+    width: 100%;
+}
+
+/* Mobile fixes (moved from base.html inline) */
+@media (max-width: 768px) {
+    html { font-size: 14px; }
+    .container { padding-left: 1rem; padding-right: 1rem; }
+    h1 { font-size: 1.5rem !important; }
+    .p-8 { padding: 1.5rem !important; }
 }
