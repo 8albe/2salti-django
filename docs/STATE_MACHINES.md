@@ -3,7 +3,7 @@
 Questo documento descrive le macchine a stati implementate nel codice.
 Se il blueprint di prodotto o altri documenti dicono cose diverse, **questo file vince**.
 
-Ultimo aggiornamento: 2026-05-20
+Ultimo aggiornamento: 2026-06-22
 Generato leggendo:
 - `accounts/models.py`
 - `accounts/middleware.py`
@@ -14,7 +14,10 @@ Generato leggendo:
 - `matches/services/ocr_service.py`
 - `matches/views.py`
 - `management/models.py`
+- `management/admin.py`
+- `management/services/president_personification.py`
 - `core/models.py`
+- `core/views.py`
 - `docs/BLUEPRINT.md`
 - `docs/FEATURE_SYLLABUS_LEGACY.md`
 - `CLAUDE.md`
@@ -328,6 +331,46 @@ Nessuna transizione automatica rilevata — gestito manualmente dall'admin.
 | `WONT_FIX` | Won't Fix | Sì |
 
 Nessuna transizione automatica rilevata — gestito manualmente dall'admin.
+
+---
+
+## 10. Personificazione società presidente (Macro 18)
+
+**Model:** `management.MembershipRequest` **riusato** con `role='PRESIDENT'` come discriminatore — nessun campo/stato dedicato, nessuno schema-change.
+**Field di stato:** `status` (CharField, lo stesso di §5)
+**File modello:** [management/models.py](management/models.py) righe 275–286
+**Servizio:** [management/services/president_personification.py](management/services/president_personification.py)
+**Default:** `PENDING`
+
+> **Natura della macchina:** questa **non** è una state machine "ricca" con campo di stato proprio. È la macchina di §5 (`MembershipRequest.status`) riusata, distinta solo dal discriminatore `role='PRESIDENT'`. Il ramo PRESIDENT è isolato dal consumer player-gated (`approve_membership` in `management/views.py`): viene approvato **solo** dall'admin via op_admin_site. Di conseguenza nel ramo PRESIDENT sono raggiunti a runtime solo `PENDING` e `APPROVED`; `REJECTED` non è prodotto da alcun percorso PRESIDENT corrente (gestito solo difensivamente, vedi Guardrails).
+
+### Stati
+
+| Valore DB | Label | Descrizione (ramo PRESIDENT) | Iniziale? | Finale? |
+|---|---|---|---|---|
+| `PENDING` | In attesa | Richiesta di personificazione inviata, in attesa di approvazione admin | Sì | No |
+| `APPROVED` | Approvata | Presidente agganciato alla società via `PresidentProfile.managed_society` | No | Sì |
+| `REJECTED` | Respinta | Non raggiunto dal ramo PRESIDENT (solo difensivo) | No | (Sì) |
+
+### Transizioni
+
+| Da | A | Trigger | Side effects | File |
+|---|---|---|---|---|
+| — | `PENDING` | `request_president_personification()` da `choose_society` POST | `get_or_create(role='PRESIDENT', defaults={'status':'PENDING'})`, **idempotente** (richiesta PENDING esistente → ritorna senza duplicare) | [core/views.py](core/views.py) r. 276 → [president_personification.py](management/services/president_personification.py) r. 64–69 |
+| `PENDING` | `APPROVED` | Action admin `approve_president_personification` → `approve_president_request()` (dentro `transaction.atomic()` + `select_for_update`) | `PresidentProfile.objects.filter(user=...).update(managed_society=...)` — **nessuna Membership** creata; `status='APPROVED'`; notifica email best-effort **fuori** dall'atomic | [management/admin.py](management/admin.py) r. 40–64 → [president_personification.py](management/services/president_personification.py) r. 99–135 |
+| `PENDING` | `PENDING` (nessuna transizione) | `approve_president_request()` su società che ha **già** un presidente | **Guard 1:1 applicativo**: ritorna `(False, errore)`, lo `status` resta `PENDING`, nessun side-effect | [president_personification.py](management/services/president_personification.py) r. 116–122 |
+
+### Guardrails
+
+- **Guard 1:1 (`already_managed`):** `PresidentProfile.managed_society` è un `OneToOne`. Prima di agganciare, il servizio verifica che la società non abbia già un presidente; in caso positivo **blocca l'approvazione con un errore leggibile** invece di lasciar salire un `IntegrityError` grezzo. Non è una transizione di stato: la richiesta resta `PENDING`. [president_personification.py](management/services/president_personification.py) r. 116–122.
+- **Guard idempotenza in creazione:** se l'utente gestisce già una società (`managed_society_id` valorizzato) o ha già una richiesta `PENDING`, `request_president_personification()` non duplica nulla. [president_personification.py](management/services/president_personification.py) r. 51–62.
+- **Side-effect del solo `managed_society`:** all'approvazione **non** viene creata alcuna `Membership` PRESIDENT (coerente con `create_society` e con la bacheca del "presidente de-vincolato"). L'aggancio è una `.update()` diretta sul `PresidentProfile`, **non** passa per `_sync_profile_denorm` (quel denormalizzatore serve il ramo player/coach in `membership_enrollment.py`, non questo flusso). [president_personification.py](management/services/president_personification.py) r. 124–127.
+- **Concorrenza:** l'approvazione serializza le richieste concorrenti con `select_for_update()` sul lock della richiesta, dentro `transaction.atomic()`. [president_personification.py](management/services/president_personification.py) r. 99–105.
+- **`REJECTED` difensivo:** `request_president_personification()` riapre a `PENDING` una eventuale richiesta `REJECTED`/`APPROVED` sulla stessa società (r. 70–74), ma nessun percorso PRESIDENT corrente scrive `REJECTED`: il ramo non è toccato da `approve_membership`.
+
+### Relazione con §5
+
+§5 descrive la macchina `MembershipRequest` per il tesseramento giocatore (`role` player, `PENDING→APPROVED` con creazione `Membership`, oppure `REJECTED`). Qui lo stesso modello/campo è riusato con `role='PRESIDENT'`: stati identici, ma trigger (admin op_admin, non presidente di società), side-effect (`managed_society`, **non** `Membership`) e guard (1:1) sono diversi.
 
 ---
 
