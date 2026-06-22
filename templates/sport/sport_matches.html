@@ -8,8 +8,8 @@
     </div>
     {% if available_seasons|length > 1 %}
     <form method="get" class="shrink-0">
-        {# Querystring additiva: porta il giorno selezionato come hidden cosi'
-           cambiare stagione non perde il sotto-filtro data. #}
+        {% comment %}Querystring additiva: porta il giorno selezionato come hidden cosi'
+           cambiare stagione non perde il sotto-filtro data.{% endcomment %}
         <input type="hidden" name="date" value="{{ selected_date|date:'Y-m-d' }}">
         <label for="season-select" class="sr-only">Seleziona stagione</label>
         <select id="season-select" name="season" onchange="this.form.submit()"
