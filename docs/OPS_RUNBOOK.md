@@ -539,6 +539,12 @@ Il link a `static/css/style.css` in `templates/base.html` porta un query string 
 
 Cosa fare: quando si tocca `style.css`, nello stesso commit bumpare `?v=N` in `base.html`. La Macro 17.1 (pipeline Tailwind compilata con hashing degli asset) supera del tutto questa procedura manuale.
 
+### 12.9 Debito semantico A1: utility `cyan-*` che rendono blue (Macro 17 Fase 2)
+
+> **Aperto dal 2026-06-23 (`dev`, commit `819db21`).** Il re-skin Cap. 12 ha adottato la strategia **token-remap (A1)**: in `tailwind.config.js` la scala `cyan` è ridefinita sui valori `blue` di Tailwind. Conseguenza: le ~480 utility scritte `cyan-*` nei template (`text-cyan-400`, `bg-cyan-500`, …) **rendono blue** senza essere state rinominate. È deliberato — evita un find-replace di massa — ma è **debito**: chi legge i template vede `cyan` e ottiene blue.
+
+Cosa sapere: (1) **non fidarsi del nome classe** per il colore reale: la fonte di verità è `tailwind.config.js`. (2) Nuove UI: preferire `blue-*` esplicito; non aggiungere altri `cyan-*`. (3) **Literali orfani**: hex/rgba ciano hardcoded (`rgba(6,182,212,…)` nei glow `shadow-[…]`, qualche `#06b6d4`/`#0891b2`) NON sono raggiunti dal remap — vanno cambiati a mano dove emergono (al 2026-06-23 ne restano in ~15 template non-base, delegati al giro visivo Antigravity). (4) **Per-sport color**: `Sport.hex_color` è in DB (pallanuoto `#00ffff`) — il remap CSS non lo tocca; allinearlo a blue richiede una migration dati (gate backup + ratifica). La ripulitura completa dei nomi-classe `cyan-*`→`blue-*` è un **task A2 futuro**, non urgente (nessun impatto funzionale/a11y).
+
 ## Appendice A — Archivio debiti e fragilità risolti
 
 Voci di §10 chiuse e verificate, spostate qui dalla testa del file per tenere

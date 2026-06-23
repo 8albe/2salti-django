@@ -597,6 +597,7 @@ Il frontend è **Django server-rendered** (template + Gunicorn/Nginx) con **Tail
 ### Direzione visiva
 
 - **Palette**: base scura su navy profondo (slate-950, `#020617`), coerente con l'identità blu+navy del progetto, e base chiara su slate-50 (`#F8FAFC`). Il **blu** è il colore di marca primario (link, stati attivi, CTA); **teal, orange e green** sono accenti funzionali (positivo / avviso / stato). Gli accenti sono effettivamente usati: la piattaforma non deve apparire monocromatica o neutra.
+  - **Esito (2026-06-23, `dev`):** palette applicata — il vecchio accento ciano/slate è stato rimpiazzato dal blu di marca (perno `blue-600 #2563eb`) via Macro 17 Fase 2. Residuo aperto: il colore per-sport è in DB (`Sport.hex_color`, pallanuoto ancora `#00ffff`), il suo allineamento a blue è gated da backup+ratifica. Dettaglio in [SYLLABUS 17.2](syllabus/17_frontend_design_system.md).
 - **Tipografia**: **Inter** per body e dati (massima leggibilità delle tabelle), **Outfit** per i titoli (personalità). L'accoppiata è identica in dark e light: i titoli restano in Outfit in **entrambi** i temi, senza regressioni a Inter nel tema chiaro.
 - **Card**: arrotondate, sfondi molto puliti, bordi leggeri, ampio respiro tra moduli.
 - **Grafici**: pochi ma chiari; tabelle pulite, con varianti card su mobile.

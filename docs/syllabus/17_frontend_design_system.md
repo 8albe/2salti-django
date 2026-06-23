@@ -44,9 +44,14 @@ di verità unica. Il "perché" sta nel blueprint; qui stanno gli step.
 
 ### 17.2 Design token centralizzati
 > **Fase 1 (2026-06-23):** i token già esistenti (`dark`, `card`, `sport`→`var(--sport-color)`, font Inter/Outfit) sono ora in `tailwind.config.js` a **valori invariati** — chiude il residuo "token in config". La migrazione full-palette (navy/teal/orange/green) e l'audit hex restano **Fase 2**.
-- [ ] Spostare colori (navy/slate-950, slate-50, blu di marca, accenti teal/orange/green), spacing, tipografia, raggi e ombre in `tailwind.config` — _(Fase 2; i token attuali già migrati in Fase 1)_
+>
+> **Fase 2 — RE-SKIN CROMATICO APPLICATO (2026-06-23, `dev`, commit `819db21`):** palette Cap. 12 blue+navy. Strategia ratificata = **token-remap (A1)**: la scala `cyan` è schiacciata sui valori `blue` di Tailwind in `tailwind.config.js`, così le ~480 utility `cyan-*` rendono blue **senza rinominare le classi** (niente sweep A2). Perno brand `blue-600 #2563eb`. `style.css`: accent/glow/neon → blue, accento secondario radiale → teal, nav-link tema chiaro `#0e7490`→`#1d4ed8` (blue-700 AA), fallback focus ring → `#2563eb`. `base.html`: `--sport-color` fallback → `#2563eb`, selection → blue-500, CTA gradient anti-appiattimento. Funzionali green/orange/teal/red = già default Tailwind, invariati. Build ribuildata (~68KB), suite **417 verde**. **Solo cromatico** (tipografia/raggi/spacing/layout invariati).
+>
+> ⚠️ **Residui aperti Fase 2** (la Macro resta 🔄): (a) **per-sport color è DB-driven** (`Sport.hex_color`, non il fallback template): pallanuoto in DB è `#00ffff` ciano → "pallanuoto = blue" richiede cambio DATI (migration + gate backup + scelta prodotto), **non ancora fatto**; (b) **literali ciano orfani** (`rgba(6,182,212,…)` glow + qualche hex) in ~15 template non-base, fuori dalla portata del token-remap → delegati al giro visivo Antigravity; (c) **verifica e2e Antigravity** (dark+light, tutte le superfici) ancora da eseguire; (d) **debito semantico A1** (classi `cyan-*` che rendono blue) → vedi OPS_RUNBOOK.
+- [x] Migrare la palette di marca (blu+navy) in `tailwind.config` via token-remap della scala cyan — _(Fase 2, 2026-06-23, `dev`)_
 - [x] Variabili CSS per i temi — consolidate in `style.css` (2026-06-22, `dev`)
-- [ ] Audit ed eliminazione di hex/spacing hardcoded sparsi nei template
+- [ ] Audit ed eliminazione di hex/spacing hardcoded sparsi nei template — _(residuo: literali ciano orfani + debito A1 nomi-classe, delegati Antigravity/A2)_
+- [ ] Cambio DB `Sport.hex_color` pallanuoto ciano→blue — _(gated: backup DB + ratifica prodotto)_
 
 ### 17.3 Tipografia
 - [x] Caricare Inter (body/dati) + Outfit (titoli)
