@@ -36,11 +36,13 @@ di verità unica. Il "perché" sta nel blueprint; qui stanno gli step.
 > (`tailwind.config` + audit hex, gated su 17.1). La macro resta 🔄.
 
 ### 17.1 Pipeline Tailwind compilata
-- [ ] Build Tailwind via CLI/PostCSS con scansione dei template e purge delle classi inutilizzate
-- [ ] Rimuovere `cdn.tailwindcss.com` in produzione; CDN ammesso solo in dev locale
+> **Fase 1 (toolchain) — pipeline parziale, su `dev` (2026-06-23):** in piedi `package.json` + `tailwind.config.js` (content glob su template/app `*.py`/JS/crispy + safelist isole `.dark-surface`) + input `static/css/tailwind.src.css`. Il CDN runtime è rimosso da `base.html`, che ora punta a `static/css/tailwind.build.css` compilato e committato (~68KB, purge attivo). Token a **valori invariati** (slate/ciano): nessun cambiamento estetico — il re-skin è Fase 2. Resta gated sul passaggio a `ManifestStaticFilesStorage` in `settings.py` (Alberto), con precondizione `pattern.png` (vedi OPS).
+- [x] Build Tailwind via CLI con scansione dei template e purge delle classi inutilizzate (Fase 1, `dev`, e2e in verifica)
+- [x] Rimuovere `cdn.tailwindcss.com`; CDN sostituito dal CSS compilato committato (Fase 1, `dev`, e2e in verifica)
 
 ### 17.2 Design token centralizzati
-- [ ] Spostare colori (navy/slate-950, slate-50, blu di marca, accenti teal/orange/green), spacing, tipografia, raggi e ombre in `tailwind.config`
+> **Fase 1 (2026-06-23):** i token già esistenti (`dark`, `card`, `sport`→`var(--sport-color)`, font Inter/Outfit) sono ora in `tailwind.config.js` a **valori invariati** — chiude il residuo "token in config". La migrazione full-palette (navy/teal/orange/green) e l'audit hex restano **Fase 2**.
+- [ ] Spostare colori (navy/slate-950, slate-50, blu di marca, accenti teal/orange/green), spacing, tipografia, raggi e ombre in `tailwind.config` — _(Fase 2; i token attuali già migrati in Fase 1)_
 - [x] Variabili CSS per i temi — consolidate in `style.css` (2026-06-22, `dev`)
 - [ ] Audit ed eliminazione di hex/spacing hardcoded sparsi nei template
 

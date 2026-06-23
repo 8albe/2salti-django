@@ -393,6 +393,10 @@ SESSION_RIPARTENZA_YYYYMMDD_<momento>.md    (es: _mattina, _pomeriggio, _sera)
 
 Lo scopo è la ricostruzione del contesto a inizio sessione successiva, quando il contesto della chat AI si è azzerato e serve un'ancora per ripartire senza rifare tutto il lavoro di orientamento. Per questo motivo le note sono scritte in prosa narrativa, non in bullet point secchi: devono trasmettere il ragionamento, le lezioni e le scelte, non solo i fatti. Una nota scritta bene permette alla sessione successiva di ripartire in cinque minuti invece che in un'ora.
 
+### 7.3 Build frontend Tailwind (CSS compilato committato)
+
+Dal 17.1 Fase 1 il CSS Tailwind non è più servito da CDN runtime ma compilato e committato. Convenzione: **se modifichi un template / `forms.py` / JS introducendo classi Tailwind nuove, ricompila e ricommitta il CSS** — `npm run build:css` genera `static/css/tailwind.build.css`, che va committato **insieme** alla modifica che lo richiede. Il glob `content` in `tailwind.config.js` deve coprire la sorgente delle classi nuove (template, app `*.py`, JS, e i template di `crispy_tailwind` nel venv); le utility usate solo dentro selettori di `style.css` (isole `.dark-surface`) stanno in `safelist`. Dev e prod fanno solo `collectstatic`, **non** eseguono `npm`: un asset non ricompilato = classe mancante a video (purge silenzioso). La build gira solo su una macchina con node (`npm install` locale, non-sudo).
+
 ## 8. Protocollo protected file
 
 Il "protocollo protected file" è una procedura disciplinata per modificare file critici dell'infrastruttura — settings Django, configurazione Gunicorn, configurazione Nginx, middleware di onboarding, servizi che toccano la persistenza delle classifiche, migrazioni applicate, file `.env`, unit systemd. Questi file sono elencati nominalmente in [CLAUDE.md](../CLAUDE.md) sotto "Protected Files", e la regola di base è che ogni modifica richiede conferma esplicita prima dell'esecuzione. Questa sezione codifica come applicare quella regola in pratica.
