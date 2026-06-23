@@ -28,6 +28,13 @@ di verità unica. Il "perché" sta nel blueprint; qui stanno gli step.
 > decisione toolchain/deploy di Alberto). La macro resta 🔄 — è chiuso il
 > blocco tema chiaro, non l'intera macro.
 
+> Avanzamento (2026-06-23, solo `dev`, prod invariato a `f697c0f`): chiusi su
+> `dev` 17.4 esteso (empty-state su classifica/dashboard/profilo + `sport_detail`),
+> 17.7 accessibilità base (label associate + `aria-label` ricerca + `:focus-visible`
+> globale) e 17.5 footer reale. CSS a `?v=182`. Verifica e2e (Antigravity) ancora
+> da eseguire. Restano aperti 17.1 (pipeline/CDN, gated) e il residuo 17.2
+> (`tailwind.config` + audit hex, gated su 17.1). La macro resta 🔄.
+
 ### 17.1 Pipeline Tailwind compilata
 - [ ] Build Tailwind via CLI/PostCSS con scansione dei template e purge delle classi inutilizzate
 - [ ] Rimuovere `cdn.tailwindcss.com` in produzione; CDN ammesso solo in dev locale
@@ -43,19 +50,19 @@ di verità unica. Il "perché" sta nel blueprint; qui stanno gli step.
 
 ### 17.4 Componente stato-vuoto riusabile
 - [x] Componente unico (icona/illustrazione + copy che spiega il perché + CTA opzionale) — `templates/components/_empty_state.html` (2026-06-22, `dev`)
-- [ ] Applicarlo ovunque il dato possa mancare (classifiche a zero, nessun gol a inizio stagione) — applicato alle 2 liste partite; restano classifica/dashboard/profilo
+- [x] Applicarlo ovunque il dato possa mancare (classifiche a zero, nessun gol a inizio stagione) — esteso a classifica (`league_standings`), dashboard, profilo e unificato `sport_detail` (2026-06-23, `dev`, e2e in verifica)
 
 ### 17.5 Struttura di pagina
-- [ ] Footer reale su tutte le pagine pubbliche
-- [ ] Header sticky (logo, nav sport, ricerca, toggle tema)
+- [x] Footer reale su tutte le pagine pubbliche — wordmark + tagline, link prodotto (Partite/Classifiche/Statistiche su route reali, primo rollout Pallanuoto), contatto mailto, riga © + Beta; "Società" escluso (nessun hub pubblico) (2026-06-23, `dev`, e2e in verifica)
+- [x] Header sticky (logo, nav sport, ricerca, toggle tema) — già presente nello scaffolding `base.html`
 
 ### 17.6 Dark/light theming
 - [ ] Stesso set di token e stessi componenti nei due temi; cambiano solo i valori colore
 - [ ] Toggle tema nell'header
 
 ### 17.7 Accessibilità base
-- [ ] Ogni campo form con `id`/`name` + label associata
-- [ ] Navigazione da tastiera e focus visibili
+- [x] Ogni campo form con `id`/`name` + label associata — `for=`/`id` su setup_wizard, request_certification, generate_code; `aria-label` sui 3 input di ricerca in `base.html`; login/signup già via crispy (2026-06-23, `dev`, e2e in verifica)
+- [x] Navigazione da tastiera e focus visibili — regola globale `:focus-visible` in `style.css` (anello keyboard-only, vince sul reset outline del CDN Tailwind) (2026-06-23, `dev`, e2e in verifica)
 
 ### 17.8 Direzione estetica unica
 - [x] Audit dei template per divergenze view-per-view — chiuso e verificato e2e (2026-06-22, `dev`)
