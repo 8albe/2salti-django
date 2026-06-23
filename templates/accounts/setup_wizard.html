@@ -23,7 +23,7 @@
             <div class="space-y-6">
                 <!-- Selezione campionato -->
                 <div>
-                    <label class="block text-sm font-medium text-slate-300 mb-2">Campionato</label>
+                    <label for="league-select" class="block text-sm font-medium text-slate-300 mb-2">Campionato</label>
                     <select id="league-select" name="league"
                         class="w-full bg-slate-800 border border-slate-600 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-cyan-500">
                         <option value="">--- Seleziona Campionato ---</option>
@@ -37,7 +37,7 @@
 
                 <!-- Selezione squadra (popolata via JS) -->
                 <div id="team-select-wrapper" class="hidden">
-                    <label class="block text-sm font-medium text-slate-300 mb-2">Squadra Preferita</label>
+                    <label for="team-select" class="block text-sm font-medium text-slate-300 mb-2">Squadra Preferita</label>
                     <select id="team-select"
                         class="w-full bg-slate-800 border border-slate-600 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-cyan-500">
                         <option value="">--- Seleziona Squadra ---</option>
@@ -47,7 +47,7 @@
 
                 <!-- Ricerca atleti (multi-follow: più figli/atleti) -->
                 <div>
-                    <label class="block text-sm font-medium text-slate-300 mb-2">Atleti Seguiti</label>
+                    <label for="athlete-search-input" class="block text-sm font-medium text-slate-300 mb-2">Atleti Seguiti</label>
                     <div class="relative">
                         <input type="text" id="athlete-search-input" autocomplete="off"
                             placeholder="Scrivi nome e cognome dell'atleta..."

@@ -573,3 +573,21 @@ body {
     color: var(--text-main);             /* testo scuro, alto contrasto */
     color-scheme: light;                 /* best-effort sul menu nativo aperto */
 }
+
+/* ================================================================
+   ACCESSIBILITA' 17.7 — focus visibile da tastiera (keyboard-only).
+   :focus-visible scatta solo per navigazione da tastiera, non al click del
+   mouse: gli utenti tastiera ottengono sempre un anello di focus netto, anche
+   sugli elementi con Tailwind focus:outline-none (input ricerca, theme-toggle,
+   <select> stagione, bottoni). Il mouse resta pulito (nessun anello).
+   !important per vincere sul reset outline che il runtime Tailwind CDN inietta.
+   ================================================================ */
+:focus-visible {
+    outline: 2px solid var(--sport-color, #06b6d4) !important;
+    outline-offset: 2px !important;
+}
+/* Sopprimi l'outline solo quando NON e' focus da tastiera (mouse/touch),
+   cosi' il look pulito del design resta intatto al click. */
+:focus:not(:focus-visible) {
+    outline: none;
+}
