@@ -142,9 +142,7 @@
         {% endif %}
     </div>
     {% empty %}
-    <div class="text-center py-12 text-slate-500">
-        Nessuna partita in programma al momento.
-    </div>
+    {% include 'components/_empty_state.html' with icon="🏆" title="Nessun campionato disponibile" message="Non ci sono ancora campionati o partite in programma per questo sport." %}
     {% endfor %}
 </div>
 {% endblock %}

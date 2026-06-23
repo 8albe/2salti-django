@@ -163,12 +163,7 @@
                     {% endfor %}
                 </div>
                 {% else %}
-                <div class="glass p-12 rounded-3xl border border-dashed border-white/10 text-center">
-                    <p class="text-slate-500 mb-4 text-sm">Non stai ancora seguendo nessuna squadra.</p>
-                    <a href="/" class="inline-block px-8 py-3 rounded-xl bg-white/5 text-white hover:bg-white/10 transition-colors">
-                        Sfoglia e segui
-                    </a>
-                </div>
+                {% include 'components/_empty_state.html' with icon="🛡️" title="Nessuna squadra seguita" message="Non stai ancora seguendo nessuna squadra." cta_url="/" cta_label="Sfoglia e segui" %}
                 {% endif %}
             </section>
 

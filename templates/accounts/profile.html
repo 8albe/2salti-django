@@ -135,8 +135,8 @@
     </div>
 </div>
 {% else %}
-<div class="bg-slate-900/50 rounded-xl p-8 text-center text-slate-500 italic mb-8 border border-dashed border-slate-800">
-    Nessuna partita pubblicata per questo atleta al momento.
+<div class="mb-8">
+{% include 'components/_empty_state.html' with icon="📅" title="Nessuna partita pubblicata" message="Nessuna partita pubblicata per questo atleta al momento." %}
 </div>
 {% endif %}
 
@@ -336,8 +336,13 @@
 </div>
 {% endfor %}
 {% else %}
-<div class="bg-slate-900 rounded-xl p-6 mb-6 border border-slate-800 text-center text-slate-400">
-    Nessun atleta seguito. {% if request.user == profile_user %}<a href="{% url 'edit_profile' %}" class="text-cyan-400 hover:underline">Aggiungine uno</a>.{% endif %}
+{% url 'edit_profile' as edit_profile_url %}
+<div class="mb-6">
+{% if request.user == profile_user %}
+{% include 'components/_empty_state.html' with icon="🏃" title="Nessun atleta seguito" message="Non segui ancora nessun atleta." cta_url=edit_profile_url cta_label="Aggiungi un atleta" %}
+{% else %}
+{% include 'components/_empty_state.html' with icon="🏃" title="Nessun atleta seguito" message="Questo profilo non segue ancora nessun atleta." %}
+{% endif %}
 </div>
 {% endif %}
 
@@ -387,9 +392,13 @@
 </div>
 {% endfor %}
 {% else %}
-<div class="bg-slate-900 rounded-xl p-6 border border-slate-800 text-center text-slate-400">
-    Nessuna squadra seguita. {% if request.user == profile_user %}<a href="{% url 'edit_profile' %}" class="text-cyan-400 hover:underline">Aggiungine
-        una</a>.{% endif %}
+{% url 'edit_profile' as edit_profile_url %}
+<div>
+{% if request.user == profile_user %}
+{% include 'components/_empty_state.html' with icon="🛡️" title="Nessuna squadra seguita" message="Non segui ancora nessuna squadra." cta_url=edit_profile_url cta_label="Aggiungi una squadra" %}
+{% else %}
+{% include 'components/_empty_state.html' with icon="🛡️" title="Nessuna squadra seguita" message="Questo profilo non segue ancora nessuna squadra." %}
+{% endif %}
 </div>
 {% endif %}
 {% endif %}

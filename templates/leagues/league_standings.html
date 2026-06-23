@@ -71,6 +71,7 @@
 </div>
 
 <!-- STANDINGS TABLE -->
+{% if standings %}
 <div class="glass rounded-2xl overflow-hidden shadow-2xl mb-12 relative">
     <!-- Top Highlight Line -->
     <div class="h-1 w-full bg-gradient-to-r from-cyan-500 via-blue-500 to-purple-500"></div>
@@ -145,16 +146,13 @@
                         {{ entry.points }}
                     </td>
                 </tr>
-                {% empty %}
-                <tr>
-                    <td colspan="10" class="px-6 py-12 text-center text-slate-500 italic">
-                        Nessuna squadra in questa classifica.
-                    </td>
-                </tr>
                 {% endfor %}
             </tbody>
         </table>
     </div>
 </div>
+{% else %}
+{% include 'components/_empty_state.html' with icon="🏆" title="Classifica non disponibile" message="Non ci sono ancora squadre o risultati in questa classifica." %}
+{% endif %}
 
 {% endblock %}
