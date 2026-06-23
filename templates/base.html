@@ -52,7 +52,7 @@
     <!-- ?v= forza il refresh della cache browser sui deploy CSS: senza,
          il browser serviva uno style.css cache-ato pre-17.3 (heading in Inter).
          Va incrementato a ogni modifica di style.css. -->
-    <link rel="stylesheet" href="{% static 'css/style.css' %}?v=184">
+    <link rel="stylesheet" href="{% static 'css/style.css' %}?v=185">
 
     <style>
         /* Dynamic per-sport accent (Django-rendered). All static design tokens
@@ -386,13 +386,14 @@
     <script>
         document.addEventListener('DOMContentLoaded', function () {
             // Mobile Menu
+            // Il listener di toggle dell'hamburger vive in static/js/main.js
+            // (fonte canonica: modulo JS dedicato, con animate-fade-in + chiusura
+            // su resize). Qui NON ri-registriamo il click: un secondo
+            // addEventListener annullava il toggle (due toggle di .hidden si
+            // cancellavano → menu mai aperto). Manteniamo solo i riferimenti
+            // btn/menu per la "chiusura al click fuori" più sotto. (Macro 17.1, fix JS)
             const btn = document.getElementById('mobile-menu-btn');
             const menu = document.getElementById('mobile-menu');
-            if (btn && menu) {
-                btn.addEventListener('click', function () {
-                    menu.classList.toggle('hidden');
-                });
-            }
 
             // Theme Toggle Logic
             const themeToggle = document.getElementById('theme-toggle');
@@ -400,6 +401,7 @@
             const html = document.documentElement;
 
             function updateToggleUI(theme) {
+                if (!themeToggle || !toggleDot) return;  // toggle assente (es. home '/'): no-op
                 if (theme === 'light') {
                     toggleDot.style.transform = 'translateX(24px)';
                     themeToggle.classList.remove('bg-slate-700');
@@ -411,16 +413,22 @@
                 }
             }
 
-            // Init UI
+            // Init UI — il toggle tema vive nella sidebar, NON renderizzata su '/'
+            // (home: l'aside è condizionata a request.path diverso da '/'). Senza guard,
+            // updateToggleUI e addEventListener esplodevano con TypeError su null,
+            // bloccando il resto del DOMContentLoaded — incluso l'init del drawer
+            // Ricerca AI più sotto. (Macro 17.1, fix JS)
             const currentTheme = html.getAttribute('data-theme');
-            updateToggleUI(currentTheme);
+            if (themeToggle && toggleDot) {
+                updateToggleUI(currentTheme);
 
-            themeToggle.addEventListener('click', () => {
-                const newTheme = html.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
-                html.setAttribute('data-theme', newTheme);
-                localStorage.setItem('theme', newTheme);
-                updateToggleUI(newTheme);
-            });
+                themeToggle.addEventListener('click', () => {
+                    const newTheme = html.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+                    html.setAttribute('data-theme', newTheme);
+                    localStorage.setItem('theme', newTheme);
+                    updateToggleUI(newTheme);
+                });
+            }
 
             // Chiudi se clicchi fuori
             document.addEventListener('click', function (e) {
