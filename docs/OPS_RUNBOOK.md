@@ -277,6 +277,8 @@ renderizza letteralmente `{{ entry.goals_against }}` nella pagina invece del val
 
 Cosa fare: tenere ogni tag template `{{ ... }}` o `{% ... %}` su una riga sola. Configurare l'editor o il prettier HTML per non spezzare le righe dentro questi delimitatori. In code review su template, segnalare ogni tag che attraversa newline.
 
+Corollario (scoperto 2026-06-23, regressione introdotta in `07122e0`): i delimitatori `{% ... %}` e `{{ ... }}` vengono parsati da Django **anche dentro i commenti HTML** `<!-- ... -->` — il commento HTML è opaco al browser, non al template engine. Un commento che cita un tag a scopo descrittivo (es. `<!-- {% static %} risolve... -->`) viene compilato come tag reale: se è malformato (qui `static` senza argomento) alza `TemplateSyntaxError` a compile-time e rompe il rendering di ogni pagina che estende quel template, dev/prod inclusi. Cosa fare: nei commenti non scrivere mai la sintassi `{% %}`/`{{ }}` letterale — parafrasare ("il tag static"), oppure usare il commento Django `{# ... #}` (che invece è opaco al parser), oppure `{% templatetag %}`.
+
 ### 3.11 "1, 2, 4 senza 3" è la firma del refactor incompleto
 
 Quando in un blocco di codice o in un test trovi una sequenza numerica con un buco — commenti `# 1.`, `# 2.`, `# 4.` senza `# 3.`, oppure variabili `step1`, `step2`, `step4` senza `step3` — quasi sempre il pezzo mancante esisteva e un refactor lo ha rimosso senza aggiornare la numerazione né i punti che vi si appoggiavano. Il bug del 28 aprile 2026 sul `staff_dashboard` (`NameError: stuck_reports`) era esattamente questo: il commit di consolidamento `668b406` aveva rimosso la sezione `# 3. Calcola stuck reports` lasciando intatti i `# 1.`, `# 2.` e `# 4.` adiacenti, e nessuno aveva notato il salto.
@@ -396,6 +398,10 @@ Lo scopo è la ricostruzione del contesto a inizio sessione successiva, quando i
 ### 7.3 Build frontend Tailwind (CSS compilato committato)
 
 Dal 17.1 Fase 1 il CSS Tailwind non è più servito da CDN runtime ma compilato e committato. Convenzione: **se modifichi un template / `forms.py` / JS introducendo classi Tailwind nuove, ricompila e ricommitta il CSS** — `npm run build:css` genera `static/css/tailwind.build.css`, che va committato **insieme** alla modifica che lo richiede. Il versioning della cache è automatico (`ManifestStaticFilesStorage`, hash nel nome dell'asset): i link in `base.html` non portano più il `?v=N` manuale — vedi §12.8. Il glob `content` in `tailwind.config.js` deve coprire la sorgente delle classi nuove (template, app `*.py`, JS, e i template di `crispy_tailwind` nel venv); le utility usate solo dentro selettori di `style.css` (isole `.dark-surface`) stanno in `safelist`. Dev e prod fanno solo `collectstatic`, **non** eseguono `npm`: un asset non ricompilato = classe mancante a video (purge silenzioso). La build gira solo su una macchina con node (`npm install` locale, non-sudo).
+
+### 7.4 Suite test e storage statico (manifest disattivato solo nei test)
+
+La suite si lancia con il comando standard `python manage.py test` (nessun flag). `ManifestStaticFilesStorage` (dev/prod) risolve `{% static %}` via `staticfiles.json`, che è prodotto da `collectstatic` e **non** esiste nell'ambiente di test → ogni template con `{% static %}` alzerebbe `ValueError: Missing staticfiles manifest entry`. Soluzione (2026-06-23): `config/settings_test.py` eredita `config.settings` e sovrascrive **solo** lo storage `staticfiles` con il non-manifest `StaticFilesStorage`; `manage.py` lo auto-seleziona quando `test` è in `argv`. `config/settings.py` (protetto) e lo storage di dev/prod restano `ManifestStaticFilesStorage`. Per forzarlo esplicitamente: `python manage.py test --settings=config.settings_test`. Non reintrodurre il manifest nei test (rompe la suite) e non disattivarlo per dev/prod.
 
 ## 8. Protocollo protected file
 
