@@ -46,13 +46,13 @@
          come asset statico (dev/prod fanno solo collectstatic, niente node).
          Token e safelist in tailwind.config.js. Caricato PRIMA di style.css per
          preservare la cascata del CDN: utility prima, override custom dopo. -->
-    <link rel="stylesheet" href="{% static 'css/tailwind.build.css' %}?v=1">
+    <link rel="stylesheet" href="{% static 'css/tailwind.build.css' %}">
 
     <!-- Custom CSS -->
-    <!-- ?v= forza il refresh della cache browser sui deploy CSS: senza,
-         il browser serviva uno style.css cache-ato pre-17.3 (heading in Inter).
-         Va incrementato a ogni modifica di style.css. -->
-    <link rel="stylesheet" href="{% static 'css/style.css' %}?v=186">
+    <!-- Cache-busting automatico via ManifestStaticFilesStorage (Macro 17.1 Fase 1):
+         {% static %} risolve al nome con hash, quindi il vecchio ?v=N manuale è
+         ridondante ed è stato rimosso. -->
+    <link rel="stylesheet" href="{% static 'css/style.css' %}">
 
     <style>
         /* Dynamic per-sport accent (Django-rendered). All static design tokens
