@@ -36,7 +36,9 @@ di verità unica. Il "perché" sta nel blueprint; qui stanno gli step.
 > (`tailwind.config` + audit hex, gated su 17.1). La macro resta 🔄.
 
 ### 17.1 Pipeline Tailwind compilata
-> **Fase 1 (toolchain) — pipeline parziale, su `dev` (2026-06-23):** in piedi `package.json` + `tailwind.config.js` (content glob su template/app `*.py`/JS/crispy + safelist isole `.dark-surface`) + input `static/css/tailwind.src.css`. Il CDN runtime è rimosso da `base.html`, che ora punta a `static/css/tailwind.build.css` compilato e committato (~68KB, purge attivo). Token a **valori invariati** (slate/ciano): nessun cambiamento estetico — il re-skin è Fase 2. Resta gated sul passaggio a `ManifestStaticFilesStorage` in `settings.py` (Alberto), con precondizione `pattern.png` (vedi OPS).
+> **Fase 1 (toolchain) — pipeline parziale, su `dev` (2026-06-23):** in piedi `package.json` + `tailwind.config.js` (content glob su template/app `*.py`/JS/crispy + safelist isole `.dark-surface`) + input `static/css/tailwind.src.css`. Il CDN runtime è rimosso da `base.html`, che ora punta a `static/css/tailwind.build.css` compilato e committato (~68KB, purge attivo). Token a **valori invariati** (slate/ciano): nessun cambiamento estetico — il re-skin è Fase 2.
+>
+> **Fase 1 CHIUSA (2026-06-23):** `ManifestStaticFilesStorage` attivo e verificato (collectstatic post-process di 132 asset, zero errori, fingerprint con hash nel nome). Il cache-busting è ora **automatico**: rimosso il `?v=N` manuale dai link CSS in `base.html` (vedi OPS §12.8/§7.3). La Macro 17 resta 🔄 — manca la **Fase 2** (re-skin Cap. 12: full-palette navy/teal/orange/green, audit hex).
 - [x] Build Tailwind via CLI con scansione dei template e purge delle classi inutilizzate (Fase 1, `dev`, e2e in verifica)
 - [x] Rimuovere `cdn.tailwindcss.com`; CDN sostituito dal CSS compilato committato (Fase 1, `dev`, e2e in verifica)
 
