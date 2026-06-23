@@ -59,6 +59,19 @@ module.exports = {
         dark: '#020617',
         card: 'rgba(15, 23, 42, 0.8)',
         sport: 'var(--sport-color)',
+        // Macro 17 Fase 2 — RE-SKIN CROMATICO Cap. 12 (token-remap, strategia A1).
+        // La scala `cyan` viene schiacciata sui valori `blue` di Tailwind: le ~480
+        // utility cyan-* esistenti nei template rendono BLUE senza rinominare le
+        // classi (niente find-replace A2 sui template). Perno brand = blue-600.
+        // DEBITO SEMANTICO NOTO: i template chiamano ancora `cyan-*` ma rendono blue;
+        // la ripulitura dei nomi classe (cyan-*->blue-*) e' un task A2 futuro.
+        // `sky` NON e' usato in nessun template -> non rimappato. I funzionali
+        // (green/orange/teal/red) sono gia' i default Tailwind ratificati -> invariati.
+        cyan: {
+          50: '#eff6ff', 100: '#dbeafe', 200: '#bfdbfe', 300: '#93c5fd',
+          400: '#60a5fa', 500: '#3b82f6', 600: '#2563eb', 700: '#1d4ed8',
+          800: '#1e40af', 900: '#1e3a8a', 950: '#172554',
+        },
       },
       fontFamily: {
         sans: ['Inter', 'sans-serif'],

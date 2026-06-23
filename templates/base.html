@@ -58,7 +58,7 @@
         /* Dynamic per-sport accent (Django-rendered). All static design tokens
            and component classes live in static/css/style.css (17.2). */
         :root {
-            --sport-color: {{ sport_color|default:"#06b6d4" }};
+            --sport-color: {{ sport_color|default:"#2563eb" }};
         }
     </style>
     <script>
@@ -70,7 +70,7 @@
     </script>
 </head>
 
-<body class="antialiased selection:bg-cyan-500 selection:text-white transition-colors duration-300">
+<body class="antialiased selection:bg-blue-500 selection:text-white transition-colors duration-300">
 
     <div class="flex h-screen overflow-hidden">
 
@@ -233,7 +233,7 @@
                 </form>
                 {% else %}
                 <a href="{% url 'login' %}"
-                    class="block w-full text-center py-3 px-4 rounded-xl bg-gradient-to-r from-cyan-600 to-blue-600 text-white font-bold hover:shadow-[0_0_15px_rgba(6,182,212,0.4)] transition-all">
+                    class="block w-full text-center py-3 px-4 rounded-xl bg-gradient-to-r from-blue-500 to-blue-700 text-white font-bold hover:shadow-[0_0_15px_rgba(37,99,235,0.4)] transition-all">
                     Accedi
                 </a>
                 {% endif %}
