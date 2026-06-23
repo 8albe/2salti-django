@@ -52,7 +52,7 @@
     <!-- ?v= forza il refresh della cache browser sui deploy CSS: senza,
          il browser serviva uno style.css cache-ato pre-17.3 (heading in Inter).
          Va incrementato a ogni modifica di style.css. -->
-    <link rel="stylesheet" href="{% static 'css/style.css' %}?v=185">
+    <link rel="stylesheet" href="{% static 'css/style.css' %}?v=186">
 
     <style>
         /* Dynamic per-sport accent (Django-rendered). All static design tokens
@@ -85,20 +85,9 @@
             </div>
 
             <nav class="flex-1 px-4 py-6 overflow-y-auto space-y-6">
-                <!-- AI SEARCH BAR (Desktop) -->
-                <div class="px-2 pb-2">
-                    <div class="relative">
-                        <input type="text" id="ai-search-input"
-                            placeholder="Chiedi all'AI (es: gol Rossi)..."
-                            aria-label="Ricerca AI: chiedi statistiche e partite"
-                            class="w-full bg-white/5 border border-white/10 rounded-xl py-2 px-10 text-sm focus:outline-none focus:ring-2 focus:ring-cyan-500/50 placeholder:text-slate-500 text-white">
-                        <span class="absolute left-3 top-2.5 text-slate-500 text-xs">🔍</span>
-                        <div id="ai-search-loading" class="hidden absolute right-3 top-2.5">
-                            <span class="animate-spin inline-block w-4 h-4 border-2 border-cyan-500 border-t-transparent rounded-full"></span>
-                        </div>
-                    </div>
-                    <div id="ai-search-results" class="hidden mt-2 p-3 bg-cyan-500/10 border border-cyan-500/20 rounded-xl text-[11px] text-cyan-100 leading-relaxed shadow-lg"></div>
-                </div>
+                <!-- Ricerca AI desktop consolidata nell'header (box unico id="ai-search-input").
+                     Rimossa qui la AI bar duplicata della sidebar: un solo box desktop, valido
+                     su tutte le pagine (la sidebar era nascosta su home). Macro 17.1, decisione prodotto. -->
 
                 <!-- EXPLORE SECTION (Always Visible) -->
                 <div>
@@ -270,10 +259,18 @@
                     </nav>
                 </div>
                 <div class="flex items-center gap-6">
-                    <!-- Global Search Placeholder in Nav -->
+                    <!-- Ricerca desktop UNICA: barra "normale" con Ricerca AI integrata.
+                         id="ai-search-input" è già legato dall'array searchInputs nel JS in
+                         fondo (invariato): su Enter interroga /matches/api/v1/ai-query/.
+                         Header hidden lg:flex senza condizione su request.path → visibile su
+                         TUTTE le pagine desktop, home inclusa. Macro 17.1, decisione prodotto. -->
                     <div class="relative w-64">
-                        <input type="text" placeholder="Cerca atleti, club..." aria-label="Cerca atleti e club" class="w-full bg-white/5 border border-white/10 rounded-full py-2 px-4 text-xs focus:outline-none focus:ring-1 focus:ring-cyan-500/50 text-white">
+                        <input type="text" id="ai-search-input"
+                            placeholder="Cerca o chiedi all'AI (es: gol Rossi)..."
+                            aria-label="Ricerca: cerca atleti e club o chiedi statistiche all'AI"
+                            class="w-full bg-white/5 border border-white/10 rounded-full py-2 px-4 text-xs focus:outline-none focus:ring-1 focus:ring-cyan-500/50 text-white">
                         <span class="absolute right-3 top-2 text-slate-500">🔍</span>
+                        <div id="ai-search-results" class="hidden absolute right-0 w-64 mt-2 z-50 p-3 bg-cyan-500/10 border border-cyan-500/20 rounded-xl text-[11px] text-cyan-100 leading-relaxed shadow-lg"></div>
                     </div>
                 </div>
             </header>
