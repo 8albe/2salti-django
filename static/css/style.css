@@ -591,24 +591,27 @@ body {
 :focus:not(:focus-visible) {
     outline: none;
 }
-/* FIX regressione (2026-06-23): i controlli di testo (input testuali, textarea,
-   select) fanno match con :focus-visible ANCHE al focus da mouse — comportamento
-   UA, non un nostro bug: il browser assume input da tastiera e li tratta sempre
-   come focus-visible. Quindi su di loro l'outline compariva al click (regressione
-   17.7). In puro CSS non e' distinguibile il click dalla tastiera per questi
-   elementi: sopprimo l'outline qui e lascio i loro stili di focus nativi
-   (border/ring inline). Bottoni, link, toggle, checkbox e radio NON sono toccati
-   e mantengono l'outline keyboard-only della regola sopra. */
-input[type="text"]:focus-visible,
-input[type="password"]:focus-visible,
-input[type="email"]:focus-visible,
-input[type="number"]:focus-visible,
-input[type="search"]:focus-visible,
-input[type="tel"]:focus-visible,
-input[type="url"]:focus-visible,
-input[type="date"]:focus-visible,
-input:not([type]):focus-visible,
-textarea:focus-visible,
-select:focus-visible {
+/* FIX prodotto (2026-06-23): i campi di testo (input testuali, textarea, select,
+   inclusi i campi crispy di login/signup) mostrano l'anello di focus su :focus —
+   sia da tastiera SIA al click — perche' per un campo di testo e' il comportamento
+   nativo atteso (WCAG 2.4.7) e coerente con gli input che gia' usano focus:ring
+   inline. Uso un box-shadow ciano (lo stesso "anello" dei ring inline): la maggiore
+   specificita' del selettore sovrascrive quei ring -> un solo anello, niente
+   doubling. Azzero l'outline con !important cosi' i text field NON mostrano qui
+   l'outline keyboard-only della regola globale (i text field matchano :focus-visible
+   anche al mouse). Bottoni, link, toggle, checkbox e radio NON sono toccati: restano
+   :focus-visible keyboard-only (anello solo da tastiera, mai al click). */
+input[type="text"]:focus,
+input[type="password"]:focus,
+input[type="email"]:focus,
+input[type="number"]:focus,
+input[type="search"]:focus,
+input[type="tel"]:focus,
+input[type="url"]:focus,
+input[type="date"]:focus,
+input:not([type]):focus,
+textarea:focus,
+select:focus {
     outline: none !important;
+    box-shadow: 0 0 0 2px var(--sport-color, #06b6d4);
 }
