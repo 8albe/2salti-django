@@ -41,32 +41,18 @@
         href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;800&family=Outfit:wght@400;500;600;700;800&display=swap"
         rel="stylesheet">
 
-    <!-- Tailwind CSS CDN -->
-    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Tailwind CSS (compilato — Macro 17.1 Fase 1; sostituisce il Play CDN runtime).
+         Buildato da static/css/tailwind.src.css via `npm run build:css`; committato
+         come asset statico (dev/prod fanno solo collectstatic, niente node).
+         Token e safelist in tailwind.config.js. Caricato PRIMA di style.css per
+         preservare la cascata del CDN: utility prima, override custom dopo. -->
+    <link rel="stylesheet" href="{% static 'css/tailwind.build.css' %}?v=1">
 
     <!-- Custom CSS -->
     <!-- ?v= forza il refresh della cache browser sui deploy CSS: senza,
          il browser serviva uno style.css cache-ato pre-17.3 (heading in Inter).
          Va incrementato a ogni modifica di style.css. -->
     <link rel="stylesheet" href="{% static 'css/style.css' %}?v=184">
-
-    <script>
-        tailwind.config = {
-            theme: {
-                extend: {
-                    colors: {
-                        dark: '#020617',
-                        card: 'rgba(15, 23, 42, 0.8)',
-                        sport: '{{ sport_color|default:"#06b6d4" }}',
-                    },
-                    fontFamily: {
-                        sans: ['Inter', 'sans-serif'],
-                        display: ['Outfit', 'sans-serif'],
-                    }
-                }
-            }
-        }
-    </script>
 
     <style>
         /* Dynamic per-sport accent (Django-rendered). All static design tokens

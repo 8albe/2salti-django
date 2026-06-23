@@ -1,0 +1,14 @@
+/*
+ * Tailwind input — 2salti (Macro 17.1 Fase 1).
+ * Compiled to static/css/tailwind.build.css via `npm run build:css`.
+ *
+ * This file produces ONLY the Tailwind layers (base + components + utilities).
+ * The hand-written component/island CSS stays in static/css/style.css, which
+ * base.html keeps loading as a separate <link> AFTER this compiled file — same
+ * cascade order the Play CDN had (utilities first, custom overrides second).
+ * style.css is deliberately NOT @import-ed here so it is not re-processed,
+ * stays independently cache-busted (?v=N), and needs no rewrite.
+ */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
