@@ -48,7 +48,7 @@
     <!-- ?v= forza il refresh della cache browser sui deploy CSS: senza,
          il browser serviva uno style.css cache-ato pre-17.3 (heading in Inter).
          Va incrementato a ogni modifica di style.css. -->
-    <link rel="stylesheet" href="{% static 'css/style.css' %}?v=181">
+    <link rel="stylesheet" href="{% static 'css/style.css' %}?v=182">
 
     <script>
         tailwind.config = {
@@ -358,8 +358,38 @@
                     {% block content %}{% endblock %}
                 </div>
 
-                <footer class="mt-12 py-6 text-center text-slate-600 text-sm">
-                    &copy; 2025 2salti.com
+                <footer class="max-w-6xl mx-auto mt-16 border-t border-white/10 pt-10 pb-6">
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-8 mb-8">
+                        <!-- Brand + tagline -->
+                        <div>
+                            <a href="/" class="flex items-center gap-2 mb-3">
+                                <img src="{% static 'img/logo.png' %}" alt="2salti" class="h-8 w-auto">
+                                <span class="text-2xl font-display font-bold bg-clip-text text-transparent bg-gradient-to-r from-cyan-400 to-blue-500">2salti</span>
+                            </a>
+                            <p class="text-sm text-slate-400 max-w-xs">Il tuo sport, un altro livello.</p>
+                        </div>
+
+                        <!-- Link prodotto (route pubbliche reali, primo rollout: Pallanuoto) -->
+                        <nav aria-label="Link prodotto">
+                            <h3 class="text-xs font-bold uppercase tracking-widest text-slate-500 mb-4">Prodotto</h3>
+                            <ul class="space-y-2 text-sm">
+                                <li><a href="{% url 'sport_matches' 'pallanuoto' %}" class="text-slate-400 hover:text-cyan-400 transition-colors">Partite</a></li>
+                                <li><a href="{% url 'sport_detail' 'pallanuoto' %}" class="text-slate-400 hover:text-cyan-400 transition-colors">Classifiche</a></li>
+                                <li><a href="{% url 'league_stats' 'serie-c-maschile-2026-2027' %}" class="text-slate-400 hover:text-cyan-400 transition-colors">Statistiche</a></li>
+                            </ul>
+                        </nav>
+
+                        <!-- Contatti -->
+                        <div>
+                            <h3 class="text-xs font-bold uppercase tracking-widest text-slate-500 mb-4">Contatti</h3>
+                            <a href="mailto:albegalbi@gmail.com" class="text-sm text-slate-400 hover:text-cyan-400 transition-colors">albegalbi@gmail.com</a>
+                        </div>
+                    </div>
+
+                    <div class="border-t border-white/5 pt-6 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-slate-500">
+                        <span>&copy; {% now "Y" %} 2salti</span>
+                        <span class="px-2 py-0.5 rounded-full bg-cyan-500/10 text-cyan-400 font-bold uppercase tracking-widest">Beta</span>
+                    </div>
                 </footer>
             </main>
 
