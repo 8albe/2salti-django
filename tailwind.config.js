@@ -30,9 +30,9 @@ module.exports = {
     './seasons/**/*.py',
     './config/**/*.py',
     // crispy-tailwind renders form-field classes from its own package templates.
-    // Path is venv-version-specific (python3.12); update if the venv moves.
-    './.venv/lib/python3.12/site-packages/crispy_forms/templates/**/*.html',
-    './.venv/lib/python3.12/site-packages/crispy_tailwind/templates/**/*.html',
+    // `python*` so the glob survives a Python minor bump without manual edit.
+    './.venv/lib/python*/site-packages/crispy_forms/templates/**/*.html',
+    './.venv/lib/python*/site-packages/crispy_tailwind/templates/**/*.html',
   ],
   // Safelist = utilities that exist ONLY inside style.css descendant selectors
   // (the light-theme ".dark-surface" islands, 17.3/17.4 work). They are applied
