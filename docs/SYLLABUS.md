@@ -1,6 +1,6 @@
 # SYLLABUS — Roadmap operativa 2salti
 
-Aggiornato: 2026-06-22
+Aggiornato: 2026-06-30
 
 Punto d'ingresso operativo del progetto. Per la visione di prodotto vedi [BLUEPRINT.md](BLUEPRINT.md).
 
@@ -63,7 +63,7 @@ Punto d'ingresso operativo del progetto. Per la visione di prodotto vedi [BLUEPR
 ## 16. Modello stagione e tesseramento per stagione ✅
 → [Dettaglio](syllabus/16_modello_stagione.md)
 
-## 17. Frontend & Design System 🔄
+## 17. Frontend & Design System ✅
 → [Dettaglio](syllabus/17_frontend_design_system.md)
 
 ## 18. Personificazione società (presidente) ✅

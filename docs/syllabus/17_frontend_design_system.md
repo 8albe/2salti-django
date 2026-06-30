@@ -1,6 +1,6 @@
 ## 17. Frontend & Design System
 
-Stato: 🔄 In corso
+Stato: ✅ Completata
 
 > Nota stato (2026-06-22): lo scaffolding è **già parziale** in `templates/base.html`
 > e `static/css/style.css` — token colore, font Inter+Outfit, `tailwind.config`
@@ -35,6 +35,15 @@ di verità unica. Il "perché" sta nel blueprint; qui stanno gli step.
 > da eseguire. Restano aperti 17.1 (pipeline/CDN, gated) e il residuo 17.2
 > (`tailwind.config` + audit hex, gated su 17.1). La macro resta 🔄.
 
+> **CHIUSURA Macro 17 (2026-06-30, solo `dev`, prod invariato a `f697c0f`):** Fase 2
+> completata — re-skin cromatico Cap. 12 in CSS via token-remap **A1** (`819db21`, literali
+> ciano orfani chiusi `ac9b970`) + migration per-sport DB `Sport.hex_color` pallanuoto
+> ciano→`#2563eb` applicata su `dev`. Verifica e2e (Antigravity): isole `.dark-surface`
+> intatte, zero regressioni WCAG AA; i "residui ciano" segnalati erano falsi positivi
+> (classi `cyan-*` che **rendono** blue via `tailwind.config.js`). Resta solo il **debito
+> A1** (rinomina classi `cyan-*`→`blue-*`), rimandato al task **A2** futuro non urgente
+> (OPS_RUNBOOK §12.9). Tutte le sotto-macro 17.1–17.8.1 chiuse → Macro 17 **✅**.
+
 ### 17.1 Pipeline Tailwind compilata
 > **Fase 1 (toolchain) — pipeline parziale, su `dev` (2026-06-23):** in piedi `package.json` + `tailwind.config.js` (content glob su template/app `*.py`/JS/crispy + safelist isole `.dark-surface`) + input `static/css/tailwind.src.css`. Il CDN runtime è rimosso da `base.html`, che ora punta a `static/css/tailwind.build.css` compilato e committato (~68KB, purge attivo). Token a **valori invariati** (slate/ciano): nessun cambiamento estetico — il re-skin è Fase 2.
 >
@@ -51,7 +60,7 @@ di verità unica. Il "perché" sta nel blueprint; qui stanno gli step.
 - [x] Migrare la palette di marca (blu+navy) in `tailwind.config` via token-remap della scala cyan — _(Fase 2, 2026-06-23, `dev`)_
 - [x] Variabili CSS per i temi — consolidate in `style.css` (2026-06-22, `dev`)
 - [x] Audit ed eliminazione di hex/spacing hardcoded sparsi nei template — _(literali ciano orfani chiusi: 15 template → blue-600, grep=0, 2026-06-30, `dev`, `ac9b970`; resta solo il debito A1 nomi-classe `cyan-*`, voluto)_
-- [~] Cambio DB `Sport.hex_color` pallanuoto ciano→blue — _(codice pronto: model+migration `0020`/`0021`+seed, 2026-06-30, `dev`, `e5eab0d`; **migrate gated su backup DB dev — Alberto**)_
+- [x] Cambio DB `Sport.hex_color` pallanuoto ciano→blue — _(model+migration `0020`/`0021`+seed, `e5eab0d`; migration applicata su `dev`, 2026-06-30)_
 
 ### 17.3 Tipografia
 - [x] Caricare Inter (body/dati) + Outfit (titoli)
@@ -66,8 +75,8 @@ di verità unica. Il "perché" sta nel blueprint; qui stanno gli step.
 - [x] Header sticky (logo, nav sport, ricerca, toggle tema) — già presente nello scaffolding `base.html`
 
 ### 17.6 Dark/light theming
-- [ ] Stesso set di token e stessi componenti nei due temi; cambiano solo i valori colore
-- [ ] Toggle tema nell'header
+- [x] Stesso set di token e stessi componenti nei due temi; cambiano solo i valori colore — token consolidati in `style.css`/`tailwind.config.js` (17.2) + isole `.dark-surface` verificate (17.8.1)
+- [x] Toggle tema nell'header — `data-theme` + theme-toggle già nello scaffolding `base.html`
 
 ### 17.7 Accessibilità base
 - [x] Ogni campo form con `id`/`name` + label associata — `for=`/`id` su setup_wizard, request_certification, generate_code; `aria-label` sui 3 input di ricerca in `base.html`; login/signup già via crispy (2026-06-23, `dev`, e2e in verifica)
