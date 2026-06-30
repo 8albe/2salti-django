@@ -1,0 +1,25 @@
+{% comment %}
+Reusable empty-state (Macro 17.4).
+Usare ovunque un dato possa mancare (classifiche a zero, nessuna partita, ecc.).
+
+Parametri (tutti opzionali tranne title):
+  icon       — emoji o glifo decorativo (default 📭)
+  title      — intestazione (Outfit via .font-display)
+  message    — riga esplicativa del perché manca il dato
+  cta_url    — URL opzionale per una call-to-action
+  cta_label  — testo del bottone CTA (richiede cta_url)
+
+Esempio:
+  {% include 'components/_empty_state.html' with icon="📅" title="Nessuna partita" message="Non ci sono partite in programma." %}
+{% endcomment %}
+<div class="glass-panel p-12 text-center border-dashed border-2 border-slate-700/50">
+    <div class="text-4xl mb-4 opacity-50 grayscale">{{ icon|default:"📭" }}</div>
+    <h3 class="text-lg font-display font-bold text-white mb-2">{{ title|default:"Nessun dato" }}</h3>
+    {% if message %}<p class="text-slate-400">{{ message }}</p>{% endif %}
+    {% if cta_url and cta_label %}
+    <a href="{{ cta_url }}"
+        class="inline-block mt-5 py-2 px-5 rounded-xl bg-blue-600/20 text-blue-400 font-bold hover:bg-blue-600/30 transition-colors">
+        {{ cta_label }}
+    </a>
+    {% endif %}
+</div>

@@ -52,7 +52,8 @@ Questo documento è il ponte tra il linguaggio di prodotto usato nel blueprint (
 | Claim_Requests (rivendica profilo) | `AccountProfileLink` | accounts | accounts/models.py | ✅ | status: PENDING → APPROVED/REJECTED; vedi STATE_MACHINES.md §4 |
 | Activation_Codes (codici invito) | `ActivationCode` | management | management/models.py | ✅ | Generati dal Club Admin; max_uses, expires_at, role-specific |
 | Shop_Orders | — | — | — | ❌ | Blueprint §10, §13; webhook outbound HMAC verso shop società; nessun modello nel codice |
-| Sponsor_Assets | `Society.sponsors` (JSONField) | core | core/models.py | 🟡 | Lista JSON `[{"name": "...", "logo_url": "..."}]` sul modello Society; blueprint prevede un modello `Sponsor_Assets` separato con placement |
+| Sponsor (modello relazionale) | `core.Sponsor` | core | core/models.py | ✅ (dev) | **Macro 9 as-built (2026-06-30):** modello relazionale dedicato, FK `Society` + FK `Season`; targeting **società-wide sulla stagione corrente** via `core.services.sponsor_service`. Render in **forma piena** (scheda società) e **forma ridotta** (profilo atleta del club). Scope pilota **solo-Zero9** (le altre società degradano a zero). Gestione **seed/admin-only** (`op_admin_site`), UI CRUD differita. Migration `0022_sponsor`. Pending: `migrate` su prod + dati reali Zero9 (lato Alberto) |
+| Sponsor_Assets (legacy) | `Society.sponsors` (JSONField) | core | core/models.py | 🟡 | Lista JSON `[{"name": "...", "logo_url": "..."}]` sul modello Society; **deprecato e lasciato intatto** (non rimosso; stato prod non verificato) — superato dal modello relazionale `core.Sponsor` (riga sopra) |
 | User_Preferences (layout widget) | — | — | — | ❌ | Blueprint §10, §12; personalizzazioni widget e tema non implementate |
 | Jury_Tokens | — | — | — | ❌ | Blueprint §7.4, §10, §14; token match-specific per giuria con finestra 30 min; confermato non implementato in STATE_MACHINES.md §"Funzionalità non implementate" |
 

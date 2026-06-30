@@ -95,9 +95,23 @@ STATICFILES_DIRS = [BASE_DIR / 'static']
 MEDIA_URL = '/media/'
 MEDIA_ROOT = BASE_DIR / 'media'
 
+# Static files storage — hashing + manifest (Macro 17.1 Fase 1).
+STORAGES = {
+    "default": {
+        "BACKEND": "django.core.files.storage.FileSystemStorage",
+    },
+    "staticfiles": {
+        "BACKEND": "django.contrib.staticfiles.storage.ManifestStaticFilesStorage",
+    },
+}
+
 # Default PK
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 AUTH_USER_MODEL = 'accounts.User'
+# Auth redirects — post-login l'utente va al redirect role-aware (-> dashboard).
+# Senza questa variabile Django usa il default /accounts/profile/, che non
+# matcha alcuna rotta (esiste solo profile/<username>/) e restituisce 404.
+LOGIN_REDIRECT_URL = 'profile_redirect'
 
 # Email
 # §10.12-dev: in dev il backend di default è la console (le email finiscono su

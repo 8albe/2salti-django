@@ -1,0 +1,13 @@
+{
+  "name": "2salti-frontend",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Frontend build pipeline (Tailwind CSS) for 2salti. Compiles static/css/tailwind.src.css -> static/css/tailwind.build.css. The compiled CSS is committed; the dev/prod boxes only run collectstatic, not this build.",
+  "scripts": {
+    "build:css": "tailwindcss -i ./static/css/tailwind.src.css -o ./static/css/tailwind.build.css --minify",
+    "watch:css": "tailwindcss -i ./static/css/tailwind.src.css -o ./static/css/tailwind.build.css --watch"
+  },
+  "devDependencies": {
+    "tailwindcss": "^3.4.0"
+  }
+}

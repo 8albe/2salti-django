@@ -9,7 +9,7 @@
 {% block content %}
 <div class="animate-fade-in">
     <!-- 1. HEADER HERO: Scoreboard & Context -->
-    <section class="relative overflow-hidden rounded-[2rem] glass-premium mb-8">
+    <section class="dark-surface relative overflow-hidden rounded-[2rem] glass-premium mb-8">
         <!-- Abstract Background -->
         <div class="absolute inset-0 bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 opacity-90"></div>
         <div class="absolute inset-0 opacity-10 bg-[radial-gradient(circle_at_center,var(--sport-color),transparent_70%)]"></div>
@@ -17,7 +17,7 @@
         <div class="relative z-10 p-6 md:p-12">
             <!-- Top Metadata -->
             <div class="flex flex-col items-center mb-10">
-                <span class="px-4 py-1 rounded-full bg-white/5 border border-white/10 text-[10px] font-bold tracking-[0.3em] uppercase text-cyan-400 mb-4">
+                <span class="px-4 py-1 rounded-full bg-white/5 border border-white/10 text-[10px] font-bold tracking-[0.3em] uppercase text-blue-400 mb-4">
                     {{ match.league.name }} • {{ match.league.season }}
                 </span>
                 <div class="flex flex-wrap items-center justify-center gap-4 text-slate-400 text-xs font-medium">
@@ -25,10 +25,10 @@
                     <span class="flex items-center gap-1.5"><i class="far fa-clock"></i> {{ match.match_date|date:"H:i" }}</span>
                     {% if match.location %}
                     <span class="flex items-center gap-1.5">
-                        <i class="fas fa-location-dot text-cyan-400"></i>
+                        <i class="fas fa-location-dot text-blue-400"></i>
                         <span class="text-[10px] uppercase tracking-widest text-slate-500">Venue:</span>
                         {% if match.google_maps_url %}
-                        <a href="{{ match.google_maps_url }}" target="_blank" rel="noopener" class="hover:text-cyan-400 transition-colors">{{ match.location }}</a>
+                        <a href="{{ match.google_maps_url }}" target="_blank" rel="noopener" class="hover:text-blue-400 transition-colors">{{ match.location }}</a>
                         {% else %}
                         <span>{{ match.location }}</span>
                         {% endif %}
@@ -41,15 +41,15 @@
             <div class="flex items-center justify-between max-w-5xl mx-auto gap-2 md:gap-8">
                 <!-- Home Team -->
                 <a href="{% url 'team_detail' match.home_team.slug %}" class="flex-1 group flex flex-col items-center text-center">
-                    <div class="w-24 h-24 md:w-40 md:h-40 rounded-full bg-white/5 p-4 md:p-6 mb-6 border border-white/10 group-hover:border-cyan-500/50 group-hover:bg-cyan-500/5 transition-all duration-500 shadow-2xl relative">
-                        <div class="absolute inset-0 rounded-full bg-cyan-500/10 blur-2xl opacity-0 group-hover:opacity-100 transition-opacity"></div>
+                    <div class="w-24 h-24 md:w-40 md:h-40 rounded-full bg-white/5 p-4 md:p-6 mb-6 border border-white/10 group-hover:border-blue-500/50 group-hover:bg-blue-500/5 transition-all duration-500 shadow-2xl relative">
+                        <div class="absolute inset-0 rounded-full bg-blue-500/10 blur-2xl opacity-0 group-hover:opacity-100 transition-opacity"></div>
                         {% if match.home_team.society.logo %}
                         <img src="{{ match.home_team.society.logo.url }}" class="w-full h-full object-contain relative z-10">
                         {% else %}
                         <span class="text-5xl relative z-10">🏠</span>
                         {% endif %}
                     </div>
-                    <h2 class="text-xl md:text-4xl font-display font-black text-white uppercase tracking-tight group-hover:text-cyan-400 transition-colors">{{ match.home_team.name }}</h2>
+                    <h2 class="text-xl md:text-4xl font-display font-black text-white uppercase tracking-tight group-hover:text-blue-400 transition-colors">{{ match.home_team.name }}</h2>
                     <p class="text-[10px] text-slate-500 font-bold uppercase tracking-widest mt-2">CASA</p>
                 </a>
 
@@ -100,7 +100,7 @@
                         {% else %}bg-slate-500{% endif %}"></span>
                     <span class="text-slate-400">Referto: <strong class="text-white">{{ report.get_status_display }}</strong></span>
                     {% if request.user.is_staff or request.user.is_superuser %}
-                    <a href="{% url 'report_review' report.id %}" class="text-cyan-400 font-bold hover:underline ml-2">Review →</a>
+                    <a href="{% url 'report_review' report.id %}" class="text-blue-400 font-bold hover:underline ml-2">Review →</a>
                     {% endif %}
                 </div>
                 {% endfor %}
@@ -131,18 +131,18 @@
     {% if home_scorers or away_scorers %}
     <div class="glass-panel p-6 md:p-8 mb-8">
         <h3 class="text-sm font-bold text-slate-500 uppercase tracking-[0.3em] mb-6 flex items-center gap-3">
-            <span class="w-10 h-10 rounded-xl bg-cyan-500/10 flex items-center justify-center text-cyan-400">⚽</span>
+            <span class="w-10 h-10 rounded-xl bg-blue-500/10 flex items-center justify-center text-blue-400">⚽</span>
             Marcatori
         </h3>
         <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
             <!-- Home scorers -->
-            <div class="border-l-2 border-cyan-500/50 pl-4">
-                <h4 class="text-xs font-black text-cyan-400 uppercase tracking-widest mb-4">{{ match.home_team.name }}</h4>
+            <div class="border-l-2 border-blue-500/50 pl-4">
+                <h4 class="text-xs font-black text-blue-400 uppercase tracking-widest mb-4">{{ match.home_team.name }}</h4>
                 {% if home_scorers %}
                 <ul class="space-y-2">
                     {% for entry in home_scorers %}
                     <li class="flex items-center justify-between text-sm">
-                        <a href="{% url 'profile' entry.player.username %}" class="text-white font-bold hover:text-cyan-400 transition-colors">
+                        <a href="{% url 'profile' entry.player.username %}" class="text-white font-bold hover:text-blue-400 transition-colors">
                             {{ entry.player.get_full_name }}
                         </a>
                         <span class="text-[11px] font-mono text-slate-400">
@@ -185,18 +185,18 @@
         <!-- LEFT: Timeline di Gara -->
         <div class="lg:col-span-2 glass-panel p-6 md:p-8">
             <h3 class="text-sm font-bold text-slate-500 uppercase tracking-[0.3em] mb-10 flex items-center gap-3">
-                <span class="w-10 h-10 rounded-xl bg-cyan-500/10 flex items-center justify-center text-cyan-400"><i class="fas fa-clock-rotate-left"></i></span>
+                <span class="w-10 h-10 rounded-xl bg-blue-500/10 flex items-center justify-center text-blue-400"><i class="fas fa-clock-rotate-left"></i></span>
                 Timeline di Gara
             </h3>
 
             <div class="relative pl-6 md:pl-10 space-y-12">
                 <!-- Vertical Line -->
-                <div class="absolute left-[19px] md:left-[39px] top-0 bottom-0 w-px bg-gradient-to-b from-cyan-500/50 via-white/5 to-transparent"></div>
+                <div class="absolute left-[19px] md:left-[39px] top-0 bottom-0 w-px bg-gradient-to-b from-blue-500/50 via-white/5 to-transparent"></div>
 
                 {% for event in goals %}
                 <div class="relative group">
                     <!-- Dot -->
-                    <div class="absolute -left-[32px] md:-left-[52px] top-0 w-6 h-6 md:w-8 md:h-8 rounded-full bg-slate-900 border-2 border-cyan-500 flex items-center justify-center text-[10px] font-black text-white z-10 group-hover:scale-110 transition-transform shadow-[0_0_15px_rgba(6,182,212,0.4)]">
+                    <div class="absolute -left-[32px] md:-left-[52px] top-0 w-6 h-6 md:w-8 md:h-8 rounded-full bg-slate-900 border-2 border-blue-500 flex items-center justify-center text-[10px] font-black text-white z-10 group-hover:scale-110 transition-transform shadow-[0_0_15px_rgba(37,99,235,0.4)]">
                         {{ event.minute }}'
                     </div>
                     
@@ -207,7 +207,7 @@
                             <div>
                                 <p class="text-white font-black text-lg">
                                     {% if event.player %}
-                                    <a href="{% url 'profile' event.player.username %}" class="hover:text-cyan-400 transition-colors uppercase italic">{{ event.player.get_full_name }}</a>
+                                    <a href="{% url 'profile' event.player.username %}" class="hover:text-blue-400 transition-colors uppercase italic">{{ event.player.get_full_name }}</a>
                                     {% else %}
                                     SQUADRA
                                     {% endif %}
@@ -347,17 +347,17 @@
         <!-- RIGHT: Roster Side-by-Side -->
         <div class="space-y-8">
             <!-- Home Roster -->
-            <div class="glass-panel p-6 border-t-2 border-cyan-500/50">
+            <div class="glass-panel p-6 border-t-2 border-blue-500/50">
                 <div class="flex items-center justify-between mb-6">
                     <h4 class="text-xs font-black text-white uppercase tracking-widest">{{ match.home_team.name|truncatechars:20 }}</h4>
-                    <span class="text-[10px] text-cyan-400 font-bold uppercase tracking-widest">Roster</span>
+                    <span class="text-[10px] text-blue-400 font-bold uppercase tracking-widest">Roster</span>
                 </div>
                 <div class="space-y-2">
                     {% for athlete in home_roster %}
                     <div class="flex items-center justify-between p-2 rounded-lg hover:bg-white/5 transition-colors group">
                         <div class="flex items-center gap-3">
-                            <span class="w-6 h-6 rounded bg-slate-800 flex items-center justify-center text-[10px] font-bold text-slate-400 group-hover:bg-cyan-500 group-hover:text-white transition-colors">#{{ athlete.jersey_number|default:"-" }}</span>
-                            <a href="{% url 'profile' athlete.user.username %}" class="text-sm text-slate-300 group-hover:text-white hover:text-cyan-400 transition-colors">{{ athlete.user.get_full_name }}</a>
+                            <span class="w-6 h-6 rounded bg-slate-800 flex items-center justify-center text-[10px] font-bold text-slate-400 group-hover:bg-blue-500 group-hover:text-white transition-colors">#{{ athlete.jersey_number|default:"-" }}</span>
+                            <a href="{% url 'profile' athlete.user.username %}" class="text-sm text-slate-300 group-hover:text-white hover:text-blue-400 transition-colors">{{ athlete.user.get_full_name }}</a>
                         </div>
                         <span class="text-[9px] text-slate-600 uppercase font-bold">{{ athlete.position|default:"-" }}</span>
                     </div>
@@ -390,7 +390,7 @@
                 <h4 class="text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] mb-4 text-center">Ufficiali di Gara</h4>
                 <div class="flex flex-wrap justify-center gap-2">
                     {% for ref in match.referees.all %}
-                    <a href="{% url 'profile' ref.username %}" class="px-3 py-1 rounded bg-white/5 text-xs text-slate-400 border border-white/5 hover:bg-cyan-500/10 hover:border-cyan-500/30 hover:text-cyan-400 transition-all">{{ ref.get_full_name }}</a>
+                    <a href="{% url 'profile' ref.username %}" class="px-3 py-1 rounded bg-white/5 text-xs text-slate-400 border border-white/5 hover:bg-blue-500/10 hover:border-blue-500/30 hover:text-blue-400 transition-all">{{ ref.get_full_name }}</a>
                     {% endfor %}
                 </div>
             </div>
@@ -403,7 +403,7 @@
     <!-- PREVIEW FOR UPCOMING MATCH -->
     {% if not match.is_finished %}
     <div class="glass-panel p-12 text-center">
-        <div class="w-20 h-20 rounded-full bg-cyan-500/10 flex items-center justify-center mx-auto mb-6 text-3xl text-cyan-400 animate-bounce">
+        <div class="w-20 h-20 rounded-full bg-blue-500/10 flex items-center justify-center mx-auto mb-6 text-3xl text-blue-400 animate-bounce">
             <i class="fas fa-ticket"></i>
         </div>
         <h3 class="text-2xl font-display font-black text-white mb-4 italic uppercase">Match in Programma</h3>
@@ -412,7 +412,7 @@
         </p>
         <div class="mt-8 flex justify-center gap-4">
             <button class="px-6 py-2 rounded-full bg-white/5 border border-white/10 text-xs font-bold uppercase tracking-widest text-slate-400 hover:text-white hover:bg-white/10 transition-all">Segui Squadra</button>
-            <button class="px-6 py-2 rounded-full bg-cyan-600 text-white text-xs font-bold uppercase tracking-widest hover:shadow-[0_0_20px_rgba(6,182,212,0.5)] transition-all">Aggiungi a Calendario</button>
+            <button class="px-6 py-2 rounded-full bg-blue-600 text-white text-xs font-bold uppercase tracking-widest hover:shadow-[0_0_20px_rgba(37,99,235,0.5)] transition-all">Aggiungi a Calendario</button>
         </div>
     </div>
     {% endif %}

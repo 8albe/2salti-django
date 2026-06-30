@@ -5,7 +5,7 @@
     <!-- Progress Indicator -->
     <div class="flex justify-between items-center mb-8">
         <div class="flex items-center space-x-2">
-            <div class="h-2 w-12 rounded bg-cyan-500 shadow-[0_0_10px_rgba(6,182,212,0.5)]"></div>
+            <div class="h-2 w-12 rounded bg-blue-500 shadow-[0_0_10px_rgba(37,99,235,0.5)]"></div>
             <div class="h-2 w-12 rounded bg-slate-700"></div>
             <div class="h-2 w-12 rounded bg-slate-700"></div>
             <div class="h-2 w-12 rounded bg-slate-700"></div>
@@ -14,7 +14,7 @@
     </div>
 
     <div class="text-center mb-8">
-        <div class="inline-flex items-center justify-center w-16 h-16 rounded-full bg-cyan-500/10 text-cyan-400 text-3xl mb-4">
+        <div class="inline-flex items-center justify-center w-16 h-16 rounded-full bg-blue-500/10 text-blue-400 text-3xl mb-4">
             🆔
         </div>
         <h2 class="text-3xl font-display font-bold text-white mb-2">Verifica Identità</h2>
@@ -24,11 +24,11 @@
     </div>
 
     <div class="space-y-4 mb-8">
-        <div class="p-4 rounded-xl bg-white/5 border border-white/10 hover:border-cyan-500/50 transition-colors cursor-pointer group">
+        <div class="p-4 rounded-xl bg-white/5 border border-white/10 hover:border-blue-500/50 transition-colors cursor-pointer group">
             <div class="flex items-center gap-4">
                 <div class="w-10 h-10 rounded-lg bg-blue-600/20 flex items-center justify-center text-xl">🇮🇹</div>
                 <div class="flex-1">
-                    <p class="font-bold text-white group-hover:text-cyan-400 transition-colors">Entra con SPID</p>
+                    <p class="font-bold text-white group-hover:text-blue-400 transition-colors">Entra con SPID</p>
                     <p class="text-xs text-slate-500">Sistema Pubblico di Identità Digitale</p>
                 </div>
                 <span class="text-slate-600">→</span>
@@ -48,7 +48,7 @@
 
     <form method="POST">
         {% csrf_token %}
-        <button type="submit" class="w-full py-4 rounded-xl bg-gradient-to-r from-cyan-600 to-blue-600 text-white font-bold hover:shadow-[0_0_20px_rgba(6,182,212,0.4)] transition-all transform hover:-translate-y-0.5">
+        <button type="submit" class="w-full py-4 rounded-xl bg-gradient-to-r from-blue-600 to-blue-600 text-white font-bold hover:shadow-[0_0_20px_rgba(37,99,235,0.4)] transition-all transform hover:-translate-y-0.5">
             Simula Verifica Successo (Mock SPID)
         </button>
     </form>

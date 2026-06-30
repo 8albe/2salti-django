@@ -12,7 +12,7 @@
         </span>
         {% if league.group_name %}
         <span class="w-1 h-1 bg-slate-500 rounded-full"></span>
-        <span class="text-cyan-400 font-bold">{{ league.group_name }}</span>
+        <span class="text-blue-400 font-bold">{{ league.group_name }}</span>
         {% endif %}
     </div>
 </div>
@@ -32,7 +32,7 @@
             class="glass-panel p-4 flex items-center gap-4 relative overflow-hidden group hover:bg-white/5 transition-colors">
             <!-- Rank Badge -->
             <div
-                class="absolute -right-2 -top-2 w-16 h-16 bg-gradient-to-br from-cyan-500/20 to-blue-500/20 rounded-full blur-xl group-hover:from-cyan-400/30 transition-all">
+                class="absolute -right-2 -top-2 w-16 h-16 bg-gradient-to-br from-blue-500/20 to-blue-500/20 rounded-full blur-xl group-hover:from-blue-400/30 transition-all">
             </div>
 
             <div
@@ -45,7 +45,7 @@
                 <div class="text-xs text-slate-400 truncate">{{ scorer.team__name }}</div>
             </div>
 
-            <div class="text-2xl font-display font-bold text-cyan-400 relative z-10">
+            <div class="text-2xl font-display font-bold text-blue-400 relative z-10">
                 {{ scorer.total_goals }}
             </div>
         </div>
@@ -55,7 +55,7 @@
 </div>
 <div class="flex justify-end px-2">
     <a href="{% url 'league_stats' league.slug|default:'' %}"
-        class="text-sm text-cyan-400 hover:text-cyan-300 transition-colors flex items-center gap-1">
+        class="text-sm text-blue-400 hover:text-blue-300 transition-colors flex items-center gap-1">
         Vedi tutti <i class="fas fa-arrow-right"></i>
     </a>
 </div>
@@ -66,14 +66,15 @@
 <div class="flex justify-end mb-4 px-2">
     <a href="{% url 'league_stats' league.slug|default:'' %}"
         class="px-4 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 border border-white/10 text-white text-sm font-bold transition-all flex items-center gap-2 shadow-lg">
-        <i class="fas fa-chart-bar text-cyan-400"></i> Statistiche Complete
+        <i class="fas fa-chart-bar text-blue-400"></i> Statistiche Complete
     </a>
 </div>
 
 <!-- STANDINGS TABLE -->
+{% if standings %}
 <div class="glass rounded-2xl overflow-hidden shadow-2xl mb-12 relative">
     <!-- Top Highlight Line -->
-    <div class="h-1 w-full bg-gradient-to-r from-cyan-500 via-blue-500 to-purple-500"></div>
+    <div class="h-1 w-full bg-gradient-to-r from-blue-500 via-blue-500 to-purple-500"></div>
 
     <div class="overflow-x-auto">
         <table class="w-full text-left border-collapse">
@@ -99,7 +100,7 @@
                 {% for entry in standings %}
                 <tr class="group hover:bg-white/5 transition-colors duration-200 
                            {% if forloop.counter <= 3 %}bg-blue-500/5{% endif %} 
-                           {% if user_team_id == entry.team.id %}bg-cyan-500/10 border-l-2 border-cyan-400{% endif %}">
+                           {% if user_team_id == entry.team.id %}bg-blue-500/10 border-l-2 border-blue-400{% endif %}">
 
                     <!-- POSIZIONE -->
                     <td class="px-6 py-4 text-center font-mono font-bold text-slate-400">
@@ -111,7 +112,7 @@
                         <a href="{% url 'team_detail' entry.team.slug %}"
                             class="flex items-center gap-4 group-hover:translate-x-1 transition-transform">
                             <div
-                                class="w-10 h-10 rounded-full bg-slate-800 flex items-center justify-center p-1 border border-white/10 group-hover:border-cyan-500/50 transition-colors">
+                                class="w-10 h-10 rounded-full bg-slate-800 flex items-center justify-center p-1 border border-white/10 group-hover:border-blue-500/50 transition-colors">
                                 {% if entry.team.society.logo %}
                                 <img src="{{ entry.team.society.logo.url }}" class="w-full h-full object-contain">
                                 {% else %}
@@ -119,7 +120,7 @@
                                 {% endif %}
                             </div>
                             <div>
-                                <div class="font-bold text-white group-hover:text-cyan-400 transition-colors">{{ entry.team.name }}</div>
+                                <div class="font-bold text-white group-hover:text-blue-400 transition-colors">{{ entry.team.name }}</div>
 
                             </div>
                         </a>
@@ -145,16 +146,13 @@
                         {{ entry.points }}
                     </td>
                 </tr>
-                {% empty %}
-                <tr>
-                    <td colspan="10" class="px-6 py-12 text-center text-slate-500 italic">
-                        Nessuna squadra in questa classifica.
-                    </td>
-                </tr>
                 {% endfor %}
             </tbody>
         </table>
     </div>
 </div>
+{% else %}
+{% include 'components/_empty_state.html' with icon="🏆" title="Classifica non disponibile" message="Non ci sono ancora squadre o risultati in questa classifica." %}
+{% endif %}
 
 {% endblock %}

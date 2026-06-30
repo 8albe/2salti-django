@@ -1,23 +1,43 @@
 /* 1x2 Codex - Neon Dark Theme */
 
+/* ================================
+   DESIGN TOKENS — single source of truth (17.2)
+   Solo --sport-color resta inline in base.html perché Django-rendered
+   per-sport. Valori canonici = quelli effettivi pre-consolidamento
+   (l'inline <style> di base.html vinceva sul cascade).
+   ================================ */
 :root {
     --bg-dark: #020617;
     --bg-card: rgba(15, 23, 42, 0.6);
     --bg-panel: rgba(30, 41, 59, 0.4);
-    --accent-primary: #06b6d4;
-    --accent-secondary: #8b5cf6;
-    --text-main: #e2e8f0;
+    --accent-primary: #2563eb;          /* 17.F2: cyan -> blue-600 (perno brand Cap.12) */
+    --accent-secondary: #14b8a6;        /* 17.F2: violet -> teal-500 (accento secondario) */
+    --accent-glow: rgba(37, 99, 235, 0.3);   /* 17.F2: glow blue (era ciano 6,182,212) */
+    --text-main: #f1f5f9;
     --text-muted: #94a3b8;
-    --glass-border: rgba(255, 255, 255, 0.1);
+    --glass-bg: rgba(15, 23, 42, 0.7);
+    --glass-border: rgba(255, 255, 255, 0.08);
+    --sidebar-bg: rgba(15, 23, 42, 0.9);
+    --glass-shadow: none;          /* dark: nessuna ombra glass (invariato) */
 }
 
+/* Tema chiaro (17.5): ridisegno del glass.
+   Prima: --glass-bg white 0.8 (quasi opaco) su bg quasi-bianco #f8fafc +
+   --glass-border 0.05 (invisibile) => superfici come blocchi piatti, blur
+   impercettibile. Ora: pagina leggermente più fredda, glass più trasparente
+   (blur percepibile), bordo slate leggero ma visibile e un'ombra morbida per
+   staccare la superficie dal fondo. Stesso linguaggio del dark, adattato al
+   chiaro. Il dark resta intatto. */
 [data-theme="light"] {
-    --bg-dark: #f8fafc;
-    --bg-card: rgba(255, 255, 255, 0.6);
-    --bg-panel: rgba(241, 245, 249, 0.8);
+    --bg-dark: #eef2f7;
+    --bg-card: rgba(255, 255, 255, 0.55);
+    --bg-panel: rgba(255, 255, 255, 0.6);
     --text-main: #0f172a;
-    --text-muted: #64748b;
-    --glass-border: rgba(0, 0, 0, 0.05);
+    --text-muted: #475569;                       /* slate-600: +contrasto vs #64748b */
+    --glass-bg: rgba(255, 255, 255, 0.55);       /* era 0.8 opaco -> 0.55 traslucido */
+    --glass-border: rgba(15, 23, 42, 0.12);      /* era rgba(0,0,0,0.05) invisibile */
+    --sidebar-bg: rgba(255, 255, 255, 0.6);
+    --glass-shadow: 0 4px 24px rgba(15, 23, 42, 0.08);  /* lift morbido, solo chiaro */
 }
 
 body {
@@ -25,14 +45,37 @@ body {
     color: var(--text-main);
     font-family: 'Inter', sans-serif;
     overflow-x: hidden;
+    transition: background-color 0.3s ease, color 0.3s ease;
+    background-image:
+        radial-gradient(at 0% 0%, rgba(37, 99, 235, 0.05) 0px, transparent 50%),
+        radial-gradient(at 100% 0%, rgba(20, 184, 166, 0.05) 0px, transparent 50%);
+    background-attachment: fixed;
+}
+
+/* Typography (17.3/17.5): titles always Outfit, body/data Inter.
+   Theme-independent — Tailwind Preflight makes headings inherit the body
+   font (Inter) by default (Preflight sets font-family only on `html`, never
+   on h1-h6), so without this rule headings render Inter in BOTH themes
+   unless they carry .font-display.
+   17.5: the heading selector is scoped under :root to raise its specificity
+   to (0,1,1). This makes it beat any Tailwind font-family utility — e.g. a
+   stray .font-sans (0,1,0) — that the CDN injects LATER in the cascade,
+   without resorting to !important. :root (= <html>) always matches and does
+   NOT depend on the JS-set [data-theme] attribute, so it survives JS-off. */
+:root h1, :root h2, :root h3, :root h4, :root h5, :root h6 {
+    font-family: 'Outfit', sans-serif;
+}
+.font-display {
+    font-family: 'Outfit', sans-serif;
 }
 
 /* Glassmorphism */
 .glass {
-    background: var(--bg-card);
-    backdrop-filter: blur(12px);
-    -webkit-backdrop-filter: blur(12px);
+    background: var(--glass-bg);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
     border: 1px solid var(--glass-border);
+    box-shadow: var(--glass-shadow);   /* none nel dark, lift morbido nel chiaro */
 }
 
 .glass-panel {
@@ -44,16 +87,16 @@ body {
 
 /* Neon Glows */
 .neon-text {
-    text-shadow: 0 0 10px rgba(6, 182, 212, 0.5);
+    text-shadow: 0 0 10px rgba(37, 99, 235, 0.5);
 }
 
 .neon-border {
     border-color: var(--accent-primary);
-    box-shadow: 0 0 10px rgba(6, 182, 212, 0.3);
+    box-shadow: 0 0 10px rgba(37, 99, 235, 0.3);
 }
 
 .neon-box {
-    box-shadow: 0 0 15px rgba(6, 182, 212, 0.2), inset 0 0 10px rgba(6, 182, 212, 0.1);
+    box-shadow: 0 0 15px rgba(37, 99, 235, 0.2), inset 0 0 10px rgba(37, 99, 235, 0.1);
 }
 
 /* Scrollbar */
@@ -186,11 +229,11 @@ body {
 
 /* PREMIUM ADDITIONS */
 .glass-premium {
-    background: linear-gradient(135deg, rgba(255,255,255,0.05) 0%, rgba(255,255,255,0.01) 100%);
+    background: linear-gradient(135deg, rgba(255,255,255,0.05) 0%, rgba(255,255,255,0) 100%);
     backdrop-filter: blur(20px);
     -webkit-backdrop-filter: blur(20px);
     border: 1px solid rgba(255,255,255,0.1);
-    box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.3);
+    box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
 }
 
 .timeline-line {
@@ -222,4 +265,350 @@ body {
 .hover-lift:hover {
     transform: translateY(-4px);
     box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.3);
+}
+
+/* ================================
+   Relocated from base.html inline <style> (17.2 consolidation).
+   --sport-color resta inline in base.html (Django-rendered per-sport).
+   ================================ */
+.sport-text { color: var(--sport-color); }
+
+.sport-bg-glow {
+    background-color: var(--sport-color);
+    box-shadow: 0 0 25px var(--sport-color);
+}
+
+/* Nav hover underline */
+.nav-link-premium {
+    position: relative;
+    transition: all 0.3s ease;
+}
+.nav-link-premium::after {
+    content: '';
+    position: absolute;
+    bottom: -4px;
+    left: 0;
+    width: 0;
+    height: 2px;
+    background: var(--sport-color);
+    transition: width 0.3s ease;
+}
+.nav-link-premium:hover::after {
+    width: 100%;
+}
+
+/* Mobile fixes (moved from base.html inline) */
+@media (max-width: 768px) {
+    html { font-size: 14px; }
+    .container { padding-left: 1rem; padding-right: 1rem; }
+    h1 { font-size: 1.5rem !important; }
+    .p-8 { padding: 1.5rem !important; }
+}
+
+/* ================================
+   Tema chiaro: contrasto nav header/sidebar (17.5).
+   I link nav usano utility Tailwind pensate per fondo scuro
+   (text-slate-400 / hover:text-white / text-blue-400): su fondo chiaro
+   diventano illeggibili (il bianco sparisce, il ciano-400 ha ~1.5:1).
+   Qui le rimappo SOLO nel tema chiaro, scopate a header/aside per non
+   toccare bottoni accent (es. "Accedi" bianco su gradiente ciano).
+   Le specificità (>= 0,2,x) battono le utility (0,1,0) senza !important.
+   Il dark resta intatto. */
+
+/* Header top-nav */
+[data-theme="light"] header .nav-link-premium {
+    color: #475569;                 /* slate-600, ~7:1 su fondo chiaro */
+}
+[data-theme="light"] header .nav-link-premium:hover {
+    color: #0f172a;                 /* slate-900 invece di white */
+}
+[data-theme="light"] header .nav-link-premium.text-blue-400 {
+    color: #1d4ed8;                 /* 17.F2: blue-700, accent AA su chiaro (era ciano #0e7490) */
+}
+
+/* Sidebar nav: link attivi (ciano) e nomi squadra (text-white -> scuro).
+   Limitato a `aside nav` per escludere il bottone "Accedi" (fuori da nav). */
+[data-theme="light"] aside nav .text-blue-400 {
+    color: #1d4ed8;                 /* 17.F2: blue-700 (era ciano #0e7490) */
+}
+[data-theme="light"] aside nav .text-white {
+    color: #0f172a;
+}
+
+/* ================================
+   Tema chiaro: leggibilità testo del contenuto <main> (17.6).
+   Stesso meccanismo della nav (17.5) ma esteso al contenuto: i titoli,
+   i nomi squadra, i punteggi, le label del date picker e gli empty-state
+   usano utility Tailwind tarate sul fondo scuro (text-white, text-slate-400):
+   sul tema chiaro spariscono (bianco-su-chiaro, slate-400 ~2,3:1).
+   Qui, SOLO nel chiaro e SOLO dentro <main>, rimappo il testo bianco/muted
+   sui token chiari (--text-main / --text-muted). Poi ri-affermo il testo
+   chiaro dove l'elemento ha un fondo PIENO accent o scuro (bottoni, badge,
+   pill scure): nel chiaro restano colorati/scuri e vogliono testo bianco.
+   Il dark resta intatto (tutto scopato a [data-theme="light"]).
+   Specificità: base (0,2,1) batte le utility (0,1,0); la ri-afferma
+   (0,3,1) batte la base — vince a prescindere dall'ordine, senza !important. */
+[data-theme="light"] main .text-white,
+[data-theme="light"] main .text-slate-100,
+[data-theme="light"] main .text-slate-200 {
+    color: var(--text-main);          /* "quasi bianco" usato come testo primario */
+}
+[data-theme="light"] main .text-slate-300,
+[data-theme="light"] main .text-slate-400,
+[data-theme="light"] main .text-gray-300,
+[data-theme="light"] main .text-gray-400 {
+    color: var(--text-muted);         /* muted: tutta la fascia slate/gray chiara */
+}
+
+/* Ri-afferma testo bianco sui fondi PIENI accent/scuri (bottoni, badge, pill).
+   I fondi traslucidi (bg-white/5, bg-blue-500/10) NON sono qui di proposito:
+   nel chiaro restano chiari, quindi il testo va scuro (es. giorno selezionato
+   del date picker, bg-white/5). I fondi slate scuri pieni (7/8/9) sì. */
+[data-theme="light"] main .text-white[class*="bg-blue-"],
+[data-theme="light"] main .text-white[class*="bg-indigo-"],
+[data-theme="light"] main .text-white[class*="bg-sky-"],
+[data-theme="light"] main .text-white[class*="bg-green-"],
+[data-theme="light"] main .text-white[class*="bg-emerald-"],
+[data-theme="light"] main .text-white[class*="bg-teal-"],
+[data-theme="light"] main .text-white[class*="bg-red-"],
+[data-theme="light"] main .text-white[class*="bg-rose-"],
+[data-theme="light"] main .text-white[class*="bg-purple-"],
+[data-theme="light"] main .text-white[class*="bg-violet-"],
+[data-theme="light"] main .text-white[class*="bg-pink-"],
+[data-theme="light"] main .text-white[class*="bg-amber-"],
+[data-theme="light"] main .text-white[class*="bg-orange-"],
+[data-theme="light"] main .text-white[class~="bg-slate-700"],
+[data-theme="light"] main .text-white[class~="bg-slate-800"],
+[data-theme="light"] main .text-white[class~="bg-slate-900"],
+[data-theme="light"] main .text-white[class~="bg-slate-950"],
+[data-theme="light"] main .text-white[class*="bg-gradient"] {
+    color: #fff;
+}
+
+/* Testo muted sullo STESSO elemento di una pill scura piena (es. filtri
+   report_queue bg-slate-800; messaggi bg-slate-800 text-slate-200): nel chiaro
+   la pill resta scura, quindi il testo resta chiaro.
+   17.8: `*=` -> `~=` (token pieno). Prima `[class*="bg-slate-9"]` catturava anche
+   i `<select>` glass `bg-slate-900/50` (traslucidi = grigio medio nel chiaro),
+   tenendo il testo chiaro su fondo medio = contrasto scarso. Con `~=` i fondi
+   /50 cadono nel remap base (testo scuro su glass chiaro, leggibile). */
+[data-theme="light"] main .text-slate-200[class~="bg-slate-700"],
+[data-theme="light"] main .text-slate-200[class~="bg-slate-800"],
+[data-theme="light"] main .text-slate-200[class~="bg-slate-900"],
+[data-theme="light"] main .text-slate-200[class~="bg-slate-950"],
+[data-theme="light"] main .text-slate-300[class~="bg-slate-700"],
+[data-theme="light"] main .text-slate-300[class~="bg-slate-800"],
+[data-theme="light"] main .text-slate-300[class~="bg-slate-900"],
+[data-theme="light"] main .text-slate-300[class~="bg-slate-950"],
+[data-theme="light"] main .text-slate-400[class~="bg-slate-700"],
+[data-theme="light"] main .text-slate-400[class~="bg-slate-800"],
+[data-theme="light"] main .text-slate-400[class~="bg-slate-900"],
+[data-theme="light"] main .text-slate-400[class~="bg-slate-950"] {
+    color: #94a3b8;
+}
+
+/* ================================
+   Tema chiaro: ISOLE SCURE dentro il contenuto (17.7).
+   Alcune superfici restano scure ANCHE nel tema chiaro per design (hero card,
+   alcune card a fondo slate pieno). Lì la rimappatura del testo sopra renderebbe
+   il testo scuro su fondo scuro = illeggibile. Qui ri-affermo il testo chiaro
+   per i discendenti (e per gli elementi stessi) di queste isole. Due famiglie:
+   - `.dark-surface`: marker esplicito sulle hero card, dove il fondo scuro è un
+     <div> gradient figlio assoluto (from-slate-950) e NON una classe bg sul
+     contenitore del testo: serve un hook esplicito.
+   - `[class~="bg-slate-700|800|900|950"]`: card a fondo slate scuro PIENO. Il
+     selettore `~=` matcha SOLO il token esatto, così esclude i fondi traslucidi
+     dei glass-panel (bg-slate-900/50, /30) che nel chiaro restano chiari e che
+     NON vanno ri-scuriti (pagine già verdi: Risultati, sport, classifiche).
+   Il dark resta intatto (tutto scopato a [data-theme="light"]). */
+[data-theme="light"] main .dark-surface .text-white,
+[data-theme="light"] main .dark-surface.text-white,
+[data-theme="light"] main [class~="bg-slate-700"] .text-white,
+[data-theme="light"] main [class~="bg-slate-800"] .text-white,
+[data-theme="light"] main [class~="bg-slate-900"] .text-white,
+[data-theme="light"] main [class~="bg-slate-950"] .text-white {
+    color: #fff;
+}
+[data-theme="light"] main .dark-surface .text-slate-100,
+[data-theme="light"] main .dark-surface .text-slate-200,
+[data-theme="light"] main .dark-surface .text-slate-300,
+[data-theme="light"] main .dark-surface .text-slate-400,
+[data-theme="light"] main .dark-surface .text-gray-300,
+[data-theme="light"] main .dark-surface .text-gray-400,
+[data-theme="light"] main [class~="bg-slate-700"] .text-slate-100,
+[data-theme="light"] main [class~="bg-slate-700"] .text-slate-200,
+[data-theme="light"] main [class~="bg-slate-700"] .text-slate-300,
+[data-theme="light"] main [class~="bg-slate-700"] .text-slate-400,
+[data-theme="light"] main [class~="bg-slate-800"] .text-slate-100,
+[data-theme="light"] main [class~="bg-slate-800"] .text-slate-200,
+[data-theme="light"] main [class~="bg-slate-800"] .text-slate-300,
+[data-theme="light"] main [class~="bg-slate-800"] .text-slate-400,
+[data-theme="light"] main [class~="bg-slate-900"] .text-slate-100,
+[data-theme="light"] main [class~="bg-slate-900"] .text-slate-200,
+[data-theme="light"] main [class~="bg-slate-900"] .text-slate-300,
+[data-theme="light"] main [class~="bg-slate-900"] .text-slate-400,
+[data-theme="light"] main [class~="bg-slate-950"] .text-slate-300,
+[data-theme="light"] main [class~="bg-slate-950"] .text-slate-400 {
+    color: #94a3b8;                   /* muted chiaro come nel dark */
+}
+
+/* ================================================================
+   TEMA CHIARO 17.8 — chiusura CATEGORIALE della leggibilità.
+   Tre mosse strutturali che sostituiscono i fix reattivi per-pagina.
+   Tutto scopato a [data-theme="light"]: il dark resta identico.
+   ================================================================ */
+
+/* (c) BLANKET CONTAINER-KEYED sulle isole scure.
+   Le regole isola di 17.7 ri-chiarivano SOLO il testo con una classe colore
+   esplicita (text-white/text-slate-*). Il testo SENZA classe colore eredita
+   `color` dal body, che nel chiaro è scuro: scuro-su-scuro dentro le isole
+   (nomi rosa/staff team_detail, valori card profilo/athlete_profile, righe
+   evento match_detail, card utente bacheca). Qui do un color chiaro all'ISOLA
+   stessa: ogni discendente non taggato eredita chiaro; i figli taggati
+   (accent/#fff/muted) restano governati dalle regole più specifiche sopra.
+   `~=` matcha solo il token pieno -> i glass /50,/30 restano esclusi (nel
+   chiaro sono superfici chiare e NON vanno scurite). */
+[data-theme="light"] main .dark-surface,
+[data-theme="light"] main [class~="bg-slate-700"],
+[data-theme="light"] main [class~="bg-slate-800"],
+[data-theme="light"] main [class~="bg-slate-900"],
+[data-theme="light"] main [class~="bg-slate-950"] {
+    color: #f1f5f9;                   /* = testo primario del dark, isola coerente */
+}
+
+/* RISCHIO #1 della mossa (c), gestito ESPLICITAMENTE: una superficie chiara
+   PIENA (bg-white, bg-*-50/100/200) annidata in un'isola scura erediterebbe il
+   testo chiaro del blanket -> chiaro-su-chiaro (es. chip sponsor bg-white in
+   society_detail dentro card bg-slate-900). In tema chiaro una superficie chiara
+   piena vuole SEMPRE testo scuro, ovunque sia: lo ri-affermo per categoria.
+   Stessa specificità del blanket, vince per source-order (viene dopo). I figli
+   con classe scura esplicita (text-slate-900/text-black) restano scuri.
+   `~=` (non `*=`) per non centrare bg-slate-500 etc. con un substring. */
+[data-theme="light"] main [class~="bg-white"],
+[data-theme="light"] main [class~="bg-slate-50"],
+[data-theme="light"] main [class~="bg-slate-100"],
+[data-theme="light"] main [class~="bg-slate-200"],
+[data-theme="light"] main [class~="bg-gray-50"],
+[data-theme="light"] main [class~="bg-gray-100"],
+[data-theme="light"] main [class~="bg-gray-200"],
+[data-theme="light"] main [class~="bg-indigo-50"],
+[data-theme="light"] main [class~="bg-blue-100"],
+[data-theme="light"] main [class~="bg-green-100"],
+[data-theme="light"] main [class~="bg-amber-100"],
+[data-theme="light"] main [class~="bg-orange-100"],
+[data-theme="light"] main [class~="bg-yellow-100"] {
+    color: var(--text-main);
+}
+
+/* (hover) REMAP PER-SUPERFICIE — sostituisce lo scope troppo stretto .date-strip
+   di 17.7. Default: nel chiaro, dentro main, l'hover/group-hover che porterebbe
+   il testo a bianco lo porta a scuro (superfici chiare: teaser/dettaglio home,
+   nav sport, bacheca, label, calendario date-strip). */
+[data-theme="light"] main .hover\:text-white:hover,
+[data-theme="light"] main .group:hover .group-hover\:text-white {
+    color: var(--text-main);
+}
+
+/* ECCEZIONE all'hover: il bianco va PRESERVATO dove l'hover poggia su un'isola
+   scura (pill report_queue bg-slate-800; badge rosa match_detail che sono già
+   bg-slate-800) o diventa un fondo ACCENT pieno (icona-azione athlete_profile
+   hover:bg-blue-600; badge rosa che all'hover diventano blu/purple-500).
+   Specificità maggiore del default -> vince. */
+[data-theme="light"] main .dark-surface .hover\:text-white:hover,
+[data-theme="light"] main [class~="bg-slate-700"].hover\:text-white:hover,
+[data-theme="light"] main [class~="bg-slate-800"].hover\:text-white:hover,
+[data-theme="light"] main [class~="bg-slate-900"].hover\:text-white:hover,
+[data-theme="light"] main [class~="bg-slate-950"].hover\:text-white:hover,
+[data-theme="light"] main [class~="bg-slate-700"] .hover\:text-white:hover,
+[data-theme="light"] main [class~="bg-slate-800"] .hover\:text-white:hover,
+[data-theme="light"] main [class~="bg-slate-900"] .hover\:text-white:hover,
+[data-theme="light"] main [class~="bg-slate-950"] .hover\:text-white:hover,
+[data-theme="light"] main .hover\:bg-blue-500.hover\:text-white:hover,
+[data-theme="light"] main .hover\:bg-blue-600.hover\:text-white:hover,
+[data-theme="light"] main .hover\:bg-indigo-600.hover\:text-white:hover,
+[data-theme="light"] main .hover\:bg-emerald-600.hover\:text-white:hover,
+[data-theme="light"] main .hover\:bg-green-600.hover\:text-white:hover,
+[data-theme="light"] main .hover\:bg-purple-600.hover\:text-white:hover,
+[data-theme="light"] main [class~="bg-slate-700"] .group:hover .group-hover\:text-white,
+[data-theme="light"] main [class~="bg-slate-800"] .group:hover .group-hover\:text-white,
+[data-theme="light"] main [class~="bg-slate-900"] .group:hover .group-hover\:text-white,
+[data-theme="light"] main [class~="bg-slate-950"] .group:hover .group-hover\:text-white,
+[data-theme="light"] main .dark-surface .group:hover .group-hover\:text-white,
+[data-theme="light"] main .group:hover .group-hover\:text-white[class~="bg-slate-700"],
+[data-theme="light"] main .group:hover .group-hover\:text-white[class~="bg-slate-800"],
+[data-theme="light"] main .group:hover .group-hover\:text-white[class~="bg-slate-900"],
+[data-theme="light"] main .group:hover .group-hover\:text-white[class~="bg-slate-950"],
+[data-theme="light"] main .group:hover .group-hover\:bg-blue-500.group-hover\:text-white,
+[data-theme="light"] main .group:hover .group-hover\:bg-purple-500.group-hover\:text-white {
+    color: #fff;
+}
+
+/* Input di ricerca della navbar/sidebar: vivono in <header>/<aside>, FUORI da
+   main, quindi il remap di main non li tocca. Nel chiaro hanno text-white su
+   bg-white/5 (chiaro) = chiaro-su-chiaro: il testo digitato spariva. Scuro qui. */
+[data-theme="light"] header input[type="text"],
+[data-theme="light"] aside input[type="text"] {
+    color: var(--text-main);
+}
+
+/* ================================================================
+   TEMA CHIARO 17.8.1 — <select> glass bg-slate-900/50 (fix mirato).
+   Correzione di diagnosi rispetto a 17.8: bg-slate-900/50 NON e' una superficie
+   chiara nel tema chiaro (slate-900 al 50% su fondo chiaro = grigio-scuro). Sul
+   <select> il rendering nativo lo lascia scuro, e il remap base 17.8 vi forzava
+   testo scuro -> scuro-su-scuro illeggibile (confermato a browser: select
+   "Stagione" sport_matches/sport_detail, "team"/"role" generate_code).
+   Qui, SOLO sui <select> col token ESATTO bg-slate-900/50 (i 4 select), forzo
+   una superficie chiara coerente coi glass-panel vicini + testo scuro = alto
+   contrasto pieno (niente grigio-medio ambiguo). Il selettore richiede `select`:
+   i <div> glass con la stessa classe (profile, report_review, team_detail,
+   sport_detail, grouped_match_list) restano intatti = verdi. color-scheme:light
+   e' best-effort per rendere chiaro anche il menu nativo aperto.
+   Additivo: non riapre nessuna regola categoriale gia' verde. */
+[data-theme="light"] main select[class~="bg-slate-900/50"] {
+    background-color: var(--glass-bg);   /* superficie chiara, come i glass vicini */
+    color: var(--text-main);             /* testo scuro, alto contrasto */
+    color-scheme: light;                 /* best-effort sul menu nativo aperto */
+}
+
+/* ================================================================
+   ACCESSIBILITA' 17.7 — focus visibile da tastiera (keyboard-only).
+   :focus-visible scatta solo per navigazione da tastiera, non al click del
+   mouse: gli utenti tastiera ottengono sempre un anello di focus netto, anche
+   sugli elementi con Tailwind focus:outline-none (input ricerca, theme-toggle,
+   <select> stagione, bottoni). Il mouse resta pulito (nessun anello).
+   !important per vincere sul reset outline che il runtime Tailwind CDN inietta.
+   ================================================================ */
+:focus-visible {
+    outline: 2px solid var(--sport-color, #2563eb) !important;
+    outline-offset: 2px !important;
+}
+/* Sopprimi l'outline solo quando NON e' focus da tastiera (mouse/touch),
+   cosi' il look pulito del design resta intatto al click. */
+:focus:not(:focus-visible) {
+    outline: none;
+}
+/* FIX prodotto (2026-06-23): i campi di testo (input testuali, textarea, select,
+   inclusi i campi crispy di login/signup) mostrano l'anello di focus su :focus —
+   sia da tastiera SIA al click — perche' per un campo di testo e' il comportamento
+   nativo atteso (WCAG 2.4.7) e coerente con gli input che gia' usano focus:ring
+   inline. Uso un box-shadow ciano (lo stesso "anello" dei ring inline): la maggiore
+   specificita' del selettore sovrascrive quei ring -> un solo anello, niente
+   doubling. Azzero l'outline con !important cosi' i text field NON mostrano qui
+   l'outline keyboard-only della regola globale (i text field matchano :focus-visible
+   anche al mouse). Bottoni, link, toggle, checkbox e radio NON sono toccati: restano
+   :focus-visible keyboard-only (anello solo da tastiera, mai al click). */
+input[type="text"]:focus,
+input[type="password"]:focus,
+input[type="email"]:focus,
+input[type="number"]:focus,
+input[type="search"]:focus,
+input[type="tel"]:focus,
+input[type="url"]:focus,
+input[type="date"]:focus,
+input:not([type]):focus,
+textarea:focus,
+select:focus {
+    outline: none !important;
+    box-shadow: 0 0 0 2px var(--sport-color, #2563eb);
 }

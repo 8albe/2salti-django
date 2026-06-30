@@ -10,7 +10,7 @@
     <!-- HOME TEAM (Right aligned) -->
     <div class="flex-1 flex items-center justify-end gap-3 min-w-0">
         <a href="{% url 'team_detail' match.home_team.slug %}"
-            class="font-bold text-white text-sm truncate hover:underline z-20 relative transition-colors hover:text-cyan-400">{{ match.home_team.name }}</a>
+            class="font-bold text-white text-sm truncate hover:underline z-20 relative transition-colors hover:text-blue-400">{{ match.home_team.name }}</a>
         {% if match.home_team.logo %}
         <img src="{{ match.home_team.logo.url }}" class="w-6 h-6 object-contain flex-shrink-0" alt="">
         {% else %}
@@ -21,7 +21,7 @@
     <!-- VS/SCORE (Center) -->
     <div class="mx-3 flex items-center justify-center w-12 text-center flex-shrink-0">
         {% if match.is_public %}
-        <span class="text-cyan-400 font-mono text-base font-bold">{{ match.home_score }}-{{ match.away_score }}</span>
+        <span class="text-blue-400 font-mono text-base font-bold">{{ match.home_score }}-{{ match.away_score }}</span>
         {% else %}
         <span class="text-slate-600 font-bold text-xs">VS</span>
         {% endif %}
@@ -36,7 +36,7 @@
         <div class="w-6 h-6 bg-slate-700 rounded-full"></div>
         {% endif %}
         <a href="{% url 'team_detail' match.away_team.slug %}"
-            class="font-bold text-white text-sm truncate hover:underline z-20 relative transition-colors hover:text-cyan-400">{{ match.away_team.name }}</a>
+            class="font-bold text-white text-sm truncate hover:underline z-20 relative transition-colors hover:text-blue-400">{{ match.away_team.name }}</a>
     </div>
 
     <!-- TIME & LOCATION (Right) -->
@@ -49,7 +49,7 @@
 
         {% if match.location %}
         <a href="{{ match.google_maps_url }}" target="_blank"
-            class="text-[10px] text-slate-500 hover:text-cyan-300 transition-colors z-20 relative flex items-center gap-1">
+            class="text-[10px] text-slate-500 hover:text-blue-300 transition-colors z-20 relative flex items-center gap-1">
             <span>📍</span> {{ match.location|truncatechars:25 }}
         </a>
         {% endif %}

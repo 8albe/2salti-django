@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import Sport, Society, Team, League, LeagueStanding, Season
+from .models import Sport, Society, Team, League, LeagueStanding, Season, Sponsor
 
 @admin.register(LeagueStanding)
 class LeagueStandingAdmin(admin.ModelAdmin):
@@ -31,6 +31,14 @@ class SocietyAdmin(admin.ModelAdmin):
 
     def has_module_permission(self, request):
         return False
+
+@admin.register(Sponsor)
+class SponsorAdmin(admin.ModelAdmin):
+    list_display = ('name', 'society', 'season', 'order', 'is_active')
+    list_filter = ('season', 'is_active', 'society')
+    search_fields = ('name', 'society__name')
+    ordering = ('society', 'season', 'order')
+
 
 @admin.register(Team)
 class TeamAdmin(admin.ModelAdmin):

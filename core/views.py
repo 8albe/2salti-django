@@ -165,29 +165,45 @@ def sport_detail(request, slug):
 
 @login_required
 def create_society(request):
-    """Wizard creazione società - solo per presidenti"""
+    """Wizard società - solo per presidenti.
+
+    Due modalità (Macro 18):
+    - CREATE (storico): il presidente non gestisce alcuna società -> crea società
+      + prima squadra e si aggancia. Comportamento invariato.
+    - REFINE: il presidente è già stato agganciato a una società pre-esistente
+      (via personificazione approvata dall'admin) -> rifinisce quella società
+      (email obbligatoria, #5). Non crea né società né squadra: evita duplicati.
+    """
     if request.user.role != 'president':
         return redirect('home')
-    
+
+    profile = getattr(request.user, 'president_profile', None)
+    existing = profile.managed_society if profile else None
+
     if request.method == 'POST':
-        form = SocietySetupForm(request.POST, request.FILES)
+        form = (
+            SocietySetupForm(request.POST, request.FILES, instance=existing)
+            if existing else
+            SocietySetupForm(request.POST, request.FILES)
+        )
         if form.is_valid():
             try:
                 with transaction.atomic():
                     society = form.save()
 
-                    # Collega società al presidente
-                    president_profile = request.user.president_profile
-                    president_profile.managed_society = society
-                    president_profile.save()
+                    if existing is None:
+                        # CREATE: collega società al presidente.
+                        profile.managed_society = society
+                        profile.save()
 
-                    # Fase 3 (Macro 16): niente più ladder di squadre per categoria —
-                    # la categoria vive sulla lega. Si crea la sola prima squadra
-                    # (league=None finché non viene iscritta a un campionato).
-                    Team.objects.create(society=society)
+                        # Fase 3 (Macro 16): niente più ladder di squadre per
+                        # categoria — la categoria vive sulla lega. Si crea la
+                        # sola prima squadra (league=None finché non viene
+                        # iscritta a un campionato).
+                        Team.objects.create(society=society)
 
-                    society.setup_completed = True
-                    society.save()
+                        society.setup_completed = True
+                        society.save()
 
                     request.user.setup_completed = True
                     request.user.save()
@@ -207,20 +223,83 @@ def create_society(request):
 
             return redirect('society_detail', slug=society.slug)
     else:
-        form = SocietySetupForm()
-    
-    return render(request, 'societies/society_setup.html', {'form': form})
+        form = SocietySetupForm(instance=existing) if existing else SocietySetupForm()
+
+    return render(request, 'societies/society_setup.html', {
+        'form': form,
+        'is_refine': existing is not None,
+    })
+
+
+@login_required
+def choose_society(request):
+    """Macro 18 — Landing presidente: scegli la tua società e richiedi accesso.
+
+    Stati (coerenti con §10.10, nessun loop: la vista RENDERIZZA, non rimbalza
+    verso una vista che a sua volta redirige):
+    - società già gestita + setup non completato -> rifinitura (create_society);
+    - società già gestita + setup completato     -> dashboard;
+    - richiesta PRESIDENT PENDING                 -> schermata "in attesa";
+    - altrimenti                                  -> lista società + richiesta.
+    """
+    from management.services.president_personification import (
+        societies_for_personification,
+        request_president_personification,
+    )
+
+    if request.user.role != 'president':
+        return redirect('home')
+
+    profile = getattr(request.user, 'president_profile', None)
+    if profile is not None and profile.managed_society_id is not None:
+        if not request.user.setup_completed:
+            return redirect('create_society')
+        return redirect('dashboard')
+
+    from management.models import MembershipRequest
+    pending = (
+        MembershipRequest.objects
+        .filter(user=request.user, role='PRESIDENT', status='PENDING')
+        .select_related('society')
+        .first()
+    )
+
+    if request.method == 'POST' and pending is None:
+        society_id = request.POST.get('society_id')
+        society = (
+            societies_for_personification().filter(id=society_id).first()
+            if society_id else None
+        )
+        if society is None:
+            messages.error(request, "Seleziona una società valida dall'elenco.")
+        else:
+            ok, pending, err = request_president_personification(request.user, society)
+            if ok:
+                messages.success(
+                    request,
+                    f"Richiesta inviata per {society.name}. "
+                    "Un amministratore la valuterà a breve.",
+                )
+            else:
+                messages.error(request, err)
+
+    return render(request, 'societies/choose_society.html', {
+        'societies': societies_for_personification(),
+        'pending': pending,
+    })
 
 def society_detail(request, slug):
     """Pagina società con tutte le squadre"""
+    from core.services.sponsor_service import get_society_sponsors
     society = get_object_or_404(Society, slug=slug)
     teams = society.teams.all().order_by('name')
     staff = society.get_staff()
-    
+
     return render(request, 'societies/society_detail.html', {
         'society': society,
         'teams': teams,
         'staff': staff,
+        'sponsors': get_society_sponsors(society),
         'sport_color': society.sport.hex_color,
         'seo_title': f"{society.name} - Società Sportiva",
         'seo_description': f"Tutte le squadre, lo staff e la storia di {society.name}. Scopri i risultati di pallanuoto e volley della società su 2salti.",

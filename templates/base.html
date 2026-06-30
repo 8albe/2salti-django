@@ -5,6 +5,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="icon" type="image/svg+xml" href="{% static 'favicon.svg' %}">
     <title>{% block title %}{{ seo_title|default:"2salti" }}{% endblock %} | 2salti.com</title>
     
     <!-- SEO Meta Tags -->
@@ -38,109 +39,27 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link
-        href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;800&family=Outfit:wght@400;700&display=swap"
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;800&family=Outfit:wght@400;500;600;700;800&display=swap"
         rel="stylesheet">
 
-    <!-- Tailwind CSS CDN -->
-    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Tailwind CSS (compilato — Macro 17.1 Fase 1; sostituisce il Play CDN runtime).
+         Buildato da static/css/tailwind.src.css via `npm run build:css`; committato
+         come asset statico (dev/prod fanno solo collectstatic, niente node).
+         Token e safelist in tailwind.config.js. Caricato PRIMA di style.css per
+         preservare la cascata del CDN: utility prima, override custom dopo. -->
+    <link rel="stylesheet" href="{% static 'css/tailwind.build.css' %}">
 
     <!-- Custom CSS -->
+    <!-- Cache-busting automatico via ManifestStaticFilesStorage (Macro 17.1 Fase 1):
+         il tag static risolve al nome con hash, quindi il vecchio ?v=N manuale
+         è ridondante ed è stato rimosso. -->
     <link rel="stylesheet" href="{% static 'css/style.css' %}">
 
-    <script>
-        tailwind.config = {
-            theme: {
-                extend: {
-                    colors: {
-                        dark: '#020617',
-                        card: 'rgba(15, 23, 42, 0.8)',
-                        sport: '{{ sport_color|default:"#06b6d4" }}',
-                    },
-                    fontFamily: {
-                        sans: ['Inter', 'sans-serif'],
-                        display: ['Outfit', 'sans-serif'],
-                    }
-                }
-            }
-        }
-    </script>
-
     <style>
+        /* Dynamic per-sport accent (Django-rendered). All static design tokens
+           and component classes live in static/css/style.css (17.2). */
         :root {
-            --bg-dark: #020617;
-            --text-main: #f1f5f9;
-            --text-muted: #94a3b8;
-            --glass-bg: rgba(15, 23, 42, 0.7);
-            --glass-border: rgba(255, 255, 255, 0.08);
-            --sidebar-bg: rgba(15, 23, 42, 0.9);
-            --sport-color: {{ sport_color|default:"#06b6d4" }};
-            --accent-glow: rgba(6, 182, 212, 0.3);
-        }
-
-        [data-theme="light"] {
-            --bg-dark: #f8fafc;
-            --text-main: #0f172a;
-            --text-muted: #64748b;
-            --glass-bg: rgba(255, 255, 255, 0.8);
-            --glass-border: rgba(0, 0, 0, 0.05);
-            --sidebar-bg: rgba(241, 245, 249, 0.9);
-        }
-
-        body {
-            background-color: var(--bg-dark);
-            color: var(--text-main);
-            transition: background-color 0.3s ease, color 0.3s ease;
-            background-image: 
-                radial-gradient(at 0% 0%, rgba(6, 182, 212, 0.05) 0px, transparent 50%),
-                radial-gradient(at 100% 0%, rgba(139, 92, 246, 0.05) 0px, transparent 50%);
-            background-attachment: fixed;
-        }
-
-        .glass {
-            background: var(--glass-bg);
-            backdrop-filter: blur(16px);
-            -webkit-backdrop-filter: blur(16px);
-            border: 1px solid var(--glass-border);
-        }
-
-        .glass-premium {
-            background: linear-gradient(135deg, rgba(255,255,255,0.05) 0%, rgba(255,255,255,0) 100%);
-            backdrop-filter: blur(20px);
-            border: 1px solid rgba(255,255,255,0.1);
-            box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
-        }
-
-        .sport-text { color: var(--sport-color); }
-        .sport-bg-glow {
-            background-color: var(--sport-color);
-            box-shadow: 0 0 25px var(--sport-color);
-        }
-
-        /* Nav hover effects */
-        .nav-link-premium {
-            position: relative;
-            transition: all 0.3s ease;
-        }
-        .nav-link-premium::after {
-            content: '';
-            position: absolute;
-            bottom: -4px;
-            left: 0;
-            width: 0;
-            height: 2px;
-            background: var(--sport-color);
-            transition: width 0.3s ease;
-        }
-        .nav-link-premium:hover::after {
-            width: 100%;
-        }
-
-        /* Mobile Fixes */
-        @media (max-width: 768px) {
-            html { font-size: 14px; }
-            .container { padding-left: 1rem; padding-right: 1rem; }
-            h1 { font-size: 1.5rem !important; }
-            .p-8 { padding: 1.5rem !important; }
+            --sport-color: {{ sport_color|default:"#2563eb" }};
         }
     </style>
     <script>
@@ -152,7 +71,7 @@
     </script>
 </head>
 
-<body class="antialiased selection:bg-cyan-500 selection:text-white transition-colors duration-300">
+<body class="antialiased selection:bg-blue-500 selection:text-white transition-colors duration-300">
 
     <div class="flex h-screen overflow-hidden">
 
@@ -162,40 +81,30 @@
             <div class="h-16 flex items-center px-6 border-b border-white/5">
                 <a href="/" class="flex items-center gap-2">
                     <img src="{% static 'img/logo.png' %}" alt="2salti" class="h-8 w-auto">
-                    <span class="text-2xl font-display font-bold bg-clip-text text-transparent bg-gradient-to-r from-cyan-400 to-blue-500">2salti</span>
+                    <span class="text-2xl font-display font-bold bg-clip-text text-transparent bg-gradient-to-r from-blue-400 to-blue-500">2salti</span>
                 </a>
             </div>
 
             <nav class="flex-1 px-4 py-6 overflow-y-auto space-y-6">
-                <!-- AI SEARCH BAR (Desktop) -->
-                <div class="px-2 pb-2">
-                    <div class="relative">
-                        <input type="text" id="ai-search-input" 
-                            placeholder="Chiedi all'AI (es: gol Rossi)..." 
-                            class="w-full bg-white/5 border border-white/10 rounded-xl py-2 px-10 text-sm focus:outline-none focus:ring-2 focus:ring-cyan-500/50 placeholder:text-slate-500 text-white">
-                        <span class="absolute left-3 top-2.5 text-slate-500 text-xs">🔍</span>
-                        <div id="ai-search-loading" class="hidden absolute right-3 top-2.5">
-                            <span class="animate-spin inline-block w-4 h-4 border-2 border-cyan-500 border-t-transparent rounded-full"></span>
-                        </div>
-                    </div>
-                    <div id="ai-search-results" class="hidden mt-2 p-3 bg-cyan-500/10 border border-cyan-500/20 rounded-xl text-[11px] text-cyan-100 leading-relaxed shadow-lg"></div>
-                </div>
+                <!-- Ricerca AI desktop consolidata nell'header (box unico id="ai-search-input").
+                     Rimossa qui la AI bar duplicata della sidebar: un solo box desktop, valido
+                     su tutte le pagine (la sidebar era nascosta su home). Macro 17.1, decisione prodotto. -->
 
                 <!-- EXPLORE SECTION (Always Visible) -->
                 <div>
                     <h3 class="text-[10px] text-slate-500 uppercase tracking-[0.2em] px-4 mb-3 font-bold">Esplora</h3>
                     <div class="space-y-1">
                         <a href="{% if sport %}{% url 'sport_detail' sport.slug %}{% else %}/{% endif %}"
-                            class="flex items-center gap-3 px-4 py-2 rounded-xl hover:bg-white/5 transition-colors {% if request.resolver_match.url_name == 'home' or request.resolver_match.url_name == 'sport_detail' %}bg-white/10 text-cyan-400{% endif %}">
+                            class="flex items-center gap-3 px-4 py-2 rounded-xl hover:bg-white/5 transition-colors {% if request.resolver_match.url_name == 'home' or request.resolver_match.url_name == 'sport_detail' %}bg-white/10 text-blue-400{% endif %}">
                             <span class="text-lg">🏠</span> <span class="font-medium text-sm">Home</span>
                         </a>
                         {% if sport %}
                         <a href="{% url 'sport_matches' sport.slug %}"
-                            class="flex items-center gap-3 px-4 py-2 rounded-xl hover:bg-white/5 transition-colors {% if request.resolver_match.url_name == 'sport_matches' %}bg-white/10 text-cyan-400{% endif %}">
+                            class="flex items-center gap-3 px-4 py-2 rounded-xl hover:bg-white/5 transition-colors {% if request.resolver_match.url_name == 'sport_matches' %}bg-white/10 text-blue-400{% endif %}">
                             <span class="text-lg">📅</span> <span class="font-medium text-sm">Risultati</span>
                         </a>
                         <a href="{% url 'sport_detail' sport.slug %}"
-                            class="flex items-center gap-3 px-4 py-2 rounded-xl hover:bg-white/5 transition-colors {% if request.resolver_match.url_name == 'sport_detail' %}bg-white/10 text-cyan-400{% endif %}">
+                            class="flex items-center gap-3 px-4 py-2 rounded-xl hover:bg-white/5 transition-colors {% if request.resolver_match.url_name == 'sport_detail' %}bg-white/10 text-blue-400{% endif %}">
                             <span class="text-lg">🏆</span> <span class="font-medium text-sm">Classifiche</span>
                         </a>
                         {% endif %}
@@ -205,14 +114,14 @@
                 {% if user.is_authenticated %}
                 <!-- PERSONAL SPACE SECTION -->
                 <div>
-                    <h3 class="text-[10px] text-cyan-500/50 uppercase tracking-[0.2em] px-4 mb-3 font-bold">Mio Spazio</h3>
+                    <h3 class="text-[10px] text-blue-500/50 uppercase tracking-[0.2em] px-4 mb-3 font-bold">Mio Spazio</h3>
                     <div class="space-y-1">
                         <a href="{% url 'dashboard' %}"
-                            class="flex items-center gap-3 px-4 py-2 rounded-xl hover:bg-white/5 transition-colors {% if request.resolver_match.url_name == 'dashboard' %}bg-cyan-500/10 text-cyan-400{% endif %}">
+                            class="flex items-center gap-3 px-4 py-2 rounded-xl hover:bg-white/5 transition-colors {% if request.resolver_match.url_name == 'dashboard' %}bg-blue-500/10 text-blue-400{% endif %}">
                             <span class="text-lg">📊</span> <span class="font-medium text-sm">Dashboard</span>
                         </a>
                         <a href="{% url 'profile' user.username %}"
-                            class="flex items-center gap-3 px-4 py-2 rounded-xl hover:bg-white/5 transition-colors {% if request.resolver_match.url_name == 'profile' %}bg-white/10 text-cyan-400{% endif %}">
+                            class="flex items-center gap-3 px-4 py-2 rounded-xl hover:bg-white/5 transition-colors {% if request.resolver_match.url_name == 'profile' %}bg-white/10 text-blue-400{% endif %}">
                             <span class="text-lg">👤</span> <span class="font-medium text-sm">Profilo</span>
                         </a>
                     </div>
@@ -227,7 +136,7 @@
                     {# Team Attuale del Profilo #}
                     {% if current_team %}
                     <a href="{% url 'team_detail' current_team.slug %}"
-                        class="flex items-center gap-3 px-4 py-2 rounded-lg hover:bg-white/5 transition-colors text-sm border-l-2 border-cyan-500 bg-white/5 mb-1">
+                        class="flex items-center gap-3 px-4 py-2 rounded-lg hover:bg-white/5 transition-colors text-sm border-l-2 border-blue-500 bg-white/5 mb-1">
                         {% if current_team.society.logo %}
                         <img src="{{ current_team.society.logo.url }}" class="w-6 h-6 object-contain">
                         {% else %}
@@ -235,7 +144,7 @@
                         {% endif %}
                         <div class="flex flex-col min-w-0">
                             <span class="truncate text-white font-medium">{{ current_team.society.name }}</span>
-                            <span class="text-[10px] text-cyan-400 uppercase font-bold">La tua squadra</span>
+                            <span class="text-[10px] text-blue-400 uppercase font-bold">La tua squadra</span>
                         </div>
                     </a>
                     {% endif %}
@@ -262,7 +171,7 @@
                 {% endwith %}
                 <div class="border-t border-white/5 pt-4">
                     <a href="{% url 'bacheca_globale' %}"
-                        class="flex items-center gap-3 px-4 py-2 rounded-xl hover:bg-white/5 transition-colors {% if request.resolver_match.url_name == 'bacheca_globale' %}bg-white/10 text-cyan-400{% endif %}">
+                        class="flex items-center gap-3 px-4 py-2 rounded-xl hover:bg-white/5 transition-colors {% if request.resolver_match.url_name == 'bacheca_globale' %}bg-white/10 text-blue-400{% endif %}">
                         <span class="text-lg">📢</span> <span class="font-medium text-sm">Bacheca</span>
                     </a>
                 </div>
@@ -325,7 +234,7 @@
                 </form>
                 {% else %}
                 <a href="{% url 'login' %}"
-                    class="block w-full text-center py-3 px-4 rounded-xl bg-gradient-to-r from-cyan-600 to-blue-600 text-white font-bold hover:shadow-[0_0_15px_rgba(6,182,212,0.4)] transition-all">
+                    class="block w-full text-center py-3 px-4 rounded-xl bg-gradient-to-r from-blue-600 to-blue-700 text-white font-bold hover:shadow-[0_0_15px_rgba(37,99,235,0.4)] transition-all">
                     Accedi
                 </a>
                 {% endif %}
@@ -340,21 +249,29 @@
             <header class="hidden lg:flex h-20 glass sticky top-0 z-40 px-12 items-center justify-between border-b border-white/5">
                 <div class="flex items-center gap-10">
                     <nav class="flex items-center gap-8">
-                        <a href="/" class="nav-link-premium text-sm font-bold uppercase tracking-widest {% if request.resolver_match.url_name == 'home' %}text-cyan-400{% else %}text-slate-400 hover:text-white{% endif %}">Home</a>
+                        <a href="/" class="nav-link-premium text-sm font-bold uppercase tracking-widest {% if request.resolver_match.url_name == 'home' %}text-blue-400{% else %}text-slate-400 hover:text-white{% endif %}">Home</a>
                         {% if sport %}
-                        <a href="{% url 'sport_matches' sport.slug %}" class="nav-link-premium text-sm font-bold uppercase tracking-widest {% if request.resolver_match.url_name == 'sport_matches' %}text-cyan-400{% else %}text-slate-400 hover:text-white{% endif %}">Risultati</a>
-                        <a href="{% url 'sport_detail' sport.slug %}" class="nav-link-premium text-sm font-bold uppercase tracking-widest {% if request.resolver_match.url_name == 'sport_detail' %}text-cyan-400{% else %}text-slate-400 hover:text-white{% endif %}">Classifiche</a>
+                        <a href="{% url 'sport_matches' sport.slug %}" class="nav-link-premium text-sm font-bold uppercase tracking-widest {% if request.resolver_match.url_name == 'sport_matches' %}text-blue-400{% else %}text-slate-400 hover:text-white{% endif %}">Risultati</a>
+                        <a href="{% url 'sport_detail' sport.slug %}" class="nav-link-premium text-sm font-bold uppercase tracking-widest {% if request.resolver_match.url_name == 'sport_detail' %}text-blue-400{% else %}text-slate-400 hover:text-white{% endif %}">Classifiche</a>
                         {% if sport.leagues.exists %}
-                        <a href="{% url 'league_stats' league.slug|default:sport.leagues.first.slug %}" class="nav-link-premium text-sm font-bold uppercase tracking-widest {% if 'statistics' in request.path %}text-cyan-400{% else %}text-slate-400 hover:text-white{% endif %}">Statistiche</a>
+                        <a href="{% url 'league_stats' league.slug|default:sport.leagues.first.slug %}" class="nav-link-premium text-sm font-bold uppercase tracking-widest {% if 'statistics' in request.path %}text-blue-400{% else %}text-slate-400 hover:text-white{% endif %}">Statistiche</a>
                         {% endif %}
                         {% endif %}
                     </nav>
                 </div>
                 <div class="flex items-center gap-6">
-                    <!-- Global Search Placeholder in Nav -->
+                    <!-- Ricerca desktop UNICA: barra "normale" con Ricerca AI integrata.
+                         id="ai-search-input" è già legato dall'array searchInputs nel JS in
+                         fondo (invariato): su Enter interroga /matches/api/v1/ai-query/.
+                         Header hidden lg:flex senza condizione su request.path → visibile su
+                         TUTTE le pagine desktop, home inclusa. Macro 17.1, decisione prodotto. -->
                     <div class="relative w-64">
-                        <input type="text" placeholder="Cerca atleti, club..." class="w-full bg-white/5 border border-white/10 rounded-full py-2 px-4 text-xs focus:outline-none focus:ring-1 focus:ring-cyan-500/50 text-white">
+                        <input type="text" id="ai-search-input"
+                            placeholder="Cerca o chiedi all'AI (es: gol Rossi)..."
+                            aria-label="Ricerca: cerca atleti e club o chiedi statistiche all'AI"
+                            class="w-full bg-white/5 border border-white/10 rounded-full py-2 px-4 text-xs focus:outline-none focus:ring-1 focus:ring-blue-500/50 text-white">
                         <span class="absolute right-3 top-2 text-slate-500">🔍</span>
+                        <div id="ai-search-results" class="hidden absolute right-0 w-64 mt-2 z-50 p-3 bg-blue-500/10 border border-blue-500/20 rounded-xl text-[11px] text-blue-100 leading-relaxed shadow-lg"></div>
                     </div>
                 </div>
             </header>
@@ -380,12 +297,13 @@
             <!-- MOBILE SEARCH DRAWER -->
             <div id="mobile-search-drawer" class="hidden lg:hidden glass border-b border-white/5 p-4 z-20">
                 <div class="relative">
-                    <input type="text" id="ai-search-input-mobile" 
-                        placeholder="Chiedi all'AI (es: gol Rossi)..." 
+                    <input type="text" id="ai-search-input-mobile"
+                        placeholder="Chiedi all'AI (es: gol Rossi)..."
+                        aria-label="Ricerca AI: chiedi statistiche e partite"
                         class="w-full bg-white/10 border border-white/10 rounded-xl py-2 px-10 text-sm focus:outline-none text-white">
                     <span class="absolute left-3 top-2.5 text-slate-500 text-xs">🔍</span>
                 </div>
-                <div id="ai-search-results-mobile" class="hidden mt-2 p-3 bg-cyan-500/10 border border-cyan-500/20 rounded-xl text-xs text-white"></div>
+                <div id="ai-search-results-mobile" class="hidden mt-2 p-3 bg-blue-500/10 border border-blue-500/20 rounded-xl text-xs text-white"></div>
             </div>
 
             <!-- MOBILE MENU OVERLAY -->
@@ -400,7 +318,7 @@
                 <hr class="border-white/5 my-2">
                 
                 {% if user.is_authenticated %}
-                <a href="{% url 'dashboard' %}" class="block px-4 py-3 rounded-lg bg-cyan-600/20 text-cyan-400 font-bold">Dashboard</a>
+                <a href="{% url 'dashboard' %}" class="block px-4 py-3 rounded-lg bg-blue-600/20 text-blue-400 font-bold">Dashboard</a>
                 <a href="{% url 'profile' user.username %}" class="block px-4 py-3 rounded-lg hover:bg-white/5">Profilo Pubblico</a>
                 <form method="post" action="{% url 'logout' %}">
                     {% csrf_token %}
@@ -410,7 +328,7 @@
                     </button>
                 </form>
                 {% else %}
-                <a href="{% url 'login' %}" class="block px-4 py-3 rounded-lg bg-cyan-600 text-white text-center font-bold">Accedi / Registrati</a>
+                <a href="{% url 'login' %}" class="block px-4 py-3 rounded-lg bg-blue-600 text-white text-center font-bold">Accedi / Registrati</a>
                 {% endif %}
                 
                 {% if user.is_staff %}
@@ -424,8 +342,38 @@
                     {% block content %}{% endblock %}
                 </div>
 
-                <footer class="mt-12 py-6 text-center text-slate-600 text-sm">
-                    &copy; 2025 2salti.com
+                <footer class="max-w-6xl mx-auto mt-16 border-t border-white/10 pt-10 pb-6">
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-8 mb-8">
+                        <!-- Brand + tagline -->
+                        <div>
+                            <a href="/" class="flex items-center gap-2 mb-3">
+                                <img src="{% static 'img/logo.png' %}" alt="2salti" class="h-8 w-auto">
+                                <span class="text-2xl font-display font-bold bg-clip-text text-transparent bg-gradient-to-r from-blue-400 to-blue-500">2salti</span>
+                            </a>
+                            <p class="text-sm text-slate-400 max-w-xs">Il tuo sport, un altro livello.</p>
+                        </div>
+
+                        <!-- Link prodotto (route pubbliche reali, primo rollout: Pallanuoto) -->
+                        <nav aria-label="Link prodotto">
+                            <h3 class="text-xs font-bold uppercase tracking-widest text-slate-500 mb-4">Prodotto</h3>
+                            <ul class="space-y-2 text-sm">
+                                <li><a href="{% url 'sport_matches' 'pallanuoto' %}" class="text-slate-400 hover:text-blue-400 transition-colors">Partite</a></li>
+                                <li><a href="{% url 'sport_detail' 'pallanuoto' %}" class="text-slate-400 hover:text-blue-400 transition-colors">Classifiche</a></li>
+                                <li><a href="{% url 'league_stats' 'serie-c-maschile-2026-2027' %}" class="text-slate-400 hover:text-blue-400 transition-colors">Statistiche</a></li>
+                            </ul>
+                        </nav>
+
+                        <!-- Contatti -->
+                        <div>
+                            <h3 class="text-xs font-bold uppercase tracking-widest text-slate-500 mb-4">Contatti</h3>
+                            <a href="mailto:albegalbi@gmail.com" class="text-sm text-slate-400 hover:text-blue-400 transition-colors">albegalbi@gmail.com</a>
+                        </div>
+                    </div>
+
+                    <div class="border-t border-white/5 pt-6 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-slate-500">
+                        <span>&copy; {% now "Y" %} 2salti</span>
+                        <span class="px-2 py-0.5 rounded-full bg-blue-500/10 text-blue-400 font-bold uppercase tracking-widest">Beta</span>
+                    </div>
                 </footer>
             </main>
 
@@ -436,13 +384,14 @@
     <script>
         document.addEventListener('DOMContentLoaded', function () {
             // Mobile Menu
+            // Il listener di toggle dell'hamburger vive in static/js/main.js
+            // (fonte canonica: modulo JS dedicato, con animate-fade-in + chiusura
+            // su resize). Qui NON ri-registriamo il click: un secondo
+            // addEventListener annullava il toggle (due toggle di .hidden si
+            // cancellavano → menu mai aperto). Manteniamo solo i riferimenti
+            // btn/menu per la "chiusura al click fuori" più sotto. (Macro 17.1, fix JS)
             const btn = document.getElementById('mobile-menu-btn');
             const menu = document.getElementById('mobile-menu');
-            if (btn && menu) {
-                btn.addEventListener('click', function () {
-                    menu.classList.toggle('hidden');
-                });
-            }
 
             // Theme Toggle Logic
             const themeToggle = document.getElementById('theme-toggle');
@@ -450,27 +399,34 @@
             const html = document.documentElement;
 
             function updateToggleUI(theme) {
+                if (!themeToggle || !toggleDot) return;  // toggle assente (es. home '/'): no-op
                 if (theme === 'light') {
                     toggleDot.style.transform = 'translateX(24px)';
                     themeToggle.classList.remove('bg-slate-700');
-                    themeToggle.classList.add('bg-cyan-500');
+                    themeToggle.classList.add('bg-blue-500');
                 } else {
                     toggleDot.style.transform = 'translateX(4px)';
-                    themeToggle.classList.remove('bg-cyan-500');
+                    themeToggle.classList.remove('bg-blue-500');
                     themeToggle.classList.add('bg-slate-700');
                 }
             }
 
-            // Init UI
+            // Init UI — il toggle tema vive nella sidebar, NON renderizzata su '/'
+            // (home: l'aside è condizionata a request.path diverso da '/'). Senza guard,
+            // updateToggleUI e addEventListener esplodevano con TypeError su null,
+            // bloccando il resto del DOMContentLoaded — incluso l'init del drawer
+            // Ricerca AI più sotto. (Macro 17.1, fix JS)
             const currentTheme = html.getAttribute('data-theme');
-            updateToggleUI(currentTheme);
+            if (themeToggle && toggleDot) {
+                updateToggleUI(currentTheme);
 
-            themeToggle.addEventListener('click', () => {
-                const newTheme = html.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
-                html.setAttribute('data-theme', newTheme);
-                localStorage.setItem('theme', newTheme);
-                updateToggleUI(newTheme);
-            });
+                themeToggle.addEventListener('click', () => {
+                    const newTheme = html.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+                    html.setAttribute('data-theme', newTheme);
+                    localStorage.setItem('theme', newTheme);
+                    updateToggleUI(newTheme);
+                });
+            }
 
             // Chiudi se clicchi fuori
             document.addEventListener('click', function (e) {
@@ -528,7 +484,7 @@
                             } else {
                                 resultsEl.innerText = data.text;
                                 if (data.data && data.data.athlete_id) {
-                                    resultsEl.innerHTML += `<br><a href="/accounts/profile/athlete/${data.data.athlete_id}/" class="mt-2 inline-block text-cyan-400 font-bold hover:underline">Vedi statistiche complete →</a>`;
+                                    resultsEl.innerHTML += `<br><a href="/accounts/profile/athlete/${data.data.athlete_id}/" class="mt-2 inline-block text-blue-400 font-bold hover:underline">Vedi statistiche complete →</a>`;
                                 }
                             }
                         })

@@ -3,7 +3,7 @@
 Questo documento descrive le macchine a stati implementate nel codice.
 Se il blueprint di prodotto o altri documenti dicono cose diverse, **questo file vince**.
 
-Ultimo aggiornamento: 2026-05-20
+Ultimo aggiornamento: 2026-06-22
 Generato leggendo:
 - `accounts/models.py`
 - `accounts/middleware.py`
@@ -14,7 +14,10 @@ Generato leggendo:
 - `matches/services/ocr_service.py`
 - `matches/views.py`
 - `management/models.py`
+- `management/admin.py`
+- `management/services/president_personification.py`
 - `core/models.py`
+- `core/views.py`
 - `docs/BLUEPRINT.md`
 - `docs/FEATURE_SYLLABUS_LEGACY.md`
 - `CLAUDE.md`
@@ -328,6 +331,92 @@ Nessuna transizione automatica rilevata — gestito manualmente dall'admin.
 | `WONT_FIX` | Won't Fix | Sì |
 
 Nessuna transizione automatica rilevata — gestito manualmente dall'admin.
+
+---
+
+## 10. ParentCertification (Certificazione genitore — Macro 7b)
+
+**Model:** `management.ParentCertification`
+**Field di stato:** `status` (CharField, `TextChoices`)
+**File modello:** [management/models.py](management/models.py) righe 627–773
+**Servizio:** [management/services/certification_service.py](management/services/certification_service.py)
+**Migration:** `management/migrations/0017_parentcertification.py`
+**Default:** `RICHIESTA_INVIATA`
+
+> **Natura della macchina:** macchina a stati "ricca" society-vouching via email, **ortogonale all'onboarding** (§2): il genitore resta `role='fan'` e raggiunge `COMPLETED` con sola email+setup; la certificazione è un gate **aggiuntivo** sull'accesso ai dati del figlio (`User.is_certified_parent_of`), non uno step di `onboarding_state`. Il sistema **non archivia** prove d'identità: inoltra la richiesta alla società e registra l'esito; il match nome+email lo fa un umano della società sul proprio gestionale. Razionale di prodotto in [[BLUEPRINT.md]] §7.7.
+
+### Stati
+
+| Valore DB | Label | Iniziale? | Finale? |
+|---|---|---|---|
+| `RICHIESTA_INVIATA` | Richiesta inviata | Sì | No |
+| `IN_ATTESA_SOCIETA` | In attesa società | No | No |
+| `CONFERMATA_SOCIETA` | Confermata società | No | No |
+| `IN_ATTESA_CLICK_GENITORE` | In attesa click | No | No |
+| `CERTIFICATA` | Certificata | No | Sì |
+| `RIFIUTATA` | Rifiutata | No | Sì |
+| `SCADUTA` | Scaduta | No | Sì |
+
+`FINAL_STATUSES = {CERTIFICATA, RIFIUTATA, SCADUTA}`. Property `is_final` riflette l'appartenenza a questo set.
+
+### Transizioni
+
+| Da | A | Metodo modello | Side effects |
+|---|---|---|---|
+| `RICHIESTA_INVIATA` | `IN_ATTESA_SOCIETA` | `mark_in_attesa_societa()` | — (email di vouching orchestrata dal service) |
+| `IN_ATTESA_SOCIETA` | `CONFERMATA_SOCIETA` | `conferma_societa()` | genera `token` (uuid4) + `token_expires_at` (`CERTIFICATION_LINK_VALIDITY_DAYS`); set `society_responded_at` |
+| `IN_ATTESA_SOCIETA` | `RIFIUTATA` | `rifiuta_societa()` | set `society_responded_at`; finale |
+| `CONFERMATA_SOCIETA` | `IN_ATTESA_CLICK_GENITORE` | `mark_in_attesa_click()` | — (mail con link orchestrata dal service) |
+| `IN_ATTESA_CLICK_GENITORE` | `CERTIFICATA` | `certifica_via_click()` | set `certified_at`; attiva l'accesso ai dati del figlio |
+| `IN_ATTESA_CLICK_GENITORE` | `SCADUTA` | `scadi()` | finestra di validità superata; finale |
+
+### Guardrails
+
+- **Validazione stato di partenza:** ogni metodo chiama `_require(expected)` e alza `ValueError` sulle transizioni non ammesse — non esistono salti di stato silenziosi.
+- **Link scaduto:** `certifica_via_click()` rifiuta con `ValueError` se `is_link_expired` (`token_expires_at` superato), anche se lo stato è `IN_ATTESA_CLICK_GENITORE`.
+- **Nessun side effect email nel modello:** i metodi mutano solo lo stato/timestamp; l'invio mail (vouching alla società, link al genitore) è orchestrato da `certification_service`.
+- **Una sola richiesta aperta per coppia:** `UniqueConstraint` `uniq_parentcert_open_per_parent_child` su `(parent, child)` con condizione `~Q(status__in=[CERTIFICATA, RIFIUTATA, SCADUTA])` — le righe finali non contano, si può ri-richiedere.
+- **Email società sempre valorizzata:** la notifica parte verso `_society_recipients`; il setup post-approvazione del presidente (Macro 18) richiede obbligatoriamente l'email di contatto della società, così la lista non è mai vuota.
+
+---
+
+## 11. Personificazione società presidente (Macro 18)
+
+**Model:** `management.MembershipRequest` **riusato** con `role='PRESIDENT'` come discriminatore — nessun campo/stato dedicato, nessuno schema-change.
+**Field di stato:** `status` (CharField, lo stesso di §5)
+**File modello:** [management/models.py](management/models.py) righe 275–286
+**Servizio:** [management/services/president_personification.py](management/services/president_personification.py)
+**Default:** `PENDING`
+
+> **Natura della macchina:** questa **non** è una state machine "ricca" con campo di stato proprio. È la macchina di §5 (`MembershipRequest.status`) riusata, distinta solo dal discriminatore `role='PRESIDENT'`. Il ramo PRESIDENT è isolato dal consumer player-gated (`approve_membership` in `management/views.py`): viene approvato **solo** dall'admin via op_admin_site. Di conseguenza nel ramo PRESIDENT sono raggiunti a runtime solo `PENDING` e `APPROVED`; `REJECTED` non è prodotto da alcun percorso PRESIDENT corrente (gestito solo difensivamente, vedi Guardrails).
+
+### Stati
+
+| Valore DB | Label | Descrizione (ramo PRESIDENT) | Iniziale? | Finale? |
+|---|---|---|---|---|
+| `PENDING` | In attesa | Richiesta di personificazione inviata, in attesa di approvazione admin | Sì | No |
+| `APPROVED` | Approvata | Presidente agganciato alla società via `PresidentProfile.managed_society` | No | Sì |
+| `REJECTED` | Respinta | Non raggiunto dal ramo PRESIDENT (solo difensivo) | No | (Sì) |
+
+### Transizioni
+
+| Da | A | Trigger | Side effects | File |
+|---|---|---|---|---|
+| — | `PENDING` | `request_president_personification()` da `choose_society` POST | `get_or_create(role='PRESIDENT', defaults={'status':'PENDING'})`, **idempotente** (richiesta PENDING esistente → ritorna senza duplicare) | [core/views.py](core/views.py) r. 276 → [president_personification.py](management/services/president_personification.py) r. 64–69 |
+| `PENDING` | `APPROVED` | Action admin `approve_president_personification` → `approve_president_request()` (dentro `transaction.atomic()` + `select_for_update`) | `PresidentProfile.objects.filter(user=...).update(managed_society=...)` — **nessuna Membership** creata; `status='APPROVED'`; notifica email best-effort **fuori** dall'atomic | [management/admin.py](management/admin.py) r. 40–64 → [president_personification.py](management/services/president_personification.py) r. 99–135 |
+| `PENDING` | `PENDING` (nessuna transizione) | `approve_president_request()` su società che ha **già** un presidente | **Guard 1:1 applicativo**: ritorna `(False, errore)`, lo `status` resta `PENDING`, nessun side-effect | [president_personification.py](management/services/president_personification.py) r. 116–122 |
+
+### Guardrails
+
+- **Guard 1:1 (`already_managed`):** `PresidentProfile.managed_society` è un `OneToOne`. Prima di agganciare, il servizio verifica che la società non abbia già un presidente; in caso positivo **blocca l'approvazione con un errore leggibile** invece di lasciar salire un `IntegrityError` grezzo. Non è una transizione di stato: la richiesta resta `PENDING`. [president_personification.py](management/services/president_personification.py) r. 116–122.
+- **Guard idempotenza in creazione:** se l'utente gestisce già una società (`managed_society_id` valorizzato) o ha già una richiesta `PENDING`, `request_president_personification()` non duplica nulla. [president_personification.py](management/services/president_personification.py) r. 51–62.
+- **Side-effect del solo `managed_society`:** all'approvazione **non** viene creata alcuna `Membership` PRESIDENT (coerente con `create_society` e con la bacheca del "presidente de-vincolato"). L'aggancio è una `.update()` diretta sul `PresidentProfile`, **non** passa per `_sync_profile_denorm` (quel denormalizzatore serve il ramo player/coach in `membership_enrollment.py`, non questo flusso). [president_personification.py](management/services/president_personification.py) r. 124–127.
+- **Concorrenza:** l'approvazione serializza le richieste concorrenti con `select_for_update()` sul lock della richiesta, dentro `transaction.atomic()`. [president_personification.py](management/services/president_personification.py) r. 99–105.
+- **`REJECTED` difensivo:** `request_president_personification()` riapre a `PENDING` una eventuale richiesta `REJECTED`/`APPROVED` sulla stessa società (r. 70–74), ma nessun percorso PRESIDENT corrente scrive `REJECTED`: il ramo non è toccato da `approve_membership`.
+
+### Relazione con §5
+
+§5 descrive la macchina `MembershipRequest` per il tesseramento giocatore (`role` player, `PENDING→APPROVED` con creazione `Membership`, oppure `REJECTED`). Qui lo stesso modello/campo è riusato con `role='PRESIDENT'`: stati identici, ma trigger (admin op_admin, non presidente di società), side-effect (`managed_society`, **non** `Membership`) e guard (1:1) sono diversi.
 
 ---
 

@@ -4,10 +4,10 @@
 <div class="max-w-md mx-auto px-4 py-8">
     <div class="glass-card p-8 text-center">
         <h1 class="text-2xl font-bold text-white mb-4">Check-in Allenamento</h1>
-        <p class="text-gray-400 mb-8">{{ occurrence.training.title }}<br><span class="text-cyan-400 font-mono">{{ occurrence.start_time|date:"H:i" }}</span></p>
+        <p class="text-gray-400 mb-8">{{ occurrence.training.title }}<br><span class="text-blue-400 font-mono">{{ occurrence.start_time|date:"H:i" }}</span></p>
 
         <div id="geofence-status" class="mb-8 p-4 bg-white/5 rounded-lg text-sm">
-            <p class="text-cyan-400" id="status-text">Acquisizione posizione in corso...</p>
+            <p class="text-blue-400" id="status-text">Acquisizione posizione in corso...</p>
         </div>
 
         <form id="rsvp-form" method="POST">
@@ -23,7 +23,7 @@
                     Non Posso
                 </button>
                 <button type="button" id="present-btn" onclick="submitRSVP('PRESENT')" disabled
-                    class="bg-cyan-500/20 text-cyan-500/50 px-6 py-4 rounded-xl font-bold transition-all border border-cyan-500/20 cursor-not-allowed">
+                    class="bg-blue-500/20 text-blue-500/50 px-6 py-4 rounded-xl font-bold transition-all border border-blue-500/20 cursor-not-allowed">
                     Sono Qui
                 </button>
             </div>
@@ -51,12 +51,12 @@
             accInput.value = position.coords.accuracy;
 
             statusText.innerHTML = "Posizione acquisita: ✓<br><span class='text-xs opacity-50'>(Accuratezza: " + Math.round(position.coords.accuracy) + "m)</span>";
-            statusText.classList.remove('text-cyan-400');
+            statusText.classList.remove('text-blue-400');
             statusText.classList.add('text-green-400');
 
             presentBtn.disabled = false;
-            presentBtn.classList.remove('bg-cyan-500/20', 'text-cyan-500/50', 'border-cyan-500/20', 'cursor-not-allowed');
-            presentBtn.classList.add('bg-cyan-500', 'text-black', 'shadow-[0_0_20px_rgba(6,182,212,0.5)]');
+            presentBtn.classList.remove('bg-blue-500/20', 'text-blue-500/50', 'border-blue-500/20', 'cursor-not-allowed');
+            presentBtn.classList.add('bg-blue-500', 'text-black', 'shadow-[0_0_20px_rgba(37,99,235,0.5)]');
         }, function (error) {
             statusText.innerHTML = "Errore GPS: " + error.message + "<br><span class='text-xs opacity-50'>Puoi comunque segnalare l'assenza.</span>";
             statusText.classList.add('text-yellow-400');

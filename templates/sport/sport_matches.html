@@ -8,12 +8,12 @@
     </div>
     {% if available_seasons|length > 1 %}
     <form method="get" class="shrink-0">
-        {# Querystring additiva: porta il giorno selezionato come hidden cosi'
-           cambiare stagione non perde il sotto-filtro data. #}
+        {% comment %}Querystring additiva: porta il giorno selezionato come hidden cosi'
+           cambiare stagione non perde il sotto-filtro data.{% endcomment %}
         <input type="hidden" name="date" value="{{ selected_date|date:'Y-m-d' }}">
         <label for="season-select" class="sr-only">Seleziona stagione</label>
         <select id="season-select" name="season" onchange="this.form.submit()"
-                class="glass-panel px-4 py-2 rounded-full border border-white/10 text-slate-200 text-sm bg-slate-900/50 focus:border-cyan-400/50 focus:outline-none">
+                class="glass-panel px-4 py-2 rounded-full border border-white/10 text-slate-200 text-sm bg-slate-900/50 focus:border-blue-400/50 focus:outline-none">
             {% for s in available_seasons %}
             <option value="{{ s }}" {% if s == selected_season %}selected{% endif %}>Stagione {{ s }}</option>
             {% endfor %}
@@ -26,7 +26,7 @@
 {% include 'components/date_picker.html' %}
 
 <div class="mb-6">
-    <h3 class="text-xl font-bold text-cyan-400">
+    <h3 class="text-xl font-bold text-blue-400">
         {{ selected_date|date:"l d F Y"|capfirst }}
     </h3>
 </div>
@@ -41,7 +41,7 @@
             {{ group.grouper.name }}
         </h3>
         <a href="{% url 'league_standings' group.grouper.id %}"
-            class="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-cyan-500/10 border border-cyan-500/20 text-cyan-400 text-xs font-bold hover:bg-cyan-500/20 hover:border-cyan-500/40 transition-all">
+            class="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-blue-500/10 border border-blue-500/20 text-blue-400 text-xs font-bold hover:bg-blue-500/20 hover:border-blue-500/40 transition-all">
             🏆 Vedi Classifica
         </a>
     </div>
@@ -56,11 +56,9 @@
 </div>
 {% endfor %}
 {% else %}
-<div class="glass-panel p-12 text-center border-dashed border-2 border-slate-700/50">
-    <div class="text-4xl mb-4 opacity-50 grayscale">📅</div>
-    <h3 class="text-lg font-bold text-white mb-2">Nessuna partita</h3>
-    <p class="text-slate-400">Non ci sono partite in programma per {{ selected_date|date:"l d F" }}.</p>
-</div>
+{% with datestr=selected_date|date:"l d F" %}
+{% include 'components/_empty_state.html' with icon="📅" title="Nessuna partita" message="Non ci sono partite in programma per "|add:datestr|add:"." %}
+{% endwith %}
 {% endif %}
 
 {% endblock %}

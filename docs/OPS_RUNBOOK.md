@@ -277,6 +277,8 @@ renderizza letteralmente `{{ entry.goals_against }}` nella pagina invece del val
 
 Cosa fare: tenere ogni tag template `{{ ... }}` o `{% ... %}` su una riga sola. Configurare l'editor o il prettier HTML per non spezzare le righe dentro questi delimitatori. In code review su template, segnalare ogni tag che attraversa newline.
 
+Corollario (scoperto 2026-06-23, regressione introdotta in `07122e0`): i delimitatori `{% ... %}` e `{{ ... }}` vengono parsati da Django **anche dentro i commenti HTML** `<!-- ... -->` — il commento HTML è opaco al browser, non al template engine. Un commento che cita un tag a scopo descrittivo (es. `<!-- {% static %} risolve... -->`) viene compilato come tag reale: se è malformato (qui `static` senza argomento) alza `TemplateSyntaxError` a compile-time e rompe il rendering di ogni pagina che estende quel template, dev/prod inclusi. Cosa fare: nei commenti non scrivere mai la sintassi `{% %}`/`{{ }}` letterale — parafrasare ("il tag static"), oppure usare il commento Django `{# ... #}` (che invece è opaco al parser), oppure `{% templatetag %}`.
+
 ### 3.11 "1, 2, 4 senza 3" è la firma del refactor incompleto
 
 Quando in un blocco di codice o in un test trovi una sequenza numerica con un buco — commenti `# 1.`, `# 2.`, `# 4.` senza `# 3.`, oppure variabili `step1`, `step2`, `step4` senza `step3` — quasi sempre il pezzo mancante esisteva e un refactor lo ha rimosso senza aggiornare la numerazione né i punti che vi si appoggiavano. Il bug del 28 aprile 2026 sul `staff_dashboard` (`NameError: stuck_reports`) era esattamente questo: il commit di consolidamento `668b406` aveva rimosso la sezione `# 3. Calcola stuck reports` lasciando intatti i `# 1.`, `# 2.` e `# 4.` adiacenti, e nessuno aveva notato il salto.
@@ -290,6 +292,15 @@ Esistono due `CLAUDE.md` e devono coesistere:
 - `docs/CLAUDE.md` — **gitignored** (`.gitignore:121`), copia esposta a Obsidian via Syncthing perché sia leggibile lì.
 
 `docs/CLAUDE.md` va tenuto allineato alla root ogni volta che la root cambia. Non è un bug: non segnalarlo come discrepanza in recon, non aggiungerlo a git, non cancellarlo.
+
+### 3.13 Credential helper `store`: 401 se deploy come utente ≠ `alberto` o se `~/.git-credentials` viene resettato
+
+L'autenticazione `git push`/`fetch` sul VPS verso `github.com/8albe/2salti-django.git` (remote **HTTPS**) si appoggia a `credential.helper=store`, configurato nel `.gitconfig` di `alberto`, con il PAT in chiaro in `~/.git-credentials` (perms `0600 alberto:alberto`). Tutti e tre i repo (`/home/alberto`, `/opt/2salti-dev`, `/opt/2salti-new`) ereditano lo stesso global, senza override locale. Quando funziona, il meccanismo è silenzioso e non-interattivo: **"niente 401" è il suo comportamento normale, non un'anomalia**. Ma ha due punti di rottura permanenti — non sono debito da risolvere, sono comportamenti noti da conoscere:
+
+1. **Deploy eseguito con utente ≠ `alberto` o con HOME diverso** (es. via `sudo`/root): l'helper `store` vive nel `.gitconfig` di `alberto`, root non lo vede (`sudo -H git -C /opt/2salti-new config --get-all credential.helper` → exit 1, nessuna riga; `/root/.git-credentials` assente). Un `git push` lanciato come root fa **401** anche se da `alberto` funziona.
+2. **Reset/cancellazione di `~/.git-credentials`** o cambio dei suoi permessi: senza il file (o se non più leggibile da `alberto`), `store` non ha nulla da restituire → prompt interattivo o **401**.
+
+Quindi: se un deploy che prima passava comincia a fare 401, prima di sospettare GitHub o il token, controllare *con quale utente* gira il comando e che `~/.git-credentials` di `alberto` esista con perms `0600`. La diagnosi read-only completa del meccanismo (più la mitigazione del PAT applicata il 2026-06-21) è archiviata in Appendice A §10.14.
 
 ## 4. Pulizia repo: history vs indice corrente
 
@@ -384,6 +395,18 @@ SESSION_RIPARTENZA_YYYYMMDD_<momento>.md    (es: _mattina, _pomeriggio, _sera)
 
 Lo scopo è la ricostruzione del contesto a inizio sessione successiva, quando il contesto della chat AI si è azzerato e serve un'ancora per ripartire senza rifare tutto il lavoro di orientamento. Per questo motivo le note sono scritte in prosa narrativa, non in bullet point secchi: devono trasmettere il ragionamento, le lezioni e le scelte, non solo i fatti. Una nota scritta bene permette alla sessione successiva di ripartire in cinque minuti invece che in un'ora.
 
+### 7.3 Build frontend Tailwind (CSS compilato committato)
+
+Dal 17.1 Fase 1 il CSS Tailwind non è più servito da CDN runtime ma compilato e committato. Convenzione: **se modifichi un template / `forms.py` / JS introducendo classi Tailwind nuove, ricompila e ricommitta il CSS** — `npm run build:css` genera `static/css/tailwind.build.css`, che va committato **insieme** alla modifica che lo richiede. Il versioning della cache è automatico (`ManifestStaticFilesStorage`, hash nel nome dell'asset): i link in `base.html` non portano più il `?v=N` manuale — vedi §12.8. Il glob `content` in `tailwind.config.js` deve coprire la sorgente delle classi nuove (template, app `*.py`, JS, e i template di `crispy_tailwind` nel venv); le utility usate solo dentro selettori di `style.css` (isole `.dark-surface`) stanno in `safelist`. Dev e prod fanno solo `collectstatic`, **non** eseguono `npm`: un asset non ricompilato = classe mancante a video (purge silenzioso). La build gira solo su una macchina con node (`npm install` locale, non-sudo).
+
+**Gotcha — "verde ≠ reso".** La regola di rebuild vale anche per modifiche ad **arbitrary values** (literali `rgba(...)`/hex dentro `shadow-[…]`, colori inline nei template), non solo per le classi nuove: cambiare un literale senza rigenerare `tailwind.build.css` lascia il vecchio CSS committato e la modifica **non viene resa**, pur con suite verde e deploy ok. È esattamente l'incidente `ac9b970` (vedi §12.9): i literali rgba degli aloni erano già stati portati a blu nel template ma il CSS non era stato ricostruito → 13 aloni blu non resi su `dev`, latenti finché A2 non ha rigenerato la build. Suite verde e build stantia non si escludono a vicenda: dopo ogni tocco a classi o arbitrary values, `npm run build:css` e committa il `.css` rigenerato nello stesso commit.
+
+**Gotcha — il glob `content` scansiona anche i `.py`.** Le classi Tailwind vivono anche nei widget di `matches/forms.py` (e in altri `*.py`), non solo nei template. Due conseguenze: (a) ogni stima del tipo "N riferimenti nei template" è **incompleta** se non include i `.py` — il conteggio va esteso a `*.py` e JS; (b) un `cyan-*` (o qualunque classe) residuo in un widget viene compilato nel colore reale e **sopravvive** a un remap/rimozione applicato solo ai template (post-rimozione del token-remap `cyan` compilerebbe nel ciano vero). Prima di dichiarare "rimosse tutte le occorrenze di X", grepare template **e** `*.py` **e** JS.
+
+### 7.4 Suite test e storage statico (manifest disattivato solo nei test)
+
+La suite si lancia con il comando standard `python manage.py test` (nessun flag). `ManifestStaticFilesStorage` (dev/prod) risolve `{% static %}` via `staticfiles.json`, che è prodotto da `collectstatic` e **non** esiste nell'ambiente di test → ogni template con `{% static %}` alzerebbe `ValueError: Missing staticfiles manifest entry`. Soluzione (2026-06-23): `config/settings_test.py` eredita `config.settings` e sovrascrive **solo** lo storage `staticfiles` con il non-manifest `StaticFilesStorage`; `manage.py` lo auto-seleziona quando `test` è in `argv`. `config/settings.py` (protetto) e lo storage di dev/prod restano `ManifestStaticFilesStorage`. Per forzarlo esplicitamente: `python manage.py test --settings=config.settings_test`. Non reintrodurre il manifest nei test (rompe la suite) e non disattivarlo per dev/prod.
+
 ## 8. Protocollo protected file
 
 Il "protocollo protected file" è una procedura disciplinata per modificare file critici dell'infrastruttura — settings Django, configurazione Gunicorn, configurazione Nginx, middleware di onboarding, servizi che toccano la persistenza delle classifiche, migrazioni applicate, file `.env`, unit systemd. Questi file sono elencati nominalmente in [CLAUDE.md](../CLAUDE.md) sotto "Protected Files", e la regola di base è che ogni modifica richiede conferma esplicita prima dell'esecuzione. Questa sezione codifica come applicare quella regola in pratica.
@@ -435,7 +458,7 @@ Il punto strutturale, simmetrico alla sezione 2, è che il versionamento del 25 
 ## 10. Debiti aperti
 
 Registro vivo di problemi noti che richiedono follow-up. Non sono trappole (§3) né bug attivi: sono incoerenze scoperte ma non risolte, da affrontare in sessioni dedicate.
-> Le voci §10.1-10.4, §10.6-10.9 sono CHIUSE e archiviate in Appendice A, che ne conserva razionale, commit e test. Qui resta solo ciò che è ancora aperto.
+> Le voci §10.1-10.4, §10.6-10.14 sono CHIUSE e archiviate in Appendice A, che ne conserva razionale, commit e test. Qui resta solo ciò che è ancora aperto.
 
 ### 10.5 Pulizia utenti/società di test su prod — APERTO (scoperto 26-mag in Sprint B)
 
@@ -443,26 +466,6 @@ Registro vivo di problemi noti che richiedono follow-up. Non sono trappole (§3)
 - Su prod: non verificato — richiede sessione dedicata con accesso esplicito al VPS.
 - Da fare: inventario utenti test su prod, cancellazione controllata.
 - Aggiornamento 2026-06-12: prod ora migrato a Macro 16 (§10.8) — gli eventuali dati test sono passati per le data migration (canonicalizzazione season, backfill); la voce resta APERTA.
-
-### 10.10 Loop onboarding presidente self-service (PROD) — APERTO (scoperto 2026-06-20)
-- `create_society` non è in `allowed_urls` del middleware onboarding (`accounts/middleware.py`): un presidente in `MEMBERSHIP_PENDING` (società non ancora creata) viene rediretto a `onboarding_membership` → `ERR_TOO_MANY_REDIRECTS`. Sistemico, pre-esistente, tocca **prod**.
-- Fix tocca `accounts/middleware.py` (**protected file**) → richiede autorizzazione esplicita. Priorità **alta** (blocca l'onboarding presidente reale).
-- **Aggiornamento 2026-06-21:** risolto **su dev** — `create_society` aggiunto alla whitelist del middleware onboarding (`e4f1efc`); presidente de-vincolato da `Membership` PRESIDENT, RBAC derivato da `managed_society` (`08f8830`). Loop verificato chiuso **sul solo dev** (suite `management` 126 GREEN). I 3 bug bacheca emersi durante la verifica sono chiusi su dev (`50e3396`/`17edacc`/`6a42763`; dettaglio nella session note 2026-06-20(2)). **Prod resta a `e0c928f`**: il fix tocca `accounts/middleware.py` (protected file) e il deploy è gated su Alberto → la voce **resta APERTA su prod**. Per §5, "CHIUSO end-to-end" solo dopo deploy prod + verifica.
-
-### 10.11 `_society_recipients` — candidato debito INVESTIGATO, non riproduce (2026-06-20)
-*Sospetto iniziale (test 7b):* notifica vouching alla società mai recapitata; ipotesi che `getattr(society, 'president', None)` puntasse a una relation inesistente.
-*Verifica a runtime:* `society.president` è il reverse OneToOne di `PresidentProfile.managed_society` (`related_name='president'`); in questo Django `RelatedObjectDoesNotExist` è sottoclasse di `AttributeError`, quindi `getattr(..., None)` ritorna `None` senza sollevare. `_society_recipients` ritorna `[society.email]`, `[president.user.email]` o `[]` correttamente. **Nessun bug.**
-*Causa reale del sintomo:* SMTP dev non configurato → vedi §10.12.
-
-### 10.12 SMTP dev non configurato — APERTO (scoperto 2026-06-20)
-- `EMAIL_BACKEND=smtp` su `localhost:25` senza server → le email best-effort (incluse vouching/certificazione) saltano silenziosamente (gestite via `_safe_send`, ma nessun recapito). È la causa reale del sintomo "notifica società non arrivata" osservato in test 7b.
-- Da fare: configurare console/file backend su dev + monitoraggio warning `[certification]` in prod.
-
-### 10.13 API `/accounts/api/...` fuori whitelist onboarding — APERTO (scoperto 2026-06-20)
-- L'esenzione middleware è `request.path.startswith('/api/')`, ma gli endpoint AJAX accounts (`search-athlete` e simili) stanno sotto `/accounts/api/...` → non coperti → intercettati durante onboarding e rediretti (ritornano HTML invece di JSON). Pre-esistente. Mitigabile lato client con header `X-Requested-With: XMLHttpRequest` (già esentato dal middleware).
-
-### 10.14 Git credential helper instabile sul VPS — APERTO (scoperto 2026-06-20)
-- `~/.git-credentials` presente ma `credential.helper` non attivo → `git push` fallisce con 401 finché non si riattiva `store`. Da capire se qualcosa resetta la config git sul VPS condiviso.
 
 ## 11. Sicurezza operativa e frontiera reversibile
 
@@ -531,6 +534,22 @@ Regola: oltre le 6 ore di sessione attiva, tornare a chiedere conferma esplicita
 Quando l'agente propone più opzioni all'utente, il framing del wording è esso stesso una forma di scelta. Mettere l'opzione preferita per prima nella lista, evidenziarla in grassetto, marcarla "(Recommended)", o presentare le altre come "da giustificare" mentre la preferita appare "naturale", non è neutrale — è una preferenza camuffata da scelta libera. Ed è una forma di disonestà sottile: l'utente non si accorge del bias e finisce per scegliere ciò che l'agente avrebbe scelto comunque, ma con l'illusione di averlo deciso lui.
 
 Regola: o le opzioni sono presentate in modo genuinamente neutro (ordinamento neutro, pari peso visivo, descrizione bilanciata di pro/contro), o il bias va dichiarato esplicitamente come tale ("io preferirei A perché X, ma Y e Z sono alternative valide e legittime"). Nascondere la preferenza dietro una struttura che sembra neutra è la versione più insidiosa del problema, perché toglie all'utente la possibilità di accettare o rifiutare il bias consapevolmente. Pattern osservato il 2 maggio 2026 e corretto in tempo reale dopo che Alberto ha segnalato la dinamica.
+
+### 12.8 Cache-busting manuale del CSS: bumpare `?v=N` a ogni modifica di `style.css`
+
+> **Superato dal 2026-06-23 (Macro 17.1 Fase 1).** Con `ManifestStaticFilesStorage` attivo gli asset statici sono fingerprintati (nome con hash) e il cache-busting è automatico: il `?v=N` manuale su `style.css` e `tailwind.build.css` è stato rimosso da `base.html`. Questa procedura **non si applica più** — non bumpare nulla a mano. Il resto della sezione è conservato come contesto storico.
+
+Il link a `static/css/style.css` in `templates/base.html` porta un query string `?v=N` usato come cache-buster manuale (al 2026-06-22 è `?v=179`). Non è automatico: finché non esiste la pipeline compilata (Macro 17.1), il numero **va incrementato a mano** a ogni modifica di `style.css`, altrimenti browser e CDN possono continuare a servire la versione precedente del foglio di stile anche dopo un deploy andato a buon fine. È il complemento server-side della §12.1 (lì si disattiva la cache del browser in verifica; qui si forza il refresh per tutti gli utenti).
+
+Cosa fare: quando si tocca `style.css`, nello stesso commit bumpare `?v=N` in `base.html`. La Macro 17.1 (pipeline Tailwind compilata con hashing degli asset) supera del tutto questa procedura manuale.
+
+### 12.9 Debito semantico A1: utility `cyan-*` che rendono blue (Macro 17 Fase 2)
+
+> **✅ SALDATO da A2 il 2026-06-30 (`dev`).** I nomi-classe ora coincidono con la resa: le `cyan-*` sono state rinominate `blue-*` in template, `matches/forms.py` e nei selettori light-theme di `style.css`; il token-remap `cyan` è stato **rimosso** da `tailwind.config.js` (la scala rimappata era un 1:1 esatto dello stock `blue`, quindi rinomina pixel-identica). `tailwind.build.css` rigenerato — il commit ha anche corretto un build **stale** da `ac9b970` (literali rgba dei glow già blu ma CSS non rigenerato: 13 aloni blu mancanti + 13 utility cyan morte). Verificato: 0 classi `cyan` in sorgenti e build. **Residuo aperto** (punto 4 sotto): `Sport.hex_color` di 7 sport fittizi del DB dev resta `#00ffff` — normalizzazione a `#2563eb` gated su backup+scrittura DB di Alberto. Lo storico sotto è conservato per contesto.
+
+> **Aperto dal 2026-06-23 (`dev`, commit `819db21`).** Il re-skin Cap. 12 ha adottato la strategia **token-remap (A1)**: in `tailwind.config.js` la scala `cyan` è ridefinita sui valori `blue` di Tailwind. Conseguenza: le ~480 utility scritte `cyan-*` nei template (`text-cyan-400`, `bg-cyan-500`, …) **rendono blue** senza essere state rinominate. È deliberato — evita un find-replace di massa — ma è **debito**: chi legge i template vede `cyan` e ottiene blue.
+
+Cosa sapere: (1) **non fidarsi del nome classe** per il colore reale: la fonte di verità è `tailwind.config.js`. (2) Nuove UI: preferire `blue-*` esplicito; non aggiungere altri `cyan-*`. (3) **Literali orfani**: hex/rgba ciano hardcoded (`rgba(6,182,212,…)` nei glow `shadow-[…]`, qualche `#06b6d4`/`#0891b2`) NON sono raggiunti dal remap — vanno cambiati a mano dove emergono (al 2026-06-23 ne restano in ~15 template non-base, delegati al giro visivo Antigravity). (4) **Per-sport color**: `Sport.hex_color` è in DB (pallanuoto `#00ffff`) — il remap CSS non lo tocca; allinearlo a blue richiede una migration dati (gate backup + ratifica). La ripulitura completa dei nomi-classe `cyan-*`→`blue-*` è un **task A2 futuro**, non urgente (nessun impatto funzionale/a11y).
 
 ## Appendice A — Archivio debiti e fragilità risolti
 
@@ -644,3 +663,87 @@ non legato al deploy. Causa-radice: `certbot.timer` Dummy.
 *Chiuso:* `certbot renew` + automazione via `/etc/cron.d/certbot-2salti` scoped ai domini di
 Alberto; verificato con `openssl s_client`/`x509 -dates` (valido 2026-06-14 → 2026-09-12,
 Let's Encrypt). Il `curl -k` in diagnosi era prudenza superflua.
+
+### §10.10 Loop onboarding presidente self-service (PROD) — CHIUSO 2026-06-21
+*Cosa era:* `create_society` non in `allowed_urls` del middleware onboarding
+(`accounts/middleware.py`): un presidente in `MEMBERSHIP_PENDING` (società non ancora
+creata) veniva rediretto a `onboarding_membership` → `ERR_TOO_MANY_REDIRECTS`. Sistemico,
+pre-esistente, su **prod**. Scoperto 2026-06-20.
+*Chiuso:* deploy `f697c0f` su prod (merge `dev`→`master` `--no-ff`); 3 migration applicate
+`[X]`, backfill 7/7 `FanProfile` = dry-run, gunicorn sano, smoke pubblico GREEN. Commit
+chiave: `e4f1efc` (`create_society` aggiunto alla whitelist del middleware) + `08f8830`
+(presidente de-vincolato da `Membership` PRESIDENT, RBAC derivato da `managed_society`); i
+3 fix bacheca emersi in verifica `50e3396`/`17edacc`/`6a42763`.
+*Nota onesta:* riprova autenticata su prod (login presidente `managed_society`-only) **non
+eseguita di proposito**, per non creare account fittizi su produzione. Comportamento
+verificato end-to-end su dev (Antigravity Check 1–3, sessione 2026-06-20); codice in prod
+bit-identico a dev (tree del merge identico, suite 221 verde sul merge di prova). Riprova
+demandata al primo login reale di un presidente. Per §5 è una chiusura solida proprio
+perché dichiara il suo unico angolo non coperto: chi rilegge il runbook non deve dedurre
+"verificato col login in prod" — la verità è dev verde + codice identico, riprova al primo
+presidente reale.
+*Vive in:* `accounts/middleware.py` (whitelist onboarding), `management/services` (RBAC da
+`managed_society`); regression suite `management` 126 GREEN su dev.
+
+### §10.11 `_society_recipients` — candidato debito INVESTIGATO, no-bug — CHIUSA 2026-06-21
+*Cosa era:* sospetto (test 7b) che la notifica vouching alla società non fosse recapitata
+perché `getattr(society, 'president', None)` puntava a una relation inesistente.
+*Chiusa (no-bug):* `society.president` è il reverse OneToOne di
+`PresidentProfile.managed_society` (`related_name='president'`); in questo Django
+`RelatedObjectDoesNotExist` è sottoclasse di `AttributeError`, quindi `getattr(..., None)`
+ritorna `None` senza sollevare. `_society_recipients` ritorna `[society.email]`,
+`[president.user.email]` o `[]` correttamente. **Nessun bug**: il sintomo reale è assorbito
+da §10.12 (SMTP non configurato), non da un difetto di codice.
+*Chiusura by-design (implementato e verificato e2e su `dev`, non ancora in prod):* il caso `[]` (notifica muta) per una società personificata è eliminato alla radice dal setup di personificazione presidente, che rende **obbligatoria** l'email società (BLUEPRINT §7.2 / §7.7; SYLLABUS Macro 18).
+
+### §10.12 SMTP non configurato — CHIUSO 2026-06-21 (dev console + prod Brevo)
+*Cosa era:* `EMAIL_BACKEND=smtp` su `localhost:25` senza server → le email best-effort
+(incluse vouching/certificazione) saltavano silenziosamente (gestite via `_safe_send`,
+nessun recapito). Causa reale del sintomo "notifica società non arrivata" (test 7b, vedi §10.11).
+*Chiuso in due tempi:*
+- **Lato-dev** (`baa69b3`, su prod con deploy `f697c0f`): `EMAIL_BACKEND` console di default
+  in dev, env-gated fail-safe.
+- **Lato-prod** (2026-06-21): migrazione da Gmail App Password → **Brevo SMTP**. Prod spedisce
+  via `smtp-relay.brevo.com` da `noreply@2salti.com`, dominio `2salti.com` autenticato
+  (SPF/DKIM/DMARC su Aruba: TXT `brevo-code`, CNAME `brevo1`/`brevo2` `_domainkey`, TXT `_dmarc`,
+  TXT SPF). Verificato con test reale: consegna in inbox confermata. La certificazione genitore
+  ora recapita davvero in produzione.
+*Rotazione credenziali:* via §11.1 (Brevo SMTP key in `.env`, mai in chat/log).
+
+### §10.13 API `/accounts/api/...` fuori whitelist onboarding — CHIUSO 2026-06-21
+*Cosa era:* l'esenzione middleware `request.path.startswith('/api/')` non copriva gli
+endpoint AJAX accounts sotto `/accounts/api/...` (`search-athlete` e simili) → intercettati
+durante onboarding e rediretti (HTML invece di JSON). Pre-esistente, scoperto 2026-06-20.
+*Chiuso:* `/accounts/api/` aggiunto alla whitelist del redirect middleware (commit
+`04cc484`); su prod con deploy `f697c0f`.
+
+### Cosmetico — tag `{{ }}` template spezzati su due righe — CHIUSO 2026-06-21
+*Cosa era:* 10 tag di template `{{ ... }}` spezzati su due righe (refuso cosmetico, **non**
+una voce §10 tracciata) che rendevano letterale il markup in pagina.
+*Chiuso:* 10 tag ricomposti su riga singola (commit `35ae324`); verificato in prod via HTTP
+e Antigravity Test 2. Fix chiuso, non un debito residuo.
+
+### §10.14 Git credential helper sul VPS — CHIUSO 2026-06-21 (diagnosticato + fragilità #1 mitigata)
+*Cosa era:* sospetto che qualcosa "resettasse" `credential.helper` sul VPS condiviso facendo
+fallire `git push` con 401, da cui la domanda "cosa resetta la config git". Premessa errata: vedi
+diagnosi.
+*Diagnosi (read-only, nessun segreto esposto):* il meccanismo attivo è `credential.helper=store`
+(global, `/home/alberto/.gitconfig`) + PAT in chiaro in `~/.git-credentials` (perms `0600
+alberto:alberto`), remote **HTTPS** `https://github.com/8albe/2salti-django.git` (URL pulito, nessun
+token embeddato). Tutti e tre i repo (`/home/alberto`, `/opt/2salti-dev`, `/opt/2salti-new`) ereditano
+lo stesso global, nessun override locale, nessun `url.insteadOf`. **"Niente 401" è il comportamento
+NORMALE di `store`**, non un'anomalia: restituisce il token in modo non-interattivo. La voce originale
+partiva da una premessa errata — non c'è nulla che resetti la config. (mtime di `~/.git-credentials` =
+ultima auth riuscita, non una scrittura pre-deploy → il PAT preesisteva al deploy; chiave SSH
+`id_ed25519_github_8albe` presente in `~/.ssh` ma non attiva, alternativa latente.)
+*Mitigazione applicata (fragilità #1 — scadenza/revoca del PAT):* il token era un PAT **classic**
+`2salti-hetzner-push` con scope `repo` (tutti i repo), scad. **20 lug 2026**; sostituito da un PAT
+**fine-grained** limitato al solo `8albe/2salti-django` (**Contents: read/write**), scad. **21 giu 2027**.
+Backup di `~/.git-credentials` in `~/.git-credentials.bak.20260621`, sostituita solo la stringa token
+nella riga esistente (username `8albe` e struttura HTTPS invariati), perms `0600` riapplicati; `fetch`
+di verifica **senza 401**; vecchio classic **revocato** su GitHub (esposizione scope-largo chiusa).
+Meccanismo invariato (`store`/HTTPS/PAT in chiaro come `alberto`), ma token ora fine-grained single-repo.
+*Fragilità residue (non debito, avvertenze permanenti):* #2 (deploy con utente ≠ `alberto`/HOME diverso
+→ 401) e #3 (reset/cancellazione di `~/.git-credentials` → 401) sono ricollocate come trappola operativa
+in **§3.13**. La mitigazione **SSH** (chiave già presente) resta opzionale, non implementata.
+*Rotazione credenziali:* via §11.1.

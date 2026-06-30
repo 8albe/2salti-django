@@ -105,17 +105,26 @@
 
     <!-- SPONSOR & INFO LATERALI -->
     <div class="space-y-6">
-        {% if society.sponsors %}
+        {% if sponsors %}
         <div class="bg-slate-900 rounded-xl p-6 border border-slate-800">
             <h2 class="text-xl font-bold mb-4">Partner</h2>
             <div class="grid grid-cols-2 gap-4">
-                {% for sponsor in society.sponsors %}
+                {% for sponsor in sponsors %}
+                {% if sponsor.url %}
+                <a href="{{ sponsor.url }}" target="_blank" rel="sponsored noopener nofollow" class="block text-center p-2 bg-white rounded-lg hover:ring-2 hover:ring-blue-400 transition-all">
+                    {% if sponsor.logo_url %}
+                    <img src="{{ sponsor.logo_url }}" alt="{{ sponsor.name }}" class="h-12 mx-auto object-contain mb-1">
+                    {% endif %}
+                    <p class="text-xs text-slate-900 font-bold truncate">{{ sponsor.name }}</p>
+                </a>
+                {% else %}
                 <div class="text-center p-2 bg-white rounded-lg">
                     {% if sponsor.logo_url %}
                     <img src="{{ sponsor.logo_url }}" alt="{{ sponsor.name }}" class="h-12 mx-auto object-contain mb-1">
                     {% endif %}
                     <p class="text-xs text-slate-900 font-bold truncate">{{ sponsor.name }}</p>
                 </div>
+                {% endif %}
                 {% endfor %}
             </div>
         </div>

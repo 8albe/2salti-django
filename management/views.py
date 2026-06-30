@@ -404,7 +404,13 @@ def club_admin_dashboard(request):
     if not society:
         return redirect('home')
 
-    requests = MembershipRequest.objects.filter(society=society, status='PENDING')
+    # Macro 18: le richieste di personificazione PRESIDENT NON passano dal
+    # presidente (sono admin-gated, op_admin_site). Escluderle evita che un
+    # presidente esistente approvi una richiesta role=PRESIDENT per la propria
+    # società -> tentativo di secondo managed_society -> IntegrityError OneToOne.
+    requests = MembershipRequest.objects.filter(
+        society=society, status='PENDING'
+    ).exclude(role='PRESIDENT')
     codes = ActivationCode.objects.filter(society=society)
     
     return render(request, 'management/club_admin/dashboard.html', {
@@ -426,7 +432,12 @@ def approve_membership(request, request_id):
     else:
         society = get_society_context(request)
 
-    req = get_object_or_404(MembershipRequest, id=request_id, society=society)
+    # Macro 18: il ramo PRESIDENT è isolato (approvazione solo admin) — un
+    # presidente non può approvarlo nemmeno via URL diretto: qui 404.
+    req = get_object_or_404(
+        MembershipRequest.objects.exclude(role='PRESIDENT'),
+        id=request_id, society=society,
+    )
     if request.method == 'POST':
         action = request.POST.get('action')
         if action == 'approve':

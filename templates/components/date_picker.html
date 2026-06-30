@@ -1,4 +1,4 @@
-<div class="mb-8 overflow-hidden">
+<div class="date-strip mb-8 overflow-hidden">
     <div class="flex items-center justify-between mb-4 px-2">
         <h3 class="text-xl font-bold font-display text-white">Calendario</h3>
         <div class="flex gap-2">
@@ -26,7 +26,7 @@
             </span>
 
             {% if date_obj == today and date_obj != selected_date %}
-            <span class="absolute top-2 right-2 w-1.5 h-1.5 bg-cyan-500 rounded-full"></span>
+            <span class="absolute top-2 right-2 w-1.5 h-1.5 bg-blue-500 rounded-full"></span>
             {% endif %}
         </a>
         {% endfor %}
@@ -41,7 +41,7 @@
 <script>
     // Scroll active date into view on load
     document.addEventListener('DOMContentLoaded', function () {
-        const activeDate = document.querySelector('.bg-cyan-600');
+        const activeDate = document.querySelector('.bg-blue-600');
         if (activeDate) {
             activeDate.scrollIntoView({ behavior: 'auto', block: 'nearest', inline: 'center' });
         }

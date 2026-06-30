@@ -91,7 +91,7 @@
             <tbody class="divide-y divide-slate-800">
                 {% for entry in league_standings %}
                 <tr
-                    class="hover:bg-slate-800/30 {% if entry.team == current_team %}bg-cyan-900/20 border-l-2 border-cyan-500{% endif %}">
+                    class="hover:bg-slate-800/30 {% if entry.team == current_team %}bg-blue-900/20 border-l-2 border-blue-500{% endif %}">
                     <td class="px-4 py-3 font-mono text-slate-400">{{ forloop.counter }}</td>
                     <td class="px-4 py-3 font-bold text-white">
                         <div class="flex items-center gap-2">
@@ -101,7 +101,7 @@
                             {{ entry.team.name|clean_team_name }}
                         </div>
                     </td>
-                    <td class="px-4 py-3 text-center font-bold text-cyan-400">{{ entry.points }}</td>
+                    <td class="px-4 py-3 text-center font-bold text-blue-400">{{ entry.points }}</td>
                     <td class="px-4 py-3 text-center text-slate-400">{{ entry.played }}</td>
                 </tr>
                 {% endfor %}
@@ -114,7 +114,7 @@
 <!-- ULTIME PARTITE (Pubblicate) -->
 {% if recent_matches %}
 <div class="bg-slate-900 rounded-xl p-6 mb-8 border border-slate-800">
-    <h2 class="text-xl font-bold mb-4">Ultime Partite <span class="text-[10px] text-cyan-500 uppercase ml-2 bg-cyan-500/10 px-2 py-0.5 rounded border border-cyan-500/20">Solo Pubblicate</span></h2>
+    <h2 class="text-xl font-bold mb-4">Ultime Partite <span class="text-[10px] text-blue-500 uppercase ml-2 bg-blue-500/10 px-2 py-0.5 rounded border border-blue-500/20">Solo Pubblicate</span></h2>
     <div class="space-y-4">
         {% for match in recent_matches %}
         <div
@@ -123,20 +123,20 @@
             <div class="flex-1 px-4 flex items-center justify-center gap-2">
                 <span class="text-right flex-1 truncate font-bold text-sm">{{ match.home_team.name }}</span>
                 {% if match.is_finished %}
-                <span class="text-cyan-400 font-mono font-bold">{{ match.home_score }}-{{ match.away_score }}</span>
+                <span class="text-blue-400 font-mono font-bold">{{ match.home_score }}-{{ match.away_score }}</span>
                 {% else %}
                 <span class="text-slate-600 text-xs">VS</span>
                 {% endif %}
                 <span class="text-left flex-1 truncate font-bold text-sm">{{ match.away_team.name }}</span>
             </div>
-            <a href="{% url 'match_detail' match.id %}" class="text-xs text-cyan-400 hover:underline">Vedi</a>
+            <a href="{% url 'match_detail' match.id %}" class="text-xs text-blue-400 hover:underline">Vedi</a>
         </div>
         {% endfor %}
     </div>
 </div>
 {% else %}
-<div class="bg-slate-900/50 rounded-xl p-8 text-center text-slate-500 italic mb-8 border border-dashed border-slate-800">
-    Nessuna partita pubblicata per questo atleta al momento.
+<div class="mb-8">
+{% include 'components/_empty_state.html' with icon="📅" title="Nessuna partita pubblicata" message="Nessuna partita pubblicata per questo atleta al momento." %}
 </div>
 {% endif %}
 
@@ -193,7 +193,7 @@
             <tbody class="divide-y divide-slate-800">
                 {% for entry in league_standings %}
                 <tr
-                    class="hover:bg-slate-800/30 {% if entry.team == current_team %}bg-cyan-900/20 border-l-2 border-cyan-500{% endif %}">
+                    class="hover:bg-slate-800/30 {% if entry.team == current_team %}bg-blue-900/20 border-l-2 border-blue-500{% endif %}">
                     <td class="px-4 py-3 font-mono text-slate-400">{{ forloop.counter }}</td>
                     <td class="px-4 py-3 font-bold text-white">
                         <div class="flex items-center gap-2">
@@ -203,7 +203,7 @@
                             {{ entry.team.name|clean_team_name }}
                         </div>
                     </td>
-                    <td class="px-4 py-3 text-center font-bold text-cyan-400">{{ entry.points }}</td>
+                    <td class="px-4 py-3 text-center font-bold text-blue-400">{{ entry.points }}</td>
                     <td class="px-4 py-3 text-center text-slate-400">{{ entry.played }}</td>
                 </tr>
                 {% endfor %}
@@ -224,13 +224,13 @@
             <div class="flex-1 px-4 flex items-center justify-center gap-2">
                 <span class="text-right flex-1 truncate font-bold text-sm">{{ match.home_team.name }}</span>
                 {% if match.is_finished %}
-                <span class="text-cyan-400 font-mono font-bold">{{ match.home_score }}-{{ match.away_score }}</span>
+                <span class="text-blue-400 font-mono font-bold">{{ match.home_score }}-{{ match.away_score }}</span>
                 {% else %}
                 <span class="text-slate-600 text-xs">VS</span>
                 {% endif %}
                 <span class="text-left flex-1 truncate font-bold text-sm">{{ match.away_team.name }}</span>
             </div>
-            <a href="{% url 'match_detail' match.id %}" class="text-xs text-cyan-400 hover:underline">Vedi</a>
+            <a href="{% url 'match_detail' match.id %}" class="text-xs text-blue-400 hover:underline">Vedi</a>
         </div>
         {% endfor %}
     </div>
@@ -258,13 +258,13 @@
             <div class="flex-1 px-4 flex items-center justify-center gap-2">
                 <span class="text-right flex-1 truncate font-bold text-sm">{{ match.home_team.name }}</span>
                 {% if match.is_finished %}
-                <span class="text-cyan-400 font-mono font-bold">{{ match.home_score }}-{{ match.away_score }}</span>
+                <span class="text-blue-400 font-mono font-bold">{{ match.home_score }}-{{ match.away_score }}</span>
                 {% else %}
                 <span class="text-slate-600 text-xs">VS</span>
                 {% endif %}
                 <span class="text-left flex-1 truncate font-bold text-sm">{{ match.away_team.name }}</span>
             </div>
-            <a href="{% url 'match_detail' match.id %}" class="text-xs text-cyan-400 hover:underline">Vedi</a>
+            <a href="{% url 'match_detail' match.id %}" class="text-xs text-blue-400 hover:underline">Vedi</a>
         </div>
         {% endfor %}
     </div>
@@ -295,7 +295,7 @@
 
 {% if request.user == profile_user %}
 <div class="mb-6">
-    <a href="{% url 'request_certification' %}" class="inline-block px-5 py-2 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white font-bold text-sm">
+    <a href="{% url 'request_certification' %}" class="inline-block px-5 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-sm">
         🔐 Certifica un figlio
     </a>
 </div>
@@ -307,11 +307,11 @@
     <h2 class="text-xl font-bold mb-4">🏃 Atleta Seguito — {{ item.user.get_full_name }}</h2>
     <div class="grid grid-cols-3 gap-4 mb-4">
         <div class="bg-slate-800 rounded-xl p-4 text-center">
-            <div class="text-3xl font-bold text-cyan-400">{{ item.profile.total_goals }}</div>
+            <div class="text-3xl font-bold text-blue-400">{{ item.profile.total_goals }}</div>
             <div class="text-slate-400 mt-1 text-sm">Gol</div>
         </div>
         <div class="bg-slate-800 rounded-xl p-4 text-center">
-            <div class="text-3xl font-bold text-cyan-400">{{ item.profile.total_matches }}</div>
+            <div class="text-3xl font-bold text-blue-400">{{ item.profile.total_matches }}</div>
             <div class="text-slate-400 mt-1 text-sm">Partite</div>
         </div>
         <div class="bg-slate-800 rounded-xl p-4 text-center">
@@ -323,7 +323,7 @@
     <div class="flex items-center gap-3 mt-2">
         <span class="text-slate-400 text-sm">Squadra:</span>
         <a href="{% url 'team_detail' item.profile.current_team.slug %}"
-            class="text-cyan-400 font-bold hover:underline text-sm">
+            class="text-blue-400 font-bold hover:underline text-sm">
             {{ item.profile.current_team.name }}
         </a>
     </div>
@@ -336,8 +336,13 @@
 </div>
 {% endfor %}
 {% else %}
-<div class="bg-slate-900 rounded-xl p-6 mb-6 border border-slate-800 text-center text-slate-400">
-    Nessun atleta seguito. {% if request.user == profile_user %}<a href="{% url 'edit_profile' %}" class="text-cyan-400 hover:underline">Aggiungine uno</a>.{% endif %}
+{% url 'edit_profile' as edit_profile_url %}
+<div class="mb-6">
+{% if request.user == profile_user %}
+{% include 'components/_empty_state.html' with icon="🏃" title="Nessun atleta seguito" message="Non segui ancora nessun atleta." cta_url=edit_profile_url cta_label="Aggiungi un atleta" %}
+{% else %}
+{% include 'components/_empty_state.html' with icon="🏃" title="Nessun atleta seguito" message="Questo profilo non segue ancora nessun atleta." %}
+{% endif %}
 </div>
 {% endif %}
 
@@ -373,10 +378,10 @@
             <tbody class="divide-y divide-slate-800">
                 {% for entry in item.standings %}
                 <tr
-                    class="hover:bg-slate-800/30 {% if entry.team == item.team %}bg-cyan-900/20 border-l-2 border-cyan-500{% endif %}">
+                    class="hover:bg-slate-800/30 {% if entry.team == item.team %}bg-blue-900/20 border-l-2 border-blue-500{% endif %}">
                     <td class="px-3 py-2 font-mono text-slate-400 text-xs">{{ forloop.counter }}</td>
                     <td class="px-3 py-2 font-bold text-white text-xs">{{ entry.team.name }}</td>
-                    <td class="px-3 py-2 text-center font-bold text-cyan-400">{{ entry.points }}</td>
+                    <td class="px-3 py-2 text-center font-bold text-blue-400">{{ entry.points }}</td>
                     <td class="px-3 py-2 text-center text-slate-400">{{ entry.played }}</td>
                 </tr>
                 {% endfor %}
@@ -387,9 +392,13 @@
 </div>
 {% endfor %}
 {% else %}
-<div class="bg-slate-900 rounded-xl p-6 border border-slate-800 text-center text-slate-400">
-    Nessuna squadra seguita. {% if request.user == profile_user %}<a href="{% url 'edit_profile' %}" class="text-cyan-400 hover:underline">Aggiungine
-        una</a>.{% endif %}
+{% url 'edit_profile' as edit_profile_url %}
+<div>
+{% if request.user == profile_user %}
+{% include 'components/_empty_state.html' with icon="🛡️" title="Nessuna squadra seguita" message="Non segui ancora nessuna squadra." cta_url=edit_profile_url cta_label="Aggiungi una squadra" %}
+{% else %}
+{% include 'components/_empty_state.html' with icon="🛡️" title="Nessuna squadra seguita" message="Questo profilo non segue ancora nessuna squadra." %}
+{% endif %}
 </div>
 {% endif %}
 {% endif %}

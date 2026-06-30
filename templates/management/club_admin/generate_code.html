@@ -17,8 +17,8 @@
             {% csrf_token %}
             
             <div>
-                <label class="block text-sm font-medium text-slate-300 mb-2">Destinazione (Squadra)</label>
-                <select name="team_id" class="w-full bg-slate-900/50 border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-cyan-500 transition-all">
+                <label for="gc-team-id" class="block text-sm font-medium text-slate-300 mb-2">Destinazione (Squadra)</label>
+                <select id="gc-team-id" name="team_id" class="w-full bg-slate-900/50 border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all">
                     <option value="">Nessuna (Codice Globale Società)</option>
                     {% for team in teams %}
                     <option value="{{ team.id }}">{{ team.name }}</option>
@@ -28,8 +28,8 @@
             </div>
 
             <div>
-                <label class="block text-sm font-medium text-slate-300 mb-2">Ruolo da Assegnare</label>
-                <select name="role" class="w-full bg-slate-900/50 border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-cyan-500 transition-all">
+                <label for="gc-role" class="block text-sm font-medium text-slate-300 mb-2">Ruolo da Assegnare</label>
+                <select id="gc-role" name="role" class="w-full bg-slate-900/50 border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all">
                     <option value="PLAYER">Atleta (Giocatore)</option>
                     <option value="HEAD_COACH">Allenatore Principale</option>
                     <option value="ASSISTANT_COACH">Vice Allenatore</option>
@@ -38,13 +38,13 @@
             </div>
 
             <div>
-                <label class="block text-sm font-medium text-slate-300 mb-2">Numero Massimo Utilizzi</label>
-                <input type="number" name="max_uses" value="50" min="1" max="1000" class="w-full bg-slate-900/50 border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-cyan-500 transition-all">
+                <label for="gc-max-uses" class="block text-sm font-medium text-slate-300 mb-2">Numero Massimo Utilizzi</label>
+                <input type="number" id="gc-max-uses" name="max_uses" value="50" min="1" max="1000" class="w-full bg-slate-900/50 border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all">
                 <p class="text-xs text-slate-500 mt-1">Usi totali prima della scadenza automatica.</p>
             </div>
 
             <div class="pt-4 border-t border-white/10">
-                <button type="submit" class="w-full py-4 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white font-bold transition-all shadow-lg hover:shadow-cyan-500/30">
+                <button type="submit" class="w-full py-4 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold transition-all shadow-lg hover:shadow-blue-500/30">
                     <i class="fas fa-magic mr-2"></i>Genera Codice
                 </button>
             </div>

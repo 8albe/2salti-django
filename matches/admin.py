@@ -407,10 +407,12 @@ class MatchReportAdmin(admin.ModelAdmin):
         return TemplateResponse(request, 'admin/matches/matchreport/review.html', context)
 
 op_admin_site.register(Match, MatchAdmin)
-from core.admin import TeamAdmin, LeagueAdmin, SportAdmin
+from core.admin import TeamAdmin, LeagueAdmin, SportAdmin, SponsorAdmin
+from core.models import Sponsor
 op_admin_site.register(Team, TeamAdmin)
 op_admin_site.register(League, LeagueAdmin)
 op_admin_site.register(Sport, SportAdmin)
+op_admin_site.register(Sponsor, SponsorAdmin)
 op_admin_site.register(MatchReport, MatchReportAdmin)
 
 @admin.register(MatchReport)

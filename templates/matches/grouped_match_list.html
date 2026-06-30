@@ -26,7 +26,7 @@
             <!-- VS/SCORE (Center) -->
             <div class="mx-2 sm:mx-4 flex items-center justify-center w-10 text-center flex-shrink-0">
                 {% if match.is_finished %}
-                <span class="text-cyan-400 font-mono text-sm font-bold">{{ match.home_score }}-{{ match.away_score }}</span>
+                <span class="text-blue-400 font-mono text-sm font-bold">{{ match.home_score }}-{{ match.away_score }}</span>
                 {% else %}
                 <span class="text-slate-600 font-bold text-[10px]">VS</span>
                 {% endif %}
@@ -51,7 +51,7 @@
 
                 {% if match.location %}
                 <a href="{{ match.google_maps_url }}" target="_blank"
-                    class="hidden sm:flex items-center gap-1 text-xs text-slate-500 hover:text-cyan-300 transition-colors z-20 relative truncate max-w-[130px]">
+                    class="hidden sm:flex items-center gap-1 text-xs text-slate-500 hover:text-blue-300 transition-colors z-20 relative truncate max-w-[130px]">
                     <span>📍</span> {{ match.location|truncatechars:20 }}
                 </a>
                 {% endif %}
@@ -66,9 +66,7 @@
 </div>
 
 {% if not matches %}
-<div class="glass-panel p-12 text-center border-dashed border-2 border-slate-700/50">
-    <div class="text-4xl mb-4 opacity-50 grayscale">📅</div>
-    <h3 class="text-lg font-bold text-white mb-2">Nessuna partita</h3>
-    <p class="text-slate-400">Non ci sono partite in programma per {{ selected_date|date:"l d F" }}.</p>
-</div>
+{% with datestr=selected_date|date:"l d F" %}
+{% include 'components/_empty_state.html' with icon="📅" title="Nessuna partita" message="Non ci sono partite in programma per "|add:datestr|add:"." %}
+{% endwith %}
 {% endif %}

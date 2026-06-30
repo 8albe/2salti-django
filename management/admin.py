@@ -32,9 +32,36 @@ class MembershipRequestAdmin(admin.ModelAdmin):
     list_display = ('user', 'society', 'team', 'role', 'status', 'created_at')
     list_filter = ('status', 'society', 'role')
     search_fields = ('user__username', 'user__first_name', 'user__last_name')
+    actions = ['approve_president_personification']
 
     def has_module_permission(self, request):
         return False
+
+    @admin.action(description="Approva personificazione presidente (Macro 18)")
+    def approve_president_personification(self, request, queryset):
+        """Action admin-gated: aggancia il presidente alla società richiesta.
+
+        Processa solo le richieste role=PRESIDENT, status=PENDING. Il guard 1:1
+        e il side-effect (managed_society, nessuna Membership) vivono nel
+        servizio, dentro transaction.atomic(); la notifica è best-effort fuori.
+        """
+        from management.services.president_personification import (
+            approve_president_request,
+        )
+
+        approved = 0
+        for req in queryset.filter(role='PRESIDENT', status='PENDING'):
+            ok, err = approve_president_request(req)
+            if ok:
+                approved += 1
+            else:
+                self.message_user(
+                    request,
+                    f"Richiesta #{req.pk} non approvata: {err}",
+                    level='warning',
+                )
+        if approved:
+            self.message_user(request, f"{approved} presidente/i agganciato/i.")
 
 
 @admin.register(AuditLog)
