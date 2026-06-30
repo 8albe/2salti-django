@@ -429,7 +429,11 @@ def profile(request, username):
              context['current_team'] = profile.current_team
              context['league'] = profile.current_team.league
              context['league_standings'] = profile.current_team.league.get_standings()
-    
+             # Sponsor del club (forma ridotta): stessi sponsor della società
+             # dell'atleta per la stagione corrente; degrada a vuoto.
+             from core.services.sponsor_service import get_society_sponsors
+             context['club_sponsors'] = get_society_sponsors(profile.current_team.society)
+
     elif user.role == 'coach':
         profile = user.coach_profile
         context['coach_profile'] = profile

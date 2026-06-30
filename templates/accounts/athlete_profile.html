@@ -191,5 +191,33 @@
 
     </div>
 
+    <!-- 5. SPONSOR DEL CLUB (forma ridotta) -->
+    {% if club_sponsors %}
+    <div class="glass-panel p-8">
+        <h3 class="text-xs font-black text-slate-500 uppercase tracking-[0.4em] mb-6 text-center">Partner del Club</h3>
+        <div class="flex flex-wrap items-center justify-center gap-4">
+            {% for sponsor in club_sponsors %}
+            {% if sponsor.url %}
+            <a href="{{ sponsor.url }}" target="_blank" rel="sponsored noopener nofollow" title="{{ sponsor.name }}" class="flex items-center justify-center h-12 px-4 bg-white rounded-xl hover:ring-2 hover:ring-blue-400 transition-all">
+                {% if sponsor.logo_url %}
+                <img src="{{ sponsor.logo_url }}" alt="{{ sponsor.name }}" class="h-8 object-contain">
+                {% else %}
+                <span class="text-xs text-slate-900 font-bold">{{ sponsor.name }}</span>
+                {% endif %}
+            </a>
+            {% else %}
+            <div title="{{ sponsor.name }}" class="flex items-center justify-center h-12 px-4 bg-white rounded-xl">
+                {% if sponsor.logo_url %}
+                <img src="{{ sponsor.logo_url }}" alt="{{ sponsor.name }}" class="h-8 object-contain">
+                {% else %}
+                <span class="text-xs text-slate-900 font-bold">{{ sponsor.name }}</span>
+                {% endif %}
+            </div>
+            {% endif %}
+            {% endfor %}
+        </div>
+    </div>
+    {% endif %}
+
 </div>
 {% endblock %}
