@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- 2salti favicon — PLACEHOLDER dichiarato (Macro 17 Fase 2 A2, 2026-06-30).
+     Quadrato brand blue-600 (#2563eb, perno Cap.12) + monogramma "2s" (Outfit,
+     font display del design system; fallback sans-serif fuori dal sito).
+     Da sostituire con il mark definitivo quando disponibile: non è un logo nuovo. -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="32" height="32">
+  <rect width="32" height="32" rx="7" fill="#2563eb"/>
+  <text x="16" y="22" text-anchor="middle" fill="#ffffff"
+        font-family="Outfit, Inter, system-ui, sans-serif" font-size="17" font-weight="700">2s</text>
+</svg>
