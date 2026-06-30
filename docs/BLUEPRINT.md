@@ -314,7 +314,7 @@ Esperienza differenziata tra Guest e Autenticato:
 - Il sistema non archivia prove d'identità (documenti, selfie): la verifica passa per un click di conferma su email. Dove serve un controllo di merito (es. genitore→figlio) è la società a fare il match contro il proprio gestionale; il sistema inoltra e registra l'esito, con audit log.
 - L'identità confermata via email non basta mai per l'accesso ai dati privati: deve esistere anche un collegamento sportivo valido tra utente, squadra, stagione e ruolo.
 - Per i minorenni: richiesto opt-in esplicito del genitore per Media Gallery e tagging.
-- **Certificazione genitore (society-vouching via email)**: il genitore dichiara il figlio; il sito notifica la società; la società verifica nome+email del genitore contro il proprio gestionale; se conferma, il sito invia al genitore una mail con link; al click, l'accesso ai dati/servizi del figlio si attiva. Il sistema non archivia prove d'identità: inoltra la richiesta e registra l'esito; il match lo fa un umano della società. Macchina a stati: vedi §7.7 (design pianificato).
+- **Certificazione genitore (society-vouching via email)**: il genitore dichiara il figlio; il sito notifica la società; la società verifica nome+email del genitore contro il proprio gestionale; se conferma, il sito invia al genitore una mail con link; al click, l'accesso ai dati/servizi del figlio si attiva. Il sistema non archivia prove d'identità: inoltra la richiesta e registra l'esito; il match lo fa un umano della società. Macchina a stati: vedi §7.7 (implementata; as-built in STATE_MACHINES.md §10).
 - Tema dark/light, recupero password, sessioni e messaggi di errore restano parte del modulo account, ma non devono alterare la gerarchia di sicurezza.
 
 ### 7.4 Referto Digitale In-App
@@ -358,9 +358,9 @@ Spazio dedicato ai contenuti multimediali della partita.
 - **Tagging**: I tag validati alimentano le gallery personali nei profili atleta. Prevedere una coda di review (almeno inizialmente manuale o semi-automatica) per evitare mis-tagging.
 - **Privacy Minorenni**: Richiesto opt-in esplicito del genitore per upload e tagging. L'atleta può sempre esercitare l'opt-out globale o per singolo contenuto.
 
-### 7.7 Certificazione genitore (society-vouching) — design pianificato
+### 7.7 Certificazione genitore (society-vouching) — implementata
 
-> **Design pianificato (Macro 7b), non ancora implementato a codice.** Modello target `ParentCertification`. Questa macchina a stati **non** è in STATE_MACHINES.md (che resta solo as-built): vive qui finché non esiste a codice.
+> **As-built (Macro 7b), implementata e verificata su `dev`.** Modello `management.ParentCertification` (migration `0017_parentcertification`), orchestrazione in `management/services/certification_service.py`, viste lato genitore e società, copertura in `management/tests_parent_certification.py`. La macchina a stati **as-built** è ora in [[STATE_MACHINES.md]] §10 (fonte di verità sul codice); questa sezione resta come razionale di prodotto.
 
 Flusso: il genitore dichiara il figlio; il sito notifica la società; la società verifica nome+email del genitore contro il proprio gestionale; se conferma, il sito invia al genitore una mail con link; al click, l'accesso ai dati/servizi del figlio si attiva. Il sistema non archivia prove d'identità: inoltra la richiesta e registra l'esito; il match lo fa un umano della società.
 
