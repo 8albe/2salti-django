@@ -290,14 +290,16 @@ def choose_society(request):
 
 def society_detail(request, slug):
     """Pagina società con tutte le squadre"""
+    from core.services.sponsor_service import get_society_sponsors
     society = get_object_or_404(Society, slug=slug)
     teams = society.teams.all().order_by('name')
     staff = society.get_staff()
-    
+
     return render(request, 'societies/society_detail.html', {
         'society': society,
         'teams': teams,
         'staff': staff,
+        'sponsors': get_society_sponsors(society),
         'sport_color': society.sport.hex_color,
         'seo_title': f"{society.name} - Società Sportiva",
         'seo_description': f"Tutte le squadre, lo staff e la storia di {society.name}. Scopri i risultati di pallanuoto e volley della società su 2salti.",
