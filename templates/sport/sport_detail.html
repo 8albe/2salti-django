@@ -6,12 +6,12 @@
 <nav class="mb-8 flex flex-wrap gap-2" aria-label="Seleziona sport">
     {% for s in all_sports %}
     {% if s.slug == sport.slug %}
-    <span class="glass-panel px-4 py-2 rounded-full border-2 border-cyan-400 text-white font-bold text-sm">
+    <span class="glass-panel px-4 py-2 rounded-full border-2 border-blue-400 text-white font-bold text-sm">
         {{ s.name }}
     </span>
     {% else %}
     <a href="{% url 'sport_detail' s.slug %}"
-       class="glass-panel px-4 py-2 rounded-full border border-white/10 text-slate-300 hover:text-white hover:border-cyan-400/50 hover:bg-white/5 transition-all text-sm">
+       class="glass-panel px-4 py-2 rounded-full border border-white/10 text-slate-300 hover:text-white hover:border-blue-400/50 hover:bg-white/5 transition-all text-sm">
         {{ s.name }}
     </a>
     {% endif %}
@@ -28,7 +28,7 @@
     <form method="get" class="shrink-0">
         <label for="season-select" class="sr-only">Seleziona stagione</label>
         <select id="season-select" name="season" onchange="this.form.submit()"
-                class="glass-panel px-4 py-2 rounded-full border border-white/10 text-slate-200 text-sm bg-slate-900/50 focus:border-cyan-400/50 focus:outline-none">
+                class="glass-panel px-4 py-2 rounded-full border border-white/10 text-slate-200 text-sm bg-slate-900/50 focus:border-blue-400/50 focus:outline-none">
             {% for s in available_seasons %}
             <option value="{{ s }}" {% if s == selected_season %}selected{% endif %}>Stagione {{ s }}</option>
             {% endfor %}
@@ -40,12 +40,12 @@
 <!-- QUICK LINKS -->
 <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-12">
     <a href="{% url 'sport_matches' sport.slug %}"
-       class="glass-panel p-6 flex items-center justify-between group hover:bg-white/5 transition-all border-l-4 border-cyan-500">
+       class="glass-panel p-6 flex items-center justify-between group hover:bg-white/5 transition-all border-l-4 border-blue-500">
         <div>
             <h3 class="text-xl font-bold text-white mb-1">📅 Risultati</h3>
             <p class="text-sm text-slate-400">Ultimi risultati e calendario</p>
         </div>
-        <div class="w-10 h-10 rounded-full bg-cyan-500/10 flex items-center justify-center text-cyan-400 group-hover:bg-cyan-500/20 transition-colors">
+        <div class="w-10 h-10 rounded-full bg-blue-500/10 flex items-center justify-center text-blue-400 group-hover:bg-blue-500/20 transition-colors">
             <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path></svg>
         </div>
     </a>
@@ -70,13 +70,13 @@
                 <h2 class="text-2xl font-bold font-display text-white">
                     {{ item.league.name }}
                     {% if item.league.group_name %}
-                    <span class="text-cyan-400 ml-2 text-lg">— {{ item.league.group_name }}</span>
+                    <span class="text-blue-400 ml-2 text-lg">— {{ item.league.group_name }}</span>
                     {% endif %}
                 </h2>
                 <p class="text-slate-400 text-sm">Stagione {{ item.league.season }}</p>
             </div>
             <a href="{% url 'league_standings' item.league.id %}"
-                class="text-cyan-400 hover:text-cyan-300 text-sm font-bold flex items-center gap-1">
+                class="text-blue-400 hover:text-blue-300 text-sm font-bold flex items-center gap-1">
                 Vedi Classifica <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 8l4 4m0 0l-4 4m4-4H3">
                     </path>
@@ -101,7 +101,7 @@
                     <tbody class="divide-y divide-white/5 text-white">
                         {% for row in item.standings %}
                         <tr>
-                            <td class="px-3 py-2 font-bold text-cyan-400">{{ row.rank|default:forloop.counter }}</td>
+                            <td class="px-3 py-2 font-bold text-blue-400">{{ row.rank|default:forloop.counter }}</td>
                             <td class="px-3 py-2">{{ row.team.society.name }}</td>
                             <td class="px-3 py-2 text-center text-slate-300">{{ row.played }}</td>
                             <td class="px-3 py-2 text-center font-bold">{{ row.points }}</td>

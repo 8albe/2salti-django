@@ -23,7 +23,7 @@
             <div>
                 <p class="text-white font-bold">{{ cert.parent.get_full_name|default:cert.parent.username }}
                     <span class="text-slate-400 font-normal text-sm">— {{ cert.parent.email|default:"email non indicata" }}</span></p>
-                <p class="text-slate-400 text-sm mt-1">Dichiara come figlio: <span class="text-cyan-400">{{ cert.child.get_full_name|default:cert.child.username }}</span></p>
+                <p class="text-slate-400 text-sm mt-1">Dichiara come figlio: <span class="text-blue-400">{{ cert.child.get_full_name|default:cert.child.username }}</span></p>
                 <p class="text-slate-500 text-xs mt-1">Richiesta del {{ cert.requested_at|date:"d/m/Y H:i" }}</p>
             </div>
             <div class="flex gap-3">

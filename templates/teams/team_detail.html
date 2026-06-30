@@ -26,7 +26,7 @@
                     🏆 <span class="font-bold text-sport">{{ team.league.name }}{% if team.league.group_name %} — {{ team.league.group_name }}{% endif %}</span>
                 </span>
                 {% if standing_pos %}
-                <span class="bg-cyan-500/20 px-3 py-1 rounded-full text-sm border border-cyan-500/30 text-cyan-400 font-bold">
+                <span class="bg-blue-500/20 px-3 py-1 rounded-full text-sm border border-blue-500/30 text-blue-400 font-bold">
                     Posizione #{{ standing_pos }}
                 </span>
                 {% endif %}
@@ -42,7 +42,7 @@
         <div class="flex gap-3 overflow-x-auto pb-2 scrollbar-hide">
             {% for other_team in other_teams %}
             <a href="{% url 'team_detail' other_team.slug %}"
-                class="shrink-0 px-4 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 hover:border-cyan-500/50 transition-all text-sm font-medium text-slate-300">
+                class="shrink-0 px-4 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 hover:border-blue-500/50 transition-all text-sm font-medium text-slate-300">
                 {{ other_team.category_label }}
             </a>
             {% endfor %}
@@ -74,7 +74,7 @@
 
         {% if request.user_membership.society == team.society %}
         <a href="{% url 'bacheca_team' team.slug %}"
-            class="bg-cyan-500 hover:bg-cyan-600 text-black px-6 py-2 rounded-lg font-bold transition-all flex items-center gap-2">
+            class="bg-blue-500 hover:bg-blue-600 text-black px-6 py-2 rounded-lg font-bold transition-all flex items-center gap-2">
             <span>📢</span> Bacheca
         </a>
         <a href="{% url 'chat_view' team.slug %}"
@@ -166,14 +166,14 @@
             <!-- PROSSIMA PARTITA -->
             {% if next_match %}
             <div class="mb-8">
-                <h3 class="text-xl font-bold mb-4 text-cyan-400">Prossima Partita</h3>
+                <h3 class="text-xl font-bold mb-4 text-blue-400">Prossima Partita</h3>
                 <!-- NEXT MATCH CARD (TABELLINO) -->
                 <div
-                    class="glass-panel p-6 relative overflow-hidden group hover:border-cyan-500/50 transition-all hover:scale-[1.01] duration-300">
+                    class="glass-panel p-6 relative overflow-hidden group hover:border-blue-500/50 transition-all hover:scale-[1.01] duration-300">
 
                     {% if request.user_membership.role == 'HEAD_COACH' or request.user_membership.role == 'PRESIDENT' %}
                     <a href="{% url 'convocation_create' next_match.id %}"
-                        class="absolute top-2 left-2 z-20 bg-cyan-500 text-black text-[10px] font-bold px-3 py-1 rounded-full shadow-lg hover:bg-cyan-400 transition-all">
+                        class="absolute top-2 left-2 z-20 bg-blue-500 text-black text-[10px] font-bold px-3 py-1 rounded-full shadow-lg hover:bg-blue-400 transition-all">
                         Crea Convocazione
                     </a>
                     {% endif %}
@@ -186,7 +186,7 @@
                     </div>
 
                     <div class="flex flex-col items-center">
-                        <div class="text-sm text-cyan-300 font-mono mb-6 flex items-center gap-2">
+                        <div class="text-sm text-blue-300 font-mono mb-6 flex items-center gap-2">
                             <span>📅 {{ next_match.match_date|date:"D d F"|upper }}</span>
                             <span>⏰ {{ next_match.match_date|time:"H:i" }}</span>
                         </div>
@@ -224,7 +224,7 @@
 
                         {% if next_match.location %}
                         <a href="{{ next_match.google_maps_url }}" target="_blank" onclick="event.stopPropagation();"
-                            class="flex items-center gap-2 text-slate-400 hover:text-cyan-400 transition-colors text-sm bg-black/20 px-4 py-2 rounded-full border border-white/5 hover:border-cyan-500/30 z-20 relative">
+                            class="flex items-center gap-2 text-slate-400 hover:text-blue-400 transition-colors text-sm bg-black/20 px-4 py-2 rounded-full border border-white/5 hover:border-blue-500/30 z-20 relative">
                             <span>📍</span> {{ next_match.location }}
                         </a>
                         {% endif %}
@@ -235,7 +235,7 @@
 
             <!-- ULTIME PARTITE -->
             <div>
-                <h3 class="text-xl font-bold mb-4">Ultime Partite <span class="text-[10px] text-cyan-500 uppercase ml-2 bg-cyan-500/10 px-2 py-0.5 rounded border border-cyan-500/20">Validati</span></h3>
+                <h3 class="text-xl font-bold mb-4">Ultime Partite <span class="text-[10px] text-blue-500 uppercase ml-2 bg-blue-500/10 px-2 py-0.5 rounded border border-blue-500/20">Validati</span></h3>
                 {% if last_matches %}
                 <div class="glass-panel overflow-hidden border border-white/10 rounded-xl bg-slate-900/50">
                     <div class="divide-y divide-white/5">

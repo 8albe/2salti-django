@@ -5,16 +5,16 @@
     <!-- Progress Indicator -->
     <div class="flex justify-between items-center mb-10">
         <div class="flex items-center space-x-2">
-            <div class="h-2 w-12 rounded bg-cyan-500"></div>
-            <div class="h-2 w-12 rounded bg-cyan-500"></div>
-            <div class="h-2 w-12 rounded bg-cyan-500 shadow-[0_0_10px_rgba(37,99,235,0.5)]"></div>
+            <div class="h-2 w-12 rounded bg-blue-500"></div>
+            <div class="h-2 w-12 rounded bg-blue-500"></div>
+            <div class="h-2 w-12 rounded bg-blue-500 shadow-[0_0_10px_rgba(37,99,235,0.5)]"></div>
             <div class="h-2 w-12 rounded bg-slate-700"></div>
         </div>
         <span class="text-xs font-bold text-slate-500 uppercase tracking-widest">Step 3 di 4</span>
     </div>
 
     <div class="text-center mb-12">
-        <div class="inline-flex items-center justify-center w-20 h-20 rounded-full bg-cyan-500/10 text-cyan-400 text-4xl mb-6">
+        <div class="inline-flex items-center justify-center w-20 h-20 rounded-full bg-blue-500/10 text-blue-400 text-4xl mb-6">
             🛡️
         </div>
         <h2 class="text-4xl font-display font-bold text-white mb-4">Associa il tuo Profilo</h2>
@@ -25,9 +25,9 @@
 
     <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
         <!-- Option A: Code -->
-        <div class="p-8 rounded-3xl bg-white/5 border border-white/10 hover:border-cyan-500/30 transition-all group">
+        <div class="p-8 rounded-3xl bg-white/5 border border-white/10 hover:border-blue-500/30 transition-all group">
             <h3 class="text-lg font-bold text-white mb-4 flex items-center gap-3">
-                <span class="w-8 h-8 rounded-lg bg-cyan-500/20 text-cyan-400 flex items-center justify-center text-sm">A</span>
+                <span class="w-8 h-8 rounded-lg bg-blue-500/20 text-blue-400 flex items-center justify-center text-sm">A</span>
                 Codice Invito
             </h3>
             <p class="text-sm text-slate-500 mb-6">Se hai un codice (es: RECC-X12), inseriscilo per l'attivazione immediata.</p>
@@ -35,7 +35,7 @@
             <form method="POST" class="space-y-4">
                 {% csrf_token %}
                 <input type="text" name="activation_code" placeholder="RECC-..." 
-                       class="w-full bg-slate-900/50 border border-white/10 rounded-xl px-4 py-3 text-white uppercase tracking-widest placeholder:text-slate-700 focus:ring-2 focus:ring-cyan-500 focus:border-transparent outline-none transition-all">
+                       class="w-full bg-slate-900/50 border border-white/10 rounded-xl px-4 py-3 text-white uppercase tracking-widest placeholder:text-slate-700 focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all">
                 <button type="submit" class="w-full py-3 rounded-xl bg-white/10 hover:bg-white/20 text-white font-bold transition-all border border-white/10">
                     Attiva Codice
                 </button>
@@ -43,7 +43,7 @@
         </div>
 
         <!-- Option B: Manual -->
-        <div class="p-8 rounded-3xl bg-white/5 border border-white/10 hover:border-cyan-500/30 transition-all group">
+        <div class="p-8 rounded-3xl bg-white/5 border border-white/10 hover:border-blue-500/30 transition-all group">
             <h3 class="text-lg font-bold text-white mb-4 flex items-center gap-3">
                 <span class="w-8 h-8 rounded-lg bg-slate-700 text-slate-400 flex items-center justify-center text-sm">B</span>
                 Richiesta Manuale
@@ -62,7 +62,7 @@
                                .then(d => { results = d; loading = false; })
                            "
                            placeholder="Cerca squadra..." 
-                           class="w-full bg-slate-900/50 border border-white/10 rounded-xl px-4 py-3 text-white placeholder:text-slate-700 focus:ring-2 focus:ring-cyan-500 outline-none transition-all">
+                           class="w-full bg-slate-900/50 border border-white/10 rounded-xl px-4 py-3 text-white placeholder:text-slate-700 focus:ring-2 focus:ring-blue-500 outline-none transition-all">
                 </div>
 
                 <div x-show="results.length > 0" class="absolute z-50 bg-slate-900 border border-white/10 rounded-xl shadow-2xl mt-1 overflow-hidden w-64 max-h-48 overflow-y-auto">
@@ -77,7 +77,7 @@
                 <form method="POST" x-show="selected" class="mt-4 animate-fadeIn">
                     {% csrf_token %}
                     <input type="hidden" name="team_id" :value="selected ? selected.id : ''">
-                    <button type="submit" class="w-full py-3 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white font-bold transition-all shadow-lg shadow-cyan-600/20">
+                    <button type="submit" class="w-full py-3 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold transition-all shadow-lg shadow-blue-600/20">
                         Invia Richiesta a <span x-text="selected ? selected.name : ''"></span>
                     </button>
                 </form>
@@ -87,7 +87,7 @@
 
     <div class="mt-12 pt-8 border-t border-white/5 flex flex-col md:flex-row justify-between items-center gap-4 text-[10px] text-slate-500 uppercase tracking-widest">
         <p>Supporto tecnico: support@2salti.com</p>
-        <a href="{% url 'logout' %}" class="hover:text-cyan-400 transition-colors">Logout / Esci dall'onboarding</a>
+        <a href="{% url 'logout' %}" class="hover:text-blue-400 transition-colors">Logout / Esci dall'onboarding</a>
     </div>
 </div>
 {% endblock %}

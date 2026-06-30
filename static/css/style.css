@@ -308,7 +308,7 @@ body {
 /* ================================
    Tema chiaro: contrasto nav header/sidebar (17.5).
    I link nav usano utility Tailwind pensate per fondo scuro
-   (text-slate-400 / hover:text-white / text-cyan-400): su fondo chiaro
+   (text-slate-400 / hover:text-white / text-blue-400): su fondo chiaro
    diventano illeggibili (il bianco sparisce, il ciano-400 ha ~1.5:1).
    Qui le rimappo SOLO nel tema chiaro, scopate a header/aside per non
    toccare bottoni accent (es. "Accedi" bianco su gradiente ciano).
@@ -322,14 +322,14 @@ body {
 [data-theme="light"] header .nav-link-premium:hover {
     color: #0f172a;                 /* slate-900 invece di white */
 }
-[data-theme="light"] header .nav-link-premium.text-cyan-400 {
-    color: #1d4ed8;                 /* 17.F2: blue-700, accent AA su chiaro (era cyan-700 #0e7490) */
+[data-theme="light"] header .nav-link-premium.text-blue-400 {
+    color: #1d4ed8;                 /* 17.F2: blue-700, accent AA su chiaro (era ciano #0e7490) */
 }
 
 /* Sidebar nav: link attivi (ciano) e nomi squadra (text-white -> scuro).
    Limitato a `aside nav` per escludere il bottone "Accedi" (fuori da nav). */
-[data-theme="light"] aside nav .text-cyan-400 {
-    color: #1d4ed8;                 /* 17.F2: blue-700 (era cyan-700 #0e7490) */
+[data-theme="light"] aside nav .text-blue-400 {
+    color: #1d4ed8;                 /* 17.F2: blue-700 (era ciano #0e7490) */
 }
 [data-theme="light"] aside nav .text-white {
     color: #0f172a;
@@ -361,10 +361,9 @@ body {
 }
 
 /* Ri-afferma testo bianco sui fondi PIENI accent/scuri (bottoni, badge, pill).
-   I fondi traslucidi (bg-white/5, bg-cyan-500/10) NON sono qui di proposito:
+   I fondi traslucidi (bg-white/5, bg-blue-500/10) NON sono qui di proposito:
    nel chiaro restano chiari, quindi il testo va scuro (es. giorno selezionato
    del date picker, bg-white/5). I fondi slate scuri pieni (7/8/9) sì. */
-[data-theme="light"] main .text-white[class*="bg-cyan-"],
 [data-theme="light"] main .text-white[class*="bg-blue-"],
 [data-theme="light"] main .text-white[class*="bg-indigo-"],
 [data-theme="light"] main .text-white[class*="bg-sky-"],
@@ -493,7 +492,6 @@ body {
 [data-theme="light"] main [class~="bg-gray-100"],
 [data-theme="light"] main [class~="bg-gray-200"],
 [data-theme="light"] main [class~="bg-indigo-50"],
-[data-theme="light"] main [class~="bg-cyan-100"],
 [data-theme="light"] main [class~="bg-blue-100"],
 [data-theme="light"] main [class~="bg-green-100"],
 [data-theme="light"] main [class~="bg-amber-100"],
@@ -514,7 +512,7 @@ body {
 /* ECCEZIONE all'hover: il bianco va PRESERVATO dove l'hover poggia su un'isola
    scura (pill report_queue bg-slate-800; badge rosa match_detail che sono già
    bg-slate-800) o diventa un fondo ACCENT pieno (icona-azione athlete_profile
-   hover:bg-cyan-600; badge rosa che all'hover diventano cyan/purple-500).
+   hover:bg-blue-600; badge rosa che all'hover diventano blu/purple-500).
    Specificità maggiore del default -> vince. */
 [data-theme="light"] main .dark-surface .hover\:text-white:hover,
 [data-theme="light"] main [class~="bg-slate-700"].hover\:text-white:hover,
@@ -525,8 +523,7 @@ body {
 [data-theme="light"] main [class~="bg-slate-800"] .hover\:text-white:hover,
 [data-theme="light"] main [class~="bg-slate-900"] .hover\:text-white:hover,
 [data-theme="light"] main [class~="bg-slate-950"] .hover\:text-white:hover,
-[data-theme="light"] main .hover\:bg-cyan-500.hover\:text-white:hover,
-[data-theme="light"] main .hover\:bg-cyan-600.hover\:text-white:hover,
+[data-theme="light"] main .hover\:bg-blue-500.hover\:text-white:hover,
 [data-theme="light"] main .hover\:bg-blue-600.hover\:text-white:hover,
 [data-theme="light"] main .hover\:bg-indigo-600.hover\:text-white:hover,
 [data-theme="light"] main .hover\:bg-emerald-600.hover\:text-white:hover,
@@ -541,7 +538,7 @@ body {
 [data-theme="light"] main .group:hover .group-hover\:text-white[class~="bg-slate-800"],
 [data-theme="light"] main .group:hover .group-hover\:text-white[class~="bg-slate-900"],
 [data-theme="light"] main .group:hover .group-hover\:text-white[class~="bg-slate-950"],
-[data-theme="light"] main .group:hover .group-hover\:bg-cyan-500.group-hover\:text-white,
+[data-theme="light"] main .group:hover .group-hover\:bg-blue-500.group-hover\:text-white,
 [data-theme="light"] main .group:hover .group-hover\:bg-purple-500.group-hover\:text-white {
     color: #fff;
 }

@@ -80,7 +80,7 @@
             <div class="h-16 flex items-center px-6 border-b border-white/5">
                 <a href="/" class="flex items-center gap-2">
                     <img src="{% static 'img/logo.png' %}" alt="2salti" class="h-8 w-auto">
-                    <span class="text-2xl font-display font-bold bg-clip-text text-transparent bg-gradient-to-r from-cyan-400 to-blue-500">2salti</span>
+                    <span class="text-2xl font-display font-bold bg-clip-text text-transparent bg-gradient-to-r from-blue-400 to-blue-500">2salti</span>
                 </a>
             </div>
 
@@ -94,16 +94,16 @@
                     <h3 class="text-[10px] text-slate-500 uppercase tracking-[0.2em] px-4 mb-3 font-bold">Esplora</h3>
                     <div class="space-y-1">
                         <a href="{% if sport %}{% url 'sport_detail' sport.slug %}{% else %}/{% endif %}"
-                            class="flex items-center gap-3 px-4 py-2 rounded-xl hover:bg-white/5 transition-colors {% if request.resolver_match.url_name == 'home' or request.resolver_match.url_name == 'sport_detail' %}bg-white/10 text-cyan-400{% endif %}">
+                            class="flex items-center gap-3 px-4 py-2 rounded-xl hover:bg-white/5 transition-colors {% if request.resolver_match.url_name == 'home' or request.resolver_match.url_name == 'sport_detail' %}bg-white/10 text-blue-400{% endif %}">
                             <span class="text-lg">🏠</span> <span class="font-medium text-sm">Home</span>
                         </a>
                         {% if sport %}
                         <a href="{% url 'sport_matches' sport.slug %}"
-                            class="flex items-center gap-3 px-4 py-2 rounded-xl hover:bg-white/5 transition-colors {% if request.resolver_match.url_name == 'sport_matches' %}bg-white/10 text-cyan-400{% endif %}">
+                            class="flex items-center gap-3 px-4 py-2 rounded-xl hover:bg-white/5 transition-colors {% if request.resolver_match.url_name == 'sport_matches' %}bg-white/10 text-blue-400{% endif %}">
                             <span class="text-lg">📅</span> <span class="font-medium text-sm">Risultati</span>
                         </a>
                         <a href="{% url 'sport_detail' sport.slug %}"
-                            class="flex items-center gap-3 px-4 py-2 rounded-xl hover:bg-white/5 transition-colors {% if request.resolver_match.url_name == 'sport_detail' %}bg-white/10 text-cyan-400{% endif %}">
+                            class="flex items-center gap-3 px-4 py-2 rounded-xl hover:bg-white/5 transition-colors {% if request.resolver_match.url_name == 'sport_detail' %}bg-white/10 text-blue-400{% endif %}">
                             <span class="text-lg">🏆</span> <span class="font-medium text-sm">Classifiche</span>
                         </a>
                         {% endif %}
@@ -113,14 +113,14 @@
                 {% if user.is_authenticated %}
                 <!-- PERSONAL SPACE SECTION -->
                 <div>
-                    <h3 class="text-[10px] text-cyan-500/50 uppercase tracking-[0.2em] px-4 mb-3 font-bold">Mio Spazio</h3>
+                    <h3 class="text-[10px] text-blue-500/50 uppercase tracking-[0.2em] px-4 mb-3 font-bold">Mio Spazio</h3>
                     <div class="space-y-1">
                         <a href="{% url 'dashboard' %}"
-                            class="flex items-center gap-3 px-4 py-2 rounded-xl hover:bg-white/5 transition-colors {% if request.resolver_match.url_name == 'dashboard' %}bg-cyan-500/10 text-cyan-400{% endif %}">
+                            class="flex items-center gap-3 px-4 py-2 rounded-xl hover:bg-white/5 transition-colors {% if request.resolver_match.url_name == 'dashboard' %}bg-blue-500/10 text-blue-400{% endif %}">
                             <span class="text-lg">📊</span> <span class="font-medium text-sm">Dashboard</span>
                         </a>
                         <a href="{% url 'profile' user.username %}"
-                            class="flex items-center gap-3 px-4 py-2 rounded-xl hover:bg-white/5 transition-colors {% if request.resolver_match.url_name == 'profile' %}bg-white/10 text-cyan-400{% endif %}">
+                            class="flex items-center gap-3 px-4 py-2 rounded-xl hover:bg-white/5 transition-colors {% if request.resolver_match.url_name == 'profile' %}bg-white/10 text-blue-400{% endif %}">
                             <span class="text-lg">👤</span> <span class="font-medium text-sm">Profilo</span>
                         </a>
                     </div>
@@ -135,7 +135,7 @@
                     {# Team Attuale del Profilo #}
                     {% if current_team %}
                     <a href="{% url 'team_detail' current_team.slug %}"
-                        class="flex items-center gap-3 px-4 py-2 rounded-lg hover:bg-white/5 transition-colors text-sm border-l-2 border-cyan-500 bg-white/5 mb-1">
+                        class="flex items-center gap-3 px-4 py-2 rounded-lg hover:bg-white/5 transition-colors text-sm border-l-2 border-blue-500 bg-white/5 mb-1">
                         {% if current_team.society.logo %}
                         <img src="{{ current_team.society.logo.url }}" class="w-6 h-6 object-contain">
                         {% else %}
@@ -143,7 +143,7 @@
                         {% endif %}
                         <div class="flex flex-col min-w-0">
                             <span class="truncate text-white font-medium">{{ current_team.society.name }}</span>
-                            <span class="text-[10px] text-cyan-400 uppercase font-bold">La tua squadra</span>
+                            <span class="text-[10px] text-blue-400 uppercase font-bold">La tua squadra</span>
                         </div>
                     </a>
                     {% endif %}
@@ -170,7 +170,7 @@
                 {% endwith %}
                 <div class="border-t border-white/5 pt-4">
                     <a href="{% url 'bacheca_globale' %}"
-                        class="flex items-center gap-3 px-4 py-2 rounded-xl hover:bg-white/5 transition-colors {% if request.resolver_match.url_name == 'bacheca_globale' %}bg-white/10 text-cyan-400{% endif %}">
+                        class="flex items-center gap-3 px-4 py-2 rounded-xl hover:bg-white/5 transition-colors {% if request.resolver_match.url_name == 'bacheca_globale' %}bg-white/10 text-blue-400{% endif %}">
                         <span class="text-lg">📢</span> <span class="font-medium text-sm">Bacheca</span>
                     </a>
                 </div>
@@ -248,12 +248,12 @@
             <header class="hidden lg:flex h-20 glass sticky top-0 z-40 px-12 items-center justify-between border-b border-white/5">
                 <div class="flex items-center gap-10">
                     <nav class="flex items-center gap-8">
-                        <a href="/" class="nav-link-premium text-sm font-bold uppercase tracking-widest {% if request.resolver_match.url_name == 'home' %}text-cyan-400{% else %}text-slate-400 hover:text-white{% endif %}">Home</a>
+                        <a href="/" class="nav-link-premium text-sm font-bold uppercase tracking-widest {% if request.resolver_match.url_name == 'home' %}text-blue-400{% else %}text-slate-400 hover:text-white{% endif %}">Home</a>
                         {% if sport %}
-                        <a href="{% url 'sport_matches' sport.slug %}" class="nav-link-premium text-sm font-bold uppercase tracking-widest {% if request.resolver_match.url_name == 'sport_matches' %}text-cyan-400{% else %}text-slate-400 hover:text-white{% endif %}">Risultati</a>
-                        <a href="{% url 'sport_detail' sport.slug %}" class="nav-link-premium text-sm font-bold uppercase tracking-widest {% if request.resolver_match.url_name == 'sport_detail' %}text-cyan-400{% else %}text-slate-400 hover:text-white{% endif %}">Classifiche</a>
+                        <a href="{% url 'sport_matches' sport.slug %}" class="nav-link-premium text-sm font-bold uppercase tracking-widest {% if request.resolver_match.url_name == 'sport_matches' %}text-blue-400{% else %}text-slate-400 hover:text-white{% endif %}">Risultati</a>
+                        <a href="{% url 'sport_detail' sport.slug %}" class="nav-link-premium text-sm font-bold uppercase tracking-widest {% if request.resolver_match.url_name == 'sport_detail' %}text-blue-400{% else %}text-slate-400 hover:text-white{% endif %}">Classifiche</a>
                         {% if sport.leagues.exists %}
-                        <a href="{% url 'league_stats' league.slug|default:sport.leagues.first.slug %}" class="nav-link-premium text-sm font-bold uppercase tracking-widest {% if 'statistics' in request.path %}text-cyan-400{% else %}text-slate-400 hover:text-white{% endif %}">Statistiche</a>
+                        <a href="{% url 'league_stats' league.slug|default:sport.leagues.first.slug %}" class="nav-link-premium text-sm font-bold uppercase tracking-widest {% if 'statistics' in request.path %}text-blue-400{% else %}text-slate-400 hover:text-white{% endif %}">Statistiche</a>
                         {% endif %}
                         {% endif %}
                     </nav>
@@ -268,9 +268,9 @@
                         <input type="text" id="ai-search-input"
                             placeholder="Cerca o chiedi all'AI (es: gol Rossi)..."
                             aria-label="Ricerca: cerca atleti e club o chiedi statistiche all'AI"
-                            class="w-full bg-white/5 border border-white/10 rounded-full py-2 px-4 text-xs focus:outline-none focus:ring-1 focus:ring-cyan-500/50 text-white">
+                            class="w-full bg-white/5 border border-white/10 rounded-full py-2 px-4 text-xs focus:outline-none focus:ring-1 focus:ring-blue-500/50 text-white">
                         <span class="absolute right-3 top-2 text-slate-500">🔍</span>
-                        <div id="ai-search-results" class="hidden absolute right-0 w-64 mt-2 z-50 p-3 bg-cyan-500/10 border border-cyan-500/20 rounded-xl text-[11px] text-cyan-100 leading-relaxed shadow-lg"></div>
+                        <div id="ai-search-results" class="hidden absolute right-0 w-64 mt-2 z-50 p-3 bg-blue-500/10 border border-blue-500/20 rounded-xl text-[11px] text-blue-100 leading-relaxed shadow-lg"></div>
                     </div>
                 </div>
             </header>
@@ -302,7 +302,7 @@
                         class="w-full bg-white/10 border border-white/10 rounded-xl py-2 px-10 text-sm focus:outline-none text-white">
                     <span class="absolute left-3 top-2.5 text-slate-500 text-xs">🔍</span>
                 </div>
-                <div id="ai-search-results-mobile" class="hidden mt-2 p-3 bg-cyan-500/10 border border-cyan-500/20 rounded-xl text-xs text-white"></div>
+                <div id="ai-search-results-mobile" class="hidden mt-2 p-3 bg-blue-500/10 border border-blue-500/20 rounded-xl text-xs text-white"></div>
             </div>
 
             <!-- MOBILE MENU OVERLAY -->
@@ -317,7 +317,7 @@
                 <hr class="border-white/5 my-2">
                 
                 {% if user.is_authenticated %}
-                <a href="{% url 'dashboard' %}" class="block px-4 py-3 rounded-lg bg-cyan-600/20 text-cyan-400 font-bold">Dashboard</a>
+                <a href="{% url 'dashboard' %}" class="block px-4 py-3 rounded-lg bg-blue-600/20 text-blue-400 font-bold">Dashboard</a>
                 <a href="{% url 'profile' user.username %}" class="block px-4 py-3 rounded-lg hover:bg-white/5">Profilo Pubblico</a>
                 <form method="post" action="{% url 'logout' %}">
                     {% csrf_token %}
@@ -327,7 +327,7 @@
                     </button>
                 </form>
                 {% else %}
-                <a href="{% url 'login' %}" class="block px-4 py-3 rounded-lg bg-cyan-600 text-white text-center font-bold">Accedi / Registrati</a>
+                <a href="{% url 'login' %}" class="block px-4 py-3 rounded-lg bg-blue-600 text-white text-center font-bold">Accedi / Registrati</a>
                 {% endif %}
                 
                 {% if user.is_staff %}
@@ -347,7 +347,7 @@
                         <div>
                             <a href="/" class="flex items-center gap-2 mb-3">
                                 <img src="{% static 'img/logo.png' %}" alt="2salti" class="h-8 w-auto">
-                                <span class="text-2xl font-display font-bold bg-clip-text text-transparent bg-gradient-to-r from-cyan-400 to-blue-500">2salti</span>
+                                <span class="text-2xl font-display font-bold bg-clip-text text-transparent bg-gradient-to-r from-blue-400 to-blue-500">2salti</span>
                             </a>
                             <p class="text-sm text-slate-400 max-w-xs">Il tuo sport, un altro livello.</p>
                         </div>
@@ -356,22 +356,22 @@
                         <nav aria-label="Link prodotto">
                             <h3 class="text-xs font-bold uppercase tracking-widest text-slate-500 mb-4">Prodotto</h3>
                             <ul class="space-y-2 text-sm">
-                                <li><a href="{% url 'sport_matches' 'pallanuoto' %}" class="text-slate-400 hover:text-cyan-400 transition-colors">Partite</a></li>
-                                <li><a href="{% url 'sport_detail' 'pallanuoto' %}" class="text-slate-400 hover:text-cyan-400 transition-colors">Classifiche</a></li>
-                                <li><a href="{% url 'league_stats' 'serie-c-maschile-2026-2027' %}" class="text-slate-400 hover:text-cyan-400 transition-colors">Statistiche</a></li>
+                                <li><a href="{% url 'sport_matches' 'pallanuoto' %}" class="text-slate-400 hover:text-blue-400 transition-colors">Partite</a></li>
+                                <li><a href="{% url 'sport_detail' 'pallanuoto' %}" class="text-slate-400 hover:text-blue-400 transition-colors">Classifiche</a></li>
+                                <li><a href="{% url 'league_stats' 'serie-c-maschile-2026-2027' %}" class="text-slate-400 hover:text-blue-400 transition-colors">Statistiche</a></li>
                             </ul>
                         </nav>
 
                         <!-- Contatti -->
                         <div>
                             <h3 class="text-xs font-bold uppercase tracking-widest text-slate-500 mb-4">Contatti</h3>
-                            <a href="mailto:albegalbi@gmail.com" class="text-sm text-slate-400 hover:text-cyan-400 transition-colors">albegalbi@gmail.com</a>
+                            <a href="mailto:albegalbi@gmail.com" class="text-sm text-slate-400 hover:text-blue-400 transition-colors">albegalbi@gmail.com</a>
                         </div>
                     </div>
 
                     <div class="border-t border-white/5 pt-6 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-slate-500">
                         <span>&copy; {% now "Y" %} 2salti</span>
-                        <span class="px-2 py-0.5 rounded-full bg-cyan-500/10 text-cyan-400 font-bold uppercase tracking-widest">Beta</span>
+                        <span class="px-2 py-0.5 rounded-full bg-blue-500/10 text-blue-400 font-bold uppercase tracking-widest">Beta</span>
                     </div>
                 </footer>
             </main>
@@ -402,10 +402,10 @@
                 if (theme === 'light') {
                     toggleDot.style.transform = 'translateX(24px)';
                     themeToggle.classList.remove('bg-slate-700');
-                    themeToggle.classList.add('bg-cyan-500');
+                    themeToggle.classList.add('bg-blue-500');
                 } else {
                     toggleDot.style.transform = 'translateX(4px)';
-                    themeToggle.classList.remove('bg-cyan-500');
+                    themeToggle.classList.remove('bg-blue-500');
                     themeToggle.classList.add('bg-slate-700');
                 }
             }
@@ -483,7 +483,7 @@
                             } else {
                                 resultsEl.innerText = data.text;
                                 if (data.data && data.data.athlete_id) {
-                                    resultsEl.innerHTML += `<br><a href="/accounts/profile/athlete/${data.data.athlete_id}/" class="mt-2 inline-block text-cyan-400 font-bold hover:underline">Vedi statistiche complete →</a>`;
+                                    resultsEl.innerHTML += `<br><a href="/accounts/profile/athlete/${data.data.athlete_id}/" class="mt-2 inline-block text-blue-400 font-bold hover:underline">Vedi statistiche complete →</a>`;
                                 }
                             }
                         })

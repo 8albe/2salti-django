@@ -8,7 +8,7 @@ class MatchReportUploadForm(forms.ModelForm):
         fields = ['file']
         widgets = {
             'file': forms.FileInput(attrs={
-                'class': 'w-full p-3 rounded-xl bg-slate-900 border border-slate-700 text-slate-300 focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 transition-all cursor-pointer file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-bold file:bg-cyan-500/20 file:text-cyan-400 hover:file:bg-cyan-500/30',
+                'class': 'w-full p-3 rounded-xl bg-slate-900 border border-slate-700 text-slate-300 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all cursor-pointer file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-bold file:bg-blue-500/20 file:text-blue-400 hover:file:bg-blue-500/30',
                 'accept': 'application/pdf,image/*'
             })
         }
@@ -131,7 +131,7 @@ class MatchReportReviewForm(forms.Form):
         for field_name, field in self.fields.items():
             if field_name not in ['validation_notes', 'internal_notes', 'is_finished']:
                 field.widget.attrs.update({
-                    'class': 'w-full p-2 rounded-lg bg-slate-900 border border-slate-700 text-slate-300 focus:border-cyan-500 transition-all text-sm'
+                    'class': 'w-full p-2 rounded-lg bg-slate-900 border border-slate-700 text-slate-300 focus:border-blue-500 transition-all text-sm'
                 })
             elif field_name in ['validation_notes', 'internal_notes']:
                  field.widget.attrs.update({
@@ -139,7 +139,7 @@ class MatchReportReviewForm(forms.Form):
                 })
             elif field_name == 'is_finished':
                  field.widget.attrs.update({
-                    'class': 'w-6 h-6 rounded bg-slate-900 border-slate-700 text-cyan-500 focus:ring-cyan-500'
+                    'class': 'w-6 h-6 rounded bg-slate-900 border-slate-700 text-blue-500 focus:ring-blue-500'
                 })
 
     def clean(self):

@@ -5,13 +5,13 @@
     <div class="mb-10 flex justify-between items-end">
         <div>
             <h1 class="text-4xl font-display font-black text-white tracking-tight mb-2">
-                Bacheca <span class="text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-blue-500">{{ team.name|default:"Societaria" }}</span>
+                Bacheca <span class="text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-blue-500">{{ team.name|default:"Societaria" }}</span>
             </h1>
             <p class="text-gray-400 font-medium">Comunicazioni ufficiali e discussioni della community</p>
         </div>
         {% if team %}
         <a href="{% url 'chat_view' team.slug %}"
-            class="group relative flex items-center gap-2 px-6 py-3 bg-cyan-500 text-black font-bold rounded-2xl transition-all hover:scale-105 active:scale-95 shadow-[0_0_20px_rgba(37,99,235,0.3)] hover:shadow-[0_0_30px_rgba(37,99,235,0.5)]">
+            class="group relative flex items-center gap-2 px-6 py-3 bg-blue-500 text-black font-bold rounded-2xl transition-all hover:scale-105 active:scale-95 shadow-[0_0_20px_rgba(37,99,235,0.3)] hover:shadow-[0_0_30px_rgba(37,99,235,0.5)]">
             <svg class="w-5 h-5 transition-transform group-hover:rotate-12" fill="none" stroke="currentColor"
                 viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5"
@@ -25,18 +25,18 @@
 
     <!-- AREA DI POSTING -->
     {% if can_post %}
-    <div class="glass-card p-6 mb-12 border-cyan-500/20 relative overflow-hidden group">
+    <div class="glass-card p-6 mb-12 border-blue-500/20 relative overflow-hidden group">
         <form action="{% if team %}{% url 'post_create' team.id %}{% else %}{% url 'post_create' 0 %}{% endif %}"
             method="POST" id="post-form">
             {% csrf_token %}
             <div class="flex items-start gap-4 mb-6">
                 <div
-                    class="w-12 h-12 rounded-2xl bg-gradient-to-br from-cyan-500 to-blue-600 flex items-center justify-center text-black font-black text-xl shadow-lg flex-shrink-0">
+                    class="w-12 h-12 rounded-2xl bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center text-black font-black text-xl shadow-lg flex-shrink-0">
                     {{ request.user.username|slice:":1"|upper }}
                 </div>
                 <div class="flex-grow">
                     <input type="text" name="title" placeholder="Titolo annuncio..."
-                        class="w-full bg-white/5 border-b border-white/10 p-2 text-white font-bold text-lg focus:border-cyan-400 outline-none mb-3 transition-colors placeholder:text-gray-600">
+                        class="w-full bg-white/5 border-b border-white/10 p-2 text-white font-bold text-lg focus:border-blue-400 outline-none mb-3 transition-colors placeholder:text-gray-600">
                     <textarea name="content" id="post-content" rows="3" placeholder="Scrivi una comunicazione..."
                         class="w-full bg-transparent border-none p-2 text-white focus:ring-0 outline-none resize-none placeholder:text-gray-500 text-lg"
                         required></textarea>
@@ -45,7 +45,7 @@
             <div class="flex items-center justify-between pt-4 border-t border-white/5">
                 <div class="flex gap-2">
                     <button type="button" onclick="openTemplateModal()"
-                        class="flex items-center gap-2 px-4 py-2 rounded-xl bg-gradient-to-r from-blue-600/20 to-cyan-500/20 text-cyan-400 border border-cyan-500/30 hover:bg-cyan-500/30 transition-all font-bold text-sm shadow-[0_0_15px_rgba(37,99,235,0.2)]">
+                        class="flex items-center gap-2 px-4 py-2 rounded-xl bg-gradient-to-r from-blue-600/20 to-blue-500/20 text-blue-400 border border-blue-500/30 hover:bg-blue-500/30 transition-all font-bold text-sm shadow-[0_0_15px_rgba(37,99,235,0.2)]">
                         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                                 d="M13 10V3L4 14h7v7l9-11h-7z"></path>
@@ -58,11 +58,11 @@
                         class="flex items-center gap-2 text-sm text-gray-400 cursor-pointer hover:text-white transition-colors"><input
                             type="checkbox" name="is_pinned" class="form-checkbox-custom"> Fissa</label>
                     {% if is_president %}<label
-                        class="flex items-center gap-2 text-sm text-cyan-400 cursor-pointer hover:text-cyan-300 transition-colors"><input
+                        class="flex items-center gap-2 text-sm text-blue-400 cursor-pointer hover:text-blue-300 transition-colors"><input
                             type="checkbox" name="is_broadcast" id="broadcast_check"
-                            class="form-checkbox-custom border-cyan-500/50 checked:bg-cyan-500"> Broadcast</label>{% endif %}
+                            class="form-checkbox-custom border-blue-500/50 checked:bg-blue-500"> Broadcast</label>{% endif %}
                     <button type="submit"
-                        class="bg-white text-black px-8 py-2 rounded-xl font-black transition-all hover:bg-cyan-400 hover:scale-[1.02] active:scale-95 shadow-xl">PUBBLICA</button>
+                        class="bg-white text-black px-8 py-2 rounded-xl font-black transition-all hover:bg-blue-400 hover:scale-[1.02] active:scale-95 shadow-xl">PUBBLICA</button>
                 </div>
             </div>
         </form>
@@ -72,7 +72,7 @@
     <!-- FEED -->
     {% for post in posts %}
     <div
-        class="glass-card overflow-hidden transition-all hover:border-white/10 hover:bg-white/[0.04] {% if post.is_pinned %}border-cyan-500/40 bg-cyan-500/[0.03]{% endif %}">
+        class="glass-card overflow-hidden transition-all hover:border-white/10 hover:bg-white/[0.04] {% if post.is_pinned %}border-blue-500/40 bg-blue-500/[0.03]{% endif %}">
         <div class="p-6">
             <div class="flex justify-between items-start mb-6">
                 <div class="flex items-center gap-4">
@@ -91,7 +91,7 @@
                 </div>
                 {% if post.is_pinned %}
                 <div
-                    class="flex items-center gap-2 px-3 py-1.5 bg-cyan-500/20 rounded-xl border border-cyan-500/30 text-cyan-400 font-black text-[10px] uppercase">
+                    class="flex items-center gap-2 px-3 py-1.5 bg-blue-500/20 rounded-xl border border-blue-500/30 text-blue-400 font-black text-[10px] uppercase">
                     Fissato</div>
                 {% endif %}
             </div>
@@ -110,7 +110,7 @@
                     <span class="text-sm font-bold">Interessato</span>
                 </button>
                 <button class="social-action-btn group">
-                    <svg class="w-6 h-6 group-hover:text-cyan-400 transition-colors" fill="none" stroke="currentColor"
+                    <svg class="w-6 h-6 group-hover:text-blue-400 transition-colors" fill="none" stroke="currentColor"
                         viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                             d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z">
@@ -150,12 +150,12 @@
             <form action="#" method="POST" class="flex gap-4 mt-6">
                 {% csrf_token %}
                 <div
-                    class="w-10 h-10 rounded-xl bg-gradient-to-br from-cyan-500/20 to-blue-600/20 flex-shrink-0 flex items-center justify-center border border-cyan-500/20">
-                    <span class="text-cyan-400 text-xs font-black">{{ request.user.username|slice:":1"|upper }}</span>
+                    class="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-500/20 to-blue-600/20 flex-shrink-0 flex items-center justify-center border border-blue-500/20">
+                    <span class="text-blue-400 text-xs font-black">{{ request.user.username|slice:":1"|upper }}</span>
                 </div>
                 <div class="relative flex-grow">
                     <input type="text" placeholder="Rispondi..."
-                        class="w-full bg-white/5 border border-white/10 rounded-2xl px-4 py-2.5 text-sm text-white focus:border-cyan-400 outline-none">
+                        class="w-full bg-white/5 border border-white/10 rounded-2xl px-4 py-2.5 text-sm text-white focus:border-blue-400 outline-none">
                 </div>
             </form>
         </div>
@@ -187,30 +187,30 @@
         <!-- View 1: List of Templates -->
         <div id="templateListView" class="flex-1 p-6 overflow-y-auto min-h-0 space-y-3">
             <button onclick="selectTemplate('cambio_orario')"
-                class="w-full text-left p-4 rounded-2xl bg-white/5 border border-white/5 hover:border-cyan-500/50 hover:bg-cyan-500/5 transition-all group">
-                <div class="font-bold text-white mb-1 group-hover:text-cyan-400">1) Cambio orario allenamento</div>
+                class="w-full text-left p-4 rounded-2xl bg-white/5 border border-white/5 hover:border-blue-500/50 hover:bg-blue-500/5 transition-all group">
+                <div class="font-bold text-white mb-1 group-hover:text-blue-400">1) Cambio orario allenamento</div>
                 <div class="text-sm text-gray-500">Data, Nuovo orario, Piscina, Motivo</div>
             </button>
             <button onclick="selectTemplate('promemoria')"
-                class="w-full text-left p-4 rounded-2xl bg-white/5 border border-white/5 hover:border-cyan-500/50 hover:bg-cyan-500/5 transition-all group">
-                <div class="font-bold text-white mb-1 group-hover:text-cyan-400">2) Promemoria allenamento (oggi)
+                class="w-full text-left p-4 rounded-2xl bg-white/5 border border-white/5 hover:border-blue-500/50 hover:bg-blue-500/5 transition-all group">
+                <div class="font-bold text-white mb-1 group-hover:text-blue-400">2) Promemoria allenamento (oggi)
                 </div>
                 <div class="text-sm text-gray-500">Orario, Piscina, Note</div>
             </button>
             <button onclick="selectTemplate('logistiche')"
-                class="w-full text-left p-4 rounded-2xl bg-white/5 border border-white/5 hover:border-cyan-500/50 hover:bg-cyan-500/5 transition-all group">
-                <div class="font-bold text-white mb-1 group-hover:text-cyan-400">3) Indicazioni logistiche
+                class="w-full text-left p-4 rounded-2xl bg-white/5 border border-white/5 hover:border-blue-500/50 hover:bg-blue-500/5 transition-all group">
+                <div class="font-bold text-white mb-1 group-hover:text-blue-400">3) Indicazioni logistiche
                     (ritrovo/ingresso)</div>
                 <div class="text-sm text-gray-500">Data, Orario ritrovo, Punto ritrovo, Note</div>
             </button>
             <button onclick="selectTemplate('materiale')"
-                class="w-full text-left p-4 rounded-2xl bg-white/5 border border-white/5 hover:border-cyan-500/50 hover:bg-cyan-500/5 transition-all group">
-                <div class="font-bold text-white mb-1 group-hover:text-cyan-400">4) Materiale obbligatorio</div>
+                class="w-full text-left p-4 rounded-2xl bg-white/5 border border-white/5 hover:border-blue-500/50 hover:bg-blue-500/5 transition-all group">
+                <div class="font-bold text-white mb-1 group-hover:text-blue-400">4) Materiale obbligatorio</div>
                 <div class="text-sm text-gray-500">Data, Lista materiale</div>
             </button>
             <button onclick="selectTemplate('convocazione')"
-                class="w-full text-left p-4 rounded-2xl bg-white/5 border border-white/5 hover:border-cyan-500/50 hover:bg-cyan-500/5 transition-all group">
-                <div class="font-bold text-white mb-1 group-hover:text-cyan-400">5) Convocazione inviata</div>
+                class="w-full text-left p-4 rounded-2xl bg-white/5 border border-white/5 hover:border-blue-500/50 hover:bg-blue-500/5 transition-all group">
+                <div class="font-bold text-white mb-1 group-hover:text-blue-400">5) Convocazione inviata</div>
                 <div class="text-sm text-gray-500">Avversario, Data, Ora partita, Luogo, Ora ritrovo</div>
             </button>
             {% if is_president %}
@@ -243,7 +243,7 @@
                 <button onclick="showTemplateList()"
                     class="px-6 py-2.5 rounded-xl font-bold text-gray-400 bg-white/5 hover:bg-white/10 hover:text-white transition-all">Indietro</button>
                 <button onclick="generateTemplateText()"
-                    class="flex-grow bg-cyan-500 text-black font-black rounded-xl hover:bg-cyan-400 transition-all shadow-lg active:scale-95">Inserisci
+                    class="flex-grow bg-blue-500 text-black font-black rounded-xl hover:bg-blue-400 transition-all shadow-lg active:scale-95">Inserisci
                     nel Post</button>
             </div>
         </div>
@@ -355,7 +355,7 @@
             const div = document.createElement('div');
             let inputHtml = '';
 
-            const commonClasses = "w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white focus:border-cyan-400 outline-none placeholder:text-gray-600 transition-colors";
+            const commonClasses = "w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white focus:border-blue-400 outline-none placeholder:text-gray-600 transition-colors";
 
             if (f.type === 'textarea') {
                 inputHtml = `<textarea id="tmpl_${f.id}" rows="3" placeholder="${f.placeholder}" class="${commonClasses} resize-none"></textarea>`;
@@ -421,7 +421,7 @@
     }
 
     .form-checkbox-custom {
-        @apply w-5 h-5 rounded-lg bg-white/5 border-white/20 text-cyan-500 focus:ring-0 focus:ring-offset-0 transition-all;
+        @apply w-5 h-5 rounded-lg bg-white/5 border-white/20 text-blue-500 focus:ring-0 focus:ring-offset-0 transition-all;
     }
 </style>
 {% endblock %}

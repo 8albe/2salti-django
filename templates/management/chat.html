@@ -12,11 +12,11 @@
             </a>
             <div>
                 <h1 class="text-lg font-bold text-white leading-tight">Chat Team</h1>
-                <p class="text-xs text-cyan-400 font-bold uppercase">{{ team.name }}</p>
+                <p class="text-xs text-blue-400 font-bold uppercase">{{ team.name }}</p>
             </div>
         </div>
         <div class="flex -space-x-2">
-            <div class="w-8 h-8 rounded-full border-2 border-black bg-cyan-500"></div>
+            <div class="w-8 h-8 rounded-full border-2 border-black bg-blue-500"></div>
             <div class="w-8 h-8 rounded-full border-2 border-black bg-purple-500"></div>
             <div
                 class="w-8 h-8 rounded-full border-2 border-black bg-gray-700 flex items-center justify-center text-[10px] text-white">
@@ -33,7 +33,7 @@
                 <p class="text-[10px] text-gray-500 mb-1 ml-2 font-bold">{{ msg.author.get_full_name }}</p>
                 {% endif %}
                 <div
-                    class="p-3 rounded-2xl text-sm {% if msg.author == request.user %}bg-cyan-500 text-black font-semibold rounded-tr-none{% else %}bg-white/10 text-white rounded-tl-none border border-white/5{% endif %} shadow-lg">
+                    class="p-3 rounded-2xl text-sm {% if msg.author == request.user %}bg-blue-500 text-black font-semibold rounded-tr-none{% else %}bg-white/10 text-white rounded-tl-none border border-white/5{% endif %} shadow-lg">
                     {{ msg.content }}
                     <p class="text-[9px] mt-1 opacity-50 text-right">{{ msg.created_at|date:"H:i" }}</p>
                 </div>
@@ -56,9 +56,9 @@
         <form action="{% url 'chat_message_add' team.id %}" method="POST" class="flex gap-2">
             {% csrf_token %}
             <input type="text" name="content" autocomplete="off" placeholder="Scrivi un messaggio..."
-                class="flex-grow bg-white/10 border border-white/10 rounded-full px-6 py-3 text-white focus:outline-none focus:border-cyan-500 transition-all font-medium placeholder-gray-500 shadow-inner">
+                class="flex-grow bg-white/10 border border-white/10 rounded-full px-6 py-3 text-white focus:outline-none focus:border-blue-500 transition-all font-medium placeholder-gray-500 shadow-inner">
             <button type="submit"
-                class="bg-cyan-500 hover:bg-cyan-600 text-black w-12 h-12 rounded-full flex items-center justify-center shadow-[0_0_15px_rgba(37,99,235,0.4)] transition-all flex-shrink-0">
+                class="bg-blue-500 hover:bg-blue-600 text-black w-12 h-12 rounded-full flex items-center justify-center shadow-[0_0_15px_rgba(37,99,235,0.4)] transition-all flex-shrink-0">
                 <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                         d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"></path>

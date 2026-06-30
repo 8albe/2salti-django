@@ -8,7 +8,7 @@
     <p class="text-slate-300">
         {% if certification %}
         Sei ora certificato come genitore di
-        <span class="text-cyan-400 font-bold">{{ certification.child.get_full_name|default:certification.child.username }}</span>.
+        <span class="text-blue-400 font-bold">{{ certification.child.get_full_name|default:certification.child.username }}</span>.
         {% endif %}
         L'accesso ai dati e ai servizi di tuo figlio è attivo.
     </p>
@@ -17,6 +17,6 @@
     <h1 class="text-3xl font-extrabold text-white mb-3">Link non valido</h1>
     <p class="text-slate-300">{{ error|default:"Il link di certificazione non è utilizzabile." }}</p>
     {% endif %}
-    <a href="{% url 'home' %}" class="inline-block mt-8 px-6 py-2 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white font-bold">Torna alla home</a>
+    <a href="{% url 'home' %}" class="inline-block mt-8 px-6 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold">Torna alla home</a>
 </div>
 {% endblock %}

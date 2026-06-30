@@ -7,7 +7,7 @@
 
         <div class="glass p-8 rounded-2xl shadow-2xl relative overflow-hidden">
             <!-- Decorative Glow -->
-            <div class="absolute top-0 right-0 w-32 h-32 bg-cyan-500/20 rounded-full blur-3xl -mr-16 -mt-16"></div>
+            <div class="absolute top-0 right-0 w-32 h-32 bg-blue-500/20 rounded-full blur-3xl -mr-16 -mt-16"></div>
 
             <div class="text-center mb-8 relative z-10">
                 <h2 class="text-3xl font-display font-bold text-white mb-2">Benvenuto</h2>
@@ -19,14 +19,14 @@
                 {{ form|crispy }}
 
                 <button type="submit"
-                    class="w-full py-3 px-4 rounded-xl bg-gradient-to-r from-cyan-600 to-blue-600 text-white font-bold hover:shadow-[0_0_20px_rgba(37,99,235,0.4)] transition-all transform hover:-translate-y-0.5">
+                    class="w-full py-3 px-4 rounded-xl bg-gradient-to-r from-blue-600 to-blue-600 text-white font-bold hover:shadow-[0_0_20px_rgba(37,99,235,0.4)] transition-all transform hover:-translate-y-0.5">
                     Accedi
                 </button>
             </form>
 
             <div class="mt-6 text-center text-sm text-slate-500 relative z-10">
                 Non hai un account? <a href="{% url 'signup' %}"
-                    class="text-cyan-400 hover:text-cyan-300 font-bold hover:underline">Registrati ora</a>
+                    class="text-blue-400 hover:text-blue-300 font-bold hover:underline">Registrati ora</a>
             </div>
         </div>
 

@@ -5,7 +5,7 @@
 <div class="max-w-2xl mx-auto">
     <div class="mb-8 text-center">
         <h1 class="text-3xl font-bold mb-2">Completa il tuo profilo</h1>
-        <p class="text-slate-400">Configurazione account: <span class="text-cyan-400 font-bold">{{ role }}</span></p>
+        <p class="text-slate-400">Configurazione account: <span class="text-blue-400 font-bold">{{ role }}</span></p>
     </div>
 
     <div class="bg-slate-900 rounded-xl p-6 md:p-8 border border-slate-700">
@@ -25,7 +25,7 @@
                 <div>
                     <label for="league-select" class="block text-sm font-medium text-slate-300 mb-2">Campionato</label>
                     <select id="league-select" name="league"
-                        class="w-full bg-slate-800 border border-slate-600 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-cyan-500">
+                        class="w-full bg-slate-800 border border-slate-600 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-blue-500">
                         <option value="">--- Seleziona Campionato ---</option>
                         {% for choice_val, choice_label in form.league.field.choices %}
                         {% if choice_val %}
@@ -39,7 +39,7 @@
                 <div id="team-select-wrapper" class="hidden">
                     <label for="team-select" class="block text-sm font-medium text-slate-300 mb-2">Squadra Preferita</label>
                     <select id="team-select"
-                        class="w-full bg-slate-800 border border-slate-600 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-cyan-500">
+                        class="w-full bg-slate-800 border border-slate-600 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-blue-500">
                         <option value="">--- Seleziona Squadra ---</option>
                     </select>
                     <input type="hidden" name="favorite_team" id="favorite-team-hidden">
@@ -51,7 +51,7 @@
                     <div class="relative">
                         <input type="text" id="athlete-search-input" autocomplete="off"
                             placeholder="Scrivi nome e cognome dell'atleta..."
-                            class="w-full bg-slate-800 border border-slate-600 rounded-lg px-4 py-2 text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500">
+                            class="w-full bg-slate-800 border border-slate-600 rounded-lg px-4 py-2 text-white placeholder-slate-500 focus:outline-none focus:border-blue-500">
                         <div id="athlete-results"
                             class="hidden absolute z-10 w-full mt-1 bg-slate-800 border border-slate-600 rounded-lg shadow-xl max-h-48 overflow-y-auto">
                         </div>
@@ -60,10 +60,10 @@
                     <!-- Chip degli atleti selezionati: ogni chip porta un hidden favorite_player_id -->
                     <div id="selected-athletes" class="flex flex-wrap gap-2 mt-3">
                         {% for p in followed_players %}
-                        <span class="athlete-chip inline-flex items-center gap-2 bg-cyan-500/10 border border-cyan-500/40 text-cyan-300 text-sm rounded-full px-3 py-1" data-id="{{ p.id }}">
+                        <span class="athlete-chip inline-flex items-center gap-2 bg-blue-500/10 border border-blue-500/40 text-blue-300 text-sm rounded-full px-3 py-1" data-id="{{ p.id }}">
                             <input type="hidden" name="favorite_player_id" value="{{ p.id }}">
                             <span>{{ p.full_name }}</span>
-                            <button type="button" class="remove-chip text-cyan-400 hover:text-red-400 font-bold leading-none">&times;</button>
+                            <button type="button" class="remove-chip text-blue-400 hover:text-red-400 font-bold leading-none">&times;</button>
                         </span>
                         {% endfor %}
                     </div>
@@ -194,11 +194,11 @@
         if (!selectedAthletes) return;
         if (selectedAthletes.querySelector(`.athlete-chip[data-id="${id}"]`)) return;
         const chip = document.createElement('span');
-        chip.className = 'athlete-chip inline-flex items-center gap-2 bg-cyan-500/10 border border-cyan-500/40 text-cyan-300 text-sm rounded-full px-3 py-1';
+        chip.className = 'athlete-chip inline-flex items-center gap-2 bg-blue-500/10 border border-blue-500/40 text-blue-300 text-sm rounded-full px-3 py-1';
         chip.setAttribute('data-id', id);
         chip.innerHTML = `<input type="hidden" name="favorite_player_id" value="${id}">`
             + `<span></span>`
-            + `<button type="button" class="remove-chip text-cyan-400 hover:text-red-400 font-bold leading-none">&times;</button>`;
+            + `<button type="button" class="remove-chip text-blue-400 hover:text-red-400 font-bold leading-none">&times;</button>`;
         chip.querySelector('span').textContent = fullName;
         selectedAthletes.appendChild(chip);
     }
