@@ -67,4 +67,5 @@ Punto d'ingresso operativo del progetto. Per la visione di prodotto vedi [BLUEPR
 → [Dettaglio](syllabus/17_frontend_design_system.md)
 
 ## 18. Personificazione società (presidente) ✅
-→ [Dettaglio](syllabus/18_personificazione_societa.md) — verificato e2e su `dev` (2026-06-22), non ancora propagato a prod
+→ [Dettaglio](syllabus/18_personificazione_societa.md)
+
