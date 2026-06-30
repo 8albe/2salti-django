@@ -26,6 +26,8 @@ Sponsor associati a società/campionati, visualizzazione pubblica, modello dati 
 
 **As-built (2026-06-30):** modulo sponsor relazionale completo su `dev` salvo UI CRUD e dati reali Zero9. Solo Zero9 avrà sponsor nel pilota; le altre società degradano a zero senza placeholder rotti.
 
+**Decisione di dominio aperta (by-design, 2026-06-30):** sul profilo atleta `current_team` e classifica derivano dalla lega in stagione 2026/2027, mentre gli sponsor escono dalla stagione corrente 2025/2026 (il modulo sponsor è società-wide sulla stagione corrente). Il disallineamento di stagione è **by-design, non un bug**; da rivedere lato prodotto quando Zero9 avrà i dati reali.
+
 ---
 
 ← [Macro precedente](8_ocr_affidabilita.md) | → [Macro successiva](10_subscription_piani.md)
