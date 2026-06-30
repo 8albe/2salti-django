@@ -375,3 +375,42 @@ class Season(models.Model):
     def __str__(self):
         marker = " (corrente)" if self.is_current else ""
         return f"{self.sport.name} {self.label}{marker}"
+
+
+class Sponsor(models.Model):
+    """Sponsor relazionale di una società, targettizzato per stagione (Macro 9).
+
+    Modello ADDITIVO: NON sostituisce il legacy `Society.sponsors` JSONField,
+    che resta deprecato ma intatto. Il targeting è società-wide per stagione
+    (tutti gli sponsor della società in quella `season`, non per-lega); il render
+    mostra gli sponsor della stagione corrente del proprio sport via
+    `core.services.sponsor_service`.
+
+    Logo come URLField (non ImageField): per il pilota seed/admin-only è la scelta
+    più semplice — nessuna pipeline media/upload, mantiene la semantica `logo_url`
+    del JSON legacy e il render usa direttamente l'URL come `src`.
+    """
+    society = models.ForeignKey(
+        Society, on_delete=models.CASCADE, related_name='sponsor_entries',
+        help_text="Società a cui appartiene lo sponsor.",
+    )
+    season = models.ForeignKey(
+        Season, on_delete=models.CASCADE, related_name='sponsors',
+        help_text="Stagione di validità: gli sponsor si mostrano nella stagione corrente.",
+    )
+    name = models.CharField(max_length=200)
+    logo_url = models.URLField(blank=True, help_text="URL del logo (seed/admin-only nel pilota).")
+    url = models.URLField(blank=True, help_text="Sito esterno dello sponsor (link sul logo).")
+    order = models.PositiveIntegerField(default=0, help_text="Ordine di visualizzazione (crescente).")
+    is_active = models.BooleanField(default=True)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['order', 'name']
+        verbose_name = "Sponsor"
+        verbose_name_plural = "🤝 Sponsor"
+
+    def __str__(self):
+        return f"{self.name} ({self.society.name} — {self.season.label})"
