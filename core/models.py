@@ -11,7 +11,7 @@ class Sport(models.Model):
     """Sport disponibili sulla piattaforma"""
     name = models.CharField(max_length=100, unique=True)  # "Pallanuoto", "Basket", "Volley"
     slug = models.SlugField(unique=True, blank=True)
-    hex_color = models.CharField(max_length=7, default='#00ffff', help_text="Colore tema (es: #00ffff)")
+    hex_color = models.CharField(max_length=7, default='#2563eb', help_text="Colore tema (es: #2563eb)")
     icon = models.CharField(max_length=50, blank=True, help_text="Nome icona Heroicons")
     description = models.TextField(blank=True)
     

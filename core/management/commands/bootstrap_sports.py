@@ -11,7 +11,7 @@ class Command(BaseCommand):
             {'name': 'Calcio a 5', 'slug': 'calcio-5', 'hex_color': '#059669', 'icon': '⚽'},
             {'name': 'Basket', 'slug': 'basket', 'hex_color': '#F59E0B', 'icon': '🏀'},
             {'name': 'Pallavolo', 'slug': 'pallavolo', 'hex_color': '#3B82F6', 'icon': '🏐'},
-            {'name': 'Pallanuoto', 'slug': 'pallanuoto', 'hex_color': '#00ffff', 'icon': '🤽'},
+            {'name': 'Pallanuoto', 'slug': 'pallanuoto', 'hex_color': '#2563eb', 'icon': '🤽'},
         ]
 
         self.stdout.write('🚀 Bootstrapping sports...')
