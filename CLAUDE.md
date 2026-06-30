@@ -23,7 +23,7 @@ Prima di iniziare qualunque task, identifica quale documento consultare.
 
 | Tipo di task | Documento autoritativo | Contiene |
 |---|---|---|
-| Macchine a stati di tutti i modelli | [[STATE_MACHINES.md]] | 9 state machine verificate sul codice con transizioni e side effects |
+| Macchine a stati di tutti i modelli | [[STATE_MACHINES.md]] | 10 state machine verificate sul codice con transizioni e side effects |
 | Mapping termini blueprint ↔ modelli Django | [[DOMAIN_GLOSSARY.md]] | 30+ entità, note tecniche su Match.is_public e onboarding_state |
 | Procedure operative infrastruttura | [[OPS_RUNBOOK.md]] | Deploy, trappole tecniche, protocollo protected file, sicurezza |
 | Capire il "perché" di una decisione di prodotto | [[BLUEPRINT.md]] | visione, UX, business model (italiano) |
@@ -95,7 +95,7 @@ python manage.py run_scheduler
 
 ### State machines
 
-Le 9 macchine a stati del progetto (MatchReport, User onboarding, RBAC, AccountProfileLink, MembershipRequest, Convocation, TrainingAttendance, PilotBug, PilotFeedback) sono documentate in [docs/STATE_MACHINES.md](docs/STATE_MACHINES.md). Non duplicare qui.
+Le 10 macchine a stati del progetto (MatchReport, User onboarding, RBAC, AccountProfileLink, MembershipRequest, Convocation, TrainingAttendance, PilotBug, PilotFeedback, ParentCertification) sono documentate in [docs/STATE_MACHINES.md](docs/STATE_MACHINES.md). Non duplicare qui.
 
 ### Domain model
 

@@ -334,7 +334,53 @@ Nessuna transizione automatica rilevata — gestito manualmente dall'admin.
 
 ---
 
-## 10. Personificazione società presidente (Macro 18)
+## 10. ParentCertification (Certificazione genitore — Macro 7b)
+
+**Model:** `management.ParentCertification`
+**Field di stato:** `status` (CharField, `TextChoices`)
+**File modello:** [management/models.py](management/models.py) righe 627–773
+**Servizio:** [management/services/certification_service.py](management/services/certification_service.py)
+**Migration:** `management/migrations/0017_parentcertification.py`
+**Default:** `RICHIESTA_INVIATA`
+
+> **Natura della macchina:** macchina a stati "ricca" society-vouching via email, **ortogonale all'onboarding** (§2): il genitore resta `role='fan'` e raggiunge `COMPLETED` con sola email+setup; la certificazione è un gate **aggiuntivo** sull'accesso ai dati del figlio (`User.is_certified_parent_of`), non uno step di `onboarding_state`. Il sistema **non archivia** prove d'identità: inoltra la richiesta alla società e registra l'esito; il match nome+email lo fa un umano della società sul proprio gestionale. Razionale di prodotto in [[BLUEPRINT.md]] §7.7.
+
+### Stati
+
+| Valore DB | Label | Iniziale? | Finale? |
+|---|---|---|---|
+| `RICHIESTA_INVIATA` | Richiesta inviata | Sì | No |
+| `IN_ATTESA_SOCIETA` | In attesa società | No | No |
+| `CONFERMATA_SOCIETA` | Confermata società | No | No |
+| `IN_ATTESA_CLICK_GENITORE` | In attesa click | No | No |
+| `CERTIFICATA` | Certificata | No | Sì |
+| `RIFIUTATA` | Rifiutata | No | Sì |
+| `SCADUTA` | Scaduta | No | Sì |
+
+`FINAL_STATUSES = {CERTIFICATA, RIFIUTATA, SCADUTA}`. Property `is_final` riflette l'appartenenza a questo set.
+
+### Transizioni
+
+| Da | A | Metodo modello | Side effects |
+|---|---|---|---|
+| `RICHIESTA_INVIATA` | `IN_ATTESA_SOCIETA` | `mark_in_attesa_societa()` | — (email di vouching orchestrata dal service) |
+| `IN_ATTESA_SOCIETA` | `CONFERMATA_SOCIETA` | `conferma_societa()` | genera `token` (uuid4) + `token_expires_at` (`CERTIFICATION_LINK_VALIDITY_DAYS`); set `society_responded_at` |
+| `IN_ATTESA_SOCIETA` | `RIFIUTATA` | `rifiuta_societa()` | set `society_responded_at`; finale |
+| `CONFERMATA_SOCIETA` | `IN_ATTESA_CLICK_GENITORE` | `mark_in_attesa_click()` | — (mail con link orchestrata dal service) |
+| `IN_ATTESA_CLICK_GENITORE` | `CERTIFICATA` | `certifica_via_click()` | set `certified_at`; attiva l'accesso ai dati del figlio |
+| `IN_ATTESA_CLICK_GENITORE` | `SCADUTA` | `scadi()` | finestra di validità superata; finale |
+
+### Guardrails
+
+- **Validazione stato di partenza:** ogni metodo chiama `_require(expected)` e alza `ValueError` sulle transizioni non ammesse — non esistono salti di stato silenziosi.
+- **Link scaduto:** `certifica_via_click()` rifiuta con `ValueError` se `is_link_expired` (`token_expires_at` superato), anche se lo stato è `IN_ATTESA_CLICK_GENITORE`.
+- **Nessun side effect email nel modello:** i metodi mutano solo lo stato/timestamp; l'invio mail (vouching alla società, link al genitore) è orchestrato da `certification_service`.
+- **Una sola richiesta aperta per coppia:** `UniqueConstraint` `uniq_parentcert_open_per_parent_child` su `(parent, child)` con condizione `~Q(status__in=[CERTIFICATA, RIFIUTATA, SCADUTA])` — le righe finali non contano, si può ri-richiedere.
+- **Email società sempre valorizzata:** la notifica parte verso `_society_recipients`; il setup post-approvazione del presidente (Macro 18) richiede obbligatoriamente l'email di contatto della società, così la lista non è mai vuota.
+
+---
+
+## 11. Personificazione società presidente (Macro 18)
 
 **Model:** `management.MembershipRequest` **riusato** con `role='PRESIDENT'` come discriminatore — nessun campo/stato dedicato, nessuno schema-change.
 **Field di stato:** `status` (CharField, lo stesso di §5)
