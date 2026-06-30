@@ -128,6 +128,16 @@ Quando `master` ha accumulato merge pubblici **mai rifusi in `dev`** e `dev` ha 
 
 **Gotcha — il delta `master..dev` si calcola solo da `/home/alberto/`.** I conteggi `git rev-list --count master..dev` / `git log master..dev` sono affidabili **solo nella home**, dove `master` e `origin/master` sono freschi (oggi entrambi `e0c928f`, merge-base `7df3643a`, delta reale **23 commit**). Sul **dev box** `/opt/2salti-dev/` i ref `master`/`origin/master` sono **stantii** (l'autopull aggiorna solo `dev`) → lo stesso comando lì restituisce numeri **spuri molto più alti**. Prima di citare un delta in una nota, calcolarlo **dalla home**, mai dal dev box.
 
+### 2.5 Deploy 2026-06-30 — `f697c0f` → `24bfc62` (Macro 9/17/18, 69 commit)
+
+Deploy reale dev→prod con lo stesso pattern di §2.4 (merge `--no-ff` `dev`→`master` da home + push; pull **ff** su prod; `migrate` manuale gated dopo backup DB). Prod portato da `f697c0f` a **`24bfc62`** (69 commit). Migration applicate **0020/0021/0022**: `0021` è una data-migration che ha toccato **1 row** (pallanuoto `#00ffff`→`#2563eb`); `0022` crea la tabella `core_sponsor` (Macro 9). `collectstatic` ha **rigenerato il manifest** (load-bearing pre-restart). Smoke end-to-end GREEN: HTTP 200, login→`/accounts/dashboard/`, tema pallanuoto blu confermato.
+
+**Learning — gate del backup = integrity, non byte-identità.** Il criterio di validità di un backup DB pre-deploy è **`PRAGMA integrity_check` + dimensione plausibile**, **non** l'uguaglianza byte sorgente==backup. Un `.backup` di SQLite preso su un DB live è un backup **valido e consistente** ma **non byte-identico** alla sorgente (il WAL/lo stato live evolvono): pretendere l'uguaglianza byte fa fallire il gate su un backup buono.
+
+**Learning — il file `.sha256` deve contenere SOLO la riga del backup.** Se nel `.sha256` si mette anche la riga del DB live, al rollback `sha256sum -c` **fallisce legittimamente sulla riga del db live** (che nel frattempo è cambiato, com'è giusto) e maschera l'esito reale sul backup. Il checksum va calcolato e verificato **solo sull'artefatto immutabile** (il backup), una riga sola.
+
+**Correzione — SSL `2salti.com`/`dev.2salti.com` VALIDO (non scaduto).** Il certificato è **valido**, rinnovato il **14-giu** (vedi §10.9, Let's Encrypt 2026-06-14 → 2026-09-12). La nota "SSL forse scaduto" rimasta in coda da Macro 16 è **stale**: era vera allo smoke post-Macro 16 ma chiusa il 14-giu. L'automazione di rinnovo ancora rotta riguarda i **domini di Damiano**, non quelli di Alberto (cron `certbot-2salti` scoped, §10.9).
+
 ## 3. Trappole tecniche note
 
 ### 3.1 `git rm --cached` + file dirty = pull abortito
