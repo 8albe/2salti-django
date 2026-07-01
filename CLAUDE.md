@@ -27,7 +27,7 @@ Prima di iniziare qualunque task, identifica quale documento consultare.
 | Mapping termini blueprint ↔ modelli Django | [[DOMAIN_GLOSSARY.md]] | 30+ entità, note tecniche su Match.is_public e onboarding_state |
 | Procedure operative infrastruttura | [[OPS_RUNBOOK.md]] | Deploy, trappole tecniche, protocollo protected file, sicurezza |
 | Capire il "perché" di una decisione di prodotto | [[BLUEPRINT.md]] | visione, UX, business model (italiano) |
-| Roadmap e priorità feature | [[SYLLABUS.md]] | 17 macro-obiettivi funzionali con dettaglio in [docs/syllabus/](docs/syllabus/) |
+| Roadmap e priorità feature | [[SYLLABUS.md]] | 18 macro-obiettivi funzionali con dettaglio in [docs/syllabus/](docs/syllabus/) |
 | Idee fuori scope / parcheggiate | [[FUTURE_IDEAS.md]] | feature eliminate o rinviate (Shop, Media Gallery, Venue, visione multi-sport) con motivo e cosa le riaprirebbe |
 | Regole, comandi, convenzioni di sviluppo | CLAUDE.md (questo file) | regole operative |
 
@@ -101,10 +101,6 @@ Le 10 macchine a stati del progetto (MatchReport, User onboarding, RBAC, Account
 ### Domain model
 
 Mapping tra termini italiani del blueprint e modelli Django: [docs/DOMAIN_GLOSSARY.md](docs/DOMAIN_GLOSSARY.md). Usare quel file quando si legge BLUEPRINT.md e non si riconosce un'entità nel codice.
-
-### Feature inventory
-
-Per sapere se una feature esiste, dove sta, e quali test la coprono: [docs/FEATURE_STATUS.md](docs/FEATURE_STATUS.md). Aggiornato al 2026-04-20.
 
 ### OCR edge cases
 
@@ -189,7 +185,7 @@ Quando il task lo dichiara esplicitamente, si lavora un'intera macro in batch su
 
 ## Test Layout
 
-I test vivono accanto al codice delle rispettive app, con nomi `tests_*.py` o `test_*.py`. L'inventario completo dei test per feature, incluse le aree senza copertura dedicata, è in [docs/FEATURE_STATUS.md](docs/FEATURE_STATUS.md).
+I test vivono accanto al codice delle rispettive app, con nomi `tests_*.py` o `test_*.py`.
 
 Mock the OCR provider via `OCR_PROVIDER=mock` or by patching `vision_providers.py` — never call OpenAI in tests.
 
