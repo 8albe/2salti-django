@@ -12,10 +12,11 @@ Punto d'ingresso operativo del progetto. Per la visione di prodotto vedi [BLUEPR
 - 🔄 In corso — almeno un task [x] e almeno uno [ ]
 - ⏳ Da fare — nessun task ancora iniziato
 - 🧊 Differito — fermo per dipendenza esterna o di sequenza (infrastruttura, accordo esterno, decisione a monte, un'altra macro non pronta) o pianificato esplicitamente dopo il resto del syllabus; non è candidato finché non cambia la causa che lo blocca
+- ❌ Eliminato dallo scope — feature rimossa dalla roadmap (potatura 2026-07, pallanuoto-only); dettaglio storico e cosa la riaprirebbe in [FUTURE_IDEAS.md](FUTURE_IDEAS.md)
 
 ---
 
-## 1. Pagina home pubblica di ogni sport ✅
+## 1. Pagina home pubblica pallanuoto ✅
 → [Dettaglio](syllabus/1_pagina_home_pubblica.md)
 
 ## 2. Pagina pubblica delle partite ✅
