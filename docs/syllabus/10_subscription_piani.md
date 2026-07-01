@@ -9,12 +9,12 @@ Implementazione Freemium / Premium / Club Pro come da blueprint §6. Attualmente
 - [x] `User.subscription_status` con valori INACTIVE/ACTIVE
 - [x] `User.subscription_end_date`
 - [ ] Modello `Subscription` separato (non più 2 CharField su `User`)
-- [ ] Enum FREEMIUM / PREMIUM_USER / CLUB_PRO
+- [ ] Enum piani — UTENTI: FREEMIUM / PREMIUM_USER; SOCIETÀ: CLUB_PRO (a pagamento)
 
 ### 10.2 Wiring pagamenti e gating
 
 - [ ] Integrazione provider pagamenti (Stripe o PayPal)
-- [ ] Gating feature server-side per piano (Chatbot, Live Alerts, Media upload, Recap PDF)
+- [ ] Gating feature server-side per piano (Chatbot, Live Alerts, Recap PDF)
 - [ ] Pricing definitivo Premium Utente e Club Pro (bloccato — validazione product owner)
 - [ ] Modello revenue projection (stima ricavi annui per piano)
 - [ ] Eccezione pilota: Zero9 comped (no Club Pro), ricavi da sponsor — escludere dal modello revenue Club Pro
