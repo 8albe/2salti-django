@@ -43,4 +43,4 @@ Implementazione Freemium / Premium / Club Pro come da blueprint §6. Attualmente
 
 ---
 
-← [Macro precedente](9_sistema_sponsor.md) | → [Macro successiva](11_media_gallery.md)
+← [Macro precedente](9_sistema_sponsor.md) | → [Macro successiva](12_live_alerts.md)

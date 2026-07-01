@@ -45,8 +45,8 @@ Punto d'ingresso operativo del progetto. Per la visione di prodotto vedi [BLUEPR
 ## 10. Subscription e piani (three-tier) 🔄
 → [Dettaglio](syllabus/10_subscription_piani.md)
 
-## 11. Media Gallery e AI Tagging 🧊
-→ [Dettaglio](syllabus/11_media_gallery.md)
+## 11. Media Gallery e AI Tagging ❌
+→ Eliminata dallo scope (2026-07) → [FUTURE_IDEAS.md §1](FUTURE_IDEAS.md)
 
 ## 12. Live Alerts e notifiche push 🧊
 → [Dettaglio](syllabus/12_live_alerts.md)
