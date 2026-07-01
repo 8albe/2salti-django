@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-**2salti** is a Django 5.0 sports league management platform for multi-sport organizations. Core workflows: user onboarding, OCR-based match report ingestion, standings management, and team convocations. The project is deployed on Linux with Gunicorn + Nginx.
+**2salti** is a Django 5.0 league management platform for water polo (pallanuoto). Core workflows: user onboarding, OCR-based match report ingestion, standings management, and team convocations. The `Sport` schema remains multi-sport-capable, but the product is single-sport — pallanuoto-only (scope decision 2026-07, see [[FUTURE_IDEAS.md]] §2). The project is deployed on Linux with Gunicorn + Nginx.
 
 ## Non-Negotiable Rules
 
@@ -28,6 +28,7 @@ Prima di iniziare qualunque task, identifica quale documento consultare.
 | Procedure operative infrastruttura | [[OPS_RUNBOOK.md]] | Deploy, trappole tecniche, protocollo protected file, sicurezza |
 | Capire il "perché" di una decisione di prodotto | [[BLUEPRINT.md]] | visione, UX, business model (italiano) |
 | Roadmap e priorità feature | [[SYLLABUS.md]] | 17 macro-obiettivi funzionali con dettaglio in [docs/syllabus/](docs/syllabus/) |
+| Idee fuori scope / parcheggiate | [[FUTURE_IDEAS.md]] | feature eliminate o rinviate (Shop, Media Gallery, Venue, visione multi-sport) con motivo e cosa le riaprirebbe |
 | Regole, comandi, convenzioni di sviluppo | CLAUDE.md (questo file) | regole operative |
 
 In caso di contraddizione tra documenti: `STATE_MACHINES.md > DOMAIN_GLOSSARY.md > CLAUDE.md > BLUEPRINT.md` per questioni di codice; `BLUEPRINT.md` vince sulla visione di prodotto.
