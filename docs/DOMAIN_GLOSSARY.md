@@ -14,6 +14,8 @@ Questo documento è il ponte tra il linguaggio di prodotto usato nel blueprint (
 - ❌ Non implementato — il blueprint ne parla, nel codice non c'è nulla
 - 📋 Non nel blueprint — esiste nel codice, il blueprint non lo menziona
 
+> **Scope 2026-07 (pallanuoto-only):** le voci Shop (Shop_Orders / Shop vetrina), Media Gallery e Impianto/Venue sono **eliminate dallo scope** — motivo e cosa le riaprirebbe in [FUTURE_IDEAS.md](FUTURE_IDEAS.md) (§1). I loro tombstone qui sotto restano per non rompere i rimandi esistenti; lo schema `Sport` resta multi-sport-capable ma il prodotto è pallanuoto-only ([FUTURE_IDEAS.md](FUTURE_IDEAS.md) §2).
+
 ---
 
 ## Entità principali (§10 "Entità core")
@@ -23,7 +25,7 @@ Questo documento è il ponte tra il linguaggio di prodotto usato nel blueprint (
 | Partita / Match | `Match` | matches | matches/models.py | ✅ | Contiene score, quarter_scores, referees, has_report, is_finished, is_public (vedi note tecniche sotto) |
 | Squadra / Team | `Team` | core | core/models.py | ✅ | FK verso Society e League; nome auto-generato da Society + category |
 | Società | `Society` | core | core/models.py | ✅ | Creata dal Presidente nel wizard onboarding |
-| Sport | `Sport` | core | core/models.py | ✅ | Multi-sport: pallanuoto e altri; contiene point_system e period_label |
+| Sport | `Sport` | core | core/models.py | ✅ | Schema **multi-sport-capable** (point_system, period_label, hex_color), ma **prodotto pallanuoto-only** (decisione 2026-07 → [FUTURE_IDEAS.md](FUTURE_IDEAS.md) §2) |
 | Campionato / Competizione | `League` | core | core/models.py | ✅ | Include stagione, girone, livello; blueprint §10 la chiama "Competition" |
 | Atleta (profilo sportivo) | `AthleteProfile` | accounts | accounts/models.py | ✅ | OneToOne con User; stats calcolate (total_goals, total_matches, total_expulsions) |
 | Allenatore / Coach | `CoachProfile` | accounts | accounts/models.py | ✅ | OneToOne con User; specialization, years_experience |
@@ -33,7 +35,7 @@ Questo documento è il ponte tra il linguaggio di prodotto usato nel blueprint (
 | Configurazione evento per sport | `SportEventConfig` | matches | matches/models.py | 📋 | Mappa event_code → label per sport; non menzionato nel blueprint |
 | Classifica | `LeagueStanding` | core | core/models.py | ✅ | Tabella denormalizzata persistita; mai scrivere direttamente — usare `standings_service` |
 | Stagione | `League.season` (CharField) → `Season` (entità, deciso) | core | core/models.py | 🟡 | Oggi è un CharField su `League`, formato canonico `2025/2026` (slash). **Redesign Sprint D — Fase 1 implementata su dev (2026-06-09, syllabus Macro 16):** `Season` entità di prima classe (migration 0011, `is_current` per sport, al massimo una corrente per sport); FK transitoria `League.season_fk` (nullable, PROTECT) affiancata alla stringa `League.season`, che resta fino alla Fase 2 (rename lì — **verificato 2026-06-11: `League.season` è ancora il CharField, `season_fk` ancora transitorio**). `Membership.season`, tipo lega e prestito implementati su dev (Fasi 2-4, Macro 16, 2026-06-11; prod allineata 2026-06-12). Distinta da `SeasonArchive` (archivio storico stats): da linkare, non fondere. |
-| Impianto / Venue | `Match.location` (CharField) | matches | matches/models.py | 🟡 | Blueprint §10 menziona "Venues" come entità; nel codice è solo stringa sul match |
+| Impianto / Venue | `Match.location` (CharField) | matches | matches/models.py | 🟡 | Solo stringa sul match; entità `Venue` autonoma **eliminata dallo scope 2026-07** → [FUTURE_IDEAS.md](FUTURE_IDEAS.md) §1 (storico: gap blueprint §10) |
 | Validation_Logs | `MatchReportAuditLog` | matches | matches/models.py | ✅ | Blueprint §10 li chiama "Validation_Logs"; il codice usa `MatchReportAuditLog` |
 
 ### Note tecniche su `Match`
@@ -51,7 +53,7 @@ Questo documento è il ponte tra il linguaggio di prodotto usato nel blueprint (
 | Subscriptions (piano abbonamento) | campi `User.subscription_status` + `subscription_end_date` | accounts | accounts/models.py | 🟡 | Nessun modello `Subscription` separato; il piano è codificato in due CharField sull'utente (INACTIVE/ACTIVE). Three-tier Freemium/Premium/Club Pro del blueprint non è implementato come enum |
 | Claim_Requests (rivendica profilo) | `AccountProfileLink` | accounts | accounts/models.py | ✅ | status: PENDING → APPROVED/REJECTED; vedi STATE_MACHINES.md §4 |
 | Activation_Codes (codici invito) | `ActivationCode` | management | management/models.py | ✅ | Generati dal Club Admin; max_uses, expires_at, role-specific |
-| Shop_Orders | — | — | — | ❌ | Blueprint §10, §13; webhook outbound HMAC verso shop società; nessun modello nel codice |
+| Shop_Orders | — | — | — | ❌ | **Eliminato dallo scope 2026-07** → [FUTURE_IDEAS.md](FUTURE_IDEAS.md) §1. Storico: blueprint §10, §13; webhook outbound HMAC verso shop società; nessun modello nel codice |
 | Sponsor (modello relazionale) | `core.Sponsor` | core | core/models.py | ✅ (dev) | **Macro 9 as-built (2026-06-30):** modello relazionale dedicato, FK `Society` + FK `Season`; targeting **società-wide sulla stagione corrente** via `core.services.sponsor_service`. Render in **forma piena** (scheda società) e **forma ridotta** (profilo atleta del club). Scope pilota **solo-Zero9** (le altre società degradano a zero). Gestione **seed/admin-only** (`op_admin_site`), UI CRUD differita. Migration `0022_sponsor`. Pending: `migrate` su prod + dati reali Zero9 (lato Alberto) |
 | Sponsor_Assets (legacy) | `Society.sponsors` (JSONField) | core | core/models.py | 🟡 | Lista JSON `[{"name": "...", "logo_url": "..."}]` sul modello Society; **deprecato e lasciato intatto** (non rimosso; stato prod non verificato) — superato dal modello relazionale `core.Sponsor` (riga sopra) |
 | User_Preferences (layout widget) | — | — | — | ❌ | Blueprint §10, §12; personalizzazioni widget e tema non implementate |
@@ -76,10 +78,10 @@ Questo documento è il ponte tra il linguaggio di prodotto usato nel blueprint (
 | Richiesta Membership | `MembershipRequest` | management | ✅ | Percorso manuale quando l'utente non ha codice di attivazione; vedi STATE_MACHINES.md §5 |
 | Firma arbitro / PIN referto | — | — | ❌ | Blueprint §7.4.3, §14; referto immutabile post-firma + correzioni solo via admin; non implementato |
 | AI Stats Engine / Chatbot AI | `AIQueryLog` (log query) | matches | 🟡 | Log v0 presente; engine di risposta esiste in forma basilare (`AIQueryLog`); chatbot AI interattivo (§7.5) non implementato |
-| Media Gallery | — | — | ❌ | Blueprint §7.6; upload foto/video, face detection, tagging atleti; nessun modello |
+| Media Gallery | — | — | ❌ | **Eliminata dallo scope 2026-07** → [FUTURE_IDEAS.md](FUTURE_IDEAS.md) §1. Storico: blueprint §7.6; upload foto/video, face detection, tagging atleti; nessun modello |
 | Live Alerts push | — | — | ❌ | Blueprint §2, §13; notifiche push per utenti Premium; nessuna infrastruttura |
 | Season Recap (PDF stagione) | `SeasonArchive` | seasons | 🟡 | Archivio JSON stats per stagione/atleta/squadra; nessuna generazione PDF |
-| Shop vetrina | — | — | ❌ | Blueprint §2, §3, §13; webhook outbound verso shop società; nessun modello |
+| Shop vetrina | — | — | ❌ | **Eliminata dallo scope 2026-07** → [FUTURE_IDEAS.md](FUTURE_IDEAS.md) §1. Storico: blueprint §2, §3, §13; webhook outbound verso shop società; nessun modello |
 | Bacheca squadra / Comunicazioni | `Post`, `Comment` | management | ✅ | Post e commenti per bacheca società/squadra |
 | Chat di squadra | `ChatMessage` | management | 📋 | Messaggistica istantanea squadra; non menzionata nel blueprint come funzionalità distinta |
 | Widget / Dashboard personalizzata | — | — | ❌ | Blueprint §7.1, §12; sistema slot riordinabili per utenti Premium; nessun modello preferenze |
@@ -143,4 +145,4 @@ Le 8 relazioni più strutturali del dominio:
 | "Giuria (ruolo)" (blueprint §7.1) | Nel codice non esiste un valore 'jury' o 'giuria' per `User.role`; il ruolo più vicino sarebbe 'referee', ma la giuria ha poteri diversi (token, firma) | Da decidere se aggiungere 'jury' come valore di role o gestirlo come sotto-ruolo di referee |
 | "Seasons / Stagioni" (entità §10) | Oggi la stagione è un CharField formato `2025/2026` (slash) su `League`; il redesign Macro 16 (implementato su dev 2026-06-11, prod allineata 2026-06-12) la promuove a entità `Season` — già presente su dev; `League.season` resta CharField transitorio affiancato da `season_fk`. `SeasonArchive` (seasons app) è cosa diversa: solo archivio storico delle stats | Stagione corrente = `Season.is_current` per sport (post-redesign); storico = `SeasonArchive`. I due concetti restano **distinti**: da linkare, non fondere |
 | "onboarding_state" (descritto come stato) | È una **property calcolata** su `User`, non un campo DB; aggrega `identity_status` + `subscription_status` + `setup_completed` + relazioni; non assegnabile direttamente | Mai fare `user.onboarding_state = '...'` — non funziona |
-| "Venues / Impianti" (entità §10) | Solo `Match.location` come CharField; nessun modello `Venue` autonomo | Tenere presente per la roadmap se si vuole profilazione impianti |
+| "Venues / Impianti" (entità §10) | Solo `Match.location` come CharField; nessun modello `Venue` autonomo | Entità `Venue` **eliminata dallo scope 2026-07** → [FUTURE_IDEAS.md](FUTURE_IDEAS.md) §1; resta solo `Match.location` |
