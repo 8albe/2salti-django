@@ -104,9 +104,14 @@ class AIQueryAccessTestCase(TestCase):
 
     @patch('matches.api_views.AIStatsEngine')
     def test_authenticated_runs_query(self, MockEngine):
+        # Gating premium (Macro gating): autenticato NON basta più, serve Premium.
+        # login_required + premium_required → un fan freemium riceverebbe 403; qui
+        # concediamo il piano PREMIUM così la query raggiunge il motore (mockato).
         MockEngine.return_value.process_query.return_value = {
             "type": "answer", "text": "ok",
         }
+        self.user.plan = User.Plan.PREMIUM
+        self.user.save(update_fields=['plan'])
         self.client.force_login(self.user)
         response = self.client.post(
             self.url,

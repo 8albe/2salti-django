@@ -132,6 +132,53 @@ class EntitlementAdminActionTests(TestCase):
         self.assertTrue(AuditLog.objects.filter(action='ENTITLEMENT_PLAN_REVOKED').exists())
 
 
+class AiQueryGatingTests(TestCase):
+    """Gating di api_ai_query: anonimo→login, freemium→403, premium→200.
+
+    Usa utenti fan pienamente onboardati (identity VERIFIED + setup done → stato
+    COMPLETED) così l'OnboardingMiddleware non intercetta. Nessuna rete: il motore
+    AI è mockato per il caso premium.
+    """
+
+    # Entrambe le rotte montano la stessa view decorata (matches/urls + api_urls).
+    ROUTES = ['/api/v1/ai-query/', '/matches/api/v1/ai-query/']
+
+    def _fan(self, username, **kwargs):
+        return User.objects.create_user(
+            username=username, password='x', role='fan',
+            identity_status='VERIFIED', setup_completed=True, **kwargs,
+        )
+
+    def test_anonymous_redirected_to_login(self):
+        for route in self.ROUTES:
+            resp = self.client.post(route, data='{"query":"x"}',
+                                    content_type='application/json')
+            self.assertEqual(resp.status_code, 302)
+            self.assertIn('login', resp['Location'])
+
+    def test_freemium_gets_403_premium_required_both_routes(self):
+        self._fan('fan_free')
+        self.client.login(username='fan_free', password='x')
+        for route in self.ROUTES:
+            resp = self.client.post(route, data='{"query":"x"}',
+                                    content_type='application/json')
+            self.assertEqual(resp.status_code, 403, route)
+            self.assertEqual(resp.json()['error'], 'premium_required', route)
+
+    def test_premium_reaches_engine_200(self):
+        from unittest import mock
+        self._fan('fan_premium', plan=User.Plan.PREMIUM)
+        self.client.login(username='fan_premium', password='x')
+        fake_engine = mock.Mock()
+        fake_engine.process_query.return_value = {'text': 'ok', 'data': {}}
+        with mock.patch('matches.api_views.AIStatsEngine', return_value=fake_engine):
+            resp = self.client.post('/api/v1/ai-query/', data='{"query":"gol di Rossi"}',
+                                    content_type='application/json')
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.json()['text'], 'ok')
+        fake_engine.process_query.assert_called_once()
+
+
 class DecoupleDataMigrationTest(TransactionTestCase):
     """Data migration 0010: subscription_status ACTIVE -> onboarding_payment_done,
     plan resta FREEMIUM per tutti (nessun premium regalato). Reverse esplicito.
