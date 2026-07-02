@@ -12,13 +12,13 @@ Questo file non separa più in modo rigido "quello che esiste" e "quello che dov
 
 ## 1. Visione del prodotto e principi non negoziabili
 
-2salti deve diventare l'hub multi-sport che trasforma un referto ufficiale o un referto compilato nativamente in-app in un archivio sportivo vivo. Il cuore non è la pagina bella da vedere: è la fiducia nel dato. Quando il dato è affidabile, allora classifiche, schede squadra, profili atleta, storico arbitrale e leaderboard acquistano valore reale.
+2salti deve diventare l'hub della pallanuoto che trasforma un referto ufficiale o un referto compilato nativamente in-app in un archivio sportivo vivo. Il cuore non è la pagina bella da vedere: è la fiducia nel dato. Quando il dato è affidabile, allora classifiche, schede squadra, profili atleta, storico arbitrale e leaderboard acquistano valore reale.
 
-La pallanuoto e il primo sport di rollout, non il limite del prodotto. La direzione corretta e quindi questa: pochi moduli, molto chiari, tutti agganciati allo stesso motore e progettati per essere replicabili anche su altri sport. Il percorso ideale parte dall'ingresso del referto, passa da compilazione digitale nativa oppure da OCR + AI + controlli, finisce nel database e aggiorna in automatico sito pubblico, dashboard e statistiche aggregate.
+La pallanuoto è lo sport del prodotto. La direzione corretta è questa: pochi moduli, molto chiari, tutti agganciati allo stesso motore. Il percorso ideale parte dall'ingresso del referto, passa da compilazione digitale nativa oppure da OCR + AI + controlli, finisce nel database e aggiorna in automatico sito pubblico, dashboard e statistiche aggregate.
 
 ### Chiarimenti di baseline da tenere fissi
 
-- Pallanuoto = primo sport lanciato e banco di prova principale; architettura, naming e navigazione vanno però pensati come framework multi-sport.
+- Pallanuoto = lo sport del prodotto. **Nota tecnica (non ambizione di prodotto):** l'impianto resta sport-generico *a codice* — il modello `Sport` e le sue FK sotto `Society`/`League`/`Season` restano intatti (`Team` eredita lo sport via `Society`; ultime migration su `Sport` in prod: 0020/0021, solo `hex_color`). Lo sport navigator **va auto-nascosto** con un solo sport (guard di template da aggiungere). Il multi-sport esce da visione, copy e naming, non dallo schema. Vedi FUTURE_IDEAS §2.
 - L'ingestione dei dati è automatizzata: i referti arrivano via email o WhatsApp e vengono processati autonomamente.
 - **Relazione strategica OCR ↔ Referto Digitale**: Il Referto Digitale in-app è la via principale per l'ingestione affidabile del dato; l'OCR resta in sviluppo come fallback per campionati/giurie che non adottano il digitale o per archivio storico. Entrambe le fonti convergono nello stesso contratto dati e workflow di validazione.
 - Include un motore di interrogazione AI (AI Stats Engine) che funge da router intelligente e motore di risposte in linguaggio naturale.
@@ -97,7 +97,7 @@ La home non deve essere solo una vetrina. Deve spiegare il prodotto in pochi sec
 
 - Hero principale con claim molto chiaro, sotto-claim orientato al valore e due CTA: entra nello sport e accedi all'area admin.
 
-- Modulo Sport navigator con card dei vari sport; nella fase iniziale la card Pallanuoto e il percorso principale, ma la struttura deve gia poter ospitare altri sport senza riscritture.
+- Modulo Sport navigator: con un solo sport attivo (pallanuoto) va auto-nascosto; il componente resta a codice (impianto sport-generico, vedi §1 nota tecnica) e non deve essere esposto in UI (guard di template da aggiungere).
 
 - Blocco Campionato in evidenza con stagione corrente, classifica top 4, ultimo turno e link a partite e statistiche.
 
@@ -126,13 +126,12 @@ La home non deve essere solo una vetrina. Deve spiegare il prodotto in pochi sec
 - Sottotitolo: Partite, classifiche, profili e statistiche alimentati da referti ufficiali o compilati digitalmente.
 
 - CTA 1: Esplora lo sport. CTA 2: Accedi.
-- Nella fase iniziale il percorso principale puo portare alla Pallanuoto, ma il copy non deve bloccare l'identita multi-sport.
 
 ## 5. Pagine pubbliche principali
 
-### 5.1 Landing sport - primo rollout: Pallanuoto
+### 5.1 Landing sport - Pallanuoto
 
-Scopo: Deve essere la vera porta d'ingresso al campionato corrente dello sport selezionato. Nel primo rollout questo pattern viene applicato alla Pallanuoto, ma deve restare replicabile su altri sport.
+Scopo: Deve essere la vera porta d'ingresso al campionato corrente di pallanuoto.
 
 ### Blocchi da prevedere:
 
@@ -656,7 +655,7 @@ Il modello economico si basa su tre piani paralleli che sbloccano diverse profon
 2. **Modulo account**: registrazione, verifica email a click, pagamento tre piani.
 3. **Claim e membership**: ricerca profilo, codici di attivazione, notifiche al club admin, approvazioni e revoche.
 4. **Area pubblica robusta e dashboard private** per ruoli verificati, con distinzione netta tra guest, Freemium, Premium e Club Pro.
-5. **Crescita**: nuovi sport oltre la pallanuoto, mobile/PWA, analytics più profonde, integrazioni future.
+5. **Crescita**: mobile/PWA, analytics più profonde, integrazioni future.
 
 ## 14. Decisioni immediate da bloccare (Baseline v3)
 
@@ -670,7 +669,7 @@ Il modello economico si basa su tre piani paralleli che sbloccano diverse profon
 - **Profili sportivi creati dal sistema**: gli utenti non creano da zero il proprio profilo sportivo, lo rivendicano.
 - **Verifica identità**: verifica leggera a click su email (l'utente clicca il link e parte l'iter). SPID/CIE e documento+selfie accantonati per eccesso di attrito.
 - **Accesso dati privati**: richiede SEMPRE due condizioni — email confermata + collegamento sportivo valido (membership approvata; per il genitore ai dati del figlio: certificazione society-vouching `CERTIFICATA`).
-- **Multi-sport by design**: pallanuoto è il primo rollout, non il limite. Naming, navigazione, design system, dominio devono restare estendibili ad altri sport.
+- **Pallanuoto-only (prodotto), sport-generico (codice)**: la pallanuoto è lo sport del prodotto; visione, naming e copy sono pallanuoto. L'impianto tecnico resta sport-generico (modello `Sport` + FK sotto `Society`/`League`/`Season` intatti, navigator da auto-nascondere) — vedi §1 nota tecnica e FUTURE_IDEAS §2.
 - **Rollout a imbuto**: largo = risultati pubblici per tutti; sistema-società completo acceso solo per il pilota Zero9 (~1 anno), poi clonato per le nuove società. Vedi §1 "Strategia di rollout a imbuto".
 
 ---
