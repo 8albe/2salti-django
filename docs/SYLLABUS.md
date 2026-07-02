@@ -22,10 +22,10 @@ Punto d'ingresso operativo del progetto. Per la visione di prodotto vedi [BLUEPR
 ## 2. Pagina pubblica delle partite ✅
 → [Dettaglio](syllabus/2_pagina_pubblica_partite.md)
 
-## 3. Pagina pubblica della classifica 🧊
+## 3. Pagina pubblica della classifica ✅
 → [Dettaglio](syllabus/3_pagina_pubblica_classifica.md)
 
-## 4. Pagina profilo pubblica degli atleti 🧊
+## 4. Pagina profilo pubblica degli atleti ✅
 → [Dettaglio](syllabus/4_profilo_atleti.md)
 
 ## 5. Pagina profilo pubblica degli allenatori ✅
