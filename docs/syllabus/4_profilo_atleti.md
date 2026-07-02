@@ -1,8 +1,8 @@
 ## 4. Pagina profilo pubblica degli atleti
 
-Stato: 🧊 Differito (unico residuo «minuti giocati» bloccato a monte: richiede eventi SUB_IN/SUB_OUT oggi inesistenti)
+Stato: ✅ Completa (residuo «minuti giocati» eliminato dallo scope 2026-07 → [FUTURE_IDEAS.md](../FUTURE_IDEAS.md) §1)
 
-Anagrafica, squadra attuale, storico squadre, statistiche (gol, presenze, minuti), ruolo.
+Anagrafica, squadra attuale, storico squadre, statistiche (gol, presenze, espulsioni), ruolo.
 
 ### 4.1 Modello e statistiche
 
@@ -15,9 +15,7 @@ Anagrafica, squadra attuale, storico squadre, statistiche (gol, presenze, minuti
 - [x] Pagina pubblica profilo atleta dedicata
 - [x] Sezione squadra attuale + storico squadre (da `Membership`)
 - [x] Sezione statistiche stagione corrente
-  - Cutoff stagione calcistica: 1 settembre → 31 agosto, ancorato a `Europe/Rome` via `timezone.make_aware`. Aggregazione da `MatchEvent` con `match__reports__status=PUBLISHED`.
-- [ ] Statistica "minuti giocati" (non presente fra le metriche correnti)
-  - ⏸ Deferito — richiede SUB_IN/SUB_OUT events, fuori scope Sprint A. Gap aperto in §10.
+  - Cutoff stagione: 1 settembre → 31 agosto, ancorato a `Europe/Rome` via `timezone.make_aware`. Aggregazione da `MatchEvent` con `match__reports__status=PUBLISHED`.
 
 ---
 
