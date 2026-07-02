@@ -476,8 +476,21 @@
                             },
                             body: JSON.stringify({ query: query })
                         })
-                        .then(response => response.json())
+                        .then(response => {
+                            // Utente non autenticato: api_ai_query è @login_required,
+                            // quindi risponde con un 302 verso il login (HTML, non JSON).
+                            // Lo distinguiamo dall'errore generico via redirect/content-type
+                            // e mostriamo un CTA di accesso invece di "Pensando..." fallito.
+                            const contentType = response.headers.get('content-type') || '';
+                            if (response.redirected || !contentType.includes('application/json')) {
+                                if (loadingEl) loadingEl.classList.add('hidden');
+                                resultsEl.innerHTML = `Accedi per usare la ricerca AI. <a href="{% url 'login' %}" class="mt-2 inline-block text-blue-400 font-bold hover:underline">Accedi →</a>`;
+                                return null;
+                            }
+                            return response.json();
+                        })
                         .then(data => {
+                            if (data === null) return; // caso non-autenticato già gestito
                             if (loadingEl) loadingEl.classList.add('hidden');
                             if (data.error) {
                                 resultsEl.innerText = "⚠️ " + data.error;
