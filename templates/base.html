@@ -492,7 +492,13 @@
                         .then(data => {
                             if (data === null) return; // caso non-autenticato già gestito
                             if (loadingEl) loadingEl.classList.add('hidden');
-                            if (data.error) {
+                            if (data.error === 'premium_required') {
+                                // Gating premium: mostra un CTA upgrade invece dell'errore grezzo.
+                                // (Cosmetico; la pagina di upgrade dedicata è ancora da definire,
+                                // quindi il CTA è per ora una call-to-action non cliccabile.)
+                                resultsEl.innerHTML = (data.message || "Funzione riservata al piano Premium.") +
+                                    ` <span class="mt-2 inline-block text-blue-400 font-bold">Passa a Premium ✨</span>`;
+                            } else if (data.error) {
                                 resultsEl.innerText = "⚠️ " + data.error;
                             } else {
                                 resultsEl.innerText = data.text;
