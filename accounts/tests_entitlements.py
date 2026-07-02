@@ -96,6 +96,42 @@ class EntitlementSeamTests(TestCase):
         self.assertEqual(log.details['source'], 'seed_zero9')
 
 
+class EntitlementAdminActionTests(TestCase):
+    """Le admin action instradano nel seam (cambio campo + audit), niente bypass."""
+
+    def setUp(self):
+        from django.test import RequestFactory
+        from django.contrib.messages.storage.fallback import FallbackStorage
+        self.admin_user = User.objects.create_superuser(username='admin_e', password='x')
+        self.target = User.objects.create_user(username='target_e', role='athlete')
+        self.request = RequestFactory().post('/admin/')
+        self.request.user = self.admin_user
+        # messages framework richiede uno storage sul request
+        setattr(self.request, 'session', {})
+        setattr(self.request, '_messages', FallbackStorage(self.request))
+
+    def test_attiva_premium_action_uses_seam(self):
+        from accounts.admin import CustomUserAdmin
+        from django.contrib.admin.sites import AdminSite
+        ma = CustomUserAdmin(User, AdminSite())
+        ma.attiva_premium(self.request, User.objects.filter(pk=self.target.pk))
+        self.target.refresh_from_db()
+        self.assertTrue(self.target.is_premium)
+        log = AuditLog.objects.get(action='ENTITLEMENT_PLAN_GRANTED')
+        self.assertEqual(log.details['source'], 'admin')
+        self.assertEqual(log.user, self.admin_user)  # actor tracciato
+
+    def test_disattiva_premium_action_uses_seam(self):
+        from accounts.admin import CustomUserAdmin
+        from django.contrib.admin.sites import AdminSite
+        entitlement_service.grant_premium(self.target, source='admin')
+        ma = CustomUserAdmin(User, AdminSite())
+        ma.disattiva_premium(self.request, User.objects.filter(pk=self.target.pk))
+        self.target.refresh_from_db()
+        self.assertFalse(self.target.is_premium)
+        self.assertTrue(AuditLog.objects.filter(action='ENTITLEMENT_PLAN_REVOKED').exists())
+
+
 class DecoupleDataMigrationTest(TransactionTestCase):
     """Data migration 0010: subscription_status ACTIVE -> onboarding_payment_done,
     plan resta FREEMIUM per tutti (nessun premium regalato). Reverse esplicito.

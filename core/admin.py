@@ -1,4 +1,4 @@
-from django.contrib import admin
+from django.contrib import admin, messages
 from .models import Sport, Society, Team, League, LeagueStanding, Season, Sponsor
 
 @admin.register(LeagueStanding)
@@ -24,13 +24,46 @@ class SeasonAdmin(admin.ModelAdmin):
 
 @admin.register(Society)
 class SocietyAdmin(admin.ModelAdmin):
-    list_display = ('name', 'sport', 'city', 'setup_completed')
-    list_filter = ('sport', 'setup_completed', 'city')
+    list_display = ('name', 'sport', 'city', 'setup_completed', 'tier', 'is_comped')
+    list_filter = ('sport', 'setup_completed', 'tier', 'is_comped', 'city')
     search_fields = ('name', 'city')
-    readonly_fields = ('slug',)
+    # tier è SOLO in lettura: si cambia via le action (seam) per garantire l'audit.
+    # is_comped resta editabile (usato dai seed pilota) ma le action lo instradano nel seam.
+    readonly_fields = ('slug', 'tier')
+    actions = ['attiva_club_pro', 'disattiva_club_pro', 'attiva_comped', 'disattiva_comped']
 
     def has_module_permission(self, request):
         return False
+
+    @admin.action(description="Attiva Club Pro (tier, via seam)")
+    def attiva_club_pro(self, request, queryset):
+        from core.services.entitlement_service import set_society_tier
+        for society in queryset:
+            set_society_tier(society, Society.Tier.CLUB_PRO, source='admin',
+                             actor=request.user, request=request)
+        self.message_user(request, f"Club Pro attivato per {queryset.count()} società.", messages.SUCCESS)
+
+    @admin.action(description="Disattiva Club Pro (tier, via seam)")
+    def disattiva_club_pro(self, request, queryset):
+        from core.services.entitlement_service import set_society_tier
+        for society in queryset:
+            set_society_tier(society, Society.Tier.FREE, source='admin',
+                             actor=request.user, request=request)
+        self.message_user(request, f"Club Pro disattivato per {queryset.count()} società.", messages.SUCCESS)
+
+    @admin.action(description="Concedi comped (Club Pro gratis, via seam)")
+    def attiva_comped(self, request, queryset):
+        from core.services.entitlement_service import set_society_comped
+        for society in queryset:
+            set_society_comped(society, True, source='admin', actor=request.user, request=request)
+        self.message_user(request, f"Comped concesso a {queryset.count()} società.", messages.SUCCESS)
+
+    @admin.action(description="Revoca comped (via seam)")
+    def disattiva_comped(self, request, queryset):
+        from core.services.entitlement_service import set_society_comped
+        for society in queryset:
+            set_society_comped(society, False, source='admin', actor=request.user, request=request)
+        self.message_user(request, f"Comped revocato a {queryset.count()} società.", messages.SUCCESS)
 
 @admin.register(Sponsor)
 class SponsorAdmin(admin.ModelAdmin):
