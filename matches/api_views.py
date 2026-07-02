@@ -1,6 +1,6 @@
 from django.http import JsonResponse, Http404
 from django.shortcuts import get_object_or_404
-from django.views.decorators.csrf import csrf_exempt
+from django.contrib.auth.decorators import login_required
 from django.db.models import Q
 import re
 import json
@@ -102,11 +102,16 @@ def api_match_detail(request, match_id):
         'events': events_data
     })
 
-@csrf_exempt
+@login_required
 def api_ai_query(request):
     """
     AI Query Interface v2 (Live SQL Engine)
     Uses AIStatsEngine for hybrid intent resolution (Redirect/Query).
+
+    Access: authenticated users only. CSRF protection is enforced (no
+    @csrf_exempt); the JS caller in base.html already sends X-CSRFToken.
+    Plan/Premium gating (BLUEPRINT §7.5) is NOT yet applied here — the field
+    does not exist yet and is deferred to a later pass.
     """
     if request.method != 'POST':
         return JsonResponse({'error': 'Only POST allowed'}, status=405)
