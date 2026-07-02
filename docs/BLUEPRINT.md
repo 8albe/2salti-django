@@ -509,7 +509,7 @@ Per evitare caos, il database deve riflettere entità reali e relazioni chiare.
 - **Coaches**: anagrafica tecnici, storico squadre allenate.
 - **Referees**: anagrafica arbitri, designazioni storiche.
 - **Match_Events**: riga per ogni evento (gol, espulsione, cartellino, timeout, rigore), con timestamp/periodo, atleta, team.
-- **Competitions / Venues**: entità di contesto per aggregare correttamente i dati.
+- **Competitions**: entità di contesto per aggregare correttamente i dati.
 - **Season** (entità di prima classe): identificativo stagione nel formato canonico `2025/2026` (validato sul pattern `AAAA/AAAA`, con secondo anno = primo + 1), `sport`, flag `is_current`. Sostituisce il CharField libero `League.season` come asse temporale del dominio. Distinta da `SeasonArchive` (cap. 13 / Macro 13), che resta l'archivio storico delle statistiche.
 - **Validation_Logs**: storico di tutte le correzioni e revisioni manuali.
 
