@@ -48,7 +48,7 @@ Il progetto genera valore differenziato in base al ruolo e al piano di abbonamen
 
 | Utente | Valore generato (Freemium) | Valore aggiunto (Premium Utente / Club Pro) |
 | --- | --- | --- |
-| Atleta | Profilo, gol, presenze, crescita | Media Gallery, Season Recap, Dashboard personalizzata |
+| Atleta | Profilo, gol, presenze, crescita | Season Recap, Dashboard personalizzata |
 | Genitore / Tifoso | Consultazione bacheca e statistiche | Live Alerts push, Chatbot AI, widget personalizzati |
 | Allenatore | Rendimento squadra, record | Statistiche avanzate, gestione bacheca (via Club Pro) |
 | Arbitro / Giuria | Consultazione cronologia | Referto digitale mobile, firma ufficiale, certificazione |
@@ -63,7 +63,6 @@ Il progetto genera valore differenziato in base al ruolo e al piano di abbonamen
 | Notifiche Push Bacheca  | Club Pro        | Solo Premium    | Push Act.     | Si          |
 | Referto Digitale        | Giuria (Gratis) | Tutti (via API) | Offline-first | Si (Token)  |
 | Chatbot AI              | Premium         | Solo Premium    | Web/App       | Si (Hard)   |
-| Media Gallery / Tagging | Premium         | Tutti (Vista)   | Cloud/CDN     | Si (Opt-in) |
 | Live Alerts (Referto)   | Premium         | Solo Premium    | Push Act.     | Si          |
 | Season Recap            | Premium         | Solo Premium    | Batch PDF     | Si          |
 | Shop vetrina (Request)  | Club Pro        | Tutti (Ordina)  | Out. Webhook  | Si (Order)  |
@@ -84,7 +83,6 @@ Mappa del prodotto: pagine pubbliche, superfici post-login, profili e strumenti 
 | Pubblico       | Scheda squadra / Società    | Rosa, staff, sponsor, bacheca pubblica, link esterno           |
 | Autenticato    | Dashboard personalizzata    | Widget riordinabili (Premium), alert, preferenze               |
 | Autenticato    | Bacheca (Atleti / Genitori) | Comunicazioni società gated: scrittura Club Pro, lettura tutti |
-| Autenticato    | Media Gallery Partita       | Upload (Premium) e visualizzazione foto/video taggati          |
 | Autenticato    | Vetrina Shop Società        | Catalogo prodotti con pulsante "Richiesta Materiale"           |
 | Autenticato    | Chatbot Panel               | Interfaccia AI per query e comandi operativi                   |
 | Profili        | Atleta / Coach / Arbitro    | Identità sportiva, storico e Season Recap (Premium)            |
@@ -222,7 +220,7 @@ Scopo: Pagina cardine per dare vita ai club, con flessibilità tra contenuto nat
 
 ### Blocchi da prevedere:
 - Header squadra con nome, logo, stagione e posizione in classifica.
-- **Modello Widget**: Layout a slot fissi riordinabili (non drag&drop) per sponsor, roster, calendario, bacheca pubblica, gallery, staff e storia.
+- **Modello Widget**: Layout a slot fissi riordinabili (non drag&drop) per sponsor, roster, calendario, bacheca pubblica, staff e storia.
 - **Opzione Sito Esterno**: Se la società ha un proprio sito, può disattivare la pagina 2salti personalizzata. In questo caso, il CTA "Pagina Società" effettua un **redirect diretto** al sito esterno; un badge o una nota "Sito esterno gestito dal Club" viene mostrato nell'elenco società per gestire le aspettative dell'utente. I dati sportivi (partite, classifiche) restano comunque accessibili nelle pagine pubbliche del motore 2salti.
 - Numeri chiave: punti, gol fatti, gol subiti, forma recente.
 - Ultime partite e prossime gare.
@@ -296,7 +294,7 @@ La personalizzazione Premium permette di sovrascrivere questi default riordinand
 ### 7.2 Onboarding e Claim Profilo
 Esperienza differenziata tra Guest e Autenticato:
 - **Guest**: Navigazione libera dati pubblici (Classifiche, Risultati, Schede Squadra).
-- **Utente Premium**: Sblocca dashboard personalizzata, Live Alerts, Chatbot, Gallery e Season Recap.
+- **Utente Premium**: Sblocca dashboard personalizzata, Live Alerts, Chatbot e Season Recap.
 - **Utente Club Pro**: Sblocca per la società la gestione bacheca, shop, sponsor e pagina dedicata.
 
 **Sequenza di onboarding**:
@@ -313,7 +311,6 @@ Esperienza differenziata tra Guest e Autenticato:
 
 - Il sistema non archivia prove d'identità (documenti, selfie): la verifica passa per un click di conferma su email. Dove serve un controllo di merito (es. genitore→figlio) è la società a fare il match contro il proprio gestionale; il sistema inoltra e registra l'esito, con audit log.
 - L'identità confermata via email non basta mai per l'accesso ai dati privati: deve esistere anche un collegamento sportivo valido tra utente, squadra, stagione e ruolo.
-- Per i minorenni: richiesto opt-in esplicito del genitore per Media Gallery e tagging.
 - **Certificazione genitore (society-vouching via email)**: il genitore dichiara il figlio; il sito notifica la società; la società verifica nome+email del genitore contro il proprio gestionale; se conferma, il sito invia al genitore una mail con link; al click, l'accesso ai dati/servizi del figlio si attiva. Il sistema non archivia prove d'identità: inoltra la richiesta e registra l'esito; il match lo fa un umano della società. Macchina a stati: vedi §7.7 (implementata; as-built in STATE_MACHINES.md §10).
 - Tema dark/light, recupero password, sessioni e messaggi di errore restano parte del modulo account, ma non devono alterare la gerarchia di sicurezza.
 
@@ -349,14 +346,9 @@ Disponibile esclusivamente per **utenti Premium**.
 - **Sicurezza RBAC**: Permission check server-side obbligatorio per ogni chiamata. Il chatbot non deve mai restituire dati che l'utente non avrebbe diritto di vedere navigando manualmente. Nessun bypass via prompt.
 - **Audit Log**: Ogni comando eseguito dal bot è tracciato in un log visibile all'utente per reversibilità e trasparenza.
 
-### 7.6 Media Gallery & AI Tagging
+### 7.6 Media Gallery & AI Tagging — ❌ eliminata dallo scope (2026-07, pallanuoto-only)
 
-Spazio dedicato ai contenuti multimediali della partita.
-
-- **Fruizione**: Caricamento foto/video riservato a **utenti Premium**. Visualizzazione pubblica sul profilo atleta, salvo opt-out.
-- **AI Pipeline**: Face detection + match automatico con il roster ufficiale della partita.
-- **Tagging**: I tag validati alimentano le gallery personali nei profili atleta. Prevedere una coda di review (almeno inizialmente manuale o semi-automatica) per evitare mis-tagging.
-- **Privacy Minorenni**: Richiesto opt-in esplicito del genitore per upload e tagging. L'atleta può sempre esercitare l'opt-out globale o per singolo contenuto.
+> Feature mai costruita, rimossa dallo scope operativo. Motivo e cosa la riaprirebbe in [FUTURE_IDEAS.md](FUTURE_IDEAS.md) §1. Heading mantenuto come tombstone per non rompere la numerazione della §7.7 (riferita da glossary, syllabus, STATE_MACHINES, OPS_RUNBOOK). Testo integrale recuperabile dalla history git.
 
 ### 7.7 Certificazione genitore (society-vouching) — implementata
 
@@ -564,7 +556,6 @@ Sopra l'interfaccia, in mezzo il layer applicativo, sotto il motore OCR/AI e il 
 | GET /api/coaches/{id} | Profilo coach | record + storico |
 | GET /api/referees/{id} | Profilo arbitro | designazioni + partite |
 | GET /api/teams/{id} | Scheda squadra | rosa, stats, ultime gare |
-| POST /api/media/upload | Caricamento foto/video Media Gallery (Premium) | media_id + tagging job |
 | GET /api/ai/chatbot | Interfaccia Chatbot con function calling | bot_response + eventuali azioni |
 | POST /api/jury/token/issue | Emissione token giuria match-specific | token + finestra validità |
 | POST /api/shop/webhook | Outbound firmato HMAC verso shop società | delivery status |
@@ -579,7 +570,6 @@ La base tecnica già impostata su server Hetzner può restare il punto di parten
 - **Storage originale dei file** con hash per duplicate detection.
 - **Deploy disciplinato via GitHub**, con ambiente di test/staging prima del live.
 - **Monitoring** code di sync offline, webhook shop, push notifications e pipeline OCR.
-- **Storage media** (foto/video gallery) su bucket con CDN e lifecycle policy per archiviazione.
 - **Backup** DB e media automatici, con procedura di restore testata.
 
 ## 12. Grafica del sito e regole UX
@@ -682,7 +672,6 @@ Il modello economico si basa su tre piani paralleli che sbloccano diverse profon
 - **Shop vetrina**: webhook outbound firmato HMAC o email strutturata verso lo shop società. Nessun checkout diretto in-app. 2salti è intermediario, non venditore.
 - **Certificazione giuria**: token match-specific con finestra 30 minuti pre-match, revoca automatica al fischio finale, revoca manuale admin disponibile.
 - **Firma referto**: PIN arbitro rende il referto immutabile post-firma; correzioni successive solo via admin con audit log completo.
-- **AI Tagging Media Gallery**: detection automatica + coda di review manuale; opt-in esplicito per minorenni, opt-out disponibile per ogni atleta.
 - **Profili sportivi creati dal sistema**: gli utenti non creano da zero il proprio profilo sportivo, lo rivendicano.
 - **Verifica identità**: verifica leggera a click su email (l'utente clicca il link e parte l'iter). SPID/CIE e documento+selfie accantonati per eccesso di attrito.
 - **Accesso dati privati**: richiede SEMPRE due condizioni — email confermata + collegamento sportivo valido (membership approvata; per il genitore ai dati del figlio: certificazione society-vouching `CERTIFICATA`).
@@ -697,7 +686,6 @@ Il modello economico si basa su tre piani paralleli che sbloccano diverse profon
 - **[Conflitti]** ✅ **RISOLTO (2026-06-02):** conflict resolution = single-writer lock per match (un solo device writer-attivo alla volta; NON last-write-wins, NON merge). Vedi SYLLABUS Macro 14 §14.3.
 - **[Shop]** SLA del webhook verso società: quante ore di retry? Notifica admin club in caso di failure?
 - **[UX]** Opzione "sito esterno": Redirect diretto (Opzione A) vs Pagina teaser con badge (Opzione B).
-- **[Gallery]** Moderazione contenuti: Segnalazione automatica o dashboard manuale Club Admin?
 - **[Chatbot]** Function calling aperto (Opzione A) vs Lista chiusa whitelist comandi (Opzione B).
 - **[Privacy]** Season Recap minorenni: Opt-in richiesto per generazione PDF o solo per condivisione?
 - **[Identity]** ✅ **SUPERATO (pivot 2026-06-19):** niente documenti da validare. La verifica è a click su email; il controllo di merito esiste solo nel flusso genitore→figlio e lo fa la società contro il proprio gestionale.
