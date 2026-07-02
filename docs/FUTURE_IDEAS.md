@@ -6,7 +6,7 @@ Creato il 2026-07-01, nel giro preparatorio della potatura documentale (restrizi
 
 ## 1. Eliminato dallo scope (mai costruito — esisteva solo in documentazione)
 
-Le quattro voci sotto non hanno una riga di codice, un modello o una migration: erano solo pianificazione. Verificato nell'inventario read-only del 2026-07-01 (grep su modelli, viste, migration, requirements).
+Le prime quattro voci sotto non hanno una riga di codice, un modello o una migration: erano solo pianificazione. Verificato nell'inventario read-only del 2026-07-01 (grep su modelli, viste, migration, requirements). La quinta (minuti giocati) è stata aggiunta il 2026-07-02 in chiusura della Macro 4: anche lei mai costruita.
 
 ### Shop vetrina / Shop_Orders / webhook HMAC
 Era la vetrina prodotti delle società con pulsante "Richiesta Materiale": nessun checkout in-app, 2salti faceva da intermediario inoltrando l'ordine allo shop della società via webhook outbound firmato HMAC (o email strutturata), con log degli ordini in una entità `Shop_Orders`. Parcheggiata perché mai costruita e perché il suo valore dipende da un sistema-società maturo e da accordi commerciali coi club che oggi non esistono; restavano aperti anche i punti SLA/retry del webhook. La riaprirebbe una domanda reale delle società paganti per l'intermediazione del materiale. (Storico: BLUEPRINT v3.x §2, §3, §10, §13, §14.)
@@ -19,6 +19,9 @@ Era l'entità autonoma per gli impianti sportivi: oggi il luogo della partita è
 
 ### Genesi società via calendario di lega (dipendenza FIN)
 Era il modello a regime per la nascita delle società sulla piattaforma: le partite di una stagione esistono già programmate (import del calendario federale) e da lì si estraggono le società personificabili — le società "nascono" dal calendario, non dai referti. Parcheggiata perché l'import calendario non esiste a codice e presuppone un accordo con la federazione (FIN) che non c'è; nel frattempo le società nascono come oggi, da referti OCR o seed mirato (es. Zero9 seminata a mano). La riaprirebbe l'accordo federale sull'accesso ai calendari — a quel punto andrebbe riletta insieme alla voce Jury Token (sezione 3), che dipende dallo stesso interlocutore. (Storico: BLUEPRINT v3.x §1, "Strategia di rollout a imbuto".)
+
+### Minuti giocati per atleta
+Era la metrica "minuti giocati" nel profilo pubblico dell'atleta, accanto a gol, presenze ed espulsioni. Parcheggiata perché mai costruita e bloccata a monte: richiede eventi di sostituzione SUB_IN/SUB_OUT che il modello Match_Events non traccia (oggi elenca solo gol, espulsione, cartellino, timeout, rigore) — modellare le sostituzioni è il prerequisito. La riaprirebbe l'aggiunta degli eventi sostituzione a Match_Events con il relativo calcolo dei minuti. (Storico: SYLLABUS Macro 4, task residuo.)
 
 ---
 
