@@ -12,7 +12,7 @@ class ClaimFlowTest(TestCase):
             password='Password123!',
             role='athlete',
             identity_status='VERIFIED',
-            subscription_status='ACTIVE'
+            onboarding_payment_done=True
         )
         self.client.force_login(user)
         

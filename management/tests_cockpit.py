@@ -11,7 +11,7 @@ class OpsCockpitTests(TestCase):
     def setUp(self):
         self.client = Client()
         self.staff_user = User.objects.create_user(username="admin_user", is_staff=True, password="password")
-        self.regular_user = User.objects.create_user(username="regular_user", is_staff=False, password="password", role='fan', identity_status='VERIFIED', subscription_status='ACTIVE', setup_completed=True)
+        self.regular_user = User.objects.create_user(username="regular_user", is_staff=False, password="password", role='fan', identity_status='VERIFIED', onboarding_payment_done=True, setup_completed=True)
         
         # Base data
         self.sport = Sport.objects.create(name="Pallanuoto", slug="pallanuoto")

@@ -70,11 +70,11 @@ class Society(models.Model):
         CLUB_PRO = 'CLUB_PRO', 'Club Pro'
 
     tier = models.CharField(
-        max_length=10, choices=Tier.choices, default=Tier.FREE,
+        max_length=10, choices=Tier.choices, default=Tier.FREE, db_default=Tier.FREE,
         help_text="Tier società. Cambiato SOLO via core.services.entitlement_service (seam).",
     )
     is_comped = models.BooleanField(
-        default=False,
+        default=False, db_default=False,
         help_text="Entitlement CLUB_PRO concesso gratuitamente (override su tier).",
     )
 

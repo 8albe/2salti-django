@@ -496,7 +496,7 @@ class FullFlowRegressionTest(TestCase):
             username='capitano_mock', first_name='Capitano', last_name='Mock',
             role='athlete',
             identity_status='VERIFIED',
-            subscription_status='ACTIVE',
+            onboarding_payment_done=True,
             setup_completed=True,
         )
         self.athlete_home = self.athlete_home_user.athlete_profile
@@ -507,7 +507,7 @@ class FullFlowRegressionTest(TestCase):
             username='difensore_mock', first_name='Difensore', last_name='Mock',
             role='athlete',
             identity_status='VERIFIED',
-            subscription_status='ACTIVE',
+            onboarding_payment_done=True,
             setup_completed=True,
         )
         self.athlete_away = self.athlete_away_user.athlete_profile

@@ -29,7 +29,7 @@ class BachecaPresidentNoMembershipTests(TestCase):
         self.team = Team.objects.create(society=self.society, slug="zz-hoops-senior")
         self.president = User.objects.create_user(
             username="zz-prez", password="pwd", role="president",
-            identity_status="VERIFIED", subscription_status="ACTIVE",
+            identity_status="VERIFIED", onboarding_payment_done=True,
             setup_completed=True,
         )
         # Presidente de-vincolato: managed_society senza Membership PRESIDENT.

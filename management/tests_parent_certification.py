@@ -35,7 +35,7 @@ class CertBase(TestCase):
         self.child = User.objects.create_user(
             username='figlio', password='pw', role='athlete',
             first_name='Luca', last_name='Rossi',
-            identity_status='VERIFIED', subscription_status='ACTIVE',
+            identity_status='VERIFIED', onboarding_payment_done=True,
             setup_completed=True,
         )
         # Tesseramento PLAYER del figlio nella stagione corrente.
@@ -215,7 +215,7 @@ class SocietyViewTest(CertBase):
         self.client = Client()
         self.president = User.objects.create_user(
             username='presidente', password='pw', role='president',
-            identity_status='VERIFIED', subscription_status='ACTIVE',
+            identity_status='VERIFIED', onboarding_payment_done=True,
             setup_completed=True,
         )
         # President COMPLETED richiede una società gestita.
@@ -262,7 +262,7 @@ class SocietyViewResilienceTest(CertBase):
         self.client = Client()
         self.president = User.objects.create_user(
             username='presidente', password='pw', role='president',
-            identity_status='VERIFIED', subscription_status='ACTIVE',
+            identity_status='VERIFIED', onboarding_payment_done=True,
             setup_completed=True,
         )
         pp = self.president.president_profile

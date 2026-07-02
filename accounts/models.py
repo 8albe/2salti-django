@@ -74,13 +74,13 @@ class User(AbstractUser):
         PREMIUM = 'PREMIUM', 'Premium'
 
     onboarding_payment_done = models.BooleanField(
-        default=False,
+        default=False, db_default=False,
         help_text="Ha completato lo step di pagamento nell'onboarding (mock 0,50€).",
     )
     # plan — entitlement premium VERO. Cambiato SOLO dal seam entitlement_service.
     #   Nessuno è premium per default.
     plan = models.CharField(
-        max_length=10, choices=Plan.choices, default=Plan.FREEMIUM,
+        max_length=10, choices=Plan.choices, default=Plan.FREEMIUM, db_default=Plan.FREEMIUM,
         help_text="Piano premium. Cambiato SOLO via core.services.entitlement_service (seam).",
     )
     
@@ -104,9 +104,9 @@ class User(AbstractUser):
         if self.identity_status != 'VERIFIED':
             return 'IDENTITY_PENDING'
         
-        # Step 2: Payment (Subscription)
-        # I Fan sono esenti dall'abbonamento PRO per ora
-        if self.role != 'fan' and self.subscription_status != 'ACTIVE':
+        # Step 2: Payment (onboarding) — asse SEPARATO dal piano premium.
+        # I Fan sono esenti dallo step pagamento onboarding per ora.
+        if self.role != 'fan' and not self.onboarding_payment_done:
             return 'PAYMENT_PENDING'
         
         # Step 3: Profile Setup (Dati anagrafici minimi e foto)

@@ -51,7 +51,9 @@ class OnboardingFlowTest(TestCase):
         response = self.client.post(reverse('process_payment'))
         self.assertEqual(response.status_code, 302)
         self.user.refresh_from_db()
-        self.assertEqual(self.user.subscription_status, 'ACTIVE')
+        # Il mock completa SOLO lo step onboarding, non concede premium.
+        self.assertTrue(self.user.onboarding_payment_done)
+        self.assertEqual(self.user.plan, self.user.Plan.FREEMIUM)
         
         # 5. Accesso a dashboard -> Redirezione a Setup Wizard
         response = self.client.get(reverse('dashboard'))
@@ -60,7 +62,7 @@ class OnboardingFlowTest(TestCase):
     def test_membership_activation_code(self):
         """Verifica l'onboarding con codice di attivazione"""
         self.user.identity_status = 'VERIFIED'
-        self.user.subscription_status = 'ACTIVE'
+        self.user.onboarding_payment_done = True
         self.user.setup_completed = True
         self.user.save()
         
@@ -91,7 +93,7 @@ class OnboardingFlowTest(TestCase):
     def test_membership_manual_request(self):
         """Verifica l'invio di una richiesta manuale di membership"""
         self.user.identity_status = 'VERIFIED'
-        self.user.subscription_status = 'ACTIVE'
+        self.user.onboarding_payment_done = True
         self.user.setup_completed = True
         self.user.save()
         

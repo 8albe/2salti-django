@@ -6,7 +6,10 @@ commit successivi — la data migration di decoupling e il gating di
 api_ai_query. Nessuna chiamata di rete: il motore AI è mockato.
 """
 from django.contrib.auth import get_user_model
-from django.test import TestCase
+from django.core.management import call_command
+from django.test import TestCase, TransactionTestCase
+from django.db.migrations.executor import MigrationExecutor
+from django.db import connection
 
 from core.models import Sport, Society
 from core.services import entitlement_service
@@ -91,3 +94,42 @@ class EntitlementSeamTests(TestCase):
         self.assertTrue(self.society.is_club_pro)
         log = AuditLog.objects.get(action='ENTITLEMENT_SOCIETY_COMPED_CHANGED')
         self.assertEqual(log.details['source'], 'seed_zero9')
+
+
+class DecoupleDataMigrationTest(TransactionTestCase):
+    """Data migration 0010: subscription_status ACTIVE -> onboarding_payment_done,
+    plan resta FREEMIUM per tutti (nessun premium regalato). Reverse esplicito.
+
+    Segue il pattern di management.tests_migrations_membership_season: rewind con
+    MigrationExecutor, crea fixture con lo stato storico, poi migra forward.
+    """
+
+    migrate_from = [('accounts', '0009_plan_onboarding_db_default')]
+    migrate_to = [('accounts', '0010_decouple_onboarding_payment')]
+
+    def tearDown(self):
+        # Riporta il DB di test condiviso allo stato head (le migration girano fuori
+        # transazione su SQLite; TransactionTestCase non fa rollback dello schema).
+        call_command('migrate', verbosity=0)
+
+    def test_active_maps_to_payment_done_plan_stays_freemium(self):
+        executor = MigrationExecutor(connection)
+        executor.migrate(self.migrate_from)
+        old_apps = executor.loader.project_state(self.migrate_from).apps
+        OldUser = old_apps.get_model('accounts', 'User')
+        active = OldUser.objects.create(username='mig_active', role='athlete',
+                                        subscription_status='ACTIVE')
+        inactive = OldUser.objects.create(username='mig_inactive', role='athlete',
+                                          subscription_status='INACTIVE')
+
+        executor = MigrationExecutor(connection)
+        executor.migrate(self.migrate_to)
+        new_apps = executor.loader.project_state(self.migrate_to).apps
+        NewUser = new_apps.get_model('accounts', 'User')
+        a = NewUser.objects.get(pk=active.pk)
+        i = NewUser.objects.get(pk=inactive.pk)
+        self.assertTrue(a.onboarding_payment_done)
+        self.assertFalse(i.onboarding_payment_done)
+        # Nessun premium regalato dalla data migration.
+        self.assertEqual(a.plan, 'FREEMIUM')
+        self.assertEqual(i.plan, 'FREEMIUM')

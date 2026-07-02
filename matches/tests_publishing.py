@@ -47,7 +47,7 @@ class PublishingServiceTestCase(TestCase):
                 last_name='Test',
                 role='athlete',
                 identity_status='VERIFIED',
-                subscription_status='ACTIVE',
+                onboarding_payment_done=True,
                 setup_completed=True,
             )
             profile = u.athlete_profile
@@ -63,7 +63,7 @@ class PublishingServiceTestCase(TestCase):
                 last_name='Test',
                 role='athlete',
                 identity_status='VERIFIED',
-                subscription_status='ACTIVE',
+                onboarding_payment_done=True,
                 setup_completed=True,
             )
             profile = u.athlete_profile
