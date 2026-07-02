@@ -27,7 +27,7 @@ La pallanuoto e il primo sport di rollout, non il limite del prodotto. La direzi
 ### Strategia di rollout a imbuto
 
 - Il prodotto **largo** online è basico: risultati partite + campionati pubblici per tutte le società (parità funzionale con 1x2 oggi).
-- Il **sistema-società completo** (tutto il blueprint: bacheca, shop, sponsor, membership, dashboard) si costruisce ma si **accende solo per la prima società pilota (Zero9 Roma)** per ~1 anno.
+- Il **sistema-società completo** (tutto il blueprint: bacheca, sponsor, membership, dashboard) si costruisce ma si **accende solo per la prima società pilota (Zero9 Roma)** per ~1 anno.
 - Le altre società, in questa fase, hanno **solo i risultati pubblici**.
 - Quando entreranno nuove società, si **clona e personalizza** il setup pilota.
 
@@ -52,7 +52,7 @@ Il progetto genera valore differenziato in base al ruolo e al piano di abbonamen
 | Genitore / Tifoso | Consultazione bacheca e statistiche | Live Alerts push, Chatbot AI, widget personalizzati |
 | Allenatore | Rendimento squadra, record | Statistiche avanzate, gestione bacheca (via Club Pro) |
 | Arbitro / Giuria | Consultazione cronologia | Referto digitale mobile, firma ufficiale, certificazione |
-| Societa / Lega | Pagina base, roster, calendario | Bacheca push, Shop vetrina, Sponsor, Widget Club |
+| Societa / Lega | Pagina base, roster, calendario | Bacheca push, Sponsor, Widget Club |
 | Admin | Cockpit unico di governo | Monitoraggio pipeline, audit log, gestione permessi |
 
 ### Matrice servizi per piano
@@ -65,7 +65,6 @@ Il progetto genera valore differenziato in base al ruolo e al piano di abbonamen
 | Chatbot AI              | Premium         | Solo Premium    | Web/App       | Si (Hard)   |
 | Live Alerts (Referto)   | Premium         | Solo Premium    | Push Act.     | Si          |
 | Season Recap            | Premium         | Solo Premium    | Batch PDF     | Si          |
-| Shop vetrina (Request)  | Club Pro        | Tutti (Ordina)  | Out. Webhook  | Si (Order)  |
 | Sponsor & Widget Club   | Club Pro        | Tutti (Vista)   | Web/App       | No          |
 | Personalizzazione Dash  | Premium         | Solo Premium    | DB Sync       | Si          |
 
@@ -83,7 +82,6 @@ Mappa del prodotto: pagine pubbliche, superfici post-login, profili e strumenti 
 | Pubblico       | Scheda squadra / Società    | Rosa, staff, sponsor, bacheca pubblica, link esterno           |
 | Autenticato    | Dashboard personalizzata    | Widget riordinabili (Premium), alert, preferenze               |
 | Autenticato    | Bacheca (Atleti / Genitori) | Comunicazioni società gated: scrittura Club Pro, lettura tutti |
-| Autenticato    | Vetrina Shop Società        | Catalogo prodotti con pulsante "Richiesta Materiale"           |
 | Autenticato    | Chatbot Panel               | Interfaccia AI per query e comandi operativi                   |
 | Profili        | Atleta / Coach / Arbitro    | Identità sportiva, storico e Season Recap (Premium)            |
 | Admin / Giuria | Form Referto Digitale       | Compilazione mobile, firma PIN, sync offline                   |
@@ -282,9 +280,9 @@ Prima della personalizzazione Premium, ogni utente riceve un setup di default ba
 | Ruolo | Dashboard Default (Widget) | Header / Navigazione | Permessi RBAC | Notifiche Default |
 | --- | --- | --- | --- | --- |
 | **Atleta** | Ultime gare, Stats personali, Prossimo match | Mio Profilo, Team | Lettura area team | Risultati, Variazioni orario |
-| **Genitore** | Squadra figlio, Calendario, Bacheca | Figli, Team, Shop | Lettura area team (figlio) **previa certificazione** (§7.7) | Alert live match, Bacheca |
+| **Genitore** | Squadra figlio, Calendario, Bacheca | Figli, Team | Lettura area team (figlio) **previa certificazione** (§7.7) | Alert live match, Bacheca |
 | **Allenatore** | Roster, Registro presenze, Stats team | Gestione Team, Dati | Scrittura area team | Report partita post-match |
-| **Dirigente** | KPI Club, Richieste membership, Sponsor | Club Admin, Shop Admin | Gestione Club | Nuove richieste, Alert Shop |
+| **Dirigente** | KPI Club, Richieste membership, Sponsor | Club Admin | Gestione Club | Nuove richieste |
 | **Arbitro** | Mie designazioni, Storico, Rimborsi | Archivio Arbitrale | Update match assigned | Nuove designazioni |
 | **Giuria (Cert)**| Match corrente (Form Referto) | Live Match Tool | Edit match token-spec | Nessuna |
 | **Admin** | Cockpit completo, System health | Super Admin Panel | Full access | Errori critici pipeline |
@@ -295,7 +293,7 @@ La personalizzazione Premium permette di sovrascrivere questi default riordinand
 Esperienza differenziata tra Guest e Autenticato:
 - **Guest**: Navigazione libera dati pubblici (Classifiche, Risultati, Schede Squadra).
 - **Utente Premium**: Sblocca dashboard personalizzata, Live Alerts, Chatbot e Season Recap.
-- **Utente Club Pro**: Sblocca per la società la gestione bacheca, shop, sponsor e pagina dedicata.
+- **Utente Club Pro**: Sblocca per la società la gestione bacheca, sponsor e pagina dedicata.
 
 **Sequenza di onboarding**:
 1. Registrazione account base (Email/Password).
@@ -522,7 +520,6 @@ Il dominio adotta la **stagione come asse** del tesseramento, non più le date l
 - **Subscriptions**: piani attivi (Freemium / Premium / Club Pro) con date e metodo pagamento.
 - **Claim_Requests**: richieste di rivendica profilo sportivo.
 - **Activation_Codes**: codici società per membership sportiva.
-- **Shop_Orders**: log ordini intermediati dai webhook verso gli shop delle società.
 - **Sponsor_Assets**: sponsor caricati dalle società, con placement (pagina società, profili atleti).
 - **User_Preferences**: layout widget, tema colore, notifiche opt-in per ciascun utente Premium.
 - **Jury_Tokens**: token match-specific emessi per i giurati certificati, con scadenza e stato revoca.
@@ -558,7 +555,6 @@ Sopra l'interfaccia, in mezzo il layer applicativo, sotto il motore OCR/AI e il 
 | GET /api/teams/{id} | Scheda squadra | rosa, stats, ultime gare |
 | GET /api/ai/chatbot | Interfaccia Chatbot con function calling | bot_response + eventuali azioni |
 | POST /api/jury/token/issue | Emissione token giuria match-specific | token + finestra validità |
-| POST /api/shop/webhook | Outbound firmato HMAC verso shop società | delivery status |
 | GET/PUT /api/user/preferences | Layout widget e tema utente Premium | preferenze persistenti |
 
 ### Infrastruttura e operations
@@ -569,7 +565,7 @@ La base tecnica già impostata su server Hetzner può restare il punto di parten
 - **Log per ogni job di referto**, con errori, warning e tempi di esecuzione.
 - **Storage originale dei file** con hash per duplicate detection.
 - **Deploy disciplinato via GitHub**, con ambiente di test/staging prima del live.
-- **Monitoring** code di sync offline, webhook shop, push notifications e pipeline OCR.
+- **Monitoring** code di sync offline, push notifications e pipeline OCR.
 - **Backup** DB e media automatici, con procedura di restore testata.
 
 ## 12. Grafica del sito e regole UX
@@ -669,7 +665,6 @@ Il modello economico si basa su tre piani paralleli che sbloccano diverse profon
 - **Widget Layout**: sistema a slot fissi riordinabili per dashboard utente e pagine club. Niente drag&drop libero in v1.
 - **Chatbot AI**: esclusiva Premium, con function calling e RBAC server-side obbligatorio.
 - **Bacheca mista**: scrittura gated Club Pro, lettura gratis per tutti gli iscritti, notifiche push solo Premium.
-- **Shop vetrina**: webhook outbound firmato HMAC o email strutturata verso lo shop società. Nessun checkout diretto in-app. 2salti è intermediario, non venditore.
 - **Certificazione giuria**: token match-specific con finestra 30 minuti pre-match, revoca automatica al fischio finale, revoca manuale admin disponibile.
 - **Firma referto**: PIN arbitro rende il referto immutabile post-firma; correzioni successive solo via admin con audit log completo.
 - **Profili sportivi creati dal sistema**: gli utenti non creano da zero il proprio profilo sportivo, lo rivendicano.
@@ -684,7 +679,6 @@ Il modello economico si basa su tre piani paralleli che sbloccano diverse profon
 
 - **[Federazione]** ✅ **RISOLTO (2026-06-02):** l'autorità emittente dei token giuria è la **federazione/lega** (NON il club). Conferma §7.4.1 e §14 (Baseline); vedi SYLLABUS Macro 14 §14.2.
 - **[Conflitti]** ✅ **RISOLTO (2026-06-02):** conflict resolution = single-writer lock per match (un solo device writer-attivo alla volta; NON last-write-wins, NON merge). Vedi SYLLABUS Macro 14 §14.3.
-- **[Shop]** SLA del webhook verso società: quante ore di retry? Notifica admin club in caso di failure?
 - **[UX]** Opzione "sito esterno": Redirect diretto (Opzione A) vs Pagina teaser con badge (Opzione B).
 - **[Chatbot]** Function calling aperto (Opzione A) vs Lista chiusa whitelist comandi (Opzione B).
 - **[Privacy]** Season Recap minorenni: Opt-in richiesto per generazione PDF o solo per condivisione?
