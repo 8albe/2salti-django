@@ -630,13 +630,13 @@ Il modello economico si basa su tre piani paralleli che sbloccano diverse profon
 | Piano | Prezzo Guida | Target | Feature Chiave |
 | --- | --- | --- | --- |
 | **Freemium** | Gratis | Utente base | Pagine pubbliche, claim profilo, lettura bacheca società |
-| **Premium Utente** | Mensile (TBD) | Famiglie, Atleti, Tifosi | Chatbot AI, Live Alerts push, Media Gallery upload, Season Recap, Dashboard widget personalizzata |
-| **Club Pro** | Mensile (TBD) | Società / Club | Scrittura Bacheca + push a iscritti, Shop vetrina, gestione Sponsor, Pagina Club personalizzata |
+| **Premium Utente** | Mensile (TBD) | Famiglie, Atleti, Tifosi | Chatbot AI, Live Alerts push, Season Recap, Dashboard widget personalizzata |
+| **Club Pro** | Mensile (TBD) | Società / Club | Scrittura Bacheca + push a iscritti, gestione Sponsor, Pagina Club personalizzata |
 
 ### Chi paga cosa / chi riceve cosa
 
-- **Utente Premium**: paga per servizi avanzati personali (Alerts, Chatbot, Gallery, Season Recap, personalizzazione).
-- **Società (Club Pro)**: paga per visibilità (Sponsor, pagina società), gestione operativa (Shop vetrina) e comunicazione diretta (Bacheca push).
+- **Utente Premium**: paga per servizi avanzati personali (Alerts, Chatbot, Season Recap, personalizzazione).
+- **Società (Club Pro)**: paga per visibilità (Sponsor, pagina società) e comunicazione diretta (Bacheca push).
 - **Eccezione pilota (Zero9 Roma)**: la società pilota è **comped a vita** perché fa da cavia del sistema-società completo. Su Zero9 i ricavi vengono dagli sponsor/aziende. È l'**unica** eccezione al modello Club Pro: non lo ribalta.
 - **Giuria certificata**: utilizzo del Referto Digitale sempre gratuito, via token match-specific emesso dalla federazione/lega.
 - **Fruizione contenuti**: la lettura della bacheca e la consultazione dati base restano gratis per tutti gli utenti iscritti alla società (anche Freemium). Le notifiche push sulla bacheca arrivano solo ai Premium.
