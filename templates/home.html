@@ -150,6 +150,9 @@
     </div>
 
     <!-- SPORTS EXPLORATION -->
+    {% comment %} Guard: il navigator per disciplina ha senso solo con >1 sport.
+    Con un solo sport (scope pallanuoto-only 2026-07) resta a codice ma si nasconde. {% endcomment %}
+    {% if sports|length > 1 %}
     <section class="pt-10">
         <h2 class="text-xs font-black text-slate-500 uppercase tracking-[0.4em] mb-10 text-center">Esplora per Disciplina</h2>
         <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
@@ -162,6 +165,7 @@
             {% endfor %}
         </div>
     </section>
+    {% endif %}
 
 </div>
 {% endblock %}
