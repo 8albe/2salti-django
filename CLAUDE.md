@@ -184,6 +184,13 @@ Quando il task lo dichiara esplicitamente, si lavora un'intera macro in batch su
 - Django conventions over custom patterns.
 - Type hints encouraged on service-layer functions, optional elsewhere.
 
+### Selezione modello Claude (prompt CC)
+
+- **Fable**: intelligenza e pianificazione — design di macro, audit, review architetturali, decisioni con trade-off.
+- **Opus 4.8**: default potente per esecuzione complessa — implementazioni multi-file, refactoring, debugging non banale.
+- **Sonnet 5**: economico per esecuzione meccanica ben specificata — fette già progettate nel dettaglio, doc, task ripetitivi.
+- Ogni prompt per Claude Code arriva con la raccomandazione di modello inclusa.
+
 ## Test Layout
 
 I test vivono accanto al codice delle rispettive app, con nomi `tests_*.py` o `test_*.py`.
