@@ -5,12 +5,10 @@ class Command(BaseCommand):
     help = 'Initialize or update the list of supported sports in the platform'
 
     def handle(self, *args, **options):
+        # Pallanuoto-only (scope decision 2026-07, FUTURE_IDEAS.md §2): seeding
+        # other sports would resurrect the orphan rows deleted by core.0025
+        # and re-show the home sport navigator ({% if sports|length > 1 %}).
         sports_data = [
-            {'name': 'Calcio a 11', 'slug': 'calcio-11', 'hex_color': '#10B981', 'icon': '⚽'},
-            {'name': 'Calcio a 7', 'slug': 'calcio-7', 'hex_color': '#34D399', 'icon': '⚽'},
-            {'name': 'Calcio a 5', 'slug': 'calcio-5', 'hex_color': '#059669', 'icon': '⚽'},
-            {'name': 'Basket', 'slug': 'basket', 'hex_color': '#F59E0B', 'icon': '🏀'},
-            {'name': 'Pallavolo', 'slug': 'pallavolo', 'hex_color': '#3B82F6', 'icon': '🏐'},
             {'name': 'Pallanuoto', 'slug': 'pallanuoto', 'hex_color': '#2563eb', 'icon': '🤽'},
         ]
 
