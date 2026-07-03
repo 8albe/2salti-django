@@ -12,6 +12,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - **Never** modify committed migrations. Always create new ones via `makemigrations`.
 - **Never** reference `User` directly — always use `get_user_model()`.
 - **Never** write to `LeagueStanding` directly — always go through `standings_service.rebuild_league_standings()`.
+- **Never** write `User.plan`, `Society.tier`, or `Society.is_comped` directly — always go through `core/services/entitlement_service.py` (the entitlement seam, which writes the `ENTITLEMENT_*` audit trail). Plan/tier gating is orthogonal to RBAC. Vocabulary: [docs/DOMAIN_GLOSSARY.md](docs/DOMAIN_GLOSSARY.md) §"Piano / Tier / Entitlement".
 - **Never** commit without running `python manage.py check` and the tests of the touched app.
 - **Never** commit secrets or environment artifacts. Files matching `.env*`, `*.service`, `*.timer`, `psw.*`, `*_history`, `.gitconfig`, `.git-credentials`, or any file containing credentials must stay out of the repo. When introducing a new sensitive file, add the matching pattern to `.gitignore` in the same commit.
 - Project language: Italian for UI, user-facing messages, and commit messages. English for code, comments, and technical errors.

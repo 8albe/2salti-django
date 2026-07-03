@@ -50,7 +50,7 @@ Questo documento è il ponte tra il linguaggio di prodotto usato nel blueprint (
 | Termine blueprint | Modello Django | App | File | Status | Note |
 |---|---|---|---|---|---|
 | Account utente / User_Accounts | `User` | accounts | accounts/models.py | ✅ | AbstractUser con role, staff_role, identity_status, subscription_status, setup_completed |
-| Subscriptions (piano abbonamento) | campi `User.subscription_status` + `subscription_end_date` | accounts | accounts/models.py | 🟡 | Nessun modello `Subscription` separato; il piano è codificato in due CharField sull'utente (INACTIVE/ACTIVE). Three-tier Freemium/Premium/Club Pro del blueprint non è implementato come enum |
+| Subscriptions (piano abbonamento) | `User.plan` + `Society.tier`/`is_comped` | accounts, core | accounts/models.py, core/models.py | ✅ (dev) | Nessun modello `Subscription` separato; enum `FREEMIUM`/`PREMIUM` su User e `FREE`/`CLUB_PRO` su Society (dev 2026-07-02), mutabili solo via seam `entitlement_service` — vedi §"Piano / Tier / Entitlement" sotto. Legacy: `subscription_status`/`subscription_end_date` deprecati, non più letti dal runtime |
 | Claim_Requests (rivendica profilo) | `AccountProfileLink` | accounts | accounts/models.py | ✅ | status: PENDING → APPROVED/REJECTED; vedi STATE_MACHINES.md §4 |
 | Activation_Codes (codici invito) | `ActivationCode` | management | management/models.py | ✅ | Generati dal Club Admin; max_uses, expires_at, role-specific |
 | Shop_Orders | — | — | — | ❌ | **Eliminato dallo scope 2026-07** → [FUTURE_IDEAS.md](FUTURE_IDEAS.md) §1. Storico: blueprint §10, §13; webhook outbound HMAC verso shop società; nessun modello nel codice |
@@ -58,6 +58,21 @@ Questo documento è il ponte tra il linguaggio di prodotto usato nel blueprint (
 | Sponsor_Assets (legacy) | `Society.sponsors` (JSONField) | core | core/models.py | 🟡 | Lista JSON `[{"name": "...", "logo_url": "..."}]` sul modello Society; **deprecato e lasciato intatto** (non rimosso; stato prod non verificato) — superato dal modello relazionale `core.Sponsor` (riga sopra) |
 | User_Preferences (layout widget) | — | — | — | ❌ | Blueprint §10, §12; personalizzazioni widget e tema non implementate |
 | Jury_Tokens | — | — | — | ❌ | Blueprint §7.4, §10, §14; token match-specific per giuria con finestra 30 min; confermato non implementato in STATE_MACHINES.md §"Funzionalità non implementate" |
+
+### Piano / Tier / Entitlement (gating premium — dev 2026-07-02)
+
+Due assi di entitlement, **ortogonali all'RBAC** (`management/permissions.py` non c'entra: qui si gatta su feature premium, non su ruoli/membership). Entrambi cambiano **solo** via il seam `core/services/entitlement_service.py`, che garantisce l'audit `ENTITLEMENT_*` — mai scrivere questi campi direttamente.
+
+| Termine | Campo / Property | Modello | Note |
+|---|---|---|---|
+| Piano utente | `User.plan` | accounts | TextChoices `FREEMIUM`/`PREMIUM`, default `FREEMIUM`. Solo via seam |
+| Step pagamento onboarding | `User.onboarding_payment_done` | accounts | Boolean; solo funnel onboarding (mock 0,50€). **Non** concede premium; eredita il solo ruolo funnel che aveva `subscription_status` |
+| Premium utente | `User.is_premium` | accounts | Property, fonte-di-verità unica: `plan == PREMIUM` |
+| Tier società | `Society.tier` | core | TextChoices `FREE`/`CLUB_PRO`, default `FREE`. Solo via seam |
+| Comped | `Society.is_comped` | core | Boolean; Club Pro concesso gratis (es. società pilota Zero9), override su `tier` |
+| Club Pro società | `Society.is_club_pro` | core | Property, fonte-di-verità unica: `is_comped OR tier == CLUB_PRO` (comped ha precedenza) |
+
+`User.subscription_status` e `subscription_end_date` sono **legacy deprecati**: non più letti/scritti dal runtime e **non mappano più il piano** (rimozione fisica differita a un deploy successivo). Decorator di gating in `accounts/decorators.py`: `premium_required` (applicato su `api_ai_query`, sotto `login_required`), `club_pro_required` (creato, **non applicato** in pilota: Zero9 sarà comped → gate inerte).
 
 ---
 
@@ -68,7 +83,7 @@ Questo documento è il ponte tra il linguaggio di prodotto usato nel blueprint (
 | Referto (cartaceo + OCR) | `MatchReport` con `source_channel='FILE'` | matches | ✅ | Vedi STATE_MACHINES.md §1 per stati e transizioni complete |
 | Referto Digitale In-App | `MatchReport` con `source_channel='DIGITAL'` | matches | ✅ | Stesso modello `MatchReport`, non una classe separata; source_channel discrimina |
 | Pipeline OCR / Workflow referto | `MatchReport.status` TextChoices | matches | ✅ | Stati: DRAFT, UPLOADED, PROCESSING, EXTRACTED, VALIDATED, PUBLISHED, NEEDS_REVIEW, REJECTED |
-| Onboarding utente | `User.onboarding_state` (property calcolata) | accounts | ✅ | **Non è un campo DB** — è una property che aggrega identity_status + subscription_status + setup_completed; vedi STATE_MACHINES.md §2 |
+| Onboarding utente | `User.onboarding_state` (property calcolata) | accounts | ✅ | **Non è un campo DB** — è una property che aggrega identity_status + onboarding_payment_done + setup_completed; vedi STATE_MACHINES.md §2 |
 | Verifica identità (email a click) | `User.identity_status` + `User.identity_verified_at` | accounts | 🟡 | Campo presente; SPID/CIE **accantonato** (pivot 2026-06-19). Modello target: conferma a click su link email; oggi `verify_identity()` è manuale via admin. |
 | Ruolo utente | `User.role` (CharField) | accounts | ✅ | Valori: athlete, coach, referee, fan, president |
 | Ruolo staff RBAC | `User.staff_role` (CharField) | accounts | ✅ | Valori: NONE, UPLOADER, REVIEWER, PUBLISHER, SUPERADMIN; vedi STATE_MACHINES.md §3 |
@@ -141,8 +156,8 @@ Le 8 relazioni più strutturali del dominio:
 | "Referto Digitale" (sembra un oggetto separato) | È `MatchReport` con `source_channel='DIGITAL'` — stesso modello, stesso workflow | Nessuna modifica al codice; nota da tenere presente in ogni discussione di feature |
 | "VERIFIED" (stato referto nel blueprint §8) | Nel codice lo stato si chiama `VALIDATED` | CHIUSO il 09-mag-2026 — fix applicato in BLUEPRINT.md v3.3, rinomina VERIFIED → VALIDATED in §8 |
 | `source` / `origin` (campi menzionati in CLAUDE.md) | Nel codice i campi si chiamano `source_channel` e `source_type` | CHIUSO il 24-apr-2026 — sezione obsoleta rimossa da CLAUDE.md, ora delega a STATE_MACHINES.md |
-| "Subscriptions" (entità business §10) | Non è un modello separato — il piano è codificato in `User.subscription_status` (INACTIVE/ACTIVE) e `User.subscription_end_date`; il three-tier Freemium/Premium/Club Pro non è ancora modellato | Tenere a mente quando si lavora sulla feature abbonamenti |
+| "Subscriptions" (entità business §10) | Non è un modello separato — il piano è `User.plan` (FREEMIUM/PREMIUM) + `Society.tier`/`is_comped` (Club Pro), mutabili solo via seam `entitlement_service`; `subscription_status`/`subscription_end_date` sono legacy deprecati e non mappano più il piano | Three-tier del blueprint ora modellato come due assi (utente + società); vedi §"Piano / Tier / Entitlement" |
 | "Giuria (ruolo)" (blueprint §7.1) | Nel codice non esiste un valore 'jury' o 'giuria' per `User.role`; il ruolo più vicino sarebbe 'referee', ma la giuria ha poteri diversi (token, firma) | Da decidere se aggiungere 'jury' come valore di role o gestirlo come sotto-ruolo di referee |
 | "Seasons / Stagioni" (entità §10) | Oggi la stagione è un CharField formato `2025/2026` (slash) su `League`; il redesign Macro 16 (implementato su dev 2026-06-11, prod allineata 2026-06-12) la promuove a entità `Season` — già presente su dev; `League.season` resta CharField transitorio affiancato da `season_fk`. `SeasonArchive` (seasons app) è cosa diversa: solo archivio storico delle stats | Stagione corrente = `Season.is_current` per sport (post-redesign); storico = `SeasonArchive`. I due concetti restano **distinti**: da linkare, non fondere |
-| "onboarding_state" (descritto come stato) | È una **property calcolata** su `User`, non un campo DB; aggrega `identity_status` + `subscription_status` + `setup_completed` + relazioni; non assegnabile direttamente | Mai fare `user.onboarding_state = '...'` — non funziona |
+| "onboarding_state" (descritto come stato) | È una **property calcolata** su `User`, non un campo DB; aggrega `identity_status` + `onboarding_payment_done` + `setup_completed` + relazioni; non assegnabile direttamente | Mai fare `user.onboarding_state = '...'` — non funziona |
 | "Venues / Impianti" | Solo `Match.location` come CharField; nessun modello `Venue` autonomo | Entità `Venue` **eliminata dallo scope 2026-07** → [FUTURE_IDEAS.md](FUTURE_IDEAS.md) §1; resta solo `Match.location` |

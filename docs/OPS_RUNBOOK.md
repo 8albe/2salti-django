@@ -561,6 +561,21 @@ Cosa fare: quando si tocca `style.css`, nello stesso commit bumpare `?v=N` in `b
 
 Cosa sapere: (1) **non fidarsi del nome classe** per il colore reale: la fonte di verità è `tailwind.config.js`. (2) Nuove UI: preferire `blue-*` esplicito; non aggiungere altri `cyan-*`. (3) **Literali orfani**: hex/rgba ciano hardcoded (`rgba(6,182,212,…)` nei glow `shadow-[…]`, qualche `#06b6d4`/`#0891b2`) NON sono raggiunti dal remap — vanno cambiati a mano dove emergono (al 2026-06-23 ne restano in ~15 template non-base, delegati al giro visivo Antigravity). (4) **Per-sport color**: `Sport.hex_color` è in DB (pallanuoto `#00ffff`) — il remap CSS non lo tocca; allinearlo a blue richiede una migration dati (gate backup + ratifica). La ripulitura completa dei nomi-classe `cyan-*`→`blue-*` è un **task A2 futuro**, non urgente (nessun impatto funzionale/a11y).
 
+## 13. Gating premium server-side (entitlements, dev 2026-07-02)
+
+### 13.1 `api_ai_query` hardened
+
+L'endpoint AI (`matches/api_views.py`) è esposto su due rotte — `/matches/api/v1/ai-query/` (`matches/urls.py`) e `/api/v1/ai-query/` (`matches/api_urls.py`) — ma è la stessa funzione decorata: il gating copre entrambe. Hardening in due passi, entrambi su `dev`:
+
+- `b188349`: da `@csrf_exempt` + accesso anonimo a `@login_required` + CSRF standard (il JS in `base.html` manda `X-CSRFToken`).
+- `e7b91d5`: aggiunto `@premium_required` **sotto** `login_required` (ordine login → premium): anonimo → redirect al login; freemium autenticato → `403 {'error': 'premium_required'}`, che la barra AI traduce in CTA "Passa a Premium" (`75ec92d`) invece di un errore grezzo.
+
+### 13.2 `entitlement_service` — unico seam premium/comped con audit
+
+Tutte le mutazioni di `User.plan` e `Society.tier`/`Society.is_comped` passano da `core/services/entitlement_service.py`: `grant_premium`, `revoke_premium`, `set_society_tier`, `set_society_comped`. Ogni funzione è idempotente (no-op se il valore non cambia) e, quando scrive, logga su `AuditLog` con azione `ENTITLEMENT_*` (`ENTITLEMENT_PLAN_GRANTED`, `ENTITLEMENT_PLAN_REVOKED`, `ENTITLEMENT_SOCIETY_TIER_CHANGED`, `ENTITLEMENT_SOCIETY_COMPED_CHANGED`) e `details={'from', 'to', 'source'}`.
+
+Chiamanti oggi: le action dell'admin (`op_admin_site`; `User.plan` e `Society.tier` sono read-only nel form, si cambiano solo via action → seam) e — per il solo lato società/pilota — i seed. Il mock 0,50€ dell'onboarding **non** concede premium: setta solo `User.onboarding_payment_done` (asse funnel, separato dal piano). Domani il webhook di pagamento reale si aggancia qui (`source='stripe_webhook'`), in un punto solo. Gating ortogonale all'RBAC; vocabolario completo in DOMAIN_GLOSSARY.md §"Piano / Tier / Entitlement".
+
 ## Appendice A — Archivio debiti e fragilità risolti
 
 Voci di §10 chiuse e verificate, spostate qui dalla testa del file per tenere
