@@ -54,21 +54,13 @@ class User(AbstractUser):
         ('UNVERIFIED', 'Non verificato'),
         ('VERIFIED', 'Verificato'),
     ]
-    SUBSCRIPTION_STATUS_CHOICES = [
-        ('INACTIVE', 'Inattivo'),
-        ('ACTIVE', 'Attivo'),
-    ]
     identity_status = models.CharField(max_length=20, choices=IDENTITY_STATUS_CHOICES, default='UNVERIFIED')
     identity_verified_at = models.DateTimeField(null=True, blank=True)
-    # DEPRECATI (rimozione fisica differita a deploy successivo): subscription_status
-    # e subscription_end_date non sono più letti/scritti dal codice runtime. Il ruolo
-    # onboarding è passato a onboarding_payment_done; l'asse premium a plan (vedi sotto).
-    subscription_status = models.CharField(max_length=20, choices=SUBSCRIPTION_STATUS_CHOICES, default='INACTIVE')
-    subscription_end_date = models.DateTimeField(null=True, blank=True)
 
     # Onboarding ⟂ Piano (decoupling): due assi separati.
     # onboarding_payment_done — flag "step pagamento onboarding completato" (mock 0,50€);
-    #   eredita SOLO il ruolo funnel che aveva subscription_status. Letto da onboarding_state.
+    #   eredita SOLO il ruolo funnel del vecchio subscription_status (rimosso, migration
+    #   0011). Letto da onboarding_state.
     class Plan(models.TextChoices):
         FREEMIUM = 'FREEMIUM', 'Freemium'
         PREMIUM = 'PREMIUM', 'Premium'
