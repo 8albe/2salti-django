@@ -16,6 +16,8 @@ from django.db import connection
 from django.db.migrations.executor import MigrationExecutor
 from django.test import TransactionTestCase
 
+from core.tests_migrations_season import _current_leaf
+
 # Import via importlib: il nome modulo inizia con una cifra.
 _mig = importlib.import_module(
     "management.migrations.0011_backfill_membership_season"
@@ -31,13 +33,13 @@ class BackfillMembershipSeasonMigrationTest(TransactionTestCase):
         # Rewind allo stato pre-backfill (FK season presente, valori NULL).
         executor.migrate(self.migrate_from)
 
-        # accounts pinnato a 0005_staff_role_pii (come tests_migrations_season):
-        # 0005 è il leaf di accounts. identity_status esiste già a questo stato
-        # (introdotto in 0003, default 'UNVERIFIED', NOT NULL), quindi l'INSERT del
-        # modello storico lo valorizza col default e non viola il NOT NULL.
+        # accounts pinnato al leaf DINAMICO (come tests_migrations_season):
+        # accounts non viene mai retrocesso, quindi lo schema fisico e' quello
+        # corrente; il modello storico deve combaciare (il pin fisso a 0005 si e'
+        # rotto quando 0011 ha rimosso le colonne subscription dallo schema).
         # core resta implicito al leaf (Season/League.season_fk presenti).
         old_apps = executor.loader.project_state(
-            self.migrate_from + [("accounts", "0005_staff_role_pii")]
+            self.migrate_from + [_current_leaf(executor.loader, "accounts")]
         ).apps
         Sport = old_apps.get_model("core", "Sport")
         Society = old_apps.get_model("core", "Society")

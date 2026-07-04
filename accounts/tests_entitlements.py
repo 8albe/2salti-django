@@ -185,6 +185,10 @@ class DecoupleDataMigrationTest(TransactionTestCase):
 
     Segue il pattern di management.tests_migrations_membership_season: rewind con
     MigrationExecutor, crea fixture con lo stato storico, poi migra forward.
+
+    NB: subscription_status è stato rimosso fisicamente dallo schema (migration 0011);
+    le scritture qui sotto usano il modello storico allo stato 0009, dove la colonna
+    esiste ancora — sono intenzionali e coprono anche la reversibilità di 0011.
     """
 
     migrate_from = [('accounts', '0009_plan_onboarding_db_default')]
