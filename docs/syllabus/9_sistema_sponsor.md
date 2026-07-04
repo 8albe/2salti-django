@@ -30,6 +30,8 @@ Sponsor associati a società/campionati, visualizzazione pubblica, modello dati 
 
 **Decisione di dominio aperta (by-design, 2026-06-30):** sul profilo atleta `current_team` e classifica derivano dalla lega in stagione 2026/2027, mentre gli sponsor escono dalla stagione corrente 2025/2026 (il modulo sponsor è società-wide sulla stagione corrente). Il disallineamento di stagione è **by-design, non un bug**; da rivedere lato prodotto quando Zero9 avrà i dati reali.
 
+**Aggiornamento 2026-07-04:** Zero9 ora **esiste su prod** (seed base: Society pk=13 + Team pk=13 su serie C Maschile 2026/2027) ed è comped via `comp_society`; il seed sponsor placeholder NON è stato eseguito su prod — gli sponsor reali si inseriscono a personificazione avvenuta, ancorati alla stagione corrente. Coda e vincoli in [ZERO9_DEFERRED.md](../ZERO9_DEFERRED.md).
+
 ---
 
 ← [Macro precedente](8_ocr_affidabilita.md) | → [Macro successiva](10_subscription_piani.md)
