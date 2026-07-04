@@ -99,7 +99,7 @@ Generato leggendo:
 **Enforced by:** `OnboardingMiddleware.process_request()` — [accounts/middleware.py](accounts/middleware.py)
 
 > **Nota critica:** gli "stati" dell'onboarding non sono un singolo campo sul modello.
-> Sono la combinazione di tre campi reali (`identity_status`, `subscription_status`, `setup_completed`)
+> Sono la combinazione di tre campi reali (`identity_status`, `onboarding_payment_done`, `setup_completed`)
 > più controlli relazionali su membership/claim. La property `onboarding_state` li aggrega
 > in un valore logico usato solo dal middleware per i redirect.
 
@@ -108,7 +108,7 @@ Generato leggendo:
 | Campo | Tipo | Valori | Default |
 |---|---|---|---|
 | `identity_status` | CharField | `UNVERIFIED`, `VERIFIED` | `UNVERIFIED` |
-| `subscription_status` | CharField | `INACTIVE`, `ACTIVE` | `INACTIVE` |
+| `onboarding_payment_done` | BooleanField | `False`, `True` | `False` |
 | `setup_completed` | BooleanField | `False`, `True` | `False` |
 
 ### Stati logici (property `onboarding_state`)
@@ -116,7 +116,7 @@ Generato leggendo:
 | Valore | Condizione di attivazione | Redirect middleware | Iniziale? | Finale? |
 |---|---|---|---|---|
 | `IDENTITY_PENDING` | `identity_status != 'VERIFIED'` | `verify_identity` | Sì | No |
-| `PAYMENT_PENDING` | identità OK + `role != 'fan'` + `subscription_status != 'ACTIVE'` | `process_payment` | No | No |
+| `PAYMENT_PENDING` | identità OK + `role != 'fan'` + `onboarding_payment_done == False` | `process_payment` | No | No |
 | `SETUP_PENDING` | identità OK + pagamento OK (o fan) + `setup_completed == False` | `setup_wizard` | No | No |
 | `MEMBERSHIP_PENDING` | tutto OK + nessuna membership attiva né claim/request pendenti (solo athlete/coach/president) | `onboarding_membership` | No | No |
 | `COMPLETED` | tutte le condizioni precedenti soddisfatte | nessun redirect | No | Sì |
@@ -126,7 +126,7 @@ Generato leggendo:
 | Campo | Da → A | Trigger | Side effects | File |
 |---|---|---|---|---|
 | `identity_status` | `UNVERIFIED → VERIFIED` | `verify_identity()` POST | `identity_verified_at = timezone.now()`; `log_action('ONBOARDING_IDENTITY_VERIFIED')` | `accounts/views.py` r. 130–132 |
-| `subscription_status` | `INACTIVE → ACTIVE` | `process_payment()` POST | `subscription_end_date = now + 365gg`; `log_action('ONBOARDING_PAYMENT_COMPLETED')` | `accounts/views.py` r. 160–162 |
+| `onboarding_payment_done` | `False → True` | `process_payment()` POST | `log_action('ONBOARDING_PAYMENT_COMPLETED')` | `accounts/views.py` r. 170–174 |
 | `setup_completed` | `False → True` | `setup_wizard()` — form valid | `log_action('ONBOARDING_SETUP_COMPLETED')` | `accounts/views.py` r. 89 |
 | `setup_completed` (Society) | `False → True` | vista in `core/views.py` | `Society.setup_completed = True` parallelamente | `core/views.py` r. 166 |
 
@@ -140,7 +140,7 @@ Generato leggendo:
 ### Discrepanze con la documentazione
 
 - **CLAUDE.md (sezione "Onboarding State Machine") dice:** `IDENTITY_PENDING → PAYMENT_PENDING → SETUP_PENDING → MEMBERSHIP_PENDING → COMPLETED` come se fossero valori di un campo.
-  **Codice dice:** sono stati logici di una property, non un singolo campo `status`. Il campo reale sottostante è la combinazione di `identity_status` + `subscription_status` + `setup_completed` + relazioni.
+  **Codice dice:** sono stati logici di una property, non un singolo campo `status`. Il campo reale sottostante è la combinazione di `identity_status` + `onboarding_payment_done` + `setup_completed` + relazioni.
   **Verdetto:** CLAUDE.md corretto nel descrivere il flusso, ma fuorviante nell'implicare l'esistenza di un campo unico. Da aggiornare per chiarire che è una property calcolata.
 
 - **BLUEPRINT.md §7.2 dice:** sequenza in 6 passi: Registrazione → Verifica identità → Selezione piano → Claim profilo → Autenticazione con squadra → Accesso completo.
