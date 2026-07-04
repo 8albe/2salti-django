@@ -1,3 +1,4 @@
+from unittest.mock import patch
 from django.test import TestCase
 from django.urls import reverse
 from django.contrib.auth import get_user_model
@@ -77,3 +78,46 @@ class PublicAPITestCase(TestCase):
         MatchReport.objects.create(match=self.match, status=MatchReport.Status.PUBLISHED)
         response = self.client.get(url)
         self.assertEqual(len(response.json()['matches']), 1)
+
+
+class AIQueryAccessTestCase(TestCase):
+    """L'endpoint AI query è chiuso agli anonimi (login_required) e non deve
+    mai istanziare/chiamare il motore (quindi OpenAI) per un utente non loggato."""
+
+    def setUp(self):
+        self.url = reverse('api_ai_query')
+        self.user = User.objects.create_user(
+            username="fan1", password="pw-test-123", role="fan"
+        )
+
+    @patch('matches.api_views.AIStatsEngine')
+    def test_anonymous_does_not_run_query(self, MockEngine):
+        response = self.client.post(
+            self.url,
+            data={'query': 'gol Rossi'},
+            content_type='application/json',
+        )
+        # login_required -> redirect al login (default-closed). Nessuna
+        # esecuzione: il motore (e quindi OpenAI) non viene mai toccato.
+        self.assertIn(response.status_code, (301, 302, 401, 403))
+        MockEngine.assert_not_called()
+
+    @patch('matches.api_views.AIStatsEngine')
+    def test_authenticated_runs_query(self, MockEngine):
+        # Gating premium (Macro gating): autenticato NON basta più, serve Premium.
+        # login_required + premium_required → un fan freemium riceverebbe 403; qui
+        # concediamo il piano PREMIUM così la query raggiunge il motore (mockato).
+        MockEngine.return_value.process_query.return_value = {
+            "type": "answer", "text": "ok",
+        }
+        self.user.plan = User.Plan.PREMIUM
+        self.user.save(update_fields=['plan'])
+        self.client.force_login(self.user)
+        response = self.client.post(
+            self.url,
+            data={'query': 'gol Rossi'},
+            content_type='application/json',
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()['text'], "ok")
+        MockEngine.return_value.process_query.assert_called_once()

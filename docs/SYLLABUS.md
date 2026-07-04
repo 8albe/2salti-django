@@ -12,19 +12,20 @@ Punto d'ingresso operativo del progetto. Per la visione di prodotto vedi [BLUEPR
 - 🔄 In corso — almeno un task [x] e almeno uno [ ]
 - ⏳ Da fare — nessun task ancora iniziato
 - 🧊 Differito — fermo per dipendenza esterna o di sequenza (infrastruttura, accordo esterno, decisione a monte, un'altra macro non pronta) o pianificato esplicitamente dopo il resto del syllabus; non è candidato finché non cambia la causa che lo blocca
+- ❌ Eliminato dallo scope — feature rimossa dalla roadmap (potatura 2026-07, pallanuoto-only); dettaglio storico e cosa la riaprirebbe in [FUTURE_IDEAS.md](FUTURE_IDEAS.md)
 
 ---
 
-## 1. Pagina home pubblica di ogni sport ✅
+## 1. Pagina home pubblica pallanuoto ✅
 → [Dettaglio](syllabus/1_pagina_home_pubblica.md)
 
 ## 2. Pagina pubblica delle partite ✅
 → [Dettaglio](syllabus/2_pagina_pubblica_partite.md)
 
-## 3. Pagina pubblica della classifica 🧊
+## 3. Pagina pubblica della classifica ✅
 → [Dettaglio](syllabus/3_pagina_pubblica_classifica.md)
 
-## 4. Pagina profilo pubblica degli atleti 🧊
+## 4. Pagina profilo pubblica degli atleti ✅
 → [Dettaglio](syllabus/4_profilo_atleti.md)
 
 ## 5. Pagina profilo pubblica degli allenatori ✅
@@ -45,8 +46,8 @@ Punto d'ingresso operativo del progetto. Per la visione di prodotto vedi [BLUEPR
 ## 10. Subscription e piani (three-tier) 🔄
 → [Dettaglio](syllabus/10_subscription_piani.md)
 
-## 11. Media Gallery e AI Tagging 🧊
-→ [Dettaglio](syllabus/11_media_gallery.md)
+## 11. Media Gallery e AI Tagging ❌
+→ Eliminata dallo scope (2026-07) → [FUTURE_IDEAS.md §1](FUTURE_IDEAS.md)
 
 ## 12. Live Alerts e notifiche push 🧊
 → [Dettaglio](syllabus/12_live_alerts.md)

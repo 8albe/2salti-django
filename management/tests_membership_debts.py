@@ -167,7 +167,7 @@ class Debt004ApproveAtomicityTests(TestCase):
         self.athlete = User.objects.create_user(username='ath', role='athlete')
         self.president = User.objects.create_user(
             username='prez', password='pwd', role='president',
-            identity_status='VERIFIED', subscription_status='ACTIVE',
+            identity_status='VERIFIED', onboarding_payment_done=True,
             setup_completed=True,
         )
         pp = self.president.president_profile

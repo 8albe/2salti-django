@@ -30,15 +30,15 @@ class ManualReviewTest(TestCase):
             status='UPLOADED'
         )
         
-        self.staff_user = User.objects.create_user(username='staff', is_staff=True, identity_status='VERIFIED', subscription_status='ACTIVE')
-        self.player_user = User.objects.create_user(username='player', role='fan', identity_status='VERIFIED', subscription_status='ACTIVE', setup_completed=True)
+        self.staff_user = User.objects.create_user(username='staff', is_staff=True, identity_status='VERIFIED', onboarding_payment_done=True)
+        self.player_user = User.objects.create_user(username='player', role='fan', identity_status='VERIFIED', onboarding_payment_done=True, setup_completed=True)
 
         # Create athletes for rosters to avoid "Empty roster" errors in form
         from accounts.models import AthleteProfile
-        self.athlete_a = User.objects.create_user(username='athlete_a', last_name='A', identity_status='VERIFIED', subscription_status='ACTIVE')
+        self.athlete_a = User.objects.create_user(username='athlete_a', last_name='A', identity_status='VERIFIED', onboarding_payment_done=True)
         self.prof_a = AthleteProfile.objects.create(user=self.athlete_a, current_team=self.team_a)
         
-        self.athlete_b = User.objects.create_user(username='athlete_b', last_name='B', identity_status='VERIFIED', subscription_status='ACTIVE')
+        self.athlete_b = User.objects.create_user(username='athlete_b', last_name='B', identity_status='VERIFIED', onboarding_payment_done=True)
         self.prof_b = AthleteProfile.objects.create(user=self.athlete_b, current_team=self.team_b)
 
     def test_staff_can_review(self):

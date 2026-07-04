@@ -60,7 +60,7 @@ class StatsIntegrityTest(TestCase):
             is_staff=True,
             setup_completed=True,
             identity_status='VERIFIED',
-            subscription_status='ACTIVE'
+            onboarding_payment_done=True
         )
 
     def test_standings_gating(self):

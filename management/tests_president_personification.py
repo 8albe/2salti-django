@@ -28,7 +28,7 @@ def _president(username):
     return User.objects.create_user(
         username=username, password="pwd", role="president",
         email=f"{username}@example.com",
-        identity_status="VERIFIED", subscription_status="ACTIVE",
+        identity_status="VERIFIED", onboarding_payment_done=True,
         setup_completed=False,
     )
 

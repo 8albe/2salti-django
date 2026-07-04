@@ -3,6 +3,7 @@ from django.shortcuts import render, get_object_or_404, redirect
 from django.utils import timezone
 from django.http import JsonResponse
 from django.db import transaction
+from django.db.models import BooleanField, Case, Value, When
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from .services.dashboard_service import DashboardService
@@ -14,35 +15,11 @@ from .forms import SocietySetupForm
 logger = logging.getLogger(__name__)
 
 def home(request):
-    """Homepage con lista sport e partite filtrate per data"""
-    from .utils import get_calendar_dates
-    import datetime
-    
+    """Homepage pubblica: sport, featured match, classifica teaser e numeri chiave"""
     sports = Sport.objects.all()
-    
-    # Gestione Data (default: Oggi)
+
     today = timezone.now().date()
-    date_str = request.GET.get('date')
-    if date_str:
-        try:
-            selected_date = datetime.datetime.strptime(date_str, '%Y-%m-%d').date()
-        except ValueError:
-            selected_date = today
-    else:
-        selected_date = today
-        
-    # Genera date per il calendario (centrato sulla data selezionata)
-    calendar_dates = get_calendar_dates(center_date=selected_date)
-    
-    # Filtra partite per la data selezionata (00:00 - 23:59)
-    matches = Match.objects.filter(
-        match_date__date=selected_date
-    ).select_related(
-        'home_team__society', 
-        'away_team__society', 
-        'league'
-    ).order_by('match_date')
-    
+
     # --- NEW PREMIUM HOME CONTEXT ---
     # 1. Featured Match: L'ultima partita pubblicata
     featured_match = Match.objects.filter(
@@ -50,9 +27,21 @@ def home(request):
         reports__status=MatchReport.Status.PUBLISHED
     ).select_related('home_team__society', 'away_team__society', 'league').order_by('-match_date').first()
     
-    # 2. Featured League: Prendi la prima lega che ha partite e genera classifica
+    # 2. Featured League: lega in vetrina — stagione corrente, seniores prima
+    #    delle giovanili, tiebreak pk per determinismo. Fallback senza filtro
+    #    stagione: su prod season_fk può essere ancora NULL su leghe non migrate.
     featured_league_data = None
-    featured_league = League.objects.filter(matches__isnull=False).first()
+    featured_qs = League.objects.filter(matches__isnull=False).annotate(
+        is_senior=Case(
+            When(league_type__in=League.SENIOR_LEAGUE_TYPES, then=Value(True)),
+            default=Value(False),
+            output_field=BooleanField(),
+        )
+    ).order_by('-is_senior', 'league_type', 'group_name', 'pk')
+    featured_league = (
+        featured_qs.filter(season_fk__is_current=True).first()
+        or featured_qs.first()
+    )
     if featured_league:
         featured_league_data = {
             'league': featured_league,
@@ -70,15 +59,11 @@ def home(request):
     
     return render(request, 'home.html', {
         'sports': sports,
-        'upcoming_matches': matches,
-        'calendar_dates': calendar_dates,
-        'selected_date': selected_date,
-        'today': today,
         'featured_match': featured_match,
         'featured_league_data': featured_league_data,
         'global_stats': global_stats,
-        'seo_title': f"Risultati e Classifiche del {selected_date.strftime('%d/%m/%Y')}",
-        'seo_description': f"Segui i risultati di pallanuoto, volley e altri sport del {selected_date.strftime('%d/%m/%Y')}. Classifiche e tabellini live su 2salti.",
+        'seo_title': f"Risultati e Classifiche del {today.strftime('%d/%m/%Y')}",
+        'seo_description': f"Segui i risultati di pallanuoto, volley e altri sport del {today.strftime('%d/%m/%Y')}. Classifiche e tabellini live su 2salti.",
         'structured_data': [
             SEOService.get_website_schema(request),
             SEOService.get_organization_schema(request)

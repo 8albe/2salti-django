@@ -61,10 +61,31 @@ class Society(models.Model):
     
     # Setup
     setup_completed = models.BooleanField(default=False)
-    
+
+    # Tier società (gating Club Pro) — asse premium a livello società.
+    #   tier: entitlement a pagamento, cambiato SOLO dal seam entitlement_service.
+    #   is_comped: override "concesso gratis" (es. società pilota Zero9).
+    class Tier(models.TextChoices):
+        FREE = 'FREE', 'Free'
+        CLUB_PRO = 'CLUB_PRO', 'Club Pro'
+
+    tier = models.CharField(
+        max_length=10, choices=Tier.choices, default=Tier.FREE, db_default=Tier.FREE,
+        help_text="Tier società. Cambiato SOLO via core.services.entitlement_service (seam).",
+    )
+    is_comped = models.BooleanField(
+        default=False, db_default=False,
+        help_text="Entitlement CLUB_PRO concesso gratuitamente (override su tier).",
+    )
+
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
-    
+
+    @property
+    def is_club_pro(self):
+        """Fonte-di-verità unica per l'entitlement Club Pro della società."""
+        return self.is_comped or self.tier == self.Tier.CLUB_PRO
+
     def save(self, *args, **kwargs):
         if not self.slug:
             self.slug = slugify(self.name)

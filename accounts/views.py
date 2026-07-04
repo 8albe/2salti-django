@@ -157,23 +157,23 @@ def process_payment(request):
     """Fase 3: Pagamento (Mock 0,50€)"""
     user = request.user
     
-    # Se è un fan o ha già pagato, passa oltre
-    if user.role == 'fan' or user.subscription_status == 'ACTIVE':
+    # Se è un fan o ha già completato lo step pagamento onboarding, passa oltre
+    if user.role == 'fan' or user.onboarding_payment_done:
         return redirect('setup_wizard')
-    
+
     if request.method == 'POST':
-        # Mocking payment success
-        import django.utils.timezone as timezone
+        # Mocking payment success — completa SOLO lo step onboarding.
+        # NON concede premium: User.plan cambia esclusivamente via il seam
+        # core.services.entitlement_service (admin/webhook), mai dal mock.
         from django.contrib import messages
-        
-        user.subscription_status = 'ACTIVE'
-        user.subscription_end_date = timezone.now() + timezone.timedelta(days=365)
-        user.save()
-        
+
+        user.onboarding_payment_done = True
+        user.save(update_fields=['onboarding_payment_done'])
+
         from management.utils import log_action
         log_action(user, None, "ONBOARDING_PAYMENT_COMPLETED", details={"amount": "0.50", "currency": "EUR"}, request=request)
-        
-        messages.success(request, "Abbonamento attivato con successo! Il tuo profilo 2salti PRO è ora attivo per 12 mesi.")
+
+        messages.success(request, "Step di pagamento completato con successo! Puoi ora completare il tuo profilo.")
         return redirect('setup_wizard')
         
     return render(request, 'accounts/onboarding/payment.html', {

@@ -8,7 +8,7 @@ Due tronconi distinti: **7a** il follow (riuso di codice esistente), **7b** la c
 
 - [x] `FanProfile` 1:1 con `User` (oggi `User.role=fan` non ha profilo dedicato)
 - [x] "Atleti seguiti" = **riuso di `favorite_players`** (M2M self su `User` già a codice, usato in setup wizard e dashboard fan) — multi-follow integrato nel FanProfile
-- [ ] Tracking "storico partite seguite" — **differito**
+- [ ] Tracking "storico partite seguite"
 - [x] Pagina pubblica profilo fan/genitore + sezione atleti seguiti (storico differito)
 
 ### 7b. Certificazione genitore (society-vouching) — NUOVO workflow

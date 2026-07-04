@@ -40,9 +40,9 @@ class OpsDashboardTestCase(TestCase):
         # IDENTITY_PENDING
         User.objects.create(username="blocked_identity", role='athlete', identity_status='UNVERIFIED')
         # PAYMENT_PENDING
-        User.objects.create(username="blocked_payment", role='athlete', identity_status='VERIFIED', subscription_status='INACTIVE')
+        User.objects.create(username="blocked_payment", role='athlete', identity_status='VERIFIED', onboarding_payment_done=False)
         # SETUP_PENDING
-        User.objects.create(username="blocked_setup", role='athlete', identity_status='VERIFIED', subscription_status='ACTIVE', setup_completed=False)
+        User.objects.create(username="blocked_setup", role='athlete', identity_status='VERIFIED', onboarding_payment_done=True, setup_completed=False)
 
     def test_dashboard_metrics_logic(self):
         self.client.login(username='ops_admin', password='pass123')

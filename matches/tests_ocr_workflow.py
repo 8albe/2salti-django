@@ -21,7 +21,7 @@ class OCRWorkflowTestCase(TestCase):
             is_staff=True,
             is_superuser=True,
             identity_status='VERIFIED',
-            subscription_status='ACTIVE'
+            onboarding_payment_done=True
         )
         self.team2 = Team.objects.create(
             society=Society.objects.create(name="AN Brescia", sport=self.sport, slug="an-brescia"),

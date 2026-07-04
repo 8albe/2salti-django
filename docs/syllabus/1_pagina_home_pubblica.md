@@ -1,8 +1,8 @@
-## 1. Pagina home pubblica di ogni sport
+## 1. Pagina home pubblica pallanuoto
 
 Stato: ✅ Completato
 
-Hub pubblico per sport: classifica del campionato attivo, ultime partite con risultati, prossime partite. Multi-sport by design.
+Hub pubblico dello sport: classifica del campionato attivo, ultime partite con risultati, prossime partite.
 
 ### 1.1 Backend e routing
 
@@ -15,8 +15,8 @@ Hub pubblico per sport: classifica del campionato attivo, ultime partite con ris
 - [x] Sezione "classifica campionato attivo" alimentata da `LeagueStanding`
 - [x] Sezione "ultime partite con risultati" (filtro `Match` PUBLISHED)
 - [x] Sezione "prossime partite" (filtro `Match` futuri)
-- [x] Sport navigator multi-sport (selettore sport in cima)
-  - Nota: Nascosto automaticamente se un solo sport ha league — comportamento corretto by design
+- [x] Sport navigator (selettore sport in cima)
+  - Nota tecnica: lo sport navigator resta a codice e si auto-nasconde quando un solo sport ha league; lo schema `Sport` resta intatto per decisione 2026-07 (prodotto pallanuoto-only, schema multi-sport-capable) — vedi [FUTURE_IDEAS.md §2](../FUTURE_IDEAS.md)
 
 ---
 

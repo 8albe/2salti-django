@@ -11,6 +11,9 @@ urlpatterns = [
     path('team-chat/<slug:team_slug>/', views.chat_view, name='chat_view'),
     path('team-chat/<int:team_id>/add/', views.chat_message_add, name='chat_message_add'),
 
+    # Convocazioni
+    path('convocation/create/<int:match_id>/', views.convocation_create, name='convocation_create'),
+
     # Nuovo Onboarding & Club Admin (Blueprint v3)
     path('team-access/', views.team_access, name='team_access'),
     path('club-admin/', views.club_admin_dashboard, name='club_admin_dashboard'),

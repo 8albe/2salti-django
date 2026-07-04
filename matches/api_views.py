@@ -1,6 +1,7 @@
 from django.http import JsonResponse, Http404
 from django.shortcuts import get_object_or_404
-from django.views.decorators.csrf import csrf_exempt
+from django.contrib.auth.decorators import login_required
+from accounts.decorators import premium_required
 from django.db.models import Q
 import re
 import json
@@ -102,11 +103,18 @@ def api_match_detail(request, match_id):
         'events': events_data
     })
 
-@csrf_exempt
+@login_required
+@premium_required
 def api_ai_query(request):
     """
     AI Query Interface v2 (Live SQL Engine)
     Uses AIStatsEngine for hybrid intent resolution (Redirect/Query).
+
+    Access: authenticated + Premium. Catena: login_required (anonimo → redirect
+    login, CTA accesso) POI premium_required (freemium → 403 premium_required, la
+    barra AI mostra il CTA upgrade). CSRF enforced (no @csrf_exempt); il JS in
+    base.html manda X-CSRFToken. Gating ORTOGONALE all'RBAC. Copre entrambe le
+    rotte (matches/urls.py e matches/api_urls.py: stessa funzione decorata).
     """
     if request.method != 'POST':
         return JsonResponse({'error': 'Only POST allowed'}, status=405)

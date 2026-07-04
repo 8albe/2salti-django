@@ -128,6 +128,16 @@ Quando `master` ha accumulato merge pubblici **mai rifusi in `dev`** e `dev` ha 
 
 **Gotcha — il delta `master..dev` si calcola solo da `/home/alberto/`.** I conteggi `git rev-list --count master..dev` / `git log master..dev` sono affidabili **solo nella home**, dove `master` e `origin/master` sono freschi (oggi entrambi `e0c928f`, merge-base `7df3643a`, delta reale **23 commit**). Sul **dev box** `/opt/2salti-dev/` i ref `master`/`origin/master` sono **stantii** (l'autopull aggiorna solo `dev`) → lo stesso comando lì restituisce numeri **spuri molto più alti**. Prima di citare un delta in una nota, calcolarlo **dalla home**, mai dal dev box.
 
+### 2.5 Deploy 2026-06-30 — `f697c0f` → `24bfc62` (Macro 9/17/18, 69 commit)
+
+Deploy reale dev→prod con lo stesso pattern di §2.4 (merge `--no-ff` `dev`→`master` da home + push; pull **ff** su prod; `migrate` manuale gated dopo backup DB). Prod portato da `f697c0f` a **`24bfc62`** (69 commit). Migration applicate **0020/0021/0022**: `0021` è una data-migration che ha toccato **1 row** (pallanuoto `#00ffff`→`#2563eb`); `0022` crea la tabella `core_sponsor` (Macro 9). `collectstatic` ha **rigenerato il manifest** (load-bearing pre-restart). Smoke end-to-end GREEN: HTTP 200, login→`/accounts/dashboard/`, tema pallanuoto blu confermato.
+
+**Learning — gate del backup = integrity, non byte-identità.** Il criterio di validità di un backup DB pre-deploy è **`PRAGMA integrity_check` + dimensione plausibile**, **non** l'uguaglianza byte sorgente==backup. Un `.backup` di SQLite preso su un DB live è un backup **valido e consistente** ma **non byte-identico** alla sorgente (il WAL/lo stato live evolvono): pretendere l'uguaglianza byte fa fallire il gate su un backup buono.
+
+**Learning — il file `.sha256` deve contenere SOLO la riga del backup.** Se nel `.sha256` si mette anche la riga del DB live, al rollback `sha256sum -c` **fallisce legittimamente sulla riga del db live** (che nel frattempo è cambiato, com'è giusto) e maschera l'esito reale sul backup. Il checksum va calcolato e verificato **solo sull'artefatto immutabile** (il backup), una riga sola.
+
+**Correzione — SSL `2salti.com`/`dev.2salti.com` VALIDO (non scaduto).** Il certificato è **valido**, rinnovato il **14-giu** (vedi §10.9, Let's Encrypt 2026-06-14 → 2026-09-12). La nota "SSL forse scaduto" rimasta in coda da Macro 16 è **stale**: era vera allo smoke post-Macro 16 ma chiusa il 14-giu. L'automazione di rinnovo ancora rotta riguarda i **domini di Damiano**, non quelli di Alberto (cron `certbot-2salti` scoped, §10.9).
+
 ## 3. Trappole tecniche note
 
 ### 3.1 `git rm --cached` + file dirty = pull abortito
@@ -550,6 +560,21 @@ Cosa fare: quando si tocca `style.css`, nello stesso commit bumpare `?v=N` in `b
 > **Aperto dal 2026-06-23 (`dev`, commit `819db21`).** Il re-skin Cap. 12 ha adottato la strategia **token-remap (A1)**: in `tailwind.config.js` la scala `cyan` è ridefinita sui valori `blue` di Tailwind. Conseguenza: le ~480 utility scritte `cyan-*` nei template (`text-cyan-400`, `bg-cyan-500`, …) **rendono blue** senza essere state rinominate. È deliberato — evita un find-replace di massa — ma è **debito**: chi legge i template vede `cyan` e ottiene blue.
 
 Cosa sapere: (1) **non fidarsi del nome classe** per il colore reale: la fonte di verità è `tailwind.config.js`. (2) Nuove UI: preferire `blue-*` esplicito; non aggiungere altri `cyan-*`. (3) **Literali orfani**: hex/rgba ciano hardcoded (`rgba(6,182,212,…)` nei glow `shadow-[…]`, qualche `#06b6d4`/`#0891b2`) NON sono raggiunti dal remap — vanno cambiati a mano dove emergono (al 2026-06-23 ne restano in ~15 template non-base, delegati al giro visivo Antigravity). (4) **Per-sport color**: `Sport.hex_color` è in DB (pallanuoto `#00ffff`) — il remap CSS non lo tocca; allinearlo a blue richiede una migration dati (gate backup + ratifica). La ripulitura completa dei nomi-classe `cyan-*`→`blue-*` è un **task A2 futuro**, non urgente (nessun impatto funzionale/a11y).
+
+## 13. Gating premium server-side (entitlements, dev 2026-07-02)
+
+### 13.1 `api_ai_query` hardened
+
+L'endpoint AI (`matches/api_views.py`) è esposto su due rotte — `/matches/api/v1/ai-query/` (`matches/urls.py`) e `/api/v1/ai-query/` (`matches/api_urls.py`) — ma è la stessa funzione decorata: il gating copre entrambe. Hardening in due passi, entrambi su `dev`:
+
+- `b188349`: da `@csrf_exempt` + accesso anonimo a `@login_required` + CSRF standard (il JS in `base.html` manda `X-CSRFToken`).
+- `e7b91d5`: aggiunto `@premium_required` **sotto** `login_required` (ordine login → premium): anonimo → redirect al login; freemium autenticato → `403 {'error': 'premium_required'}`, che la barra AI traduce in CTA "Passa a Premium" (`75ec92d`) invece di un errore grezzo.
+
+### 13.2 `entitlement_service` — unico seam premium/comped con audit
+
+Tutte le mutazioni di `User.plan` e `Society.tier`/`Society.is_comped` passano da `core/services/entitlement_service.py`: `grant_premium`, `revoke_premium`, `set_society_tier`, `set_society_comped`. Ogni funzione è idempotente (no-op se il valore non cambia) e, quando scrive, logga su `AuditLog` con azione `ENTITLEMENT_*` (`ENTITLEMENT_PLAN_GRANTED`, `ENTITLEMENT_PLAN_REVOKED`, `ENTITLEMENT_SOCIETY_TIER_CHANGED`, `ENTITLEMENT_SOCIETY_COMPED_CHANGED`) e `details={'from', 'to', 'source'}`.
+
+Chiamanti oggi: le action dell'admin (`op_admin_site`; `User.plan` e `Society.tier` sono read-only nel form, si cambiano solo via action → seam) e — per il solo lato società/pilota — i seed. Il mock 0,50€ dell'onboarding **non** concede premium: setta solo `User.onboarding_payment_done` (asse funnel, separato dal piano). Domani il webhook di pagamento reale si aggancia qui (`source='stripe_webhook'`), in un punto solo. Gating ortogonale all'RBAC; vocabolario completo in DOMAIN_GLOSSARY.md §"Piano / Tier / Entitlement".
 
 ## Appendice A — Archivio debiti e fragilità risolti
 

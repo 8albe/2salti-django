@@ -18,8 +18,8 @@ def onboarding_required(view_func):
             if request.resolver_match.url_name != 'verify_identity':
                 return redirect('verify_identity')
         
-        # 2. Verifica Pagamento (Abbonamento)
-        elif user.subscription_status != 'ACTIVE':
+        # 2. Verifica Pagamento onboarding (asse separato dal piano premium)
+        elif not user.onboarding_payment_done:
             # Se NON siamo nella vista di pagamento (e non siamo in quella di identità), redirect
             if request.resolver_match.url_name not in ['process_payment', 'verify_identity']:
                 return redirect('process_payment')

@@ -32,4 +32,4 @@ Notifiche push per risultati live, variazioni orario, convocazioni. Gated Premiu
 
 ---
 
-← [Macro precedente](11_media_gallery.md) | → [Macro successiva](13_season_archive.md)
+← [Macro precedente](10_subscription_piani.md) | → [Macro successiva](13_season_archive.md)

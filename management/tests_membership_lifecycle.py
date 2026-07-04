@@ -212,7 +212,7 @@ class MembershipSignalCleanupTests(TestCase):
     def test_membership_request_approve_creates_active_with_season(self):
         president_user = User.objects.create_user(
             username='prez', password='pwd', role='president',
-            identity_status='VERIFIED', subscription_status='ACTIVE',
+            identity_status='VERIFIED', onboarding_payment_done=True,
             setup_completed=True,
         )
         president_profile = president_user.president_profile

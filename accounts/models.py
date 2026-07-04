@@ -60,8 +60,29 @@ class User(AbstractUser):
     ]
     identity_status = models.CharField(max_length=20, choices=IDENTITY_STATUS_CHOICES, default='UNVERIFIED')
     identity_verified_at = models.DateTimeField(null=True, blank=True)
+    # DEPRECATI (rimozione fisica differita a deploy successivo): subscription_status
+    # e subscription_end_date non sono più letti/scritti dal codice runtime. Il ruolo
+    # onboarding è passato a onboarding_payment_done; l'asse premium a plan (vedi sotto).
     subscription_status = models.CharField(max_length=20, choices=SUBSCRIPTION_STATUS_CHOICES, default='INACTIVE')
     subscription_end_date = models.DateTimeField(null=True, blank=True)
+
+    # Onboarding ⟂ Piano (decoupling): due assi separati.
+    # onboarding_payment_done — flag "step pagamento onboarding completato" (mock 0,50€);
+    #   eredita SOLO il ruolo funnel che aveva subscription_status. Letto da onboarding_state.
+    class Plan(models.TextChoices):
+        FREEMIUM = 'FREEMIUM', 'Freemium'
+        PREMIUM = 'PREMIUM', 'Premium'
+
+    onboarding_payment_done = models.BooleanField(
+        default=False, db_default=False,
+        help_text="Ha completato lo step di pagamento nell'onboarding (mock 0,50€).",
+    )
+    # plan — entitlement premium VERO. Cambiato SOLO dal seam entitlement_service.
+    #   Nessuno è premium per default.
+    plan = models.CharField(
+        max_length=10, choices=Plan.choices, default=Plan.FREEMIUM, db_default=Plan.FREEMIUM,
+        help_text="Piano premium. Cambiato SOLO via core.services.entitlement_service (seam).",
+    )
     
     # Preferenze (per TUTTI i ruoli - anche atleti/allenatori possono seguire altre squadre)
     favorite_teams = models.ManyToManyField('core.Team', blank=True, related_name='followers')
@@ -70,6 +91,11 @@ class User(AbstractUser):
     @property
     def is_verified(self):
         return self.identity_status == 'VERIFIED'
+
+    @property
+    def is_premium(self):
+        """Fonte-di-verità unica per l'entitlement premium dell'utente."""
+        return self.plan == self.Plan.PREMIUM
     
     @property
     def onboarding_state(self):
@@ -78,9 +104,9 @@ class User(AbstractUser):
         if self.identity_status != 'VERIFIED':
             return 'IDENTITY_PENDING'
         
-        # Step 2: Payment (Subscription)
-        # I Fan sono esenti dall'abbonamento PRO per ora
-        if self.role != 'fan' and self.subscription_status != 'ACTIVE':
+        # Step 2: Payment (onboarding) — asse SEPARATO dal piano premium.
+        # I Fan sono esenti dallo step pagamento onboarding per ora.
+        if self.role != 'fan' and not self.onboarding_payment_done:
             return 'PAYMENT_PENDING'
         
         # Step 3: Profile Setup (Dati anagrafici minimi e foto)

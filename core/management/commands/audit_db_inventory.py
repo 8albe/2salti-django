@@ -198,7 +198,8 @@ class Command(BaseCommand):
                 "date_joined": u.date_joined.isoformat() if u.date_joined else None,
                 "last_login": u.last_login.isoformat() if u.last_login else None,
                 "identity_status": u.identity_status,
-                "subscription_status": u.subscription_status,
+                "onboarding_payment_done": u.onboarding_payment_done,
+                "plan": u.plan,
                 "setup_completed": u.setup_completed,
                 "onboarding_state": u.onboarding_state,
                 "active_memberships_count": u.memberships.filter(is_active=True).count(),
@@ -754,8 +755,8 @@ class Command(BaseCommand):
                      f"is_active={u['is_active']}  is_staff={u['is_staff']}  "
                      f"super={u['is_superuser']}")
             L.append(f"      joined={u['date_joined']}  last_login={u['last_login']}  "
-                     f"identity={u['identity_status']}  subscription={u['subscription_status']}  "
-                     f"setup={u['setup_completed']}  onboarding_state={u['onboarding_state']}")
+                     f"identity={u['identity_status']}  payment_done={u['onboarding_payment_done']}  "
+                     f"plan={u['plan']}  setup={u['setup_completed']}  onboarding_state={u['onboarding_state']}")
             L.append(f"      memberships_active={u['active_memberships_count']}  "
                      f"profile_links={u['profile_links_count']}")
 

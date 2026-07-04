@@ -12,13 +12,13 @@ Questo file non separa più in modo rigido "quello che esiste" e "quello che dov
 
 ## 1. Visione del prodotto e principi non negoziabili
 
-2salti deve diventare l'hub multi-sport che trasforma un referto ufficiale o un referto compilato nativamente in-app in un archivio sportivo vivo. Il cuore non è la pagina bella da vedere: è la fiducia nel dato. Quando il dato è affidabile, allora classifiche, schede squadra, profili atleta, storico arbitrale e leaderboard acquistano valore reale.
+2salti deve diventare l'hub della pallanuoto che trasforma un referto ufficiale o un referto compilato nativamente in-app in un archivio sportivo vivo. Il cuore non è la pagina bella da vedere: è la fiducia nel dato. Quando il dato è affidabile, allora classifiche, schede squadra, profili atleta, storico arbitrale e leaderboard acquistano valore reale.
 
-La pallanuoto e il primo sport di rollout, non il limite del prodotto. La direzione corretta e quindi questa: pochi moduli, molto chiari, tutti agganciati allo stesso motore e progettati per essere replicabili anche su altri sport. Il percorso ideale parte dall'ingresso del referto, passa da compilazione digitale nativa oppure da OCR + AI + controlli, finisce nel database e aggiorna in automatico sito pubblico, dashboard e statistiche aggregate.
+La pallanuoto è lo sport del prodotto. La direzione corretta è questa: pochi moduli, molto chiari, tutti agganciati allo stesso motore. Il percorso ideale parte dall'ingresso del referto, passa da compilazione digitale nativa oppure da OCR + AI + controlli, finisce nel database e aggiorna in automatico sito pubblico, dashboard e statistiche aggregate.
 
 ### Chiarimenti di baseline da tenere fissi
 
-- Pallanuoto = primo sport lanciato e banco di prova principale; architettura, naming e navigazione vanno però pensati come framework multi-sport.
+- Pallanuoto = lo sport del prodotto. **Nota tecnica (non ambizione di prodotto):** l'impianto resta sport-generico *a codice* — il modello `Sport` e le sue FK sotto `Society`/`League`/`Season` restano intatti (`Team` eredita lo sport via `Society`; ultime migration su `Sport` in prod: 0020/0021, solo `hex_color`). Lo sport navigator **va auto-nascosto** con un solo sport (guard di template da aggiungere). Il multi-sport esce da visione, copy e naming, non dallo schema. Vedi FUTURE_IDEAS §2.
 - L'ingestione dei dati è automatizzata: i referti arrivano via email o WhatsApp e vengono processati autonomamente.
 - **Relazione strategica OCR ↔ Referto Digitale**: Il Referto Digitale in-app è la via principale per l'ingestione affidabile del dato; l'OCR resta in sviluppo come fallback per campionati/giurie che non adottano il digitale o per archivio storico. Entrambe le fonti convergono nello stesso contratto dati e workflow di validazione.
 - Include un motore di interrogazione AI (AI Stats Engine) che funge da router intelligente e motore di risposte in linguaggio naturale.
@@ -27,7 +27,7 @@ La pallanuoto e il primo sport di rollout, non il limite del prodotto. La direzi
 ### Strategia di rollout a imbuto
 
 - Il prodotto **largo** online è basico: risultati partite + campionati pubblici per tutte le società (parità funzionale con 1x2 oggi).
-- Il **sistema-società completo** (tutto il blueprint: bacheca, shop, sponsor, membership, dashboard) si costruisce ma si **accende solo per la prima società pilota (Zero9 Roma)** per ~1 anno.
+- Il **sistema-società completo** (tutto il blueprint: bacheca, sponsor, membership, dashboard) si costruisce ma si **accende solo per la prima società pilota (Zero9 Roma)** per ~1 anno.
 - Le altre società, in questa fase, hanno **solo i risultati pubblici**.
 - Quando entreranno nuove società, si **clona e personalizza** il setup pilota.
 
@@ -48,11 +48,11 @@ Il progetto genera valore differenziato in base al ruolo e al piano di abbonamen
 
 | Utente | Valore generato (Freemium) | Valore aggiunto (Premium Utente / Club Pro) |
 | --- | --- | --- |
-| Atleta | Profilo, gol, presenze, crescita | Media Gallery, Season Recap, Dashboard personalizzata |
+| Atleta | Profilo, gol, presenze, crescita | Season Recap, Dashboard personalizzata |
 | Genitore / Tifoso | Consultazione bacheca e statistiche | Live Alerts push, Chatbot AI, widget personalizzati |
 | Allenatore | Rendimento squadra, record | Statistiche avanzate, gestione bacheca (via Club Pro) |
 | Arbitro / Giuria | Consultazione cronologia | Referto digitale mobile, firma ufficiale, certificazione |
-| Societa / Lega | Pagina base, roster, calendario | Bacheca push, Shop vetrina, Sponsor, Widget Club |
+| Societa / Lega | Pagina base, roster, calendario | Bacheca push, Sponsor, Widget Club |
 | Admin | Cockpit unico di governo | Monitoraggio pipeline, audit log, gestione permessi |
 
 ### Matrice servizi per piano
@@ -63,10 +63,8 @@ Il progetto genera valore differenziato in base al ruolo e al piano di abbonamen
 | Notifiche Push Bacheca  | Club Pro        | Solo Premium    | Push Act.     | Si          |
 | Referto Digitale        | Giuria (Gratis) | Tutti (via API) | Offline-first | Si (Token)  |
 | Chatbot AI              | Premium         | Solo Premium    | Web/App       | Si (Hard)   |
-| Media Gallery / Tagging | Premium         | Tutti (Vista)   | Cloud/CDN     | Si (Opt-in) |
 | Live Alerts (Referto)   | Premium         | Solo Premium    | Push Act.     | Si          |
 | Season Recap            | Premium         | Solo Premium    | Batch PDF     | Si          |
-| Shop vetrina (Request)  | Club Pro        | Tutti (Ordina)  | Out. Webhook  | Si (Order)  |
 | Sponsor & Widget Club   | Club Pro        | Tutti (Vista)   | Web/App       | No          |
 | Personalizzazione Dash  | Premium         | Solo Premium    | DB Sync       | Si          |
 
@@ -84,8 +82,6 @@ Mappa del prodotto: pagine pubbliche, superfici post-login, profili e strumenti 
 | Pubblico       | Scheda squadra / Società    | Rosa, staff, sponsor, bacheca pubblica, link esterno           |
 | Autenticato    | Dashboard personalizzata    | Widget riordinabili (Premium), alert, preferenze               |
 | Autenticato    | Bacheca (Atleti / Genitori) | Comunicazioni società gated: scrittura Club Pro, lettura tutti |
-| Autenticato    | Media Gallery Partita       | Upload (Premium) e visualizzazione foto/video taggati          |
-| Autenticato    | Vetrina Shop Società        | Catalogo prodotti con pulsante "Richiesta Materiale"           |
 | Autenticato    | Chatbot Panel               | Interfaccia AI per query e comandi operativi                   |
 | Profili        | Atleta / Coach / Arbitro    | Identità sportiva, storico e Season Recap (Premium)            |
 | Admin / Giuria | Form Referto Digitale       | Compilazione mobile, firma PIN, sync offline                   |
@@ -101,7 +97,7 @@ La home non deve essere solo una vetrina. Deve spiegare il prodotto in pochi sec
 
 - Hero principale con claim molto chiaro, sotto-claim orientato al valore e due CTA: entra nello sport e accedi all'area admin.
 
-- Modulo Sport navigator con card dei vari sport; nella fase iniziale la card Pallanuoto e il percorso principale, ma la struttura deve gia poter ospitare altri sport senza riscritture.
+- Modulo Sport navigator: con un solo sport attivo (pallanuoto) va auto-nascosto; il componente resta a codice (impianto sport-generico, vedi §1 nota tecnica) e non deve essere esposto in UI (guard di template da aggiungere).
 
 - Blocco Campionato in evidenza con stagione corrente, classifica top 4, ultimo turno e link a partite e statistiche.
 
@@ -130,13 +126,12 @@ La home non deve essere solo una vetrina. Deve spiegare il prodotto in pochi sec
 - Sottotitolo: Partite, classifiche, profili e statistiche alimentati da referti ufficiali o compilati digitalmente.
 
 - CTA 1: Esplora lo sport. CTA 2: Accedi.
-- Nella fase iniziale il percorso principale puo portare alla Pallanuoto, ma il copy non deve bloccare l'identita multi-sport.
 
 ## 5. Pagine pubbliche principali
 
-### 5.1 Landing sport - primo rollout: Pallanuoto
+### 5.1 Landing sport - Pallanuoto
 
-Scopo: Deve essere la vera porta d'ingresso al campionato corrente dello sport selezionato. Nel primo rollout questo pattern viene applicato alla Pallanuoto, ma deve restare replicabile su altri sport.
+Scopo: Deve essere la vera porta d'ingresso al campionato corrente di pallanuoto.
 
 ### Blocchi da prevedere:
 
@@ -222,7 +217,7 @@ Scopo: Pagina cardine per dare vita ai club, con flessibilità tra contenuto nat
 
 ### Blocchi da prevedere:
 - Header squadra con nome, logo, stagione e posizione in classifica.
-- **Modello Widget**: Layout a slot fissi riordinabili (non drag&drop) per sponsor, roster, calendario, bacheca pubblica, gallery, staff e storia.
+- **Modello Widget**: Layout a slot fissi riordinabili (non drag&drop) per sponsor, roster, calendario, bacheca pubblica, staff e storia.
 - **Opzione Sito Esterno**: Se la società ha un proprio sito, può disattivare la pagina 2salti personalizzata. In questo caso, il CTA "Pagina Società" effettua un **redirect diretto** al sito esterno; un badge o una nota "Sito esterno gestito dal Club" viene mostrato nell'elenco società per gestire le aspettative dell'utente. I dati sportivi (partite, classifiche) restano comunque accessibili nelle pagine pubbliche del motore 2salti.
 - Numeri chiave: punti, gol fatti, gol subiti, forma recente.
 - Ultime partite e prossime gare.
@@ -284,9 +279,9 @@ Prima della personalizzazione Premium, ogni utente riceve un setup di default ba
 | Ruolo | Dashboard Default (Widget) | Header / Navigazione | Permessi RBAC | Notifiche Default |
 | --- | --- | --- | --- | --- |
 | **Atleta** | Ultime gare, Stats personali, Prossimo match | Mio Profilo, Team | Lettura area team | Risultati, Variazioni orario |
-| **Genitore** | Squadra figlio, Calendario, Bacheca | Figli, Team, Shop | Lettura area team (figlio) **previa certificazione** (§7.7) | Alert live match, Bacheca |
+| **Genitore** | Squadra figlio, Calendario, Bacheca | Figli, Team | Lettura area team (figlio) **previa certificazione** (§7.7) | Alert live match, Bacheca |
 | **Allenatore** | Roster, Registro presenze, Stats team | Gestione Team, Dati | Scrittura area team | Report partita post-match |
-| **Dirigente** | KPI Club, Richieste membership, Sponsor | Club Admin, Shop Admin | Gestione Club | Nuove richieste, Alert Shop |
+| **Dirigente** | KPI Club, Richieste membership, Sponsor | Club Admin | Gestione Club | Nuove richieste |
 | **Arbitro** | Mie designazioni, Storico, Rimborsi | Archivio Arbitrale | Update match assigned | Nuove designazioni |
 | **Giuria (Cert)**| Match corrente (Form Referto) | Live Match Tool | Edit match token-spec | Nessuna |
 | **Admin** | Cockpit completo, System health | Super Admin Panel | Full access | Errori critici pipeline |
@@ -296,8 +291,8 @@ La personalizzazione Premium permette di sovrascrivere questi default riordinand
 ### 7.2 Onboarding e Claim Profilo
 Esperienza differenziata tra Guest e Autenticato:
 - **Guest**: Navigazione libera dati pubblici (Classifiche, Risultati, Schede Squadra).
-- **Utente Premium**: Sblocca dashboard personalizzata, Live Alerts, Chatbot, Gallery e Season Recap.
-- **Utente Club Pro**: Sblocca per la società la gestione bacheca, shop, sponsor e pagina dedicata.
+- **Utente Premium**: Sblocca dashboard personalizzata, Live Alerts, Chatbot e Season Recap.
+- **Utente Club Pro**: Sblocca per la società la gestione bacheca, sponsor e pagina dedicata.
 
 **Sequenza di onboarding**:
 1. Registrazione account base (Email/Password).
@@ -307,13 +302,12 @@ Esperienza differenziata tra Guest e Autenticato:
 5. Autenticazione con la squadra: Tramite codice fornito dal club o richiesta manuale al Club Admin.
 6. Accesso completo post-approvazione.
 
-**Personificazione società (presidente) — implementato e verificato e2e su `dev` (2026-06-22), non ancora propagato a prod.** Per il ruolo presidente la "rivendicazione" del punto 4 non è creazione ex-novo né claim libero, ma **scelta da una lista + autorizzazione admin**: il presidente sceglie la propria società tra quelle con almeno una squadra in un campionato (lista **indipendente dalla stagione corrente** — anche stagioni future), invia una richiesta riusando `MembershipRequest` (pattern di approvazione atomica con lock già in `management/views.py`); all'approvazione l'admin valorizza `PresidentProfile.managed_society` (1:1, vincolo gestito applicativamente: doppio presidente = errore gestito, non `IntegrityError` grezzo). Questo flusso **supera l'attuale `create_society`** (che crea `Society` ex-novo) e riallinea il codice al principio §14 "gli utenti non creano da zero, rivendicano" — oggi disatteso dall'as-built. Dettaglio e verifica: SYLLABUS Macro 18. Macchina a stati: ora a codice e verificata su `dev`, formalizzata in STATE_MACHINES.md §11.
+**Personificazione società (presidente) — implementato e verificato e2e su `dev` (2026-06-22), propagato a prod 2026-06-30 (`24bfc62`).** Per il ruolo presidente la "rivendicazione" del punto 4 non è creazione ex-novo né claim libero, ma **scelta da una lista + autorizzazione admin**: il presidente sceglie la propria società tra quelle con almeno una squadra in un campionato (lista **indipendente dalla stagione corrente** — anche stagioni future), invia una richiesta riusando `MembershipRequest` (pattern di approvazione atomica con lock già in `management/views.py`); all'approvazione l'admin valorizza `PresidentProfile.managed_society` (1:1, vincolo gestito applicativamente: doppio presidente = errore gestito, non `IntegrityError` grezzo). Questo flusso **supera l'attuale `create_society`** (che crea `Society` ex-novo) e riallinea il codice al principio §14 "gli utenti non creano da zero, rivendicano" — oggi disatteso dall'as-built. Dettaglio e verifica: SYLLABUS Macro 18. Macchina a stati: ora a codice e verificata su `dev`, formalizzata in STATE_MACHINES.md §11.
 
 ### 7.3 Regole di verifica e privacy
 
 - Il sistema non archivia prove d'identità (documenti, selfie): la verifica passa per un click di conferma su email. Dove serve un controllo di merito (es. genitore→figlio) è la società a fare il match contro il proprio gestionale; il sistema inoltra e registra l'esito, con audit log.
 - L'identità confermata via email non basta mai per l'accesso ai dati privati: deve esistere anche un collegamento sportivo valido tra utente, squadra, stagione e ruolo.
-- Per i minorenni: richiesto opt-in esplicito del genitore per Media Gallery e tagging.
 - **Certificazione genitore (society-vouching via email)**: il genitore dichiara il figlio; il sito notifica la società; la società verifica nome+email del genitore contro il proprio gestionale; se conferma, il sito invia al genitore una mail con link; al click, l'accesso ai dati/servizi del figlio si attiva. Il sistema non archivia prove d'identità: inoltra la richiesta e registra l'esito; il match lo fa un umano della società. Macchina a stati: vedi §7.7 (implementata; as-built in STATE_MACHINES.md §10).
 - Tema dark/light, recupero password, sessioni e messaggi di errore restano parte del modulo account, ma non devono alterare la gerarchia di sicurezza.
 
@@ -349,14 +343,9 @@ Disponibile esclusivamente per **utenti Premium**.
 - **Sicurezza RBAC**: Permission check server-side obbligatorio per ogni chiamata. Il chatbot non deve mai restituire dati che l'utente non avrebbe diritto di vedere navigando manualmente. Nessun bypass via prompt.
 - **Audit Log**: Ogni comando eseguito dal bot è tracciato in un log visibile all'utente per reversibilità e trasparenza.
 
-### 7.6 Media Gallery & AI Tagging
+### 7.6 Media Gallery & AI Tagging — ❌ eliminata dallo scope (2026-07, pallanuoto-only)
 
-Spazio dedicato ai contenuti multimediali della partita.
-
-- **Fruizione**: Caricamento foto/video riservato a **utenti Premium**. Visualizzazione pubblica sul profilo atleta, salvo opt-out.
-- **AI Pipeline**: Face detection + match automatico con il roster ufficiale della partita.
-- **Tagging**: I tag validati alimentano le gallery personali nei profili atleta. Prevedere una coda di review (almeno inizialmente manuale o semi-automatica) per evitare mis-tagging.
-- **Privacy Minorenni**: Richiesto opt-in esplicito del genitore per upload e tagging. L'atleta può sempre esercitare l'opt-out globale o per singolo contenuto.
+> Feature mai costruita, rimossa dallo scope operativo. Motivo e cosa la riaprirebbe in [FUTURE_IDEAS.md](FUTURE_IDEAS.md) §1. Heading mantenuto come tombstone per non rompere la numerazione della §7.7 (riferita da glossary, syllabus, STATE_MACHINES, OPS_RUNBOOK). Testo integrale recuperabile dalla history git.
 
 ### 7.7 Certificazione genitore (society-vouching) — implementata
 
@@ -509,7 +498,7 @@ Per evitare caos, il database deve riflettere entità reali e relazioni chiare.
 - **Coaches**: anagrafica tecnici, storico squadre allenate.
 - **Referees**: anagrafica arbitri, designazioni storiche.
 - **Match_Events**: riga per ogni evento (gol, espulsione, cartellino, timeout, rigore), con timestamp/periodo, atleta, team.
-- **Competitions / Venues**: entità di contesto per aggregare correttamente i dati.
+- **Competitions**: entità di contesto per aggregare correttamente i dati.
 - **Season** (entità di prima classe): identificativo stagione nel formato canonico `2025/2026` (validato sul pattern `AAAA/AAAA`, con secondo anno = primo + 1), `sport`, flag `is_current`. Sostituisce il CharField libero `League.season` come asse temporale del dominio. Distinta da `SeasonArchive` (cap. 13 / Macro 13), che resta l'archivio storico delle statistiche.
 - **Validation_Logs**: storico di tutte le correzioni e revisioni manuali.
 
@@ -530,7 +519,6 @@ Il dominio adotta la **stagione come asse** del tesseramento, non più le date l
 - **Subscriptions**: piani attivi (Freemium / Premium / Club Pro) con date e metodo pagamento.
 - **Claim_Requests**: richieste di rivendica profilo sportivo.
 - **Activation_Codes**: codici società per membership sportiva.
-- **Shop_Orders**: log ordini intermediati dai webhook verso gli shop delle società.
 - **Sponsor_Assets**: sponsor caricati dalle società, con placement (pagina società, profili atleti).
 - **User_Preferences**: layout widget, tema colore, notifiche opt-in per ciascun utente Premium.
 - **Jury_Tokens**: token match-specific emessi per i giurati certificati, con scadenza e stato revoca.
@@ -564,10 +552,8 @@ Sopra l'interfaccia, in mezzo il layer applicativo, sotto il motore OCR/AI e il 
 | GET /api/coaches/{id} | Profilo coach | record + storico |
 | GET /api/referees/{id} | Profilo arbitro | designazioni + partite |
 | GET /api/teams/{id} | Scheda squadra | rosa, stats, ultime gare |
-| POST /api/media/upload | Caricamento foto/video Media Gallery (Premium) | media_id + tagging job |
 | GET /api/ai/chatbot | Interfaccia Chatbot con function calling | bot_response + eventuali azioni |
 | POST /api/jury/token/issue | Emissione token giuria match-specific | token + finestra validità |
-| POST /api/shop/webhook | Outbound firmato HMAC verso shop società | delivery status |
 | GET/PUT /api/user/preferences | Layout widget e tema utente Premium | preferenze persistenti |
 
 ### Infrastruttura e operations
@@ -578,8 +564,7 @@ La base tecnica già impostata su server Hetzner può restare il punto di parten
 - **Log per ogni job di referto**, con errori, warning e tempi di esecuzione.
 - **Storage originale dei file** con hash per duplicate detection.
 - **Deploy disciplinato via GitHub**, con ambiente di test/staging prima del live.
-- **Monitoring** code di sync offline, webhook shop, push notifications e pipeline OCR.
-- **Storage media** (foto/video gallery) su bucket con CDN e lifecycle policy per archiviazione.
+- **Monitoring** code di sync offline, push notifications e pipeline OCR.
 - **Backup** DB e media automatici, con procedura di restore testata.
 
 ## 12. Grafica del sito e regole UX
@@ -597,7 +582,7 @@ Il frontend è **Django server-rendered** (template + Gunicorn/Nginx) con **Tail
 ### Direzione visiva
 
 - **Palette**: base scura su navy profondo (slate-950, `#020617`), coerente con l'identità blu+navy del progetto, e base chiara su slate-50 (`#F8FAFC`). Il **blu** è il colore di marca primario (link, stati attivi, CTA); **teal, orange e green** sono accenti funzionali (positivo / avviso / stato). Gli accenti sono effettivamente usati: la piattaforma non deve apparire monocromatica o neutra.
-  - **Esito (2026-06-23, `dev`):** palette applicata — il vecchio accento ciano/slate è stato rimpiazzato dal blu di marca (perno `blue-600 #2563eb`) via Macro 17 Fase 2. Residuo aperto: il colore per-sport è in DB (`Sport.hex_color`, pallanuoto ancora `#00ffff`), il suo allineamento a blue è gated da backup+ratifica. Dettaglio in [SYLLABUS 17.2](syllabus/17_frontend_design_system.md).
+  - **Esito (2026-06-23, `dev`; propagato a prod 2026-06-30, `24bfc62`):** palette applicata — il vecchio accento ciano/slate è stato rimpiazzato dal blu di marca (perno `blue-600 #2563eb`) via Macro 17 Fase 2. Il colore per-sport in DB (`Sport.hex_color`) è ora allineato: pallanuoto `#2563eb` **su prod** (migration `0020`/`0021` applicate). Il residuo "gated da backup+ratifica" è **chiuso**. Dettaglio in [SYLLABUS 17.2](syllabus/17_frontend_design_system.md).
 - **Tipografia**: **Inter** per body e dati (massima leggibilità delle tabelle), **Outfit** per i titoli (personalità). L'accoppiata è identica in dark e light: i titoli restano in Outfit in **entrambi** i temi, senza regressioni a Inter nel tema chiaro.
 - **Card**: arrotondate, sfondi molto puliti, bordi leggeri, ampio respiro tra moduli.
 - **Grafici**: pochi ma chiari; tabelle pulite, con varianti card su mobile.
@@ -644,13 +629,13 @@ Il modello economico si basa su tre piani paralleli che sbloccano diverse profon
 | Piano | Prezzo Guida | Target | Feature Chiave |
 | --- | --- | --- | --- |
 | **Freemium** | Gratis | Utente base | Pagine pubbliche, claim profilo, lettura bacheca società |
-| **Premium Utente** | Mensile (TBD) | Famiglie, Atleti, Tifosi | Chatbot AI, Live Alerts push, Media Gallery upload, Season Recap, Dashboard widget personalizzata |
-| **Club Pro** | Mensile (TBD) | Società / Club | Scrittura Bacheca + push a iscritti, Shop vetrina, gestione Sponsor, Pagina Club personalizzata |
+| **Premium Utente** | Mensile (TBD) | Famiglie, Atleti, Tifosi | Chatbot AI, Live Alerts push, Season Recap, Dashboard widget personalizzata |
+| **Club Pro** | Mensile (TBD) | Società / Club | Scrittura Bacheca + push a iscritti, gestione Sponsor, Pagina Club personalizzata |
 
 ### Chi paga cosa / chi riceve cosa
 
-- **Utente Premium**: paga per servizi avanzati personali (Alerts, Chatbot, Gallery, Season Recap, personalizzazione).
-- **Società (Club Pro)**: paga per visibilità (Sponsor, pagina società), gestione operativa (Shop vetrina) e comunicazione diretta (Bacheca push).
+- **Utente Premium**: paga per servizi avanzati personali (Alerts, Chatbot, Season Recap, personalizzazione).
+- **Società (Club Pro)**: paga per visibilità (Sponsor, pagina società) e comunicazione diretta (Bacheca push).
 - **Eccezione pilota (Zero9 Roma)**: la società pilota è **comped a vita** perché fa da cavia del sistema-società completo. Su Zero9 i ricavi vengono dagli sponsor/aziende. È l'**unica** eccezione al modello Club Pro: non lo ribalta.
 - **Giuria certificata**: utilizzo del Referto Digitale sempre gratuito, via token match-specific emesso dalla federazione/lega.
 - **Fruizione contenuti**: la lettura della bacheca e la consultazione dati base restano gratis per tutti gli utenti iscritti alla società (anche Freemium). Le notifiche push sulla bacheca arrivano solo ai Premium.
@@ -670,7 +655,7 @@ Il modello economico si basa su tre piani paralleli che sbloccano diverse profon
 2. **Modulo account**: registrazione, verifica email a click, pagamento tre piani.
 3. **Claim e membership**: ricerca profilo, codici di attivazione, notifiche al club admin, approvazioni e revoche.
 4. **Area pubblica robusta e dashboard private** per ruoli verificati, con distinzione netta tra guest, Freemium, Premium e Club Pro.
-5. **Crescita**: nuovi sport oltre la pallanuoto, mobile/PWA, analytics più profonde, integrazioni future.
+5. **Crescita**: mobile/PWA, analytics più profonde, integrazioni future.
 
 ## 14. Decisioni immediate da bloccare (Baseline v3)
 
@@ -679,14 +664,12 @@ Il modello economico si basa su tre piani paralleli che sbloccano diverse profon
 - **Widget Layout**: sistema a slot fissi riordinabili per dashboard utente e pagine club. Niente drag&drop libero in v1.
 - **Chatbot AI**: esclusiva Premium, con function calling e RBAC server-side obbligatorio.
 - **Bacheca mista**: scrittura gated Club Pro, lettura gratis per tutti gli iscritti, notifiche push solo Premium.
-- **Shop vetrina**: webhook outbound firmato HMAC o email strutturata verso lo shop società. Nessun checkout diretto in-app. 2salti è intermediario, non venditore.
 - **Certificazione giuria**: token match-specific con finestra 30 minuti pre-match, revoca automatica al fischio finale, revoca manuale admin disponibile.
 - **Firma referto**: PIN arbitro rende il referto immutabile post-firma; correzioni successive solo via admin con audit log completo.
-- **AI Tagging Media Gallery**: detection automatica + coda di review manuale; opt-in esplicito per minorenni, opt-out disponibile per ogni atleta.
 - **Profili sportivi creati dal sistema**: gli utenti non creano da zero il proprio profilo sportivo, lo rivendicano.
 - **Verifica identità**: verifica leggera a click su email (l'utente clicca il link e parte l'iter). SPID/CIE e documento+selfie accantonati per eccesso di attrito.
 - **Accesso dati privati**: richiede SEMPRE due condizioni — email confermata + collegamento sportivo valido (membership approvata; per il genitore ai dati del figlio: certificazione society-vouching `CERTIFICATA`).
-- **Multi-sport by design**: pallanuoto è il primo rollout, non il limite. Naming, navigazione, design system, dominio devono restare estendibili ad altri sport.
+- **Pallanuoto-only (prodotto), sport-generico (codice)**: la pallanuoto è lo sport del prodotto; visione, naming e copy sono pallanuoto. L'impianto tecnico resta sport-generico (modello `Sport` + FK sotto `Society`/`League`/`Season` intatti, navigator da auto-nascondere) — vedi §1 nota tecnica e FUTURE_IDEAS §2.
 - **Rollout a imbuto**: largo = risultati pubblici per tutti; sistema-società completo acceso solo per il pilota Zero9 (~1 anno), poi clonato per le nuove società. Vedi §1 "Strategia di rollout a imbuto".
 
 ---
@@ -695,9 +678,7 @@ Il modello economico si basa su tre piani paralleli che sbloccano diverse profon
 
 - **[Federazione]** ✅ **RISOLTO (2026-06-02):** l'autorità emittente dei token giuria è la **federazione/lega** (NON il club). Conferma §7.4.1 e §14 (Baseline); vedi SYLLABUS Macro 14 §14.2.
 - **[Conflitti]** ✅ **RISOLTO (2026-06-02):** conflict resolution = single-writer lock per match (un solo device writer-attivo alla volta; NON last-write-wins, NON merge). Vedi SYLLABUS Macro 14 §14.3.
-- **[Shop]** SLA del webhook verso società: quante ore di retry? Notifica admin club in caso di failure?
 - **[UX]** Opzione "sito esterno": Redirect diretto (Opzione A) vs Pagina teaser con badge (Opzione B).
-- **[Gallery]** Moderazione contenuti: Segnalazione automatica o dashboard manuale Club Admin?
 - **[Chatbot]** Function calling aperto (Opzione A) vs Lista chiusa whitelist comandi (Opzione B).
 - **[Privacy]** Season Recap minorenni: Opt-in richiesto per generazione PDF o solo per condivisione?
 - **[Identity]** ✅ **SUPERATO (pivot 2026-06-19):** niente documenti da validare. La verifica è a click su email; il controllo di merito esiste solo nel flusso genitore→figlio e lo fa la società contro il proprio gestionale.
@@ -725,3 +706,4 @@ Il modello economico si basa su tre piani paralleli che sbloccano diverse profon
 - **v3.3**: Ripristino chirurgico completo dei capitoli 7.4-7.6 e 8-14 con contenuto operativo pieno. Consolidata sezione 7.3.
 - **v3.4**: Risolti 2 punti da validare — [Federazione] issuer token giuria = federazione/lega; [Conflitti] sync multi-device = single-writer lock. Macro 14 (Referto Digitale) marcata 🧊 Differita nel syllabus per dipendenza esterna (accordo federale).
 - **v3.5**: Modello stagione e tesseramento (Sprint D, deciso, non implementato) — `Season` promossa a entità di prima classe (formato `2025/2026`, `is_current` per sport), `Membership.season` + nuova unique key `(user, society, team, role, season)` in luogo di `start_date`/`end_date`, lega come fonte di verità grandi/giovanili (lista chiusa A1–D / U10–U20 con etichette tradizionali), prestito strutturato con constraint DB rigido (solo squadre dei grandi, riferimento società di tesseramento + stato attivo/concluso come etichetta). Vedi cap. 10.1 e syllabus Macro 16.
+- **v3.6**: Potatura scope → pallanuoto-only. Rimossi dai doc (mai costruiti, sintetizzati in FUTURE_IDEAS §1) Venue/Impianto (B1), Media Gallery + AI tagging (B2a), Shop vetrina / Shop_Orders / webhook (B2b); ripuliti da §13 i token Shop/Gallery residui nel business model (B3, review Fable); reframe visione multi-sport → pallanuoto in §1/§4/§5.1/§13/§14, con nota tecnica esplicita "impianto sport-generico a codice" (`Sport` + FK intatti, navigator da auto-nascondere) — schema invariato (B4, review Fable). Allineato il rimando § stale del glossary (r.148 Venue). Nessun tocco a codice/schema/migration.
