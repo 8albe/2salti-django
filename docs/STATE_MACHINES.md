@@ -95,7 +95,7 @@ Generato leggendo:
 
 **Model:** `accounts.User`
 **Field:** property calcolata `onboarding_state` — **non è un campo DB**
-**File:** [accounts/models.py](accounts/models.py) righe 75–110
+**File:** [accounts/models.py](accounts/models.py) righe 100–136
 **Enforced by:** `OnboardingMiddleware.process_request()` — [accounts/middleware.py](accounts/middleware.py)
 
 > **Nota critica:** gli "stati" dell'onboarding non sono un singolo campo sul modello.
@@ -139,9 +139,8 @@ Generato leggendo:
 
 ### Discrepanze con la documentazione
 
-- **CLAUDE.md (sezione "Onboarding State Machine") dice:** `IDENTITY_PENDING → PAYMENT_PENDING → SETUP_PENDING → MEMBERSHIP_PENDING → COMPLETED` come se fossero valori di un campo.
-  **Codice dice:** sono stati logici di una property, non un singolo campo `status`. Il campo reale sottostante è la combinazione di `identity_status` + `onboarding_payment_done` + `setup_completed` + relazioni.
-  **Verdetto:** CLAUDE.md corretto nel descrivere il flusso, ma fuorviante nell'implicare l'esistenza di un campo unico. Da aggiornare per chiarire che è una property calcolata.
+- ~~**CLAUDE.md (sezione "Onboarding State Machine") dice:** `IDENTITY_PENDING → PAYMENT_PENDING → SETUP_PENDING → MEMBERSHIP_PENDING → COMPLETED` come se fossero valori di un campo.~~
+  **RISOLTA** — la sezione "Onboarding State Machine" non esiste più in CLAUDE.md: è stata sostituita dal puntatore a questo documento (§"State machines" in CLAUDE.md, cfr. punto 4 delle azioni chiuse in fondo). La natura di property calcolata è documentata qui sopra.
 
 - **BLUEPRINT.md §7.2 dice:** sequenza in 6 passi: Registrazione → Verifica identità → Selezione piano → Claim profilo → Autenticazione con squadra → Accesso completo.
   **Codice dice:** i passi reali sono 4 (identity, payment, setup, membership). "Selezione piano" corrisponde a `PAYMENT_PENDING`. "Claim profilo" e "Autenticazione con squadra" sono entrambi inglobati in `MEMBERSHIP_PENDING` (uno o l'altro basta).
