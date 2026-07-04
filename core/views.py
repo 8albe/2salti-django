@@ -3,6 +3,7 @@ from django.shortcuts import render, get_object_or_404, redirect
 from django.utils import timezone
 from django.http import JsonResponse
 from django.db import transaction
+from django.db.models import BooleanField, Case, Value, When
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from .services.dashboard_service import DashboardService
@@ -26,9 +27,21 @@ def home(request):
         reports__status=MatchReport.Status.PUBLISHED
     ).select_related('home_team__society', 'away_team__society', 'league').order_by('-match_date').first()
     
-    # 2. Featured League: Prendi la prima lega che ha partite e genera classifica
+    # 2. Featured League: lega in vetrina — stagione corrente, seniores prima
+    #    delle giovanili, tiebreak pk per determinismo. Fallback senza filtro
+    #    stagione: su prod season_fk può essere ancora NULL su leghe non migrate.
     featured_league_data = None
-    featured_league = League.objects.filter(matches__isnull=False).first()
+    featured_qs = League.objects.filter(matches__isnull=False).annotate(
+        is_senior=Case(
+            When(league_type__in=League.SENIOR_LEAGUE_TYPES, then=Value(True)),
+            default=Value(False),
+            output_field=BooleanField(),
+        )
+    ).order_by('-is_senior', 'league_type', 'group_name', 'pk')
+    featured_league = (
+        featured_qs.filter(season_fk__is_current=True).first()
+        or featured_qs.first()
+    )
     if featured_league:
         featured_league_data = {
             'league': featured_league,
