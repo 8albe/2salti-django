@@ -125,28 +125,36 @@
             </div>
         </div>
 
-        <!-- GLOBAL STATS (Marketing Cards) -->
+        <!-- GLOBAL STATS (numeri reali: card nascosta a contatore 0) -->
+        {% if global_stats.teams_count or global_stats.athletes_count or global_stats.matches_count %}
         <div class="space-y-6">
+            {% if global_stats.teams_count %}
             <div class="glass-panel p-8 flex flex-col items-center justify-center text-center hover-lift relative overflow-hidden">
                 <div class="absolute -right-4 -top-4 w-20 h-20 bg-blue-500/10 rounded-full blur-2xl"></div>
                 <span class="text-4xl mb-4">🛡️</span>
-                <span class="text-3xl font-black text-white">{{ global_stats.teams_count|default:"120" }}+</span>
+                <span class="text-3xl font-black text-white">{{ global_stats.teams_count }}</span>
                 <span class="text-[10px] text-slate-500 font-bold uppercase tracking-[0.2em] mt-2">Squadre Attive</span>
             </div>
+            {% endif %}
 
+            {% if global_stats.athletes_count %}
             <div class="glass-panel p-8 flex flex-col items-center justify-center text-center hover-lift relative overflow-hidden">
                 <div class="absolute -left-4 -bottom-4 w-20 h-20 bg-purple-500/10 rounded-full blur-2xl"></div>
                 <span class="text-4xl mb-4">🏃</span>
-                <span class="text-3xl font-black text-white">{{ global_stats.athletes_count|default:"2.5K" }}+</span>
+                <span class="text-3xl font-black text-white">{{ global_stats.athletes_count }}</span>
                 <span class="text-[10px] text-slate-500 font-bold uppercase tracking-[0.2em] mt-2">Profili Atleta</span>
             </div>
+            {% endif %}
 
+            {% if global_stats.matches_count %}
             <div class="glass-panel p-8 flex flex-col items-center justify-center text-center hover-lift">
                  <span class="text-4xl mb-4">📋</span>
-                <span class="text-3xl font-black text-white">{{ global_stats.matches_count|default:"800" }}+</span>
+                <span class="text-3xl font-black text-white">{{ global_stats.matches_count }}</span>
                 <span class="text-[10px] text-slate-500 font-bold uppercase tracking-[0.2em] mt-2">Referti Elaborati</span>
             </div>
+            {% endif %}
         </div>
+        {% endif %}
     </div>
 
     <!-- SPORTS EXPLORATION -->
