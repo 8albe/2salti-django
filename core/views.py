@@ -153,9 +153,10 @@ def create_society(request):
     """Wizard società - solo per presidenti.
 
     Due modalità (Macro 18):
-    - CREATE (storico): il presidente non gestisce alcuna società -> crea società
-      + prima squadra e si aggancia. Riservato allo staff (strumento operativo,
-      debito B4): il self-service passa da /society/choose/ (personificazione).
+    - CREATE: strumento operativo riservato allo staff (account role='president'
+      + is_staff) per onboardare una società non ancora a DB. Crea società +
+      prima squadra SENZA agganciarla all'operatore: la società resta
+      rivendicabile dal presidente reale via /society/choose/ (personificazione).
     - REFINE: il presidente è già stato agganciato a una società pre-esistente
       (via personificazione approvata dall'admin) -> rifinisce quella società
       (email obbligatoria, #5). Non crea né società né squadra: evita duplicati.
@@ -166,7 +167,7 @@ def create_society(request):
     profile = getattr(request.user, 'president_profile', None)
     existing = profile.managed_society if profile else None
 
-    if existing is None and not request.user.is_staff:
+    if existing is None and not (request.user.is_staff or request.user.is_superuser):
         return redirect('choose_society')
 
     if request.method == 'POST':
@@ -181,9 +182,10 @@ def create_society(request):
                     society = form.save()
 
                     if existing is None:
-                        # CREATE: collega società al presidente.
-                        profile.managed_society = society
-                        profile.save()
+                        # CREATE (staff): la società NON viene agganciata al
+                        # profilo dell'operatore — resta rivendicabile dal
+                        # presidente reale via choose_society, e lo strumento
+                        # resta riusabile dallo stesso account.
 
                         # Fase 3 (Macro 16): niente più ladder di squadre per
                         # categoria — la categoria vive sulla lega. Si crea la
@@ -193,9 +195,11 @@ def create_society(request):
 
                         society.setup_completed = True
                         society.save()
-
-                    request.user.setup_completed = True
-                    request.user.save()
+                    else:
+                        # REFINE: chiude il setup del presidente agganciato
+                        # (choose_society smette di rimandare qui).
+                        request.user.setup_completed = True
+                        request.user.save()
             except Exception:
                 # L'atomic garantisce il rollback di società/team/profilo:
                 # nessuna entità orfana resta a DB. Si mostra un errore
@@ -208,7 +212,10 @@ def create_society(request):
                     "Si è verificato un errore durante la creazione della società. "
                     "Riprova o contatta l'amministratore.",
                 )
-                return render(request, 'societies/society_setup.html', {'form': form})
+                return render(request, 'societies/society_setup.html', {
+                    'form': form,
+                    'is_refine': existing is not None,
+                })
 
             return redirect('society_detail', slug=society.slug)
     else:
