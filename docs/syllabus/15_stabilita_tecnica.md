@@ -20,7 +20,7 @@ KO residui sulla test suite e debiti tecnici aperti.
   - Utenti test-like (7): `admin_bot` (super), `admin_test` (super), `admin_test_v2`, `athl_test_v2`, `mrossi_test`, `referee_api_test`, `testadmin` (super). Da cancellare tutti (`mrossi_test` chiude anche la discrepanza stats sopra).
   - Società test (2): `AN Brescia Test` (id=4), `Pro Recco Test` (id=3). Da cancellare.
   - Da verificare cross-prod prima dell'esecuzione (richiede accesso esplicito al VPS).
-  - Nota: su dev rimasto solo `albe_admin` come superuser. `admin_bot` cancellato (id=66, `SET_NULL` su `MatchReport.in_review_by`). Nessuna società test trovata su dev. Pulizia prod rinviata a sessione dedicata.
+  - Nota: su dev rimasto solo `albe_admin` come superuser. `admin_bot` cancellato (id=66, `SET_NULL` su `MatchReport.in_review_by`). Nessuna società test trovata su dev. Pulizia prod **eseguita 2026-07-05**: `admin_bot` (pk=66) e `albegalbi` (pk=86, superuser temporaneo creato via CLI da Alberto al deploy Macro 17 del 30/06) eliminati da prod, sessioni flushate; cascate: `SET_NULL` su `MatchReport` 7/8/10 (lock review stantio liberato) e 1 riga `AuditLog` (user→NULL, details intatti).
 - [x] Ridurre superuser di test da 5 a 1–2 — inventario dev 2026-05-26: 7 superuser (`admin`, `admin_bot`, `admin_test`, `albe_admin`, `antigravity_admin`, `testadmin`, `verifyadmin`). Target: mantenere solo `admin` + `albe_admin`, cancellare gli altri 5.
   - Nota: su dev rimasto solo `albe_admin` come superuser — vedi task sopra per dettagli. Pulizia prod rinviata a sessione dedicata.
 - [x] Fix `rebuild_standings` exit code (esce 0 anche su errore — OPS_RUNBOOK §3.6)
