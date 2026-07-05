@@ -1,7 +1,14 @@
-from django.test import TestCase
+from django.core import mail
+from django.test import TestCase, Client
 from django.contrib.auth import get_user_model
+from django.urls import reverse
+from django.utils import timezone
 
-from accounts.services.email_verification import make_token, verify_token
+from accounts.services.email_verification import (
+    make_token,
+    verify_token,
+    EMAIL_VERIFICATION_RESEND_COOLDOWN_SECONDS,
+)
 
 User = get_user_model()
 
@@ -44,3 +51,43 @@ class EmailVerificationTokenTest(TestCase):
         self.assertFalse(ok)
         self.assertIsNone(user)
         self.assertEqual(error, 'invalid')
+
+
+class VerifyIdentityResendThrottleTest(TestCase):
+    """Cooldown session-based sul reinvio POST di verify_identity (debito B2)."""
+
+    def setUp(self):
+        self.client = Client()
+        self.user = User.objects.create_user(
+            username='throttle_user', password='password123', role='athlete',
+            email='throttle_user@example.com',
+        )
+        self.client.login(username='throttle_user', password='password123')
+
+    def test_first_resend_sends_email(self):
+        response = self.client.post(reverse('verify_identity'))
+        self.assertRedirects(response, reverse('verify_identity'))
+        self.assertEqual(len(mail.outbox), 1)
+
+    def test_second_resend_within_cooldown_is_blocked(self):
+        self.client.post(reverse('verify_identity'))
+        self.assertEqual(len(mail.outbox), 1)
+
+        response = self.client.post(reverse('verify_identity'), follow=True)
+        self.assertEqual(len(mail.outbox), 1)  # nessuna nuova email inviata
+        messages = list(response.context['messages'])
+        self.assertTrue(any('secondi' in str(m) for m in messages))
+
+    def test_resend_allowed_again_after_cooldown_elapses(self):
+        self.client.post(reverse('verify_identity'))
+        self.assertEqual(len(mail.outbox), 1)
+
+        session = self.client.session
+        session['verify_email_last_sent'] = (
+            timezone.now().timestamp() - EMAIL_VERIFICATION_RESEND_COOLDOWN_SECONDS - 1
+        )
+        session.save()
+
+        response = self.client.post(reverse('verify_identity'))
+        self.assertRedirects(response, reverse('verify_identity'))
+        self.assertEqual(len(mail.outbox), 2)

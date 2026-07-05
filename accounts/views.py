@@ -138,10 +138,24 @@ def verify_identity(request):
 
     if request.method == 'POST':
         from django.contrib import messages
-        from accounts.services.email_verification import send_verification_email
+        from django.utils import timezone
+        from accounts.services.email_verification import (
+            send_verification_email,
+            EMAIL_VERIFICATION_RESEND_COOLDOWN_SECONDS,
+        )
+
+        now_ts = timezone.now().timestamp()
+        last_sent = request.session.get('verify_email_last_sent')
+        elapsed = now_ts - last_sent if last_sent is not None else None
+
+        if elapsed is not None and elapsed < EMAIL_VERIFICATION_RESEND_COOLDOWN_SECONDS:
+            remaining = int(EMAIL_VERIFICATION_RESEND_COOLDOWN_SECONDS - elapsed)
+            messages.warning(request, f"Attendi ancora {remaining} secondi prima di richiedere un nuovo invio.")
+            return redirect('verify_identity')
 
         sent = send_verification_email(user, request=request)
         if sent:
+            request.session['verify_email_last_sent'] = now_ts
             messages.success(request, f"Email di conferma inviata a {user.email}.")
         else:
             messages.error(request, "Invio email non riuscito. Riprova più tardi.")

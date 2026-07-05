@@ -16,6 +16,7 @@ logger = logging.getLogger(__name__)
 
 EMAIL_VERIFICATION_SALT = 'accounts.email-verification'
 EMAIL_VERIFICATION_MAX_AGE_DAYS = 7
+EMAIL_VERIFICATION_RESEND_COOLDOWN_SECONDS = 60
 
 
 def make_token(user):
