@@ -23,8 +23,8 @@ INTEGRATION_REGISTRY = {
         'description': 'Verifica identità via link email firmato (accounts/services/email_verification.py).'
     },
     'PAYMENTS': {
-        'status': 'SIMULATED',
-        'provider': 'Mock Stripe/PayPal',
-        'description': 'Gestione abbonamenti e transazioni.'
+        'status': 'PLACEHOLDER',
+        'provider': 'Nessuno (step rimosso dal funnel onboarding)',
+        'description': 'Abbonamenti e transazioni: nessun processore reale integrato, in attesa di Macro 10.'
     }
 }
