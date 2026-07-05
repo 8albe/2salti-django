@@ -9,7 +9,6 @@ class Migration(migrations.Migration):
     dependencies = [
         ('accounts', '0011_remove_deprecated_subscription_fields'),
         ('auth', '0012_alter_user_first_name_max_length'),
-        ('core', '0025_delete_orphan_sports'),
     ]
 
     operations = [
