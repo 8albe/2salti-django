@@ -287,3 +287,58 @@ class SignupHoneypotTest(TestCase):
         response = self.client.post(reverse('signup'), self._signup_payload(website='http://spam.example'))
         self.assertEqual(response.status_code, 200)  # form non valido, ri-renderizzato
         self.assertFalse(User.objects.filter(username='honeypot_test_user').exists())
+
+
+class SignupEmailUniquenessTest(TestCase):
+    """Constraint email unique case-insensitive su User (debito B1): il form
+    deve rifiutare un duplicato con un errore di validazione, non un 500 da
+    IntegrityError; i 58 seed a email vuota restano fuori dal vincolo."""
+
+    def setUp(self):
+        User.objects.create_user(
+            username='existing_user',
+            email='Existing@Example.com',
+            password='password123',
+            role='athlete',
+        )
+
+    def _signup_payload(self, **overrides):
+        payload = {
+            'username': 'new_user',
+            'email': 'newuser@example.com',
+            'first_name': 'Test',
+            'last_name': 'User',
+            'role': 'athlete',
+            'password1': 'S0me-Str0ng-Pass!',
+            'password2': 'S0me-Str0ng-Pass!',
+        }
+        payload.update(overrides)
+        return payload
+
+    def test_signup_with_new_email_succeeds(self):
+        response = self.client.post(reverse('signup'), self._signup_payload())
+        self.assertEqual(response.status_code, 302)
+        self.assertTrue(User.objects.filter(username='new_user').exists())
+
+    def test_signup_with_duplicate_email_is_form_error_not_500(self):
+        response = self.client.post(
+            reverse('signup'), self._signup_payload(email='existing@example.com')
+        )
+        self.assertEqual(response.status_code, 200)  # form non valido, ri-renderizzato
+        self.assertFalse(User.objects.filter(username='new_user').exists())
+        self.assertFormError(
+            response.context['form'], 'email', "Questa email è già registrata."
+        )
+
+    def test_signup_with_duplicate_email_different_case_is_rejected(self):
+        response = self.client.post(
+            reverse('signup'), self._signup_payload(email='EXISTING@EXAMPLE.COM')
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(User.objects.filter(username='new_user').exists())
+
+    def test_multiple_empty_emails_do_not_violate_constraint(self):
+        """I 58 seed a email vuota: il partial index li esclude dal vincolo."""
+        User.objects.create_user(username='seed_a', email='', password='x', role='athlete')
+        User.objects.create_user(username='seed_b', email='', password='x', role='athlete')
+        self.assertTrue(User.objects.filter(username__in=['seed_a', 'seed_b']).count() == 2)

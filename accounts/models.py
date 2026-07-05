@@ -1,5 +1,7 @@
 from django.contrib.auth.models import AbstractUser
 from django.db import models
+from django.db.models import Q
+from django.db.models.functions import Lower
 from django.db.models.signals import post_save
 from django.dispatch import receiver
 
@@ -145,6 +147,15 @@ class User(AbstractUser):
 
     def __str__(self):
         return f"{self.username} ({self.get_role_display()})"
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                Lower('email'),
+                condition=~Q(email=''),
+                name='unique_lower_email_when_not_empty',
+            ),
+        ]
 
 
 # PROFILI SPECIFICI PER RUOLO (creati automaticamente via signals)
