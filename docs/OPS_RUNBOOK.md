@@ -777,3 +777,17 @@ Meccanismo invariato (`store`/HTTPS/PAT in chiaro come `alberto`), ma token ora 
 → 401) e #3 (reset/cancellazione di `~/.git-credentials` → 401) sono ricollocate come trappola operativa
 in **§3.13**. La mitigazione **SSH** (chiave già presente) resta opzionale, non implementata.
 *Rotazione credenziali:* via §11.1.
+
+### §10.15 Dependency superflua su migration già applicata su dev — CHIUSO 2026-07-05
+*Cosa era:* `accounts/0012_unique_email_constraint` dichiarava `('core','0025_delete_orphan_sports')`
+come dependency auto-generata da `makemigrations`, non reale (0012 tocca solo `accounts.User.email`).
+*Nota:* `django_migrations` non persiste il grafo delle dependency, solo `(app, name, applied)` — non
+c'è quindi un vero rischio "file dice una cosa, tabella un'altra" nel rimuovere una dependency su una
+migration già applicata. Il rischio reale è sui TEST che rigiocano l'ordine (rewind/`_applied_leaf`,
+§10.7): un cambio di grafo cambia quali app vengono trascinate da un rewind, va sempre riverificato.
+*Procedura usata (dev, replicabile):* confermare che la migration è foglia (nessun `dependencies`/
+`run_before` la referenzia) e che le `operations` non toccano l'app rimossa dal grafo; poi, come
+validazione empirica del reverse (non strettamente necessaria per la tabella ma utile su dati reali):
+unapply → verifica `--plan` (deve mostrare solo il reverse delle operations, nessuna cascata) → copia
+locale del file nuovo → reapply con nuovo grafo → `git checkout --` per ripulire il working tree →
+push + pull normale. Suite 478/478 e i 12 test `_applied_leaf` invariati dopo il cambio.
