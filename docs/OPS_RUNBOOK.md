@@ -417,6 +417,10 @@ Dal 17.1 Fase 1 il CSS Tailwind non è più servito da CDN runtime ma compilato 
 
 La suite si lancia con il comando standard `python manage.py test` (nessun flag). `ManifestStaticFilesStorage` (dev/prod) risolve `{% static %}` via `staticfiles.json`, che è prodotto da `collectstatic` e **non** esiste nell'ambiente di test → ogni template con `{% static %}` alzerebbe `ValueError: Missing staticfiles manifest entry`. Soluzione (2026-06-23): `config/settings_test.py` eredita `config.settings` e sovrascrive **solo** lo storage `staticfiles` con il non-manifest `StaticFilesStorage`; `manage.py` lo auto-seleziona quando `test` è in `argv`. `config/settings.py` (protetto) e lo storage di dev/prod restano `ManifestStaticFilesStorage`. Per forzarlo esplicitamente: `python manage.py test --settings=config.settings_test`. Non reintrodurre il manifest nei test (rompe la suite) e non disattivarlo per dev/prod.
 
+### 7.5 Onboarding manuale di una società nuova (strumento staff `create_society`)
+
+Il ramo CREATE di `/society/create/` è uno **strumento operativo staff** (opzione A, 2026-07-05) per onboardare una società non ancora a DB, in attesa dell'import calendario FIN come fonte canonica. Requisito account operatore: `role='president'` **e** `is_staff=True` (o superuser) — un account staff con altro role viene rediretto a `home`, un presidente non-staff a `choose_society`. La creazione produce Società + una prima squadra e **non** aggancia la società all'operatore (riusabile, side-effect-free): il presidente reale la rivendica poi via "Scegli la tua società" (personificazione, Macro 18). Entrypoint: card "Onboarda società (staff)" negli Strumenti Operativi della dashboard.
+
 ## 8. Protocollo protected file
 
 Il "protocollo protected file" è una procedura disciplinata per modificare file critici dell'infrastruttura — settings Django, configurazione Gunicorn, configurazione Nginx, middleware di onboarding, servizi che toccano la persistenza delle classifiche, migrazioni applicate, file `.env`, unit systemd. Questi file sono elencati nominalmente in [CLAUDE.md](../CLAUDE.md) sotto "Protected Files", e la regola di base è che ogni modifica richiede conferma esplicita prima dell'esecuzione. Questa sezione codifica come applicare quella regola in pratica.
@@ -476,6 +480,18 @@ Registro vivo di problemi noti che richiedono follow-up. Non sono trappole (§3)
 - Su prod: non verificato — richiede sessione dedicata con accesso esplicito al VPS.
 - Da fare: inventario utenti test su prod, cancellazione controllata.
 - Aggiornamento 2026-06-12: prod ora migrato a Macro 16 (§10.8) — gli eventuali dati test sono passati per le data migration (canonicalizzazione season, backfill); la voce resta APERTA.
+- Aggiornamento 2026-07-05 (Task 4, bot signup): recon di caratterizzazione read-only su backup prod (`db.sqlite3.backup.pre-botcleanup.20260705_1813`) ha isolato **27 id** senza legami reali (0 Membership, 0 AthleteProfile/CoachProfile con team, 0 PresidentProfile con società) e firma bot (username random + email gmail puntata o dominio spam) — 18 candidati certi, 8 con profilo husk auto-creato dal signal `create_user_profile` (`accounts/models.py`), 1 test manuale di Alberto (id 89). Lista ratificata: `63,64,65,69,70,72,73,74,75,76,78,79,80,81,82,83,85,88,61,62,67,68,71,77,84,87,89`. Recon FK: le 40 FK verso `accounts_user` sono tutte `ON DELETE NO ACTION` nel DDL SQLite — i CASCADE sui 5 profili sono dichiarati solo a livello ORM Django (`on_delete=models.CASCADE` in `accounts/models.py`), quindi una `DELETE` SQL diretta senza `PRAGMA foreign_keys=ON` lascerebbe profili orfani senza errore. Strumento pronto: management command `core/management/commands/cleanup_bot_users.py` (dry-run di default, guard hard su staff/superuser e su legami reali, assert sui conteggi attesi, `--apply` esplicito) — testato su dev (guard verificati, dry-run e apply su 2 id bot dev di prova, 100 test `core` verdi). **Esecuzione su prod non ancora fatta — vedi procedura sotto, di competenza di Alberto dopo backup fresco.**
+
+**Procedura di esecuzione su prod (Alberto, dopo backup fresco):**
+```bash
+cd /opt/2salti-new
+sudo -u www-data cp db.sqlite3 db.sqlite3.backup.pre-botcleanup-apply.$(date +%Y%m%d_%H%M)
+.venv/bin/python manage.py cleanup_bot_users            # dry-run di default sui 27 id ratificati
+# verificare che stampi: accounts.user=27, presidentprofile=10, fanprofile=8,
+# athleteprofile=5, coachprofile=2, refereeprofile=2 — e "Conteggi conformi agli attesi"
+.venv/bin/python manage.py cleanup_bot_users --apply --flush-sessions
+```
+Se i conteggi in dry-run non tornano esattamente a quei valori, **non lanciare `--apply`**: significa che la lista non corrisponde più allo stato di prod (nuovi bot dopo il 5 luglio, o account cambiati) — richiede un nuovo recon prima di procedere.
 
 ## 11. Sicurezza operativa e frontiera reversibile
 

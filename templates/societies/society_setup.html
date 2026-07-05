@@ -4,8 +4,13 @@
 {% block content %}
 <div class="max-w-3xl mx-auto">
     <div class="text-center mb-8">
-        <h1 class="text-3xl font-bold mb-2">Crea la tua Società</h1>
-        <p class="text-slate-400">Inserisci i dati ufficiali della tua società sportiva.</p>
+        {% if is_refine %}
+        <h1 class="text-3xl font-bold mb-2">Completa i dati della tua società</h1>
+        <p class="text-slate-400">Verifica e completa i dati ufficiali della tua società sportiva.</p>
+        {% else %}
+        <h1 class="text-3xl font-bold mb-2">Nuova società — strumento staff</h1>
+        <p class="text-slate-400">Inserisci i dati ufficiali della società sportiva.</p>
+        {% endif %}
     </div>
 
     <div class="bg-slate-900 rounded-xl p-8 border border-slate-700">
@@ -14,14 +19,20 @@
 
             {{ form|crispy }}
 
-            <div class="mt-6 bg-blue-900/20 border border-blue-500/30 rounded-lg p-4 text-sm text-blue-200">
-                <p>ℹ️ <strong>Nota Bene:</strong> Creando la società, verranno generate automaticamente le squadre per
-                    tutte le categorie (U10, U12, ..., Senior). Potrai assegnare gli allenatori in seguito.</p>
+            {% if not is_refine %}
+            <div class="mt-6 bg-yellow-900/20 border border-yellow-500/30 rounded-lg p-4 text-sm text-yellow-200">
+                <p><strong>Riservato allo staff:</strong> la società creata sarà rivendicabile dal
+                    presidente reale da "Scegli la tua società".</p>
             </div>
+            <div class="mt-4 bg-blue-900/20 border border-blue-500/30 rounded-lg p-4 text-sm text-blue-200">
+                <p>ℹ️ <strong>Nota Bene:</strong> verrà creata una sola prima squadra; i campionati
+                    si assegnano in seguito.</p>
+            </div>
+            {% endif %}
 
             <button type="submit"
                 class="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-4 rounded-lg mt-8 transition-colors">
-                Crea Società e Continua
+                {% if is_refine %}Salva e continua{% else %}Crea società{% endif %}
             </button>
         </form>
     </div>
