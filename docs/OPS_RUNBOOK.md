@@ -480,6 +480,18 @@ Registro vivo di problemi noti che richiedono follow-up. Non sono trappole (§3)
 - Su prod: non verificato — richiede sessione dedicata con accesso esplicito al VPS.
 - Da fare: inventario utenti test su prod, cancellazione controllata.
 - Aggiornamento 2026-06-12: prod ora migrato a Macro 16 (§10.8) — gli eventuali dati test sono passati per le data migration (canonicalizzazione season, backfill); la voce resta APERTA.
+- Aggiornamento 2026-07-05 (Task 4, bot signup): recon di caratterizzazione read-only su backup prod (`db.sqlite3.backup.pre-botcleanup.20260705_1813`) ha isolato **27 id** senza legami reali (0 Membership, 0 AthleteProfile/CoachProfile con team, 0 PresidentProfile con società) e firma bot (username random + email gmail puntata o dominio spam) — 18 candidati certi, 8 con profilo husk auto-creato dal signal `create_user_profile` (`accounts/models.py`), 1 test manuale di Alberto (id 89). Lista ratificata: `63,64,65,69,70,72,73,74,75,76,78,79,80,81,82,83,85,88,61,62,67,68,71,77,84,87,89`. Recon FK: le 40 FK verso `accounts_user` sono tutte `ON DELETE NO ACTION` nel DDL SQLite — i CASCADE sui 5 profili sono dichiarati solo a livello ORM Django (`on_delete=models.CASCADE` in `accounts/models.py`), quindi una `DELETE` SQL diretta senza `PRAGMA foreign_keys=ON` lascerebbe profili orfani senza errore. Strumento pronto: management command `core/management/commands/cleanup_bot_users.py` (dry-run di default, guard hard su staff/superuser e su legami reali, assert sui conteggi attesi, `--apply` esplicito) — testato su dev (guard verificati, dry-run e apply su 2 id bot dev di prova, 100 test `core` verdi). **Esecuzione su prod non ancora fatta — vedi procedura sotto, di competenza di Alberto dopo backup fresco.**
+
+**Procedura di esecuzione su prod (Alberto, dopo backup fresco):**
+```bash
+cd /opt/2salti-new
+sudo -u www-data cp db.sqlite3 db.sqlite3.backup.pre-botcleanup-apply.$(date +%Y%m%d_%H%M)
+.venv/bin/python manage.py cleanup_bot_users            # dry-run di default sui 27 id ratificati
+# verificare che stampi: accounts.user=27, presidentprofile=10, fanprofile=8,
+# athleteprofile=5, coachprofile=2, refereeprofile=2 — e "Conteggi conformi agli attesi"
+.venv/bin/python manage.py cleanup_bot_users --apply --flush-sessions
+```
+Se i conteggi in dry-run non tornano esattamente a quei valori, **non lanciare `--apply`**: significa che la lista non corrisponde più allo stato di prod (nuovi bot dopo il 5 luglio, o account cambiati) — richiede un nuovo recon prima di procedere.
 
 ## 11. Sicurezza operativa e frontiera reversibile
 
