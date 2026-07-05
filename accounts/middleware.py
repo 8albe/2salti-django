@@ -4,7 +4,7 @@ from django.utils.deprecation import MiddlewareMixin
 
 class OnboardingMiddleware(MiddlewareMixin):
     """
-    Forza l'utente a completare il funnel di onboarding (Identity -> Payment -> Setup -> Membership).
+    Forza l'utente a completare il funnel di onboarding (Identity -> Setup -> Membership).
     Redirige alle viste corrette in base a User.onboarding_state.
     """
     def process_request(self, request):
@@ -40,11 +40,9 @@ class OnboardingMiddleware(MiddlewareMixin):
             return None
 
         state = request.user.onboarding_state
-        
+
         if state == 'IDENTITY_PENDING':
             return redirect('verify_identity')
-        elif state == 'PAYMENT_PENDING':
-            return redirect('process_payment')
         elif state == 'SETUP_PENDING':
             return redirect('setup_wizard')
         elif state == 'MEMBERSHIP_PENDING':

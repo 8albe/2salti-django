@@ -43,20 +43,19 @@ class OnboardingFlowTest(TestCase):
         self.user.refresh_from_db()
         self.assertEqual(self.user.identity_status, 'VERIFIED')
         
-        # 3. Accesso a dashboard -> Redirezione a Payment
+        # 3. Accesso a dashboard -> Redirezione a Setup Wizard (step pagamento
+        # onboarding: differito a Macro 10 pagamenti reali, non blocca più il funnel)
         response = self.client.get(reverse('dashboard'))
-        self.assertRedirects(response, reverse('process_payment'))
-        
-        # 4. Completa Payment
-        response = self.client.post(reverse('process_payment'))
-        self.assertEqual(response.status_code, 302)
-        self.user.refresh_from_db()
-        # Il mock completa SOLO lo step onboarding, non concede premium.
-        self.assertTrue(self.user.onboarding_payment_done)
-        self.assertEqual(self.user.plan, self.user.Plan.FREEMIUM)
-        
-        # 5. Accesso a dashboard -> Redirezione a Setup Wizard
-        response = self.client.get(reverse('dashboard'))
+        self.assertRedirects(response, reverse('setup_wizard'))
+
+    def test_process_payment_redirects_unconditionally(self):
+        """/accounts/payment/ non è più uno step: redirige sempre a setup_wizard
+        senza mostrare il mock, anche per link/bookmark diretti."""
+        self.client.login(username='test_athlete', password='password123')
+        self.user.identity_status = 'VERIFIED'
+        self.user.save()
+
+        response = self.client.get(reverse('process_payment'))
         self.assertRedirects(response, reverse('setup_wizard'))
 
     def test_membership_activation_code(self):

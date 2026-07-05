@@ -154,32 +154,13 @@ def verify_identity(request):
 
 @login_required
 def process_payment(request):
-    """Fase 3: Pagamento (Mock 0,50€)"""
-    user = request.user
-    
-    # Se è un fan o ha già completato lo step pagamento onboarding, passa oltre
-    if user.role == 'fan' or user.onboarding_payment_done:
-        return redirect('setup_wizard')
+    """Step pagamento onboarding: differito a Macro 10 pagamenti reali.
 
-    if request.method == 'POST':
-        # Mocking payment success — completa SOLO lo step onboarding.
-        # NON concede premium: User.plan cambia esclusivamente via il seam
-        # core.services.entitlement_service (admin/webhook), mai dal mock.
-        from django.contrib import messages
-
-        user.onboarding_payment_done = True
-        user.save(update_fields=['onboarding_payment_done'])
-
-        from management.utils import log_action
-        log_action(user, None, "ONBOARDING_PAYMENT_COMPLETED", details={"amount": "0.50", "currency": "EUR"}, request=request)
-
-        messages.success(request, "Step di pagamento completato con successo! Puoi ora completare il tuo profilo.")
-        return redirect('setup_wizard')
-        
-    return render(request, 'accounts/onboarding/payment.html', {
-        'seo_title': "Attivazione Profilo PRO | 2salti",
-        'seo_description': "Sostieni la piattaforma e sblocca tutte le funzionalità avanzate di 2salti.",
-    })
+    Non più uno step del funnel (vedi User.onboarding_state); la view resta
+    solo per non rompere link/bookmark esistenti verso /accounts/payment/ e
+    redirige incondizionatamente al passo successivo.
+    """
+    return redirect('setup_wizard')
 
 @login_required
 def onboarding_membership(request):

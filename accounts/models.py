@@ -91,16 +91,14 @@ class User(AbstractUser):
     
     @property
     def onboarding_state(self):
-        """Ritorna lo stato attuale dell'avanzamento utente (SPID -> Pagamento -> Setup -> Member)"""
-        # Step 1: Identity (SPID/CIE) - Obbligatorio per tutti
+        """Ritorna lo stato attuale dell'avanzamento utente (Identità -> Setup -> Member)"""
+        # Step 1: Identity (verifica email a click) - Obbligatorio per tutti
         if self.identity_status != 'VERIFIED':
             return 'IDENTITY_PENDING'
-        
-        # Step 2: Payment (onboarding) — asse SEPARATO dal piano premium.
-        # I Fan sono esenti dallo step pagamento onboarding per ora.
-        if self.role != 'fan' and not self.onboarding_payment_done:
-            return 'PAYMENT_PENDING'
-        
+
+        # Step 2: Payment — differito a Macro 10 pagamenti reali. Il vecchio
+        # step onboarding_payment_done non blocca più il funnel.
+
         # Step 3: Profile Setup (Dati anagrafici minimi e foto)
         if not self.setup_completed:
             return 'SETUP_PENDING'
