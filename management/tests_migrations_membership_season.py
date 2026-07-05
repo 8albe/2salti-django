@@ -16,7 +16,7 @@ from django.db import connection
 from django.db.migrations.executor import MigrationExecutor
 from django.test import TransactionTestCase
 
-from core.tests_migrations_season import _current_leaf
+from core.tests_migrations_season import _applied_leaf
 
 # Import via importlib: il nome modulo inizia con una cifra.
 _mig = importlib.import_module(
@@ -33,13 +33,14 @@ class BackfillMembershipSeasonMigrationTest(TransactionTestCase):
         # Rewind allo stato pre-backfill (FK season presente, valori NULL).
         executor.migrate(self.migrate_from)
 
-        # accounts pinnato al leaf DINAMICO (come tests_migrations_season):
-        # accounts non viene mai retrocesso, quindi lo schema fisico e' quello
-        # corrente; il modello storico deve combaciare (il pin fisso a 0005 si e'
-        # rotto quando 0011 ha rimosso le colonne subscription dallo schema).
-        # core resta implicito al leaf (Season/League.season_fk presenti).
+        # accounts pinnato all'ultima migration APPLICATA dopo il rewind
+        # (_applied_leaf, come tests_migrations_season): il leaf di GRAFO
+        # trascinerebbe core in avanti nel modello storico via dipendenze
+        # cross-app (accounts/0012 -> core/0025) mentre il rewind ha
+        # retrocesso lo schema fisico; il set applicato e' la verita' fisica.
+        # core resta implicito (Season/League.season_fk presenti a mgmt@0010).
         old_apps = executor.loader.project_state(
-            self.migrate_from + [_current_leaf(executor.loader, "accounts")]
+            self.migrate_from + [_applied_leaf(executor, "accounts")]
         ).apps
         Sport = old_apps.get_model("core", "Sport")
         Society = old_apps.get_model("core", "Society")
