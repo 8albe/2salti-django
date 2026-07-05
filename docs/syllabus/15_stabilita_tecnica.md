@@ -74,9 +74,9 @@ KO residui sulla test suite e debiti tecnici aperti.
 
 ### 15.9 Coverage Gaps — feature senza test dedicati
 
-- [ ] Aggiungere test dedicati per **Convocations** (state machine 4 stati + property time-based) — **rinviato**: modello presente ma nessuna view/service/URL esposta, test attesi a feature implementata
-- [ ] Aggiungere test dedicati per **Training Management** (presenze + geofencing) — **rinviato**: modello presente ma nessuna view/service/URL esposta, test attesi a feature implementata
-- [ ] Aggiungere test dedicati per **Team Communications** (Post, Comment, ChatMessage) — **rinviato**: modello presente ma nessuna view/service/URL esposta, test attesi a feature implementata
+- [ ] Aggiungere test dedicati per **Convocations** (state machine 4 stati + property time-based) — view + URL già live (`convocation_create` in `management/urls.py`), manca solo la copertura test dedicata
+- [ ] Aggiungere test dedicati per **Training Management** (presenze + geofencing) — view + URL già live (`training_list`, `training_create`, `training_rsvp` in `management/urls.py`), manca solo la copertura test dedicata
+- [ ] Aggiungere test dedicati per **Team Communications** (Post, Comment, ChatMessage) — view + URL già live (`post_create`, `chat_view` in `management/urls.py`), manca solo la copertura test dedicata
 - ~~Aggiungere test dedicati per **Sponsors** (JSONField serialization)~~ — **task stale rimosso**: modello `Sponsor` non esiste nel codice
 
 ---

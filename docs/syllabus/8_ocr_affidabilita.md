@@ -23,8 +23,8 @@ Miglioramento accuracy, preprocessing, gestione errori, dataset test, qualità d
 ### 8.3 Match Report Workflow
 
 - [x] Modello `MatchReport` + `MatchReportAuditLog` con 8 stati (UPLOADED → PROCESSING → EXTRACTED → VALIDATED → PUBLISHED + branch NEEDS_REVIEW/REJECTED/DRAFT)
-- [x] Service `publishing_service.py` per publish/depublish/republish
-- [x] Guardrails pre-publish (blockers + warnings) in `integrity_service.py`
+- [x] Service `publishing_service.py`: `publish_report()` con depublish/republish come rami interni (non funzioni standalone)
+- [x] Guardrails pre-publish (blockers + warnings) in `schema.py` (`OCRSchemaValidator.assess_publish_readiness`) + guardrail "0 eventi con score positivo → abort" inline in `publishing_service.py`
 - [x] Audit log per ogni transizione (utente, timestamp, diff, motivo) — vedi STATE_MACHINES.md §1
 - [x] Convergenza referto cartaceo (FILE) e digitale (DIGITAL) sul ramo VALIDATED → PUBLISHED
 

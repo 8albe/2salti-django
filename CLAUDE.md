@@ -11,7 +11,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - **Never** call OpenAI in tests — use `OCR_PROVIDER=mock` or patch `vision_providers.py`.
 - **Never** modify committed migrations. Always create new ones via `makemigrations`.
 - **Never** reference `User` directly — always use `get_user_model()`.
-- **Never** write to `LeagueStanding` directly — always go through `standings_service.rebuild_league_standings()`.
+- **Never** write to `LeagueStanding` directly — always go through `StandingsService.rebuild_for_league()` in `matches/services/standings_service.py`.
 - **Never** write `User.plan`, `Society.tier`, or `Society.is_comped` directly — always go through `core/services/entitlement_service.py` (the entitlement seam, which writes the `ENTITLEMENT_*` audit trail). Plan/tier gating is orthogonal to RBAC. Vocabulary: [docs/DOMAIN_GLOSSARY.md](docs/DOMAIN_GLOSSARY.md) §"Piano / Tier / Entitlement".
 - **Never** commit without running `python manage.py check` and the tests of the touched app.
 - **Never** commit secrets or environment artifacts. Files matching `.env*`, `*.service`, `*.timer`, `psw.*`, `*_history`, `.gitconfig`, `.git-credentials`, or any file containing credentials must stay out of the repo. When introducing a new sensitive file, add the matching pattern to `.gitignore` in the same commit.
@@ -203,7 +203,7 @@ Mock the OCR provider via `OCR_PROVIDER=mock` or by patching `vision_providers.p
 
 - "Add an `INVALIDATED` status to `MatchReport` between `VALIDATED` and `PUBLISHED`. Update the state machine in `publishing_service.py`, add the transition to `tests_status_semantics.py`, and generate the migration."
 - "In the setup wizard (`SETUP_PENDING` step), add a required `birth_date` field for athlete profiles. Update the form, the template, and `tests_onboarding.py`."
-- "Refactor `standings_service.rebuild_league_standings()` to emit a structured log per league rebuild, including duration and number of matches processed. Keep the public signature unchanged."
+- "Refactor `StandingsService.rebuild_for_league()` to emit a structured log per league rebuild, including duration and number of matches processed. Keep the public signature unchanged."
 
 **Bad prompts — too vague:**
 
