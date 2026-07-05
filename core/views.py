@@ -154,7 +154,8 @@ def create_society(request):
 
     Due modalità (Macro 18):
     - CREATE (storico): il presidente non gestisce alcuna società -> crea società
-      + prima squadra e si aggancia. Comportamento invariato.
+      + prima squadra e si aggancia. Riservato allo staff (strumento operativo,
+      debito B4): il self-service passa da /society/choose/ (personificazione).
     - REFINE: il presidente è già stato agganciato a una società pre-esistente
       (via personificazione approvata dall'admin) -> rifinisce quella società
       (email obbligatoria, #5). Non crea né società né squadra: evita duplicati.
@@ -164,6 +165,9 @@ def create_society(request):
 
     profile = getattr(request.user, 'president_profile', None)
     existing = profile.managed_society if profile else None
+
+    if existing is None and not request.user.is_staff:
+        return redirect('choose_society')
 
     if request.method == 'POST':
         form = (
