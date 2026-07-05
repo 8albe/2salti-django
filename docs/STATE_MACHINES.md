@@ -95,20 +95,21 @@ Generato leggendo:
 
 **Model:** `accounts.User`
 **Field:** property calcolata `onboarding_state` — **non è un campo DB**
-**File:** [accounts/models.py](accounts/models.py) righe 100–136
+**File:** [accounts/models.py](accounts/models.py) righe 92–126
 **Enforced by:** `OnboardingMiddleware.process_request()` — [accounts/middleware.py](accounts/middleware.py)
 
 > **Nota critica:** gli "stati" dell'onboarding non sono un singolo campo sul modello.
-> Sono la combinazione di tre campi reali (`identity_status`, `onboarding_payment_done`, `setup_completed`)
-> più controlli relazionali su membership/claim. La property `onboarding_state` li aggrega
-> in un valore logico usato solo dal middleware per i redirect.
+> Sono la combinazione di due campi reali che gatingano il funnel (`identity_status`,
+> `setup_completed`) più controlli relazionali su membership/claim. La property
+> `onboarding_state` li aggrega in un valore logico usato solo dal middleware per i redirect.
+> `onboarding_payment_done` resta sul modello (audit/storico) ma **non gating** più: lo
+> step pagamento onboarding è stato rimosso dal funnel, differito a Macro 10 pagamenti reali.
 
 ### Campi reali sottostanti
 
 | Campo | Tipo | Valori | Default |
 |---|---|---|---|
 | `identity_status` | CharField | `UNVERIFIED`, `VERIFIED` | `UNVERIFIED` |
-| `onboarding_payment_done` | BooleanField | `False`, `True` | `False` |
 | `setup_completed` | BooleanField | `False`, `True` | `False` |
 
 ### Stati logici (property `onboarding_state`)
@@ -116,8 +117,7 @@ Generato leggendo:
 | Valore | Condizione di attivazione | Redirect middleware | Iniziale? | Finale? |
 |---|---|---|---|---|
 | `IDENTITY_PENDING` | `identity_status != 'VERIFIED'` | `verify_identity` | Sì | No |
-| `PAYMENT_PENDING` | identità OK + `role != 'fan'` + `onboarding_payment_done == False` | `process_payment` | No | No |
-| `SETUP_PENDING` | identità OK + pagamento OK (o fan) + `setup_completed == False` | `setup_wizard` | No | No |
+| `SETUP_PENDING` | identità OK + `setup_completed == False` | `setup_wizard` | No | No |
 | `MEMBERSHIP_PENDING` | tutto OK + nessuna membership attiva né claim/request pendenti (solo athlete/coach/president) | `onboarding_membership` | No | No |
 | `COMPLETED` | tutte le condizioni precedenti soddisfatte | nessun redirect | No | Sì |
 
@@ -125,15 +125,13 @@ Generato leggendo:
 
 | Campo | Da → A | Trigger | Side effects | File |
 |---|---|---|---|---|
-| `identity_status` | `UNVERIFIED → VERIFIED` | `verify_identity()` POST | `identity_verified_at = timezone.now()`; `log_action('ONBOARDING_IDENTITY_VERIFIED')` | `accounts/views.py` r. 130–132 |
-| `onboarding_payment_done` | `False → True` | `process_payment()` POST | `log_action('ONBOARDING_PAYMENT_COMPLETED')` | `accounts/views.py` r. 170–174 |
-| `setup_completed` | `False → True` | `setup_wizard()` — form valid | `log_action('ONBOARDING_SETUP_COMPLETED')` | `accounts/views.py` r. 89 |
+| `identity_status` | `UNVERIFIED → VERIFIED` | click sul link di verifica email (`verify_email(token)`, token stateless firmato via `accounts/services/email_verification.py`) | `identity_verified_at = timezone.now()`; `log_action('ONBOARDING_IDENTITY_VERIFIED', method='EMAIL_CLICK')`; idempotente se già `VERIFIED` | `accounts/views.py` r. 156–186 |
+| `setup_completed` | `False → True` | `setup_wizard()` — form valid | `log_action('ONBOARDING_SETUP_COMPLETED')` | `accounts/views.py` r. 108–109 |
 | `setup_completed` (Society) | `False → True` | vista in `core/views.py` | `Society.setup_completed = True` parallelamente | `core/views.py` r. 166 |
 
 ### Guardrails
 
-- Il middleware **non** redirige: utenti non autenticati, richieste `/api/*`, richieste AJAX (`X-Requested-With`), utenti `is_staff` o `is_superuser`.
-- I fan (`role == 'fan'`) saltano `PAYMENT_PENDING` e `MEMBERSHIP_PENDING` → arrivano a `COMPLETED` dopo solo identità e setup.
+- Il middleware **non** redirige: utenti non autenticati, richieste `/api/*`, richieste AJAX (`X-Requested-With`), richieste `/accounts/verify-email/*` (path variabile, esentato per prefisso), utenti `is_staff` o `is_superuser`.
 - `MEMBERSHIP_PENDING` per athlete/coach: basta avere *uno* tra membership attiva, claim `PENDING`, o `MembershipRequest PENDING` per superarlo.
 - `MEMBERSHIP_PENDING` per president: serve `president_profile.managed_society` non nullo.
 
@@ -142,9 +140,8 @@ Generato leggendo:
 - ~~**CLAUDE.md (sezione "Onboarding State Machine") dice:** `IDENTITY_PENDING → PAYMENT_PENDING → SETUP_PENDING → MEMBERSHIP_PENDING → COMPLETED` come se fossero valori di un campo.~~
   **RISOLTA** — la sezione "Onboarding State Machine" non esiste più in CLAUDE.md: è stata sostituita dal puntatore a questo documento (§"State machines" in CLAUDE.md, cfr. punto 4 delle azioni chiuse in fondo). La natura di property calcolata è documentata qui sopra.
 
-- **BLUEPRINT.md §7.2 dice:** sequenza in 6 passi: Registrazione → Verifica identità → Selezione piano → Claim profilo → Autenticazione con squadra → Accesso completo.
-  **Codice dice:** i passi reali sono 4 (identity, payment, setup, membership). "Selezione piano" corrisponde a `PAYMENT_PENDING`. "Claim profilo" e "Autenticazione con squadra" sono entrambi inglobati in `MEMBERSHIP_PENDING` (uno o l'altro basta).
-  **Verdetto:** entrambi validi, il blueprint è più granulare per la UX, il codice li unifica. Nessuna correzione urgente.
+- ~~**BLUEPRINT.md §7.2 dice:** sequenza in 6 passi: Registrazione → Verifica identità → Selezione piano → Claim profilo → Autenticazione con squadra → Accesso completo.~~
+  **Codice dice (onboarding reale, build corrente):** i passi che gatingano sono 3 (identity, setup, membership). Lo step "Selezione piano"/pagamento è stato rimosso dal funnel (differito a Macro 10). "Claim profilo" e "Autenticazione con squadra" restano entrambi inglobati in `MEMBERSHIP_PENDING` (uno o l'altro basta). La verifica identità non è più un mock SPID: è conferma email a click.
 
 ---
 

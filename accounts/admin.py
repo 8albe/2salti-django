@@ -106,3 +106,19 @@ class AccountProfileLinkAdmin(admin.ModelAdmin):
     def get_target_profile(self, obj):
         return obj.athlete_profile or obj.coach_profile or obj.referee_profile
     get_target_profile.short_description = 'Profilo Target'
+
+
+# === Registrazione su op_admin_site ===
+# CustomUserAdmin sopra ha has_module_permission=False per nasconderlo dal
+# default admin.site. La sottoclasse UserOpAdmin sovrascrive quel metodo per
+# essere visibile sull'op_admin_site (l'unico admin esposto, vedi
+# matches/admin.py) — stesso pattern di management/admin.py.
+from matches.admin import op_admin_site
+
+
+class UserOpAdmin(CustomUserAdmin):
+    def has_module_permission(self, request):
+        return request.user.is_active and request.user.is_staff
+
+
+op_admin_site.register(User, UserOpAdmin)

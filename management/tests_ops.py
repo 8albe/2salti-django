@@ -39,10 +39,8 @@ class OpsDashboardTestCase(TestCase):
         # 2. Blocked Users Setup
         # IDENTITY_PENDING
         User.objects.create(username="blocked_identity", role='athlete', identity_status='UNVERIFIED')
-        # PAYMENT_PENDING
-        User.objects.create(username="blocked_payment", role='athlete', identity_status='VERIFIED', onboarding_payment_done=False)
-        # SETUP_PENDING
-        User.objects.create(username="blocked_setup", role='athlete', identity_status='VERIFIED', onboarding_payment_done=True, setup_completed=False)
+        # SETUP_PENDING (step pagamento onboarding: differito a Macro 10 pagamenti reali)
+        User.objects.create(username="blocked_setup", role='athlete', identity_status='VERIFIED', setup_completed=False)
 
     def test_dashboard_metrics_logic(self):
         self.client.login(username='ops_admin', password='pass123')
@@ -57,7 +55,6 @@ class OpsDashboardTestCase(TestCase):
         # Check Onboarding Stats
         stats = response.context['onboarding_stats']
         self.assertEqual(stats['IDENTITY_PENDING'], 1)
-        self.assertEqual(stats['PAYMENT_PENDING'], 1)
         self.assertEqual(stats['SETUP_PENDING'], 1)
         
         # Check Content

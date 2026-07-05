@@ -19,21 +19,27 @@ from django.test import TransactionTestCase
 # il modello reale core.League ha ora season_fk, assente nello schema 0008/0010.
 
 
-def _current_leaf(loader, app_label):
-    """Risolve dinamicamente il leaf corrente di un'app dal grafo migration.
+def _applied_leaf(executor, app_label):
+    """Risolve l'ultima migration di un'app ANCORA APPLICATA dopo il rewind.
 
-    Sostituisce l'hardcoding della stringa di migration leaf: una nuova
-    migration sull'app sposta il leaf, ma il test continua a targettare lo
-    schema fisico corrente (== leaf) senza lockstep manuale. Si applica SOLO
-    alle app che nel test restano allo schema fisico corrente (accounts, mai
-    retrocessa); NON agli anchor storici (core@0008/0010, management@0009) che
-    sono semantici e devono restare fissi.
+    Sostituisce il leaf di grafo (ex _current_leaf): il leaf di grafo puo'
+    trascinare ALTRE app in avanti nel project_state via dipendenze cross-app
+    (es. accounts/0012 dipende da core/0025: pinnare accounts al leaf di grafo
+    porta core a 0025 nel modello storico mentre lo schema fisico e' stato
+    retrocesso dal rewind -> "no column named is_comped"). L'insieme delle
+    migration APPLICATE dopo executor.migrate(migrate_from) e' invece la
+    verita' fisica: il rewind unapplica anche i dipendenti cross-app, quindi
+    ancorare il pin qui garantisce per costruzione che modello storico e
+    schema coincidano. Da chiamare DOPO il rewind. Si applica SOLO alle app
+    non retrocesse esplicitamente (accounts); NON agli anchor storici
+    (core@0008/0010, management@0009) che sono semantici e restano fissi.
     """
-    leaves = loader.graph.leaf_nodes(app_label)
-    assert len(leaves) == 1, (
-        f"atteso 1 leaf per '{app_label}', trovati {len(leaves)}: {leaves}"
+    applied = sorted(
+        name for app, name in executor.recorder.applied_migrations()
+        if app == app_label
     )
-    return leaves[0]
+    assert applied, f"nessuna migration applicata per '{app_label}'"
+    return (app_label, applied[-1])
 
 
 class SeasonBonificaMigrationTest(TransactionTestCase):
@@ -61,15 +67,15 @@ class SeasonBonificaMigrationTest(TransactionTestCase):
         # season_fk_id e fallirebbe ("no such column"). Si usa un project_state
         # combinato che riproduce il DB reale dopo il rewind del SOLO core a 0008:
         # core e management vengono retrocessi (anchor storici, vedi sopra),
-        # mentre accounts NON viene mai retrocesso e resta allo schema fisico
-        # corrente. Per questo accounts va targettato al suo LEAF (User con i
-        # campi correnti, es. identity_status): il leaf e' risolto in modo
-        # dinamico (_current_leaf) invece che con la stringa fissa, cosi' una
+        # mentre accounts segue il rewind solo se una sua migration dipende da
+        # core>0008 (es. accounts/0012 -> core/0025, unapplicata in cascata).
+        # Per questo accounts va targettato all'ultima migration APPLICATA
+        # dopo il rewind (_applied_leaf, non il leaf di grafo): cosi' una
         # futura migration accounts non rompe il test ne' richiede lockstep
         # manuale. Tutti i modelli provengono cosi' dallo stesso registro
         # storico: niente ibridi, FK coerenti dentro lo stesso apps registry.
         old_apps = executor.loader.project_state(
-            self.migrate_from + [_current_leaf(executor.loader, "accounts")]
+            self.migrate_from + [_applied_leaf(executor, "accounts")]
         ).apps
         Sport = old_apps.get_model("core", "Sport")
         Society = old_apps.get_model("core", "Society")

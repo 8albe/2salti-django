@@ -16,7 +16,7 @@ Due tronconi distinti: **7a** il follow (riuso di codice esistente), **7b** la c
 - [x] Modello `ParentCertification` con macchina a stati (design in BLUEPRINT §7.7)
 - [x] Email di vouching alla società + match nome+email su gestionale (umano società)
 - [x] Email con link al genitore + endpoint click → attiva accesso dati figlio
-- [x] Gate accesso dati/servizi figlio condizionato a `status=CERTIFICATA`
+- [ ] Gate accesso dati/servizi figlio condizionato a `status=CERTIFICATA` — helper `User.is_certified_parent_of()` presente e testato (`accounts/models.py:131`), ma non ancora cablato in nessuna view/template
 - [x] Distinzione netta: follow (7a) ≠ accesso certificato (7b)
 
 ---

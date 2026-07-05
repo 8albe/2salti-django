@@ -554,8 +554,7 @@ def staff_dashboard(request):
     functional_roles = ['athlete', 'coach', 'referee', 'president']
     onboarding_stats = {
         'IDENTITY_PENDING': User.objects.filter(role__in=functional_roles, identity_status='UNVERIFIED').count(),
-        'PAYMENT_PENDING': User.objects.filter(role__in=functional_roles, identity_status='VERIFIED', onboarding_payment_done=False).count(),
-        'SETUP_PENDING': User.objects.filter(role__in=functional_roles, identity_status='VERIFIED', onboarding_payment_done=True, setup_completed=False).count(),
+        'SETUP_PENDING': User.objects.filter(role__in=functional_roles, identity_status='VERIFIED', setup_completed=False).count(),
     }
 
     # 3. Referti bloccati (> 4h)

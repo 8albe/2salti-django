@@ -671,6 +671,11 @@ test. NO-SCHEMA, test-only.
 anchor storici semantici → restano hardcoded di proposito (management 0014→0016 senza rotture).
 *Vive in:* `core/tests_migrations_season.py::SeasonBonificaMigrationTest` (5 test); suite
 core/accounts/management 177/177.
+*Aggiornamento 2026-07-05:* anche il leaf di GRAFO si rompe se una migration accounts dipende
+da una core recente (accounts/0012 → core/0025): il pin trascina core in avanti nel modello
+storico mentre il rewind ha retrocesso lo schema ("no column named is_comped", 12 test).
+Sostituito `_current_leaf` con `_applied_leaf`: pin all'ultima migration accounts ancora
+APPLICATA dopo il rewind (verità fisica dal recorder) — coincidenza modello↔schema per costruzione.
 
 ### §10.8 Macro 16 — propagazione prod — CHIUSO 2026-06-12
 *Cosa era:* Macro 16 chiusa su `dev`/dev-box ma prod `/opt/2salti-new/` a `01427d59` senza
@@ -772,3 +777,17 @@ Meccanismo invariato (`store`/HTTPS/PAT in chiaro come `alberto`), ma token ora 
 → 401) e #3 (reset/cancellazione di `~/.git-credentials` → 401) sono ricollocate come trappola operativa
 in **§3.13**. La mitigazione **SSH** (chiave già presente) resta opzionale, non implementata.
 *Rotazione credenziali:* via §11.1.
+
+### §10.15 Dependency superflua su migration già applicata su dev — CHIUSO 2026-07-05
+*Cosa era:* `accounts/0012_unique_email_constraint` dichiarava `('core','0025_delete_orphan_sports')`
+come dependency auto-generata da `makemigrations`, non reale (0012 tocca solo `accounts.User.email`).
+*Nota:* `django_migrations` non persiste il grafo delle dependency, solo `(app, name, applied)` — non
+c'è quindi un vero rischio "file dice una cosa, tabella un'altra" nel rimuovere una dependency su una
+migration già applicata. Il rischio reale è sui TEST che rigiocano l'ordine (rewind/`_applied_leaf`,
+§10.7): un cambio di grafo cambia quali app vengono trascinate da un rewind, va sempre riverificato.
+*Procedura usata (dev, replicabile):* confermare che la migration è foglia (nessun `dependencies`/
+`run_before` la referenzia) e che le `operations` non toccano l'app rimossa dal grafo; poi, come
+validazione empirica del reverse (non strettamente necessaria per la tabella ma utile su dati reali):
+unapply → verifica `--plan` (deve mostrare solo il reverse delle operations, nessuna cascata) → copia
+locale del file nuovo → reapply con nuovo grafo → `git checkout --` per ripulire il working tree →
+push + pull normale. Suite 478/478 e i 12 test `_applied_leaf` invariati dopo il cambio.

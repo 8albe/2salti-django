@@ -24,6 +24,10 @@ def signup(request):
         if form.is_valid():
             user = form.save()
             login(request, user)
+
+            from accounts.services.email_verification import send_verification_email
+            send_verification_email(user, request=request)
+
             return redirect('verify_identity')  # Nuovo flusso: prima l'identità
     else:
         form = SignUpForm()
@@ -126,60 +130,83 @@ def setup_wizard(request):
 
 @login_required
 def verify_identity(request):
-    """Fase 2: Verifica Identità (Mock SPID/CIE)"""
+    """Fase 2: Verifica Identità — conferma email a click. Mostra "controlla
+    la tua casella" e permette il reinvio del link."""
     user = request.user
     if user.identity_status == 'VERIFIED':
-        return redirect('process_payment')
-    
+        return redirect('setup_wizard')
+
     if request.method == 'POST':
-        # Mocking verification success
-        import django.utils.timezone as timezone
         from django.contrib import messages
-        
+        from django.utils import timezone
+        from accounts.services.email_verification import (
+            send_verification_email,
+            EMAIL_VERIFICATION_RESEND_COOLDOWN_SECONDS,
+        )
+
+        now_ts = timezone.now().timestamp()
+        last_sent = request.session.get('verify_email_last_sent')
+        elapsed = now_ts - last_sent if last_sent is not None else None
+
+        if elapsed is not None and elapsed < EMAIL_VERIFICATION_RESEND_COOLDOWN_SECONDS:
+            remaining = int(EMAIL_VERIFICATION_RESEND_COOLDOWN_SECONDS - elapsed)
+            messages.warning(request, f"Attendi ancora {remaining} secondi prima di richiedere un nuovo invio.")
+            return redirect('verify_identity')
+
+        sent = send_verification_email(user, request=request)
+        if sent:
+            request.session['verify_email_last_sent'] = now_ts
+            messages.success(request, f"Email di conferma inviata a {user.email}.")
+        else:
+            messages.error(request, "Invio email non riuscito. Riprova più tardi.")
+        return redirect('verify_identity')
+
+    return render(request, 'accounts/onboarding/verify_identity.html', {
+        'seo_title': "Verifica il tuo indirizzo email | 2salti",
+        'seo_description': "Conferma il tuo indirizzo email per completare la registrazione su 2salti.",
+    })
+
+
+def verify_email(request, token):
+    """Endpoint pubblico: click sul link ricevuto via email. Nessun login
+    richiesto. Token valido → identity_status=VERIFIED (idempotente se già
+    verificato); scaduto/manomesso → pagina d'errore con link al reinvio."""
+    from accounts.services.email_verification import verify_token
+
+    ok, user, error = verify_token(token)
+
+    if not ok:
+        return render(request, 'accounts/onboarding/verify_email_result.html', {
+            'ok': False,
+            'error': error,
+            'seo_title': "Verifica email non riuscita | 2salti",
+        }, status=400)
+
+    if user.identity_status != 'VERIFIED':
+        import django.utils.timezone as timezone
+        from management.utils import log_action
+
         user.identity_status = 'VERIFIED'
         user.identity_verified_at = timezone.now()
-        user.save()
-        
-        from management.utils import log_action
-        log_action(user, None, "ONBOARDING_IDENTITY_VERIFIED", details={"method": "MOCK_SPID"}, request=request)
-        
-        messages.success(request, "Identità verificata con successo tramite SPID. Benvenuto!")
-        return redirect('process_payment')
-        
-    return render(request, 'accounts/onboarding/verify_identity.html', {
-        'seo_title': "Verifica Identità SPID/CIE | 2salti",
-        'seo_description': "Procedura sicura di verifica identità digitale per l'accesso alla piattaforma 2salti.",
+        user.save(update_fields=['identity_status', 'identity_verified_at'])
+
+        log_action(user, None, "ONBOARDING_IDENTITY_VERIFIED", details={"method": "EMAIL_CLICK"}, request=request)
+
+    return render(request, 'accounts/onboarding/verify_email_result.html', {
+        'ok': True,
+        'seo_title': "Email verificata | 2salti",
     })
 
 
 @login_required
 def process_payment(request):
-    """Fase 3: Pagamento (Mock 0,50€)"""
-    user = request.user
-    
-    # Se è un fan o ha già completato lo step pagamento onboarding, passa oltre
-    if user.role == 'fan' or user.onboarding_payment_done:
-        return redirect('setup_wizard')
+    """Step pagamento onboarding: differito a Macro 10 pagamenti reali.
 
-    if request.method == 'POST':
-        # Mocking payment success — completa SOLO lo step onboarding.
-        # NON concede premium: User.plan cambia esclusivamente via il seam
-        # core.services.entitlement_service (admin/webhook), mai dal mock.
-        from django.contrib import messages
-
-        user.onboarding_payment_done = True
-        user.save(update_fields=['onboarding_payment_done'])
-
-        from management.utils import log_action
-        log_action(user, None, "ONBOARDING_PAYMENT_COMPLETED", details={"amount": "0.50", "currency": "EUR"}, request=request)
-
-        messages.success(request, "Step di pagamento completato con successo! Puoi ora completare il tuo profilo.")
-        return redirect('setup_wizard')
-        
-    return render(request, 'accounts/onboarding/payment.html', {
-        'seo_title': "Attivazione Profilo PRO | 2salti",
-        'seo_description': "Sostieni la piattaforma e sblocca tutte le funzionalità avanzate di 2salti.",
-    })
+    Non più uno step del funnel (vedi User.onboarding_state); la view resta
+    solo per non rompere link/bookmark esistenti verso /accounts/payment/ e
+    redirige incondizionatamente al passo successivo.
+    """
+    return redirect('setup_wizard')
 
 @login_required
 def onboarding_membership(request):

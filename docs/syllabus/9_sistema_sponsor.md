@@ -26,9 +26,11 @@ Sponsor associati a società/campionati, visualizzazione pubblica, modello dati 
 
 **As-built (2026-06-30):** modulo sponsor relazionale completo su `dev` salvo UI CRUD e dati reali Zero9. Solo Zero9 avrà sponsor nel pilota; le altre società degradano a zero senza placeholder rotti.
 
-**Propagazione prod (2026-06-30, deploy `24bfc62`):** migration `0022` applicata su prod → la tabella `core_sponsor` è **creata ma VUOTA**. Zero9 **non esiste su prod** (società assente), quindi il render sponsor è verificato **solo su `dev` coi seed**; su prod nessuna società ha sponsor finché Zero9 non viene creata (flusso Macro 18) e seedata. Nessun placeholder rotto: degradazione a zero su tutte le società prod.
+**Propagazione prod (2026-06-30, deploy `24bfc62`):** migration `0022` applicata su prod → la tabella `core_sponsor` è **creata ma VUOTA**. Zero9 **non esiste su prod** (società assente), quindi il render sponsor è verificato **solo su `dev` coi seed**; su prod nessuna società ha sponsor finché Zero9 non viene creata dal seed base (Society + Team con lega), personificata via flusso Macro 18 (che aggancia società esistenti con ≥1 team, non le crea) e seedata. Nessun placeholder rotto: degradazione a zero su tutte le società prod.
 
 **Decisione di dominio aperta (by-design, 2026-06-30):** sul profilo atleta `current_team` e classifica derivano dalla lega in stagione 2026/2027, mentre gli sponsor escono dalla stagione corrente 2025/2026 (il modulo sponsor è società-wide sulla stagione corrente). Il disallineamento di stagione è **by-design, non un bug**; da rivedere lato prodotto quando Zero9 avrà i dati reali.
+
+**Aggiornamento 2026-07-04:** Zero9 ora **esiste su prod** (seed base: Society pk=13 + Team pk=13 su serie C Maschile 2026/2027) ed è comped via `comp_society`; il seed sponsor placeholder NON è stato eseguito su prod — gli sponsor reali si inseriscono a personificazione avvenuta, ancorati alla stagione corrente. Coda e vincoli in [ZERO9_DEFERRED.md](../ZERO9_DEFERRED.md).
 
 ---
 

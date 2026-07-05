@@ -3,12 +3,33 @@ from django.contrib.auth.forms import UserCreationForm
 from .models import User, AthleteProfile, CoachProfile, RefereeProfile
 
 class SignUpForm(UserCreationForm):
-    """Form registrazione con scelta ruolo"""
+    """Form registrazione con scelta ruolo.
+
+    Email obbligatoria: serve il link di verifica identità a click. Unicità
+    case-insensitive verificata in clean_email, rispecchia il constraint
+    a DB su User (Lower('email'), esclude le email vuote)."""
     role = forms.ChoiceField(choices=User.ROLE_CHOICES, widget=forms.RadioSelect)
-    
+    email = forms.EmailField(required=True)
+    # Honeypot anti-bot: campo non-model, nascosto via widget, che un utente
+    # umano non compila mai. Se valorizzato il form è invalido senza rivelare
+    # il motivo. Migration-free (non tocca il modello User).
+    website = forms.CharField(required=False, widget=forms.HiddenInput())
+
     class Meta:
         model = User
         fields = ['username', 'email', 'first_name', 'last_name', 'role']
+
+    def clean_website(self):
+        value = self.cleaned_data.get('website')
+        if value:
+            raise forms.ValidationError("Errore di validazione.")
+        return value
+
+    def clean_email(self):
+        email = self.cleaned_data.get('email', '')
+        if email and User.objects.filter(email__iexact=email).exists():
+            raise forms.ValidationError("Questa email è già registrata.")
+        return email
 
 
 class UserSetupForm(forms.ModelForm):

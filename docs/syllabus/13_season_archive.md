@@ -7,8 +7,7 @@ Archivio stagioni chiuse, generazione PDF riepilogo stagione. Recap PDF gated Pr
 ### 13.1 Archivio stagionale
 
 - [x] Modello `SeasonArchive` con snapshot JSON statistiche atleti e squadre
-- [x] Vista archivio in `seasons/views.py`
-- [x] Gestione manuale stagioni via admin
+- [ ] Solo modello: nessuna vista/scrittore in `seasons/views.py` (stub vuoto), nessuna registrazione admin — letto (mai scritto) da `accounts/views.py`
 
 ### 13.2 Generazione PDF Recap
 

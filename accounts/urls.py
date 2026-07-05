@@ -7,6 +7,7 @@ urlpatterns = [
     path('setup/', views.setup_wizard, name='setup_wizard'),
     path('profile-setup/', views.setup_wizard, name='setup_wizard'),
     path('verify-identity/', views.verify_identity, name='verify_identity'),
+    path('verify-email/<str:token>/', views.verify_email, name='verify_email'),
     path('payment/', views.process_payment, name='process_payment'),
     path('profile-redirect/', views.profile_redirect, name='profile_redirect'),
     path('dashboard/', views.dashboard, name='dashboard'),

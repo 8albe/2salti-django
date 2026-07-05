@@ -15,7 +15,7 @@ from django.db import connection
 from django.db.migrations.executor import MigrationExecutor
 from django.test import TransactionTestCase
 
-from core.tests_migrations_season import _current_leaf
+from core.tests_migrations_season import _applied_leaf
 
 
 def _season_notnull_in_schema():
@@ -33,12 +33,13 @@ class MembershipSeasonNotNullMigrationTest(TransactionTestCase):
         self.executor = MigrationExecutor(connection)
         self.executor.migrate(self.migrate_from)
 
-        # Pin storici coerenti con gli altri test migration (accounts al leaf
-        # DINAMICO, mai retrocesso; core implicito al leaf: Season/League.season_fk
-        # presenti). Il pin fisso a 0005 si e' rotto con la rimozione delle colonne
-        # subscription (accounts 0011).
+        # Pin storici coerenti con gli altri test migration: accounts
+        # all'ultima migration APPLICATA dopo il rewind (_applied_leaf, non il
+        # leaf di grafo, che trascinerebbe core in avanti nel modello storico
+        # via accounts/0012 -> core/0025). core implicito (Season e
+        # League.season_fk presenti a management@0014).
         self.old_apps = self.executor.loader.project_state(
-            self.migrate_from + [_current_leaf(self.executor.loader, "accounts")]
+            self.migrate_from + [_applied_leaf(self.executor, "accounts")]
         ).apps
         self.Sport = self.old_apps.get_model("core", "Sport")
         self.Society = self.old_apps.get_model("core", "Society")

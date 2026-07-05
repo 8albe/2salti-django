@@ -26,6 +26,7 @@ Il presidente non crea una società da zero né la rivendica liberamente: la **s
 - **BLUEPRINT §7.2** (Onboarding e Claim Profilo) — dettaglio del flusso e riconciliazione con §14.
 - **BLUEPRINT §7.7** — guardrail email società lato notifica vouching.
 - **OPS_RUNBOOK §10.11** — debito `_society_recipients` chiuso by-design da §18.2.
+- **[ZERO9_DEFERRED.md](../ZERO9_DEFERRED.md)** — personificazione reale di Zero9 (gated dal presidente reale, 2026-07-04) con i vincoli critici del flusso: registrazione da wizard con `role=president`, mai il link legacy `create_society`.
 
 ---
 

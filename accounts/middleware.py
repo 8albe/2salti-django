@@ -4,7 +4,7 @@ from django.utils.deprecation import MiddlewareMixin
 
 class OnboardingMiddleware(MiddlewareMixin):
     """
-    Forza l'utente a completare il funnel di onboarding (Identity -> Payment -> Setup -> Membership).
+    Forza l'utente a completare il funnel di onboarding (Identity -> Setup -> Membership).
     Redirige alle viste corrette in base a User.onboarding_state.
     """
     def process_request(self, request):
@@ -30,8 +30,13 @@ class OnboardingMiddleware(MiddlewareMixin):
         # search-profile-claim) usata DENTRO il funnel onboarding; va esentata dal
         # redirect anche quando il client non manda l'header XMLHttpRequest.
         # Prefisso stretto e specifico, voce additiva e minima.
+        # /accounts/verify-email/<token>/ è pubblico e a path variabile (il
+        # match esatto di allowed_urls non basta): esentato per prefisso così
+        # un utente già loggato che clicca il link nello stesso browser vede
+        # l'esito, non un redirect al funnel.
         if (request.path.startswith('/api/')
                 or request.path.startswith('/accounts/api/')
+                or request.path.startswith('/accounts/verify-email/')
                 or request.headers.get('x-requested-with') == 'XMLHttpRequest'):
             return None
 
@@ -40,11 +45,9 @@ class OnboardingMiddleware(MiddlewareMixin):
             return None
 
         state = request.user.onboarding_state
-        
+
         if state == 'IDENTITY_PENDING':
             return redirect('verify_identity')
-        elif state == 'PAYMENT_PENDING':
-            return redirect('process_payment')
         elif state == 'SETUP_PENDING':
             return redirect('setup_wizard')
         elif state == 'MEMBERSHIP_PENDING':
