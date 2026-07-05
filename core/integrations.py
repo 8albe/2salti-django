@@ -18,9 +18,9 @@ INTEGRATION_REGISTRY = {
         'description': 'Invio email e alert di sistema.'
     },
     'IDENTITY_VERIFICATION': {
-        'status': 'SIMULATED',
-        'provider': 'Mock SPID/CIE',
-        'description': 'Verifica identità legale tramite gateway nazionale.'
+        'status': 'REAL' if not settings.EMAIL_BACKEND.endswith('ConsoleBackend') else 'MIXED',
+        'provider': 'Email a click (token firmato)',
+        'description': 'Verifica identità via link email firmato (accounts/services/email_verification.py).'
     },
     'PAYMENTS': {
         'status': 'SIMULATED',
