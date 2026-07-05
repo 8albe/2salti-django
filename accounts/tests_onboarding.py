@@ -259,3 +259,31 @@ class VerifyEmailViewTest(TestCase):
         self.assertEqual(response.status_code, 400)
         self.user.refresh_from_db()
         self.assertEqual(self.user.identity_status, 'UNVERIFIED')
+
+
+class SignupHoneypotTest(TestCase):
+    """Honeypot anti-bot su SignUpForm (debito B3): un campo nascosto che un
+    utente umano non compila mai."""
+
+    def _signup_payload(self, **overrides):
+        payload = {
+            'username': 'honeypot_test_user',
+            'email': 'honeypot_test@example.com',
+            'first_name': 'Test',
+            'last_name': 'User',
+            'role': 'athlete',
+            'password1': 'S0me-Str0ng-Pass!',
+            'password2': 'S0me-Str0ng-Pass!',
+        }
+        payload.update(overrides)
+        return payload
+
+    def test_signup_without_honeypot_succeeds(self):
+        response = self.client.post(reverse('signup'), self._signup_payload())
+        self.assertEqual(response.status_code, 302)
+        self.assertTrue(User.objects.filter(username='honeypot_test_user').exists())
+
+    def test_signup_with_honeypot_filled_is_rejected(self):
+        response = self.client.post(reverse('signup'), self._signup_payload(website='http://spam.example'))
+        self.assertEqual(response.status_code, 200)  # form non valido, ri-renderizzato
+        self.assertFalse(User.objects.filter(username='honeypot_test_user').exists())

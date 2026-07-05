@@ -9,10 +9,20 @@ class SignUpForm(UserCreationForm):
     vincolo di unicità per ora, fuori scope)."""
     role = forms.ChoiceField(choices=User.ROLE_CHOICES, widget=forms.RadioSelect)
     email = forms.EmailField(required=True)
+    # Honeypot anti-bot: campo non-model, nascosto via widget, che un utente
+    # umano non compila mai. Se valorizzato il form è invalido senza rivelare
+    # il motivo. Migration-free (non tocca il modello User).
+    website = forms.CharField(required=False, widget=forms.HiddenInput())
 
     class Meta:
         model = User
         fields = ['username', 'email', 'first_name', 'last_name', 'role']
+
+    def clean_website(self):
+        value = self.cleaned_data.get('website')
+        if value:
+            raise forms.ValidationError("Errore di validazione.")
+        return value
 
 
 class UserSetupForm(forms.ModelForm):
