@@ -671,6 +671,11 @@ test. NO-SCHEMA, test-only.
 anchor storici semantici → restano hardcoded di proposito (management 0014→0016 senza rotture).
 *Vive in:* `core/tests_migrations_season.py::SeasonBonificaMigrationTest` (5 test); suite
 core/accounts/management 177/177.
+*Aggiornamento 2026-07-05:* anche il leaf di GRAFO si rompe se una migration accounts dipende
+da una core recente (accounts/0012 → core/0025): il pin trascina core in avanti nel modello
+storico mentre il rewind ha retrocesso lo schema ("no column named is_comped", 12 test).
+Sostituito `_current_leaf` con `_applied_leaf`: pin all'ultima migration accounts ancora
+APPLICATA dopo il rewind (verità fisica dal recorder) — coincidenza modello↔schema per costruzione.
 
 ### §10.8 Macro 16 — propagazione prod — CHIUSO 2026-06-12
 *Cosa era:* Macro 16 chiusa su `dev`/dev-box ma prod `/opt/2salti-new/` a `01427d59` senza
