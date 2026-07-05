@@ -3,9 +3,13 @@ from django.contrib.auth.forms import UserCreationForm
 from .models import User, AthleteProfile, CoachProfile, RefereeProfile
 
 class SignUpForm(UserCreationForm):
-    """Form registrazione con scelta ruolo"""
+    """Form registrazione con scelta ruolo.
+
+    Email obbligatoria: serve il link di verifica identità a click (nessun
+    vincolo di unicità per ora, fuori scope)."""
     role = forms.ChoiceField(choices=User.ROLE_CHOICES, widget=forms.RadioSelect)
-    
+    email = forms.EmailField(required=True)
+
     class Meta:
         model = User
         fields = ['username', 'email', 'first_name', 'last_name', 'role']

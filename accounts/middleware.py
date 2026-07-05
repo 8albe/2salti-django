@@ -30,8 +30,13 @@ class OnboardingMiddleware(MiddlewareMixin):
         # search-profile-claim) usata DENTRO il funnel onboarding; va esentata dal
         # redirect anche quando il client non manda l'header XMLHttpRequest.
         # Prefisso stretto e specifico, voce additiva e minima.
+        # /accounts/verify-email/<token>/ è pubblico e a path variabile (il
+        # match esatto di allowed_urls non basta): esentato per prefisso così
+        # un utente già loggato che clicca il link nello stesso browser vede
+        # l'esito, non un redirect al funnel.
         if (request.path.startswith('/api/')
                 or request.path.startswith('/accounts/api/')
+                or request.path.startswith('/accounts/verify-email/')
                 or request.headers.get('x-requested-with') == 'XMLHttpRequest'):
             return None
 

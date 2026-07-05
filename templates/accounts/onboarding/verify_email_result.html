@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="max-w-xl mx-auto py-16 px-4 text-center">
+    {% if ok %}
+    <div class="text-5xl mb-4">✅</div>
+    <h1 class="text-3xl font-extrabold text-white mb-3">Email verificata</h1>
+    <p class="text-slate-300">Il tuo account è verificato. Puoi continuare la registrazione.</p>
+    <a href="{% url 'dashboard' %}" class="inline-block mt-8 px-6 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold">Continua</a>
+    {% else %}
+    <div class="text-5xl mb-4">⚠️</div>
+    <h1 class="text-3xl font-extrabold text-white mb-3">Link non valido</h1>
+    <p class="text-slate-300">
+        {% if error == 'expired' %}
+        Il link è scaduto. Richiedi una nuova email di conferma.
+        {% else %}
+        Il link di verifica non è valido.
+        {% endif %}
+    </p>
+    <a href="{% url 'verify_identity' %}" class="inline-block mt-8 px-6 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold">Richiedi un nuovo link</a>
+    {% endif %}
+</div>
+{% endblock %}

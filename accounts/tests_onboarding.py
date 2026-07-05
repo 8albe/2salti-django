@@ -1,3 +1,6 @@
+import re
+
+from django.core import mail
 from django.test import TestCase, Client
 from django.urls import reverse
 from django.contrib.auth import get_user_model
@@ -7,6 +10,14 @@ import datetime
 from django.utils import timezone
 
 User = get_user_model()
+
+
+def _extract_verify_link(email_body):
+    """Estrae il path /accounts/verify-email/<token>/ dal corpo dell'email
+    (stesso pattern usato per il link di certificazione genitore)."""
+    match = re.search(r'(/accounts/verify-email/[^\s]+/)', email_body)
+    return match.group(1) if match else None
+
 
 class OnboardingFlowTest(TestCase):
     def setUp(self):
@@ -19,31 +30,40 @@ class OnboardingFlowTest(TestCase):
         )
         self.league = League.objects.create(name="Serie A1", sport=self.sport, season='2024-2025')
         self.team = Team.objects.create(society=self.society, league=self.league)
-        
+
         # Utente Atleta da onboardare
         self.user = User.objects.create_user(
             username='test_athlete',
             password='password123',
             role='athlete',
             first_name='Test',
-            last_name='Athlete'
+            last_name='Athlete',
+            email='test_athlete@example.com',
         )
 
     def test_onboarding_redirection_flow(self):
         """Verifica che l'utente venga rediretto correttamente attraverso i vari step"""
         self.client.login(username='test_athlete', password='password123')
-        
+
         # 1. Accesso a dashboard -> Redirezione a Identity
         response = self.client.get(reverse('dashboard'))
         self.assertRedirects(response, reverse('verify_identity'))
-        
-        # 2. Completa Identity
+
+        # 2. Reinvio email di conferma (verify_identity POST = reinvio, non più mock)
         response = self.client.post(reverse('verify_identity'))
-        self.assertEqual(response.status_code, 302)
+        self.assertRedirects(response, reverse('verify_identity'))
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertIn(self.user.email, mail.outbox[0].to)
+
+        # 3. Click sul link ricevuto via email -> Identity verificata
+        link = _extract_verify_link(mail.outbox[0].body)
+        self.assertIsNotNone(link)
+        response = self.client.get(link)
+        self.assertEqual(response.status_code, 200)
         self.user.refresh_from_db()
         self.assertEqual(self.user.identity_status, 'VERIFIED')
-        
-        # 3. Accesso a dashboard -> Redirezione a Setup Wizard (step pagamento
+
+        # 4. Accesso a dashboard -> Redirezione a Setup Wizard (step pagamento
         # onboarding: differito a Macro 10 pagamenti reali, non blocca più il funnel)
         response = self.client.get(reverse('dashboard'))
         self.assertRedirects(response, reverse('setup_wizard'))
@@ -164,3 +184,78 @@ class OnboardingMiddlewareApiExemptionTest(TestCase):
         response = self.client.get(reverse('api_teams_by_league'))
         self.assertEqual(response.status_code, 200)
         self.assertNotIn('Location', response)
+
+    def test_verify_email_link_not_redirected_by_middleware(self):
+        # /accounts/verify-email/<token>/ è a path variabile: il match esatto
+        # di allowed_urls non basta, serve l'esenzione per prefisso.
+        from accounts.services.email_verification import make_token
+
+        self.user.email = 'test_onb@example.com'
+        self.user.save()
+        token = make_token(self.user)
+
+        response = self.client.get(reverse('verify_email', args=[token]))
+        self.assertEqual(response.status_code, 200)
+        self.assertNotIn('Location', response)
+
+
+class VerifyEmailViewTest(TestCase):
+    """Copertura a livello view del click sul link di verifica: scaduto,
+    manomesso, idempotente sul già-verificato."""
+
+    def setUp(self):
+        self.client = Client()
+        self.user = User.objects.create_user(
+            username='verify_target', password='password123', role='athlete',
+            email='verify_target@example.com',
+        )
+
+    def test_valid_token_verifies_identity(self):
+        from accounts.services.email_verification import make_token
+
+        token = make_token(self.user)
+        response = self.client.get(reverse('verify_email', args=[token]))
+        self.assertEqual(response.status_code, 200)
+        self.user.refresh_from_db()
+        self.assertEqual(self.user.identity_status, 'VERIFIED')
+        self.assertIsNotNone(self.user.identity_verified_at)
+
+    def test_already_verified_is_idempotent(self):
+        from accounts.services.email_verification import make_token
+        from management.models import AuditLog
+
+        token = make_token(self.user)
+        self.client.get(reverse('verify_email', args=[token]))
+        first_verified_at = User.objects.get(pk=self.user.pk).identity_verified_at
+
+        # Secondo click sullo stesso link valido: nessun errore, nessun nuovo
+        # audit log, il timestamp di verifica non si sposta.
+        response = self.client.get(reverse('verify_email', args=[token]))
+        self.assertEqual(response.status_code, 200)
+        self.user.refresh_from_db()
+        self.assertEqual(self.user.identity_status, 'VERIFIED')
+        self.assertEqual(self.user.identity_verified_at, first_verified_at)
+        self.assertEqual(
+            AuditLog.objects.filter(action='ONBOARDING_IDENTITY_VERIFIED', user=self.user).count(), 1,
+        )
+
+    def test_expired_token_shows_error_page(self):
+        # La scadenza è coperta a livello service (tests_email_verification,
+        # max_age negativo). Qui si verifica solo che la view propaghi
+        # correttamente l'esito 'expired' del service alla pagina d'errore.
+        from unittest.mock import patch
+
+        with patch('accounts.services.email_verification.verify_token', return_value=(False, None, 'expired')):
+            response = self.client.get(reverse('verify_email', args=['whatever-token']))
+        self.assertEqual(response.status_code, 400)
+        self.assertContains(response, "scaduto", status_code=400)
+
+    def test_tampered_token_shows_error_page(self):
+        from accounts.services.email_verification import make_token
+
+        token = make_token(self.user)
+        tampered = token[:-1] + ('a' if token[-1] != 'a' else 'b')
+        response = self.client.get(reverse('verify_email', args=[tampered]))
+        self.assertEqual(response.status_code, 400)
+        self.user.refresh_from_db()
+        self.assertEqual(self.user.identity_status, 'UNVERIFIED')
