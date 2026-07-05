@@ -21,17 +21,17 @@ Implementazione Freemium / Premium / Club Pro come da blueprint §6.
 ### 10.3 User Onboarding
 
 - [x] `OnboardingMiddleware` redirect per stato logico
-- [x] Property calcolata `User.onboarding_state` (aggrega `identity_status`, `onboarding_payment_done`, `setup_completed`)
-- [x] Viste `verify_identity`, `process_payment`, `setup_wizard`, `onboarding_membership`
-- [x] Flusso 4 step implementato (claim + team auth inglobati in MEMBERSHIP_PENDING)
+- [x] Property calcolata `User.onboarding_state` (aggrega `identity_status`, `setup_completed`; `onboarding_payment_done` resta sul modello per audit ma non gating)
+- [x] Viste `verify_identity`, `setup_wizard`, `onboarding_membership` (`process_payment` resta solo come redirect neutro per non rompere link/bookmark esistenti: lo step pagamento onboarding è rimosso dal funnel, differito a Macro 10)
+- [x] Flusso 3 step implementato (identity, setup, membership — claim + team auth inglobati in MEMBERSHIP_PENDING; step pagamento rimosso dal funnel)
 - [ ] Allineamento al blueprint §7.2 con 6 step distinti (claim profilo + autenticazione squadra come step separati)
 
 ### 10.4 Identity Verification
 
 - [x] Campo `User.identity_status` (UNVERIFIED/VERIFIED) + `User.identity_verified_at`
-- [x] Vista `verify_identity()` manuale via admin
+- [x] Vista `verify_identity()` — pagina "controlla la tua casella" con reinvio
 - [ ] ~~Integrazione SPID/CIE come metodo primario~~ **Accantonato (pivot 2026-06-19): SPID/CIE abbandonato per attrito.**
-- [ ] Verifica identità a click su email (invio link → conferma → `identity_status=VERIFIED`)
+- [x] Verifica identità a click su email (invio link → conferma → `identity_status=VERIFIED`; token stateless firmato, validità 7 giorni, `accounts/services/email_verification.py`)
 
 ### 10.5 Membership Management
 
