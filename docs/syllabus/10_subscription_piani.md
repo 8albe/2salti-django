@@ -12,7 +12,7 @@ Implementazione Freemium / Premium / Club Pro come da blueprint §6.
 
 ### 10.2 Wiring pagamenti e gating
 
-- [ ] Integrazione provider pagamenti (Stripe o PayPal)
+- [ ] Integrazione provider pagamenti → scorporata nella [Macro 19 — Monetizzazione Stripe](19_monetizzazione_stripe.md) (🧊 differita, trigger e seam dormienti registrati lì)
 - [ ] Gating feature server-side per piano (Chatbot, Live Alerts, Recap PDF)
 - [ ] Pricing definitivo Premium Utente e Club Pro (bloccato — validazione product owner)
 - [ ] Modello revenue projection (stima ricavi annui per piano)
@@ -22,7 +22,7 @@ Implementazione Freemium / Premium / Club Pro come da blueprint §6.
 
 - [x] `OnboardingMiddleware` redirect per stato logico
 - [x] Property calcolata `User.onboarding_state` (aggrega `identity_status`, `setup_completed`; `onboarding_payment_done` resta sul modello per audit ma non gating)
-- [x] Viste `verify_identity`, `setup_wizard`, `onboarding_membership` (`process_payment` resta solo come redirect neutro per non rompere link/bookmark esistenti: lo step pagamento onboarding è rimosso dal funnel, differito a Macro 10)
+- [x] Viste `verify_identity`, `setup_wizard`, `onboarding_membership` (`process_payment` resta solo come redirect neutro per non rompere link/bookmark esistenti: lo step pagamento onboarding è rimosso dal funnel, differito alla [Macro 19](19_monetizzazione_stripe.md))
 - [x] Flusso 3 step implementato (identity, setup, membership — claim + team auth inglobati in MEMBERSHIP_PENDING; step pagamento rimosso dal funnel)
 - [ ] Allineamento al blueprint §7.2 con 6 step distinti (claim profilo + autenticazione squadra come step separati)
 

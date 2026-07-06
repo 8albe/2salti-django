@@ -30,4 +30,4 @@ Il presidente non crea una società da zero né la rivendica liberamente: la **s
 
 ---
 
-← [Macro precedente](17_frontend_design_system.md)
+← [Macro precedente](17_frontend_design_system.md) | → [Macro successiva](19_monetizzazione_stripe.md)
