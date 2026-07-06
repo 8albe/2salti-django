@@ -472,7 +472,11 @@ Il punto strutturale, simmetrico alla sezione 2, è che il versionamento del 25 
 ## 10. Debiti aperti
 
 Registro vivo di problemi noti che richiedono follow-up. Non sono trappole (§3) né bug attivi: sono incoerenze scoperte ma non risolte, da affrontare in sessioni dedicate.
-> Le voci §10.1-10.15 sono CHIUSE e archiviate in Appendice A, che ne conserva razionale, commit e test. Nessuna voce aperta al momento.
+> Le voci §10.1-10.15 sono CHIUSE e archiviate in Appendice A, che ne conserva razionale, commit e test. Resta aperta la sola §10.16.
+
+### 10.16 Rate-limit IP sul signup — hardening differito (pianificato, non implementato)
+
+Il vettore signup pubblico è stato realmente abusato in passato (27 husk bot esterni id 61–89 rimossi il 2026-07-05, firma username random + email gmail puntate/domini spam — dettaglio in Appendice A §10.5). Mitigazione attuale: solo honeypot (`4aa48e7`), che copre solo i bot "dumb" self-service. Nessuna urgenza: DB prod congelato dal 2026-07-05 19:14, nessun account nuovo dopo la pulizia (verificato via recon read-only 2026-07-06). Approccio previsto se/quando implementato: throttle cache-based per IP (coerente con il throttle B2 sul resend), cap generoso da tarare per non bloccare famiglie dietro lo stesso NAT (scuola/club/wifi). Nessuna migration. Decisione se/quando implementare: di Alberto.
 
 ## 11. Sicurezza operativa e frontiera reversibile
 
