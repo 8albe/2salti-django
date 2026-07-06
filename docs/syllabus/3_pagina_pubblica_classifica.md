@@ -1,6 +1,6 @@
 ## 3. Pagina pubblica della classifica
 
-Stato: ✅ Completa (tutto il pubblicabile è **LIVE su prod 2026-06-19**; residuo Venue/Impianto → vedi [Macro 20](20_venue_impianto.md), 🧊 differita dal 2026-07-06; storico del parcheggio in [FUTURE_IDEAS.md](../FUTURE_IDEAS.md) §1)
+Stato: ✅ Completa (tutto il pubblicabile è **LIVE su prod 2026-06-19**; residuo Venue/Impianto rimosso dallo scope → scheda di dettaglio in [Macro 20](20_venue_impianto.md) (❌, rientra solo su decisione esplicita); storico in [FUTURE_IDEAS.md](../FUTURE_IDEAS.md) §1)
 
 Classifica per campionato/stagione: punti, gol fatti/subiti, partite giocate/vinte/perse/pareggiate. Filtrabile per stagione.
 
