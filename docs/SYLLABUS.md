@@ -73,3 +73,6 @@ Punto d'ingresso operativo del progetto. Per la visione di prodotto vedi [BLUEPR
 ## 19. Monetizzazione Stripe 🧊
 → [Dettaglio](syllabus/19_monetizzazione_stripe.md)
 
+## 20. Modello Venue / Impianto 🧊
+→ [Dettaglio](syllabus/20_venue_impianto.md)
+
