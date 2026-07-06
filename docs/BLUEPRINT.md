@@ -660,7 +660,7 @@ Il modello economico si basa su tre piani paralleli che sbloccano diverse profon
 ## 14. Decisioni immediate da bloccare (Baseline v3)
 
 - **Referto Digitale**: via principale di ingestione. OCR come fallback per cartaceo e archivio storico.
-- **Three-Tier Pricing**: Freemium / Premium Utente / Club Pro. Prezzi puntuali TBD, da validare con campione di famiglie e società.
+- **Three-Tier Pricing**: Freemium / Premium Utente / Club Pro. Prezzi puntuali TBD, da validare con campione di famiglie e società. (Dettaglio e stato differito del wiring pagamenti: vedi [Macro 19 — Monetizzazione Stripe](syllabus/19_monetizzazione_stripe.md).)
 - **Widget Layout**: sistema a slot fissi riordinabili per dashboard utente e pagine club. Niente drag&drop libero in v1.
 - **Chatbot AI**: esclusiva Premium, con function calling e RBAC server-side obbligatorio.
 - **Bacheca mista**: scrittura gated Club Pro, lettura gratis per tutti gli iscritti, notifiche push solo Premium.
