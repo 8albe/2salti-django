@@ -641,7 +641,10 @@ separatamente e poi implementato il 2026-07-06 (vedi §10.16 in questa appendice
 *Vive in:* nessun codice toccato — verifica read-only via query ORM su venv prod
 (`accounts.User`, `management.Membership`, `core.Society`); comando di riferimento
 `core/management/commands/cleanup_bot_users.py` (dry-run confermato "niente da
-fare" il 2026-07-06, i 27 id già assenti).
+fare" il 2026-07-06, i 27 id già assenti). Evoluzione scanner-by-signature del
+command: DIFFERITA per decisione 2026-07-06 — resta a lista fissa (`DEFAULT_BOT_IDS`,
+id ≤ 89); trigger di riapertura e razionale in [ZERO9_DEFERRED.md](ZERO9_DEFERRED.md)
+§4, voce "Pulizia account bot sul signup prod".
 
 ### §10.6 Debiti residui post-Sprint C (BUG-001, DEBT-001/002/003/004) — CHIUSI 2026-06-19
 *Cosa era:* cinque item tracciati durante Sprint C, non bloccanti.
