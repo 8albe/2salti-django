@@ -1,6 +1,7 @@
 import re
 
 from django.core import mail
+from django.core.cache import cache
 from django.test import TestCase, Client
 from django.urls import reverse
 from django.contrib.auth import get_user_model
@@ -265,6 +266,11 @@ class SignupHoneypotTest(TestCase):
     """Honeypot anti-bot su SignUpForm (debito B3): un campo nascosto che un
     utente umano non compila mai."""
 
+    def setUp(self):
+        # Il rate-limit signup (§10.16) conta i POST per IP in cache, che
+        # LocMemCache condivide tra i test dello stesso run: azzera il contatore
+        cache.clear()
+
     def _signup_payload(self, **overrides):
         payload = {
             'username': 'honeypot_test_user',
@@ -295,6 +301,8 @@ class SignupEmailUniquenessTest(TestCase):
     IntegrityError; i 58 seed a email vuota restano fuori dal vincolo."""
 
     def setUp(self):
+        # Vedi SignupHoneypotTest.setUp: azzera il contatore del rate-limit
+        cache.clear()
         User.objects.create_user(
             username='existing_user',
             email='Existing@Example.com',

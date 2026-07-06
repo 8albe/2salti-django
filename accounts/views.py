@@ -20,6 +20,18 @@ def _followed_players_for(user):
 def signup(request):
     """Registrazione con scelta ruolo"""
     if request.method == 'POST':
+        from django.contrib import messages
+        from accounts.services.signup_throttle import is_throttled, record_attempt
+
+        if is_throttled(request):
+            messages.warning(request, "Troppi tentativi di registrazione. Riprova tra qualche minuto.")
+            return render(request, 'accounts/signup.html', {
+                'form': SignUpForm(),
+                'seo_title': "Registrati | 2salti",
+                'seo_description': "Crea il tuo profilo su 2salti. La piattaforma per atleti, coach e appassionati di sport.",
+            })
+        record_attempt(request)
+
         form = SignUpForm(request.POST)
         if form.is_valid():
             user = form.save()

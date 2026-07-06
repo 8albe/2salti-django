@@ -1,6 +1,6 @@
 # SYLLABUS — Roadmap operativa 2salti
 
-Aggiornato: 2026-06-30
+Aggiornato: 2026-07-06
 
 Punto d'ingresso operativo del progetto. Per la visione di prodotto vedi [BLUEPRINT.md](BLUEPRINT.md).
 
@@ -69,4 +69,10 @@ Punto d'ingresso operativo del progetto. Per la visione di prodotto vedi [BLUEPR
 
 ## 18. Personificazione società (presidente) ✅
 → [Dettaglio](syllabus/18_personificazione_societa.md)
+
+## 19. Monetizzazione Stripe 🧊
+→ [Dettaglio](syllabus/19_monetizzazione_stripe.md)
+
+## 20. Modello Venue / Impianto ❌
+→ Rimossa dallo scope (2026-07-06; rientra solo su decisione esplicita) → [Dettaglio](syllabus/20_venue_impianto.md)
 

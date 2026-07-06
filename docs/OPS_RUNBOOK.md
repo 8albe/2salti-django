@@ -472,11 +472,7 @@ Il punto strutturale, simmetrico alla sezione 2, è che il versionamento del 25 
 ## 10. Debiti aperti
 
 Registro vivo di problemi noti che richiedono follow-up. Non sono trappole (§3) né bug attivi: sono incoerenze scoperte ma non risolte, da affrontare in sessioni dedicate.
-> Le voci §10.1-10.15 sono CHIUSE e archiviate in Appendice A, che ne conserva razionale, commit e test. Resta aperta la sola §10.16.
-
-### 10.16 Rate-limit IP sul signup — hardening differito (pianificato, non implementato)
-
-Il vettore signup pubblico è stato realmente abusato in passato (27 husk bot esterni id 61–89 rimossi il 2026-07-05, firma username random + email gmail puntate/domini spam — dettaglio in Appendice A §10.5). Mitigazione attuale: solo honeypot (`4aa48e7`), che copre solo i bot "dumb" self-service. Nessuna urgenza: DB prod congelato dal 2026-07-05 19:14, nessun account nuovo dopo la pulizia (verificato via recon read-only 2026-07-06). Approccio previsto se/quando implementato: throttle cache-based per IP (coerente con il throttle B2 sul resend), cap generoso da tarare per non bloccare famiglie dietro lo stesso NAT (scuola/club/wifi). Nessuna migration. Decisione se/quando implementare: di Alberto.
+> Le voci §10.1-10.16 sono CHIUSE e archiviate in Appendice A, che ne conserva razionale, commit e test. Nessuna voce aperta al momento.
 
 ## 11. Sicurezza operativa e frontiera reversibile
 
@@ -575,7 +571,7 @@ L'endpoint AI (`matches/api_views.py`) è esposto su due rotte — `/matches/api
 
 Tutte le mutazioni di `User.plan` e `Society.tier`/`Society.is_comped` passano da `core/services/entitlement_service.py`: `grant_premium`, `revoke_premium`, `set_society_tier`, `set_society_comped`. Ogni funzione è idempotente (no-op se il valore non cambia) e, quando scrive, logga su `AuditLog` con azione `ENTITLEMENT_*` (`ENTITLEMENT_PLAN_GRANTED`, `ENTITLEMENT_PLAN_REVOKED`, `ENTITLEMENT_SOCIETY_TIER_CHANGED`, `ENTITLEMENT_SOCIETY_COMPED_CHANGED`) e `details={'from', 'to', 'source'}`.
 
-Chiamanti oggi: le action dell'admin (`op_admin_site`; `User.plan` e `Society.tier` sono read-only nel form, si cambiano solo via action → seam) e — per il solo lato società/pilota — i seed. Il mock 0,50€ dell'onboarding **non** concede premium: setta solo `User.onboarding_payment_done` (asse funnel, separato dal piano). Domani il webhook di pagamento reale si aggancia qui (`source='stripe_webhook'`), in un punto solo. Gating ortogonale all'RBAC; vocabolario completo in DOMAIN_GLOSSARY.md §"Piano / Tier / Entitlement".
+Chiamanti oggi: le action dell'admin (`op_admin_site`; `User.plan` e `Society.tier` sono read-only nel form, si cambiano solo via action → seam) e — per il solo lato società/pilota — i seed. Il mock 0,50€ dell'onboarding **non** concede premium: setta solo `User.onboarding_payment_done` (asse funnel, separato dal piano). Domani il webhook di pagamento reale si aggancia qui (`source='stripe_webhook'`), in un punto solo — scope e trigger formalizzati nella macro dedicata [syllabus/19_monetizzazione_stripe.md](syllabus/19_monetizzazione_stripe.md) (🧊 differita). Gating ortogonale all'RBAC; vocabolario completo in DOMAIN_GLOSSARY.md §"Piano / Tier / Entitlement".
 
 ## Appendice A — Archivio debiti e fragilità risolti
 
@@ -640,12 +636,15 @@ test users/società di fatto pulito — nessun utente di test orfano (59 utenti 
 admin + 58 seed pilota con legami reali), 13 società tutte league-wired, nessuna
 shell di test. La premessa "bot id ≥ 90" era infondata: nessun id sopra 60 esiste nel
 DB (`max(id)=60`), DB fermo dal 2026-07-05 19:14. Vettore signup storicamente
-abusato (27 husk id 61–89 già rimossi il 2026-07-05); rate-limit resta tracciato
-separatamente come hardening differito, ancora aperto in ## 10.
+abusato (27 husk id 61–89 già rimossi il 2026-07-05); rate-limit tracciato
+separatamente e poi implementato il 2026-07-06 (vedi §10.16 in questa appendice).
 *Vive in:* nessun codice toccato — verifica read-only via query ORM su venv prod
 (`accounts.User`, `management.Membership`, `core.Society`); comando di riferimento
 `core/management/commands/cleanup_bot_users.py` (dry-run confermato "niente da
-fare" il 2026-07-06, i 27 id già assenti).
+fare" il 2026-07-06, i 27 id già assenti). Evoluzione scanner-by-signature del
+command: DIFFERITA per decisione 2026-07-06 — resta a lista fissa (`DEFAULT_BOT_IDS`,
+id ≤ 89); trigger di riapertura e razionale in [ZERO9_DEFERRED.md](ZERO9_DEFERRED.md)
+§4, voce "Pulizia account bot sul signup prod".
 
 ### §10.6 Debiti residui post-Sprint C (BUG-001, DEBT-001/002/003/004) — CHIUSI 2026-06-19
 *Cosa era:* cinque item tracciati durante Sprint C, non bloccanti.
@@ -810,3 +809,21 @@ validazione empirica del reverse (non strettamente necessaria per la tabella ma 
 unapply → verifica `--plan` (deve mostrare solo il reverse delle operations, nessuna cascata) → copia
 locale del file nuovo → reapply con nuovo grafo → `git checkout --` per ripulire il working tree →
 push + pull normale. Suite 478/478 e i 12 test `_applied_leaf` invariati dopo il cambio.
+### §10.16 Rate-limit IP sul signup — IMPLEMENTATO 2026-07-06 (su dev, live al prossimo merge/deploy)
+*Cosa era:* hardening differito, registrato il 2026-07-06: vettore signup pubblico
+storicamente abusato (27 husk bot id 61–89 rimossi il 2026-07-05, dettaglio §10.5),
+mitigato dal solo honeypot (`4aa48e7`); throttle IP-based pianificato ma non costruito.
+*Chiuso:* implementato su dev (commit `ae0ecee`): cap **5 tentativi POST / 10 minuti
+per IP**, sliding window di timestamp nella cache Django di default, chiave
+`signup_throttle:<ip>` (IP da `X-Forwarded-For` col fallback `REMOTE_ADDR`, stessa
+estrazione di `management.utils.log_action`). Errore soft: messaggio "Troppi tentativi
+di registrazione. Riprova tra qualche minuto." + ri-render del form, mai un 500; reset
+automatico a fine finestra (sliding). Nessuna migration, `config/settings.py` non toccato.
+**Limite noto, accettato:** nessun backend `CACHES` configurato → LocMemCache di default,
+contatore per-process: con N worker gunicorn il cap effettivo è fino a N×5 per IP.
+Difesa-in-profondità (honeypot + verifica email restano indipendenti), non un hard gate;
+si rivaluta solo se/quando comparirà una cache condivisa — nessuna nuova infra (no Redis)
+introdotta per questo.
+*Vive in:* `accounts/services/signup_throttle.py` (service, costanti cap/finestra),
+`accounts/views.py::signup` (gate sul POST), test `accounts/tests_signup_throttle.py`
+(6° tentativo bloccato, sblocco a finestra scaduta, honeypot indipendente dal throttle).

@@ -103,7 +103,7 @@ Generato leggendo:
 > `setup_completed`) più controlli relazionali su membership/claim. La property
 > `onboarding_state` li aggrega in un valore logico usato solo dal middleware per i redirect.
 > `onboarding_payment_done` resta sul modello (audit/storico) ma **non gating** più: lo
-> step pagamento onboarding è stato rimosso dal funnel, differito a Macro 10 pagamenti reali.
+> step pagamento onboarding è stato rimosso dal funnel, differito alla Macro 19 (monetizzazione Stripe, 🧊 differita).
 
 ### Campi reali sottostanti
 
@@ -141,7 +141,7 @@ Generato leggendo:
   **RISOLTA** — la sezione "Onboarding State Machine" non esiste più in CLAUDE.md: è stata sostituita dal puntatore a questo documento (§"State machines" in CLAUDE.md, cfr. punto 4 delle azioni chiuse in fondo). La natura di property calcolata è documentata qui sopra.
 
 - ~~**BLUEPRINT.md §7.2 dice:** sequenza in 6 passi: Registrazione → Verifica identità → Selezione piano → Claim profilo → Autenticazione con squadra → Accesso completo.~~
-  **Codice dice (onboarding reale, build corrente):** i passi che gatingano sono 3 (identity, setup, membership). Lo step "Selezione piano"/pagamento è stato rimosso dal funnel (differito a Macro 10). "Claim profilo" e "Autenticazione con squadra" restano entrambi inglobati in `MEMBERSHIP_PENDING` (uno o l'altro basta). La verifica identità non è più un mock SPID: è conferma email a click.
+  **Codice dice (onboarding reale, build corrente):** i passi che gatingano sono 3 (identity, setup, membership). Lo step "Selezione piano"/pagamento è stato rimosso dal funnel (differito alla Macro 19, monetizzazione Stripe). "Claim profilo" e "Autenticazione con squadra" restano entrambi inglobati in `MEMBERSHIP_PENDING` (uno o l'altro basta). La verifica identità non è più un mock SPID: è conferma email a click.
 
 ---
 
