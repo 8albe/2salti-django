@@ -472,26 +472,11 @@ Il punto strutturale, simmetrico alla sezione 2, è che il versionamento del 25 
 ## 10. Debiti aperti
 
 Registro vivo di problemi noti che richiedono follow-up. Non sono trappole (§3) né bug attivi: sono incoerenze scoperte ma non risolte, da affrontare in sessioni dedicate.
-> Le voci §10.1-10.4, §10.6-10.14 sono CHIUSE e archiviate in Appendice A, che ne conserva razionale, commit e test. Qui resta solo ciò che è ancora aperto.
+> Le voci §10.1-10.15 sono CHIUSE e archiviate in Appendice A, che ne conserva razionale, commit e test. Resta aperta la sola §10.16.
 
-### 10.5 Pulizia utenti/società di test su prod — APERTO (scoperto 26-mag in Sprint B)
+### 10.16 Rate-limit IP sul signup — hardening differito (pianificato, non implementato)
 
-- Su dev: admin_bot cancellato, rimasto solo albe_admin come superuser. Nessuna società test trovata.
-- Su prod: non verificato — richiede sessione dedicata con accesso esplicito al VPS.
-- Da fare: inventario utenti test su prod, cancellazione controllata.
-- Aggiornamento 2026-06-12: prod ora migrato a Macro 16 (§10.8) — gli eventuali dati test sono passati per le data migration (canonicalizzazione season, backfill); la voce resta APERTA.
-- Aggiornamento 2026-07-05 (Task 4, bot signup): recon di caratterizzazione read-only su backup prod (`db.sqlite3.backup.pre-botcleanup.20260705_1813`) ha isolato **27 id** senza legami reali (0 Membership, 0 AthleteProfile/CoachProfile con team, 0 PresidentProfile con società) e firma bot (username random + email gmail puntata o dominio spam) — 18 candidati certi, 8 con profilo husk auto-creato dal signal `create_user_profile` (`accounts/models.py`), 1 test manuale di Alberto (id 89). Lista ratificata: `63,64,65,69,70,72,73,74,75,76,78,79,80,81,82,83,85,88,61,62,67,68,71,77,84,87,89`. Recon FK: le 40 FK verso `accounts_user` sono tutte `ON DELETE NO ACTION` nel DDL SQLite — i CASCADE sui 5 profili sono dichiarati solo a livello ORM Django (`on_delete=models.CASCADE` in `accounts/models.py`), quindi una `DELETE` SQL diretta senza `PRAGMA foreign_keys=ON` lascerebbe profili orfani senza errore. Strumento pronto: management command `core/management/commands/cleanup_bot_users.py` (dry-run di default, guard hard su staff/superuser e su legami reali, assert sui conteggi attesi, `--apply` esplicito) — testato su dev (guard verificati, dry-run e apply su 2 id bot dev di prova, 100 test `core` verdi). **Esecuzione su prod non ancora fatta — vedi procedura sotto, di competenza di Alberto dopo backup fresco.**
-
-**Procedura di esecuzione su prod (Alberto, dopo backup fresco):**
-```bash
-cd /opt/2salti-new
-sudo -u www-data cp db.sqlite3 db.sqlite3.backup.pre-botcleanup-apply.$(date +%Y%m%d_%H%M)
-.venv/bin/python manage.py cleanup_bot_users            # dry-run di default sui 27 id ratificati
-# verificare che stampi: accounts.user=27, presidentprofile=10, fanprofile=8,
-# athleteprofile=5, coachprofile=2, refereeprofile=2 — e "Conteggi conformi agli attesi"
-.venv/bin/python manage.py cleanup_bot_users --apply --flush-sessions
-```
-Se i conteggi in dry-run non tornano esattamente a quei valori, **non lanciare `--apply`**: significa che la lista non corrisponde più allo stato di prod (nuovi bot dopo il 5 luglio, o account cambiati) — richiede un nuovo recon prima di procedere.
+Il vettore signup pubblico è stato realmente abusato in passato (27 husk bot esterni id 61–89 rimossi il 2026-07-05, firma username random + email gmail puntate/domini spam — dettaglio in Appendice A §10.5). Mitigazione attuale: solo honeypot (`4aa48e7`), che copre solo i bot "dumb" self-service. Nessuna urgenza: DB prod congelato dal 2026-07-05 19:14, nessun account nuovo dopo la pulizia (verificato via recon read-only 2026-07-06). Approccio previsto se/quando implementato: throttle cache-based per IP (coerente con il throttle B2 sul resend), cap generoso da tarare per non bloccare famiglie dietro lo stesso NAT (scuola/club/wifi). Nessuna migration. Decisione se/quando implementare: di Alberto.
 
 ## 11. Sicurezza operativa e frontiera reversibile
 
@@ -643,6 +628,24 @@ per `created_at`, partite dirette non filtrabili per periodo.
 `0015`). I follow-up sono confluiti in §10.6.
 *Vive in:* `management/models.py` (storico in git), `accounts/views.py`,
 test `management.tests_membership_dates`, `accounts.tests_temporal_views`.
+
+### §10.5 Pulizia utenti/società di test su prod — CHIUSO 2026-07-06 (verificato via recon read-only)
+*Cosa era:* inventario aperto dal 26-mag 2026 (Sprint B) su utenti/società di test
+residui su prod, mai verificato con accesso VPS diretto; il 2026-07-05 (Task 4) ne
+era stata affrontata la sola parte bot-signup (27 husk id 61–89 cancellati via
+`cleanup_bot_users.py`), lasciando aperta la domanda sull'inventario più ampio e sul
+sospetto di bot nati dopo il backup delle 19:12 (id ≥ 90).
+*Chiuso:* Risolto/verificato il 2026-07-06 via recon read-only su prod: inventario
+test users/società di fatto pulito — nessun utente di test orfano (59 utenti = 1
+admin + 58 seed pilota con legami reali), 13 società tutte league-wired, nessuna
+shell di test. La premessa "bot id ≥ 90" era infondata: nessun id sopra 60 esiste nel
+DB (`max(id)=60`), DB fermo dal 2026-07-05 19:14. Vettore signup storicamente
+abusato (27 husk id 61–89 già rimossi il 2026-07-05); rate-limit resta tracciato
+separatamente come hardening differito, ancora aperto in ## 10.
+*Vive in:* nessun codice toccato — verifica read-only via query ORM su venv prod
+(`accounts.User`, `management.Membership`, `core.Society`); comando di riferimento
+`core/management/commands/cleanup_bot_users.py` (dry-run confermato "niente da
+fare" il 2026-07-06, i 27 id già assenti).
 
 ### §10.6 Debiti residui post-Sprint C (BUG-001, DEBT-001/002/003/004) — CHIUSI 2026-06-19
 *Cosa era:* cinque item tracciati durante Sprint C, non bloccanti.
