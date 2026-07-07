@@ -105,8 +105,8 @@ Mapping tra termini italiani del blueprint e modelli Django: [docs/DOMAIN_GLOSSA
 
 ### OCR edge cases
 
-- Multi-page PDFs: concatenate pages before extraction.
-- Rotated or skewed photos: the provider handles orientation — do not pre-process.
+- Multi-page PDFs: **not implemented** — `PDFProcessor` exists in `matches/services/pdf_processor.py` but is never imported (dead code, no PDF lib in requirements). Open task.
+- Rotated or skewed photos: handled by `ImagePreprocessor` (EXIF fix + OpenCV auto-rotate/deskew), invoked by `GPT4oVisionProvider` before the API call — do not add further pre-processing.
 - Near-duplicates (different scans of same report): **not** deduplicated automatically — reviewer must decide.
 
 ### Key Environment Variables
