@@ -256,7 +256,8 @@ class GPT4oVisionProvider(BaseVisionProvider):
             {
                 "type": "image_url",
                 "image_url": {
-                    "url": f"data:{mime_type};base64,{base64_image}"
+                    "url": f"data:{mime_type};base64,{base64_image}",
+                    "detail": getattr(settings, "OCR_IMAGE_DETAIL", "high")
                 }
             }
         ]

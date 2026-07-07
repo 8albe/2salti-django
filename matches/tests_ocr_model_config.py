@@ -79,3 +79,21 @@ class OCRModelConfigTest(SimpleTestCase):
             data["metadata"]["token_usage"],
             {"prompt_tokens": 1200, "completion_tokens": 350},
         )
+
+    def test_payload_requests_high_detail_by_default(self):
+        """
+        Il referto è una griglia manoscritta fitta: senza detail:"high" OpenAI
+        la riscala al lato corto (~768px), illeggibile. Default deve essere "high".
+        """
+        _, mock_create = self._run_extraction()
+        messages = mock_create.call_args.kwargs["messages"]
+        image_url_block = messages[1]["content"][1]["image_url"]
+        self.assertEqual(image_url_block["detail"], "high")
+
+    @override_settings(OCR_IMAGE_DETAIL="low")
+    def test_payload_detail_configurable_via_settings(self):
+        """settings.OCR_IMAGE_DETAIL, se presente, sovrascrive il default "high"."""
+        _, mock_create = self._run_extraction()
+        messages = mock_create.call_args.kwargs["messages"]
+        image_url_block = messages[1]["content"][1]["image_url"]
+        self.assertEqual(image_url_block["detail"], "low")
