@@ -9,12 +9,19 @@ Con --show stampa un blocco leggibile per modello con i campi chiave estratti
 (squadre, punteggio, quarti, roster, eventi) per il confronto a occhio col
 referto fisico. Con --save-dir <path> salva il JSON completo estratto da
 ciascun modello in <path>/ocr_bench_<model>_<timestamp>.json.
+Con --dump-sent-image <dir> salva su disco l'immagine esattamente inviata al
+modello (output del preprocessing, o i byte grezzi con --no-preprocess) come
+<dir>/ocr_bench_sent_<model>_<timestamp>.<ext>; il dump avviene prima della
+chiamata API, quindi anche se la chiamata poi fallisce.
+Con --no-preprocess bypassa ImagePreprocessor e invia l'immagine grezza
+(niente auto-rotate a portrait né downscale).
 
 Nessuna scrittura sul DB: niente salvataggi di MatchReport/OCRRawResponse,
 niente transizioni di stato.
 """
 import json
 import re
+import shutil
 import time
 from types import SimpleNamespace
 
@@ -139,6 +146,20 @@ class Command(BaseCommand):
             default=None,
             help="Salva il JSON completo estratto da ciascun modello in <path>/ocr_bench_<model>_<timestamp>.json",
         )
+        parser.add_argument(
+            "--dump-sent-image",
+            default=None,
+            metavar="DIR",
+            help=(
+                "Salva in DIR l'immagine esattamente inviata al modello come "
+                "ocr_bench_sent_<model>_<timestamp>.<ext> (crea DIR se manca)"
+            ),
+        )
+        parser.add_argument(
+            "--no-preprocess",
+            action="store_true",
+            help="Bypassa ImagePreprocessor e invia l'immagine grezza (no auto-rotate, no downscale)",
+        )
 
     def handle(self, *args, **options):
         import os
@@ -177,17 +198,44 @@ class Command(BaseCommand):
             file=SimpleNamespace(path=image_path),
         )
 
+        preprocess = not options["no_preprocess"]
+        dump_dir = options["dump_sent_image"]
+        if dump_dir:
+            os.makedirs(dump_dir, exist_ok=True)
+
         self.stdout.write(f"\nImmagine: {image_path}")
-        self.stdout.write(f"Modelli: {', '.join(models)}\n")
+        self.stdout.write(f"Modelli: {', '.join(models)}")
+        if not preprocess:
+            self.stdout.write("Preprocessing: BYPASSATO (--no-preprocess)")
+        self.stdout.write("")
         header = f"{'modello':<20} {'confidence':>10} {'latenza':>9} {'tok_in':>8} {'tok_out':>8}"
         self.stdout.write(header)
         self.stdout.write("-" * len(header))
 
         results = {}
+        dumped_paths = []
         for model in models:
+            # Solo kwargs non-default: il contratto della chiamata senza nuovi
+            # flag resta identico a prima.
+            extract_kwargs = {"model": model}
+            if not preprocess:
+                extract_kwargs["preprocess"] = False
+            if dump_dir:
+                ts = timezone.localtime().strftime("%Y%m%d_%H%M%S")
+
+                def dump_sent(sent_path, _model=model, _ts=ts):
+                    ext = os.path.splitext(sent_path)[1] or ".jpg"
+                    dest = os.path.join(
+                        dump_dir, f"ocr_bench_sent_{safe_model_slug(_model)}_{_ts}{ext}"
+                    )
+                    shutil.copyfile(sent_path, dest)
+                    dumped_paths.append(dest)
+
+                extract_kwargs["sent_image_callback"] = dump_sent
+
             start = time.monotonic()
             try:
-                data, _raw = provider.extract_data(bench_report, model=model)
+                data, _raw = provider.extract_data(bench_report, **extract_kwargs)
             except Exception as e:
                 elapsed = time.monotonic() - start
                 self.stdout.write(self.style.ERROR(
@@ -207,6 +255,11 @@ class Command(BaseCommand):
                 f"{tok_out if tok_out is not None else 'N/A':>8}"
             )
             results[model] = data
+
+        if dumped_paths:
+            self.stdout.write("")
+            for path in dumped_paths:
+                self.stdout.write(f"Immagine inviata salvata: {path}")
 
         if options["show"] and results:
             for model, data in results.items():

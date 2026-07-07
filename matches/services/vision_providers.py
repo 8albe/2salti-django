@@ -106,9 +106,17 @@ class GPT4oVisionProvider(BaseVisionProvider):
         from openai import OpenAI
         self.client = OpenAI(api_key=settings.OPENAI_API_KEY)
 
-    def extract_data(self, match_report, model: str = None) -> Dict[str, Any]:
+    def extract_data(self, match_report, model: str = None, preprocess: bool = True,
+                     sent_image_callback=None) -> Dict[str, Any]:
+        """
+        preprocess=False bypassa ImagePreprocessor e invia i byte grezzi del file
+        (debug: nessun auto-rotate né downscale). sent_image_callback, se fornita,
+        riceve il path del file i cui byte vengono effettivamente inviati al modello,
+        prima della chiamata API (quindi anche in caso di errore/refusal successivo).
+        """
         import base64
         import json
+        import mimetypes
         import os
         from django.conf import settings
         from .image_preprocessor import ImagePreprocessor
@@ -117,18 +125,27 @@ class GPT4oVisionProvider(BaseVisionProvider):
         model = model or getattr(settings, "OCR_MODEL", "gpt-4o")
 
         logger.info(f"[GPT4oVisionProvider] Avvio preprocessing per report {match_report.id} (model={model})...")
-        
+
         # Safe access guard (Root cause hardening)
         if not match_report.file:
             raise ValueError("Il referto non ha alcun file associato. Impossibile eseguire OCR.")
 
-        # Preprocessing
+        # Preprocessing (bypassabile per debug)
         original_path = match_report.file.path
-        processed_path = ImagePreprocessor.process(original_path)
-        
-        logger.info(f"[GPT4oVisionProvider] Invio report preprocessato a OpenAI: {processed_path}")
+        if preprocess:
+            processed_path = ImagePreprocessor.process(original_path)
+            mime_type = "image/jpeg"
+        else:
+            logger.info(f"[GPT4oVisionProvider] Preprocessing bypassato per report {match_report.id}: invio immagine grezza.")
+            processed_path = original_path
+            mime_type = mimetypes.guess_type(processed_path)[0] or "image/jpeg"
 
-        # Encoding dell'immagine preprocessata
+        logger.info(f"[GPT4oVisionProvider] Invio report a OpenAI: {processed_path}")
+
+        if sent_image_callback:
+            sent_image_callback(processed_path)
+
+        # Encoding dell'immagine effettivamente inviata
         with open(processed_path, 'rb') as f:
             base64_image = base64.b64encode(f.read()).decode('utf-8')
 
@@ -239,7 +256,7 @@ class GPT4oVisionProvider(BaseVisionProvider):
             {
                 "type": "image_url",
                 "image_url": {
-                    "url": f"data:image/jpeg;base64,{base64_image}"
+                    "url": f"data:{mime_type};base64,{base64_image}"
                 }
             }
         ]

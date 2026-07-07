@@ -8,6 +8,7 @@ import os
 import shutil
 import tempfile
 from io import StringIO
+from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
 from django.core.files.uploadedfile import SimpleUploadedFile
@@ -73,9 +74,15 @@ class OcrBenchCommandTest(TestCase):
         self.addCleanup(patcher.stop)
         mock_provider = MagicMock()
         mock_class.return_value = mock_provider
-        mock_provider.extract_data.side_effect = (
-            lambda report, model=None: (factory(model), "raw")
-        )
+
+        def _fake_extract(report, model=None, preprocess=True, sent_image_callback=None):
+            # Stesso contratto del provider reale: la callback riceve il path
+            # dei byte inviati, prima della chiamata API.
+            if sent_image_callback:
+                sent_image_callback(report.file.path)
+            return factory(model), "raw"
+
+        mock_provider.extract_data.side_effect = _fake_extract
         return mock_provider
 
     def test_iterates_over_multiple_models(self):
@@ -230,6 +237,72 @@ class OcrBenchCommandTest(TestCase):
         self.assertNotIn("Salvato:", output)
         self.assertIn("confidence", output)
 
+    def test_default_call_omits_new_kwargs(self):
+        """Senza --dump-sent-image/--no-preprocess la chiamata al provider è identica a prima."""
+        mock_provider = self._patch_provider()
+        call_command(
+            "ocr_bench", "--image", self.image_path, "--models", "gpt-4o",
+            stdout=StringIO(),
+        )
+        kwargs = mock_provider.extract_data.call_args.kwargs
+        self.assertEqual(set(kwargs), {"model"})
+
+    def test_no_preprocess_propagates_flag(self):
+        """--no-preprocess passa preprocess=False al provider."""
+        mock_provider = self._patch_provider()
+        call_command(
+            "ocr_bench", "--image", self.image_path, "--models", "gpt-4o",
+            "--no-preprocess",
+            stdout=StringIO(),
+        )
+        kwargs = mock_provider.extract_data.call_args.kwargs
+        self.assertIs(kwargs.get("preprocess"), False)
+
+    def test_dump_sent_image_writes_file_per_model(self):
+        """--dump-sent-image salva un file per modello con i byte inviati."""
+        self._patch_provider()
+        dump_dir = os.path.join(tempfile.mkdtemp(), "sent_out")  # dir non esistente
+        self.addCleanup(shutil.rmtree, os.path.dirname(dump_dir))
+        out = StringIO()
+        call_command(
+            "ocr_bench",
+            "--image", self.image_path,
+            "--models", "gpt-4o,gpt-4o-mini",
+            "--dump-sent-image", dump_dir,
+            stdout=out,
+        )
+        files = sorted(os.listdir(dump_dir))
+        self.assertEqual(len(files), 2)
+        prefixes = {f.rsplit("_", 2)[0] for f in files}
+        self.assertEqual(
+            prefixes, {"ocr_bench_sent_gpt-4o", "ocr_bench_sent_gpt-4o-mini"}
+        )
+        for fname in files:
+            self.assertTrue(fname.endswith(".jpg"))
+            with open(os.path.join(dump_dir, fname), "rb") as f:
+                self.assertEqual(f.read(), b"fake image bytes")
+        self.assertIn("Immagine inviata salvata:", out.getvalue())
+
+    def test_dump_sent_image_works_with_no_preprocess(self):
+        """I due flag insieme: dump dei byte grezzi inviati senza preprocessing."""
+        mock_provider = self._patch_provider()
+        dump_dir = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, dump_dir)
+        call_command(
+            "ocr_bench",
+            "--image", self.image_path,
+            "--models", "gpt-4o",
+            "--dump-sent-image", dump_dir,
+            "--no-preprocess",
+            stdout=StringIO(),
+        )
+        kwargs = mock_provider.extract_data.call_args.kwargs
+        self.assertIs(kwargs.get("preprocess"), False)
+        files = os.listdir(dump_dir)
+        self.assertEqual(len(files), 1)
+        with open(os.path.join(dump_dir, files[0]), "rb") as f:
+            self.assertEqual(f.read(), b"fake image bytes")
+
     def test_report_without_normalized_data_warns(self):
         self._patch_provider()
         report = MatchReport.objects.create(
@@ -247,3 +320,105 @@ class OcrBenchCommandTest(TestCase):
         )
         self.assertIn("accuracy non calcolabile", out.getvalue())
         self.assertNotIn("Accuracy exact-match", out.getvalue())
+
+
+def fake_openai_response(payload=None):
+    """Risposta OpenAI finta con JSON valido in schema OCR v2."""
+    content = json.dumps(payload or {
+        "metadata": {"confidence": 0.9},
+        "match_info": {"home_team": "POL. DELTA", "away_team": "VILLA YORK"},
+    })
+    return SimpleNamespace(
+        choices=[SimpleNamespace(message=SimpleNamespace(content=content, refusal=None))],
+        usage=SimpleNamespace(prompt_tokens=100, completion_tokens=50),
+    )
+
+
+class OcrBenchPreprocessBypassEndToEndTest(TestCase):
+    """
+    End-to-end sul provider reale (GPT4oVisionProvider) con client OpenAI
+    patchato e spy su ImagePreprocessor.process: verifica che --no-preprocess
+    salti davvero il preprocessing e che il dump contenga i byte inviati.
+    Nessuna chiamata reale.
+    """
+
+    def setUp(self):
+        fd, self.image_path = tempfile.mkstemp(suffix=".png")
+        with os.fdopen(fd, "wb") as f:
+            f.write(b"raw png bytes")
+        self.addCleanup(os.remove, self.image_path)
+        self.dump_dir = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, self.dump_dir)
+
+    @patch("matches.services.image_preprocessor.ImagePreprocessor.process")
+    @patch("openai.OpenAI")
+    def test_no_preprocess_skips_image_preprocessor(self, mock_openai, mock_process):
+        mock_client = mock_openai.return_value
+        mock_client.chat.completions.create.return_value = fake_openai_response()
+        out = StringIO()
+        call_command(
+            "ocr_bench",
+            "--image", self.image_path,
+            "--models", "gpt-4o",
+            "--no-preprocess",
+            "--dump-sent-image", self.dump_dir,
+            stdout=out,
+        )
+        mock_process.assert_not_called()
+        # Il dump è il file grezzo, con estensione originale
+        files = os.listdir(self.dump_dir)
+        self.assertEqual(len(files), 1)
+        self.assertTrue(files[0].startswith("ocr_bench_sent_gpt-4o_"))
+        self.assertTrue(files[0].endswith(".png"))
+        with open(os.path.join(self.dump_dir, files[0]), "rb") as f:
+            self.assertEqual(f.read(), b"raw png bytes")
+        # Il data URI riflette il mime reale del file grezzo
+        messages = mock_client.chat.completions.create.call_args.kwargs["messages"]
+        image_url = messages[1]["content"][1]["image_url"]["url"]
+        self.assertTrue(image_url.startswith("data:image/png;base64,"))
+
+    @patch("matches.services.image_preprocessor.ImagePreprocessor.process")
+    @patch("openai.OpenAI")
+    def test_default_still_preprocesses_and_dumps_processed_file(self, mock_openai, mock_process):
+        fd, processed_path = tempfile.mkstemp(suffix=".jpg")
+        with os.fdopen(fd, "wb") as f:
+            f.write(b"processed jpg bytes")
+        self.addCleanup(os.remove, processed_path)
+        mock_process.return_value = processed_path
+        mock_client = mock_openai.return_value
+        mock_client.chat.completions.create.return_value = fake_openai_response()
+        call_command(
+            "ocr_bench",
+            "--image", self.image_path,
+            "--models", "gpt-4o",
+            "--dump-sent-image", self.dump_dir,
+            stdout=StringIO(),
+        )
+        mock_process.assert_called_once_with(self.image_path)
+        # Il dump è l'output del preprocessing, non l'originale
+        files = os.listdir(self.dump_dir)
+        self.assertEqual(len(files), 1)
+        self.assertTrue(files[0].endswith(".jpg"))
+        with open(os.path.join(self.dump_dir, files[0]), "rb") as f:
+            self.assertEqual(f.read(), b"processed jpg bytes")
+
+    @patch("matches.services.image_preprocessor.ImagePreprocessor.process")
+    @patch("openai.OpenAI")
+    def test_dump_happens_even_if_api_call_fails(self, mock_openai, mock_process):
+        """Il dump precede la chiamata API: resta su disco anche su errore/refusal."""
+        mock_client = mock_openai.return_value
+        mock_client.chat.completions.create.side_effect = Exception("Refusal simulato")
+        out = StringIO()
+        call_command(
+            "ocr_bench",
+            "--image", self.image_path,
+            "--models", "gpt-4o",
+            "--no-preprocess",
+            "--dump-sent-image", self.dump_dir,
+            stdout=out,
+        )
+        self.assertIn("ERRORE", out.getvalue())
+        files = os.listdir(self.dump_dir)
+        self.assertEqual(len(files), 1)
+        with open(os.path.join(self.dump_dir, files[0]), "rb") as f:
+            self.assertEqual(f.read(), b"raw png bytes")
