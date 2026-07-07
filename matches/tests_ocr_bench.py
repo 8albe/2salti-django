@@ -321,6 +321,79 @@ class OcrBenchCommandTest(TestCase):
         self.assertIn("accuracy non calcolabile", out.getvalue())
         self.assertNotIn("Accuracy exact-match", out.getvalue())
 
+    # --- Provider Gemini (SDK sempre mockato) ---------------------------------
+
+    def _patch_gemini_provider(self, extraction_factory=None):
+        """Come _patch_provider ma sul simbolo GeminiVisionProvider del comando."""
+        factory = extraction_factory or fake_extraction
+        patcher = patch("matches.management.commands.ocr_bench.GeminiVisionProvider")
+        mock_class = patcher.start()
+        self.addCleanup(patcher.stop)
+        mock_provider = MagicMock()
+        mock_class.return_value = mock_provider
+
+        def _fake_extract(report, model=None, preprocess=True, sent_image_callback=None):
+            if sent_image_callback:
+                sent_image_callback(report.file.path)
+            return factory(model), "raw"
+
+        mock_provider.extract_data.side_effect = _fake_extract
+        return mock_provider
+
+    def test_provider_gemini_end_to_end_mocked(self):
+        """--provider gemini gira end-to-end (mockato) con --show e --save-dir."""
+        mock_provider = self._patch_gemini_provider()
+        save_dir = os.path.join(tempfile.mkdtemp(), "bench_out")
+        self.addCleanup(shutil.rmtree, os.path.dirname(save_dir))
+        out = StringIO()
+        call_command(
+            "ocr_bench",
+            "--image", self.image_path,
+            "--provider", "gemini",
+            "--models", "gemini-2.5-flash,gemini-3.1-pro",
+            "--show",
+            "--save-dir", save_dir,
+            stdout=out,
+        )
+        output = out.getvalue()
+        self.assertIn("Provider: gemini", output)
+        self.assertIn("=== gemini-2.5-flash ===", output)
+        self.assertIn("=== gemini-3.1-pro ===", output)
+        self.assertIn("POL. DELTA", output)
+        # I due modelli Gemini sono passati al provider mockato
+        called_models = [
+            c.kwargs["model"] for c in mock_provider.extract_data.call_args_list
+        ]
+        self.assertEqual(called_models, ["gemini-2.5-flash", "gemini-3.1-pro"])
+        # JSON salvati per modello
+        files = sorted(os.listdir(save_dir))
+        self.assertEqual(len(files), 2)
+        self.assertTrue(all(f.startswith("ocr_bench_gemini-") for f in files))
+
+    @override_settings(GEMINI_MODEL="gemini-2.5-flash")
+    def test_provider_gemini_default_model_from_settings(self):
+        """--provider gemini senza --models usa settings.GEMINI_MODEL."""
+        mock_provider = self._patch_gemini_provider()
+        call_command(
+            "ocr_bench", "--image", self.image_path, "--provider", "gemini",
+            stdout=StringIO(),
+        )
+        self.assertEqual(mock_provider.extract_data.call_count, 1)
+        self.assertEqual(
+            mock_provider.extract_data.call_args.kwargs["model"], "gemini-2.5-flash"
+        )
+
+    def test_default_provider_is_openai(self):
+        """Senza --provider si usa ancora GPT4oVisionProvider (nessuna regressione)."""
+        gpt_mock = self._patch_provider()
+        gemini_mock = self._patch_gemini_provider()
+        call_command(
+            "ocr_bench", "--image", self.image_path, "--models", "gpt-4o",
+            stdout=StringIO(),
+        )
+        self.assertEqual(gpt_mock.extract_data.call_count, 1)
+        self.assertEqual(gemini_mock.extract_data.call_count, 0)
+
 
 def fake_openai_response(payload=None):
     """Risposta OpenAI finta con JSON valido in schema OCR v2."""
