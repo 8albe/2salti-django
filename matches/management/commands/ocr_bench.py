@@ -30,7 +30,16 @@ from django.core.management.base import BaseCommand, CommandError
 from django.utils import timezone
 
 from matches.models import MatchReport
-from matches.services.vision_providers import GPT4oVisionProvider
+from matches.services.vision_providers import GPT4oVisionProvider, GeminiVisionProvider
+
+# Mappa provider bench: nome CLI -> (setting del modello di default, fallback).
+# NB: la CLASSE del provider viene risolta a runtime dentro handle() leggendo i
+# simboli di questo modulo, così i test possono patchare GPT4oVisionProvider /
+# GeminiVisionProvider senza che un riferimento catturato all'import li scavalchi.
+PROVIDER_MODEL_SETTINGS = {
+    "openai": ("OCR_MODEL", "gpt-4o"),
+    "gemini": ("GEMINI_MODEL", "gemini-2.5-flash"),
+}
 
 # Campi top-level confrontati per l'accuracy exact-match
 ACCURACY_FIELDS = [
@@ -118,17 +127,25 @@ def build_show_block(model, data):
 
 class Command(BaseCommand):
     help = (
-        "Confronta modelli OCR sulla stessa immagine (read-only, chiamate reali a OpenAI). "
-        "Uso: ocr_bench --image <path> [--models gpt-4o,gpt-4o-mini] [--report-id <id>] "
-        "[--show] [--save-dir <path>]"
+        "Confronta modelli OCR sulla stessa immagine (read-only, chiamate reali all'LLM). "
+        "Uso: ocr_bench --image <path> [--provider openai|gemini] "
+        "[--models gpt-4o,gpt-4o-mini] [--report-id <id>] [--show] [--save-dir <path>]"
     )
 
     def add_arguments(self, parser):
         parser.add_argument("--image", required=True, help="Path dell'immagine del referto")
         parser.add_argument(
+            "--provider",
+            choices=sorted(PROVIDER_MODEL_SETTINGS.keys()),
+            default="openai",
+            help="Provider da istanziare per questo run (default: openai). "
+                 "Lancia lo stesso referto con --provider gemini per confrontarli.",
+        )
+        parser.add_argument(
             "--models",
             default=None,
-            help="Lista di modelli separati da virgola (default: settings.OCR_MODEL)",
+            help="Lista di modelli separati da virgola "
+                 "(default: modello del provider da settings, es. OCR_MODEL / GEMINI_MODEL)",
         )
         parser.add_argument(
             "--report-id",
@@ -168,10 +185,18 @@ class Command(BaseCommand):
         if not os.path.isfile(image_path):
             raise CommandError(f"Immagine non trovata: {image_path}")
 
+        provider_name = options["provider"]
+        model_setting, model_fallback = PROVIDER_MODEL_SETTINGS[provider_name]
+        # Risoluzione a runtime: rispetta gli eventuali patch dei test.
+        provider_cls = {
+            "openai": GPT4oVisionProvider,
+            "gemini": GeminiVisionProvider,
+        }[provider_name]
+
         if options["models"]:
             models = [m.strip() for m in options["models"].split(",") if m.strip()]
         else:
-            models = [getattr(settings, "OCR_MODEL", "gpt-4o")]
+            models = [getattr(settings, model_setting, model_fallback)]
         if not models:
             raise CommandError("Nessun modello specificato.")
 
@@ -191,7 +216,7 @@ class Command(BaseCommand):
                     f"Report {report.pk} senza normalized_data: accuracy non calcolabile."
                 ))
 
-        provider = GPT4oVisionProvider()
+        provider = provider_cls()
         # Stub minimale: extract_data usa solo .id (logging) e .file.path
         bench_report = SimpleNamespace(
             id=f"bench:{os.path.basename(image_path)}",
@@ -204,6 +229,7 @@ class Command(BaseCommand):
             os.makedirs(dump_dir, exist_ok=True)
 
         self.stdout.write(f"\nImmagine: {image_path}")
+        self.stdout.write(f"Provider: {provider_name}")
         self.stdout.write(f"Modelli: {', '.join(models)}")
         if not preprocess:
             self.stdout.write("Preprocessing: BYPASSATO (--no-preprocess)")

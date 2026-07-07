@@ -203,10 +203,10 @@ class OCRService:
         """Ritorna il provider configurato in base ai settings."""
         if cls._provider is None:
             from django.conf import settings
-            from .vision_providers import MockVisionProvider, GPT4oVisionProvider
-            
+            from .vision_providers import MockVisionProvider, GPT4oVisionProvider, GeminiVisionProvider
+
             provider_type = getattr(settings, 'OCR_PROVIDER', 'mock').lower()
-            
+
             if provider_type == 'gpt4o' or provider_type == 'openai':
                 api_key = getattr(settings, 'OPENAI_API_KEY', None)
                 if not api_key:
@@ -215,6 +215,14 @@ class OCRService:
                     cls._provider = GPT4oVisionProvider()
                 except Exception as e:
                     raise RuntimeError(f"Impossibile inizializzare GPT4oVisionProvider: {str(e)}")
+            elif provider_type == 'gemini':
+                api_key = getattr(settings, 'GEMINI_API_KEY', None)
+                if not api_key:
+                    raise ValueError("OCR_PROVIDER configurato come 'gemini', ma GEMINI_API_KEY mancante.")
+                try:
+                    cls._provider = GeminiVisionProvider()
+                except Exception as e:
+                    raise RuntimeError(f"Impossibile inizializzare GeminiVisionProvider: {str(e)}")
             else:
                 cls._provider = MockVisionProvider()
         return cls._provider

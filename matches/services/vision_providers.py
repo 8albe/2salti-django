@@ -1,9 +1,113 @@
 import logging
 import json
+from types import SimpleNamespace
 from typing import Dict, Any, Tuple
 from django.utils import timezone
 
 logger = logging.getLogger(__name__)
+
+# Testo utente inviato insieme all'immagine del referto (condiviso tra i provider vivi).
+OCR_USER_TEXT = "Estrai i dati da questo referto fotografato. Rispondi solo con il JSON."
+
+# Prompt di sistema hardened v2 (per-field confidence + null preference + ambiguity channel).
+# Condiviso 1:1 tra GPT4oVisionProvider e GeminiVisionProvider: stesso schema OCR v2 in output.
+OCR_SYSTEM_PROMPT_V2 = """
+        Sei un esperto di analisi di referti di partite di pallanuoto (FIN - GUG). 
+        Riceverai la FOTO di un referto ufficiale. Segui queste istruzioni spaziali:
+        
+        1. SQUADRE E PUNTEGGIO:
+           - In alto a sinistra (Tabella 1): Squadra CASA (es. POL. DELTA). 'Risultato finale' è il numero in fondo a questa casella.
+           - In basso a sinistra (Tabella 2): Squadra OSPITE (es. VILLA YORK). 'Risultato finale' è il numero in fondo a questa casella.
+           - Punteggi parziali: Nella tabella 'Risultati parziali' al centro.
+        
+        2. ROSTER (GIOCATORI):
+           - Sotto il nome di ogni squadra c'è l'elenco 'Giocatori'. Estrai 'N.' (numero calottina) e 'Cognome e Nome'.
+           - Un roster tipico ha tra 7 e 15 giocatori per squadra.
+        
+        3. EVENTI (CRONOLOGIA):
+           - TABELLE A DESTRA ('STORIA CRONOMETRICA'): Elenca tutti gli eventi.
+           - Colonne: Tempo (Minuto), N. Calottina (chi fa l'azione), Evento (GOL, ET per Esclusione 20", TR per Rigore, ecc.).
+           - Importante: Trascrivi i gol (GOL) e le espulsioni (ET come EXCLUSION_20).
+        
+        REGOLE CRITICHE:
+        - Se un dato è ILLEGGIBILE, PARZIALE o AMBIGUO: usa null. NON INDOVINARE MAI.
+        - Se un nome è parzialmente leggibile, trascrivi solo le lettere chiare e aggiungi "?" (es. "ROSS?" o "M?RETTI").
+        - Se un numero è ambiguo (es. potrebbe essere 3 o 8), usa null e segnalalo in extraction_warnings.
+        - Se il punteggio di un quarto non è leggibile, usa null per quel quarto.
+        
+        FORMATO JSON RICHIESTO:
+        {
+            "metadata": {
+                "schema_version": "2.0",
+                "confidence": <0.0-1.0 fiducia complessiva>,
+                "confidence_fields": {
+                    "home_team": <0.0-1.0>,
+                    "away_team": <0.0-1.0>,
+                    "final_score": <0.0-1.0>,
+                    "quarters": <0.0-1.0>,
+                    "home_roster": <0.0-1.0>,
+                    "away_roster": <0.0-1.0>,
+                    "events": <0.0-1.0>,
+                    "officials": <0.0-1.0>
+                },
+                "extraction_warnings": [
+                    "<stringa che descrive ogni campo ambiguo o parzialmente leggibile>"
+                ]
+            },
+            "match_info": {
+                "home_team": "<nome squadra o null>",
+                "away_team": "<nome squadra o null>",
+                "competition": "<nome campionato o null>",
+                "date": "<YYYY-MM-DD o null se illeggibile>",
+                "city": "<città o null>",
+                "venue": "<nome impianto specifico (es: Piscina Comunale) o null>",
+                "round": "<giornata/fase (es: Giornata 5, Finale) o null>",
+                "group": "<girone (es: Girone A) o null>"
+            },
+            "officials": {
+                "confidence": <0.0-1.0 fiducia sulla lettura degli ufficiali>,
+                "referees": [
+                    {"name": "<COGNOME NOME o null>", "role": "1st|2nd|null"}
+                ],
+                "timekeeper": "<nome segnapunti o null>"
+            },
+            "scores": {
+                "final_score": "<X-Y o null>",
+                "quarters": {
+                    "1": [<home, away> o null],
+                    "2": [<home, away> o null],
+                    "3": [<home, away> or null],
+                    "4": [<home, away> o null]
+                }
+            },
+            "teams": {
+                "home": {
+                    "name": "<nome>",
+                    "coach": "<nome allenatore o null>",
+                    "confidence": <0.0-1.0 fiducia sulla lettura del roster>,
+                    "players": [{"number": <int o null>, "name": "<cognome nome>"}]
+                },
+                "away": {
+                    "name": "<nome>",
+                    "coach": "<nome allenatore o null>",
+                    "confidence": <0.0-1.0 fiducia sulla lettura del roster>,
+                    "players": [{"number": <int o null>, "name": "<cognome nome>"}]
+                }
+            },
+            "events": [
+                {
+                    "type": "GOAL|EXCLUSION_20|YELLOW_CARD|RED_CARD|TIMEOUT|OTHER",
+                    "player_name": "<nome giocatore o null (null per timeout squadra)>",
+                    "team": "home|away",
+                    "minute": <int o null>,
+                    "quarter": <int o null>,
+                    "sanction_duration": <null o intero secondi (es: 20 per esclusione 20 secondi)>
+                }
+            ]
+        }
+        
+        Rispondi SOLO con il JSON. Non aggiungere testo, commenti o markdown.
+        """
 
 class BaseVisionProvider:
     """
@@ -149,109 +253,12 @@ class GPT4oVisionProvider(BaseVisionProvider):
         with open(processed_path, 'rb') as f:
             base64_image = base64.b64encode(f.read()).decode('utf-8')
 
-        # Hardened v2 prompt — per-field confidence + null preference + ambiguity channel
-        system_prompt = """
-        Sei un esperto di analisi di referti di partite di pallanuoto (FIN - GUG). 
-        Riceverai la FOTO di un referto ufficiale. Segui queste istruzioni spaziali:
-        
-        1. SQUADRE E PUNTEGGIO:
-           - In alto a sinistra (Tabella 1): Squadra CASA (es. POL. DELTA). 'Risultato finale' è il numero in fondo a questa casella.
-           - In basso a sinistra (Tabella 2): Squadra OSPITE (es. VILLA YORK). 'Risultato finale' è il numero in fondo a questa casella.
-           - Punteggi parziali: Nella tabella 'Risultati parziali' al centro.
-        
-        2. ROSTER (GIOCATORI):
-           - Sotto il nome di ogni squadra c'è l'elenco 'Giocatori'. Estrai 'N.' (numero calottina) e 'Cognome e Nome'.
-           - Un roster tipico ha tra 7 e 15 giocatori per squadra.
-        
-        3. EVENTI (CRONOLOGIA):
-           - TABELLE A DESTRA ('STORIA CRONOMETRICA'): Elenca tutti gli eventi.
-           - Colonne: Tempo (Minuto), N. Calottina (chi fa l'azione), Evento (GOL, ET per Esclusione 20", TR per Rigore, ecc.).
-           - Importante: Trascrivi i gol (GOL) e le espulsioni (ET come EXCLUSION_20).
-        
-        REGOLE CRITICHE:
-        - Se un dato è ILLEGGIBILE, PARZIALE o AMBIGUO: usa null. NON INDOVINARE MAI.
-        - Se un nome è parzialmente leggibile, trascrivi solo le lettere chiare e aggiungi "?" (es. "ROSS?" o "M?RETTI").
-        - Se un numero è ambiguo (es. potrebbe essere 3 o 8), usa null e segnalalo in extraction_warnings.
-        - Se il punteggio di un quarto non è leggibile, usa null per quel quarto.
-        
-        FORMATO JSON RICHIESTO:
-        {
-            "metadata": {
-                "schema_version": "2.0",
-                "confidence": <0.0-1.0 fiducia complessiva>,
-                "confidence_fields": {
-                    "home_team": <0.0-1.0>,
-                    "away_team": <0.0-1.0>,
-                    "final_score": <0.0-1.0>,
-                    "quarters": <0.0-1.0>,
-                    "home_roster": <0.0-1.0>,
-                    "away_roster": <0.0-1.0>,
-                    "events": <0.0-1.0>,
-                    "officials": <0.0-1.0>
-                },
-                "extraction_warnings": [
-                    "<stringa che descrive ogni campo ambiguo o parzialmente leggibile>"
-                ]
-            },
-            "match_info": {
-                "home_team": "<nome squadra o null>",
-                "away_team": "<nome squadra o null>",
-                "competition": "<nome campionato o null>",
-                "date": "<YYYY-MM-DD o null se illeggibile>",
-                "city": "<città o null>",
-                "venue": "<nome impianto specifico (es: Piscina Comunale) o null>",
-                "round": "<giornata/fase (es: Giornata 5, Finale) o null>",
-                "group": "<girone (es: Girone A) o null>"
-            },
-            "officials": {
-                "confidence": <0.0-1.0 fiducia sulla lettura degli ufficiali>,
-                "referees": [
-                    {"name": "<COGNOME NOME o null>", "role": "1st|2nd|null"}
-                ],
-                "timekeeper": "<nome segnapunti o null>"
-            },
-            "scores": {
-                "final_score": "<X-Y o null>",
-                "quarters": {
-                    "1": [<home, away> o null],
-                    "2": [<home, away> o null],
-                    "3": [<home, away> or null],
-                    "4": [<home, away> o null]
-                }
-            },
-            "teams": {
-                "home": {
-                    "name": "<nome>",
-                    "coach": "<nome allenatore o null>",
-                    "confidence": <0.0-1.0 fiducia sulla lettura del roster>,
-                    "players": [{"number": <int o null>, "name": "<cognome nome>"}]
-                },
-                "away": {
-                    "name": "<nome>",
-                    "coach": "<nome allenatore o null>",
-                    "confidence": <0.0-1.0 fiducia sulla lettura del roster>,
-                    "players": [{"number": <int o null>, "name": "<cognome nome>"}]
-                }
-            },
-            "events": [
-                {
-                    "type": "GOAL|EXCLUSION_20|YELLOW_CARD|RED_CARD|TIMEOUT|OTHER",
-                    "player_name": "<nome giocatore o null (null per timeout squadra)>",
-                    "team": "home|away",
-                    "minute": <int o null>,
-                    "quarter": <int o null>,
-                    "sanction_duration": <null o intero secondi (es: 20 per esclusione 20 secondi)>
-                }
-            ]
-        }
-        
-        Rispondi SOLO con il JSON. Non aggiungere testo, commenti o markdown.
-        """
+        system_prompt = OCR_SYSTEM_PROMPT_V2
 
         user_content = [
             {
                 "type": "text",
-                "text": "Estrai i dati da questo referto fotografato. Rispondi solo con il JSON."
+                "text": OCR_USER_TEXT
             },
             {
                 "type": "image_url",
@@ -305,11 +312,14 @@ class GPT4oVisionProvider(BaseVisionProvider):
 
     @staticmethod
     def _normalize_response(data: Dict[str, Any], processed_path: str, original_path: str,
-                            model: str = "gpt-4o", usage=None) -> Dict[str, Any]:
+                            model: str = "gpt-4o", usage=None,
+                            provider: str = "GPT4oVisionProvider-v2-hardened") -> Dict[str, Any]:
         """
-        Normalize GPT-4o response to ensure consistent structure.
+        Normalize a vision-provider response into the OCR v2 schema.
         Fills in missing optional sections with safe defaults.
-        Trims whitespace from string fields.
+        Trims whitespace from string fields. Condiviso da GPT4oVisionProvider e
+        GeminiVisionProvider: passare `provider` per marcare la provenienza.
+        `usage`, se fornito, espone .prompt_tokens / .completion_tokens.
         """
         # Ensure metadata structure
         if "metadata" not in data:
@@ -320,7 +330,7 @@ class GPT4oVisionProvider(BaseVisionProvider):
         meta.setdefault("confidence_fields", {})
         meta.setdefault("extraction_warnings", [])
         meta.update({
-            "provider": "GPT4oVisionProvider-v2-hardened",
+            "provider": provider,
             "extracted_at": timezone.now().isoformat(),
             "model": model,
             "preprocessed": processed_path != original_path
@@ -386,3 +396,103 @@ class GPT4oVisionProvider(BaseVisionProvider):
         data.setdefault("events", [])
 
         return data
+
+
+class GeminiVisionProvider(BaseVisionProvider):
+    """
+    Provider reale che utilizza Google Gemini (SDK google-genai) per estrarre
+    dati dal referto. Espone la STESSA interfaccia extract_data di
+    GPT4oVisionProvider (stessi parametri model/preprocess/sent_image_callback,
+    stesso schema OCR v2 in output, stesso prompt di sistema OCR_SYSTEM_PROMPT_V2).
+    Il modello di default è letto da settings.GEMINI_MODEL con fallback a
+    'gemini-2.5-flash'; --models nel bench può passare qualsiasi model string.
+    """
+    def __init__(self):
+        from django.conf import settings
+        from google import genai
+        self.client = genai.Client(api_key=getattr(settings, "GEMINI_API_KEY", ""))
+
+    def extract_data(self, match_report, model: str = None, preprocess: bool = True,
+                     sent_image_callback=None) -> Tuple[Dict[str, Any], str]:
+        """
+        Stesso contratto di GPT4oVisionProvider.extract_data:
+        preprocess=False bypassa ImagePreprocessor e invia i byte grezzi;
+        sent_image_callback, se fornita, riceve il path del file effettivamente
+        inviato al modello, prima della chiamata API. Ritorna (data, raw_content).
+        """
+        import mimetypes
+        import os
+        from django.conf import settings
+        from google.genai import types
+
+        # Modello: override per-chiamata > settings.GEMINI_MODEL > default
+        model = model or getattr(settings, "GEMINI_MODEL", "gemini-2.5-flash")
+
+        logger.info(f"[GeminiVisionProvider] Avvio preprocessing per report {match_report.id} (model={model})...")
+
+        if not match_report.file:
+            raise ValueError("Il referto non ha alcun file associato. Impossibile eseguire OCR.")
+
+        # Preprocessing (bypassabile per debug) — identico al provider OpenAI.
+        # Import lazy: nel path raw (preprocess=False) non tocchiamo cv2.
+        original_path = match_report.file.path
+        if preprocess:
+            from .image_preprocessor import ImagePreprocessor
+            processed_path = ImagePreprocessor.process(original_path)
+            mime_type = "image/jpeg"
+        else:
+            logger.info(f"[GeminiVisionProvider] Preprocessing bypassato per report {match_report.id}: invio immagine grezza.")
+            processed_path = original_path
+            mime_type = mimetypes.guess_type(processed_path)[0] or "image/jpeg"
+
+        logger.info(f"[GeminiVisionProvider] Invio report a Gemini: {processed_path}")
+
+        if sent_image_callback:
+            sent_image_callback(processed_path)
+
+        with open(processed_path, "rb") as f:
+            image_bytes = f.read()
+
+        try:
+            response = self.client.models.generate_content(
+                model=model,
+                contents=[
+                    types.Part.from_bytes(data=image_bytes, mime_type=mime_type),
+                    OCR_USER_TEXT,
+                ],
+                config=types.GenerateContentConfig(
+                    system_instruction=OCR_SYSTEM_PROMPT_V2,
+                    response_mime_type="application/json",
+                    max_output_tokens=4000,
+                ),
+            )
+
+            content = response.text
+            logger.info(f"[GeminiVisionProvider] Risposta Gemini ricevuta (lunghezza: {len(content) if content else 0})")
+
+            if not content:
+                raise Exception("Gemini ha restituito un contenuto vuoto.")
+
+            data = json.loads(content)
+
+            # token_usage per il confronto costi (N/A se l'SDK non lo espone)
+            usage = None
+            usage_meta = getattr(response, "usage_metadata", None)
+            if usage_meta is not None:
+                usage = SimpleNamespace(
+                    prompt_tokens=getattr(usage_meta, "prompt_token_count", None),
+                    completion_tokens=getattr(usage_meta, "candidates_token_count", None),
+                )
+
+            data = GPT4oVisionProvider._normalize_response(
+                data, processed_path, original_path,
+                model=model,
+                usage=usage,
+                provider="GeminiVisionProvider-v1",
+            )
+
+            return data, content
+
+        except Exception as e:
+            logger.error(f"Errore Gemini: {str(e)}")
+            raise Exception(f"Errore durante la chiamata a Gemini: {str(e)}")
