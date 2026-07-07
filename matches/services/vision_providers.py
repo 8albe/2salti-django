@@ -106,13 +106,17 @@ class GPT4oVisionProvider(BaseVisionProvider):
         from openai import OpenAI
         self.client = OpenAI(api_key=settings.OPENAI_API_KEY)
 
-    def extract_data(self, match_report) -> Dict[str, Any]:
+    def extract_data(self, match_report, model: str = None) -> Dict[str, Any]:
         import base64
         import json
         import os
+        from django.conf import settings
         from .image_preprocessor import ImagePreprocessor
-        
-        logger.info(f"[GPT4oVisionProvider] Avvio preprocessing per report {match_report.id}...")
+
+        # Modello: override per-chiamata > settings.OCR_MODEL > default storico
+        model = model or getattr(settings, "OCR_MODEL", "gpt-4o")
+
+        logger.info(f"[GPT4oVisionProvider] Avvio preprocessing per report {match_report.id} (model={model})...")
         
         # Safe access guard (Root cause hardening)
         if not match_report.file:
@@ -243,7 +247,7 @@ class GPT4oVisionProvider(BaseVisionProvider):
         try:
             import json
             response = self.client.chat.completions.create(
-                model="gpt-4o",
+                model=model,
                 messages=[
                     {"role": "system", "content": system_prompt},
                     {"role": "user", "content": user_content}
@@ -263,9 +267,13 @@ class GPT4oVisionProvider(BaseVisionProvider):
                 raise Exception("OpenAI ha restituito un contenuto vuoto.")
 
             data = json.loads(content)
-            
+
             # Normalize the response to ensure consistent structure
-            data = self._normalize_response(data, processed_path, original_path)
+            data = self._normalize_response(
+                data, processed_path, original_path,
+                model=model,
+                usage=getattr(response, "usage", None),
+            )
             
             # Pulizia file temporaneo se diverso dall'originale
             if processed_path != original_path and os.path.exists(processed_path):
@@ -278,7 +286,8 @@ class GPT4oVisionProvider(BaseVisionProvider):
             raise Exception(f"Errore durante la chiamata a OpenAI: {str(e)}")
 
     @staticmethod
-    def _normalize_response(data: Dict[str, Any], processed_path: str, original_path: str) -> Dict[str, Any]:
+    def _normalize_response(data: Dict[str, Any], processed_path: str, original_path: str,
+                            model: str = "gpt-4o", usage=None) -> Dict[str, Any]:
         """
         Normalize GPT-4o response to ensure consistent structure.
         Fills in missing optional sections with safe defaults.
@@ -295,9 +304,14 @@ class GPT4oVisionProvider(BaseVisionProvider):
         meta.update({
             "provider": "GPT4oVisionProvider-v2-hardened",
             "extracted_at": timezone.now().isoformat(),
-            "model": "gpt-4o",
+            "model": model,
             "preprocessed": processed_path != original_path
         })
+        if usage is not None:
+            meta["token_usage"] = {
+                "prompt_tokens": getattr(usage, "prompt_tokens", None),
+                "completion_tokens": getattr(usage, "completion_tokens", None),
+            }
 
         # Ensure match_info
         data.setdefault("match_info", {})
