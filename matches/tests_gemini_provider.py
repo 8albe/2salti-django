@@ -121,7 +121,7 @@ class GeminiVisionProviderTest(TestCase):
 
     def test_extract_data_respects_preprocess_true(self):
         response = SimpleNamespace(
-            text=_gemini_json_payload("gemini-3.1-pro"),
+            text=_gemini_json_payload("gemini-3.1-pro-preview"),
             usage_metadata=None,  # SDK senza usage -> token N/A
         )
         provider = self._make_provider(response)
@@ -138,7 +138,7 @@ class GeminiVisionProviderTest(TestCase):
                    return_value=processed) as mock_proc:
             data, _raw = provider.extract_data(
                 self.report,
-                model="gemini-3.1-pro",
+                model="gemini-3.1-pro-preview",
                 preprocess=True,
                 sent_image_callback=sent.append,
             )
@@ -157,6 +157,59 @@ class GeminiVisionProviderTest(TestCase):
             with self.assertRaises(Exception) as ctx:
                 provider.extract_data(self.report, preprocess=False)
         self.assertIn("Gemini", str(ctx.exception))
+
+    def test_uses_default_max_output_tokens(self):
+        """Senza setting esplicito, il provider alza il limite di output a 16000."""
+        response = SimpleNamespace(
+            text=_gemini_json_payload("gemini-2.5-flash"), usage_metadata=None
+        )
+        provider = self._make_provider(response)
+        fake_mods = _fake_genai_modules()
+        with patch.dict(sys.modules, fake_mods):
+            provider.extract_data(self.report, preprocess=False)
+        _, cfg_kwargs = fake_mods["google.genai.types"].GenerateContentConfig.call_args
+        self.assertEqual(cfg_kwargs["max_output_tokens"], 16000)
+
+    @override_settings(OCR_MAX_OUTPUT_TOKENS=12345)
+    def test_max_output_tokens_configurable_via_settings(self):
+        """OCR_MAX_OUTPUT_TOKENS in settings sovrascrive il default."""
+        response = SimpleNamespace(
+            text=_gemini_json_payload("gemini-2.5-flash"), usage_metadata=None
+        )
+        provider = self._make_provider(response)
+        fake_mods = _fake_genai_modules()
+        with patch.dict(sys.modules, fake_mods):
+            provider.extract_data(self.report, preprocess=False)
+        _, cfg_kwargs = fake_mods["google.genai.types"].GenerateContentConfig.call_args
+        self.assertEqual(cfg_kwargs["max_output_tokens"], 12345)
+
+    def test_truncated_json_with_max_tokens_raises_readable(self):
+        """JSON troncato + finish_reason MAX_TOKENS -> errore chiaro, non un crash grezzo."""
+        truncated = '{"metadata": {"confidence": 0.9}, "events": [{"type": "GOAL", "player_name": "ROS'
+        response = SimpleNamespace(
+            text=truncated,
+            usage_metadata=None,
+            candidates=[SimpleNamespace(finish_reason=SimpleNamespace(name="MAX_TOKENS"))],
+        )
+        provider = self._make_provider(response)
+        with patch.dict(sys.modules, _fake_genai_modules()):
+            with self.assertRaises(Exception) as ctx:
+                provider.extract_data(self.report, preprocess=False)
+        msg = str(ctx.exception)
+        self.assertIn("troncato", msg)
+        self.assertIn("MAX_TOKENS", msg)
+        self.assertIn("OCR_MAX_OUTPUT_TOKENS", msg)
+        # Non deve propagare un JSONDecodeError grezzo.
+        self.assertNotIsInstance(ctx.exception, json.JSONDecodeError)
+
+    def test_invalid_json_without_finish_reason_raises_readable(self):
+        """JSON invalido senza finish_reason: messaggio 'troncato/invalido' leggibile."""
+        response = SimpleNamespace(text="questo non e' json", usage_metadata=None)
+        provider = self._make_provider(response)
+        with patch.dict(sys.modules, _fake_genai_modules()):
+            with self.assertRaises(Exception) as ctx:
+                provider.extract_data(self.report, preprocess=False)
+        self.assertIn("JSON troncato/invalido", str(ctx.exception))
 
 
 class GeminiFactoryTest(TestCase):

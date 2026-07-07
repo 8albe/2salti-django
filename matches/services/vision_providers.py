@@ -398,6 +398,25 @@ class GPT4oVisionProvider(BaseVisionProvider):
         return data
 
 
+def _gemini_finish_reason(response):
+    """
+    Estrae il finish_reason del primo candidate se l'SDK google-genai lo espone
+    (es. 'MAX_TOKENS' quando l'output viene troncato). Ritorna una stringa o None.
+    Difensivo: qualunque forma inattesa della response non deve far esplodere il parse.
+    """
+    try:
+        candidates = getattr(response, "candidates", None) or []
+        if not candidates:
+            return None
+        fr = getattr(candidates[0], "finish_reason", None)
+        if fr is None:
+            return None
+        # google-genai espone un enum: preferisci .name, fallback a str().
+        return getattr(fr, "name", None) or str(fr)
+    except Exception:
+        return None
+
+
 class GeminiVisionProvider(BaseVisionProvider):
     """
     Provider reale che utilizza Google Gemini (SDK google-genai) per estrarre
@@ -453,6 +472,12 @@ class GeminiVisionProvider(BaseVisionProvider):
         with open(processed_path, "rb") as f:
             image_bytes = f.read()
 
+        # Limite di output token: i referti densi (molti eventi + due roster) troncano
+        # facilmente a 4000, producendo JSON incompleto. Default alto ma entro il massimo
+        # supportato dai modelli Gemini candidati (2.5-flash: 65k; 3.x pro-preview: ampio).
+        # Configurabile via settings.OCR_MAX_OUTPUT_TOKENS senza toccare il codice.
+        max_output_tokens = getattr(settings, "OCR_MAX_OUTPUT_TOKENS", 16000)
+
         try:
             response = self.client.models.generate_content(
                 model=model,
@@ -463,17 +488,36 @@ class GeminiVisionProvider(BaseVisionProvider):
                 config=types.GenerateContentConfig(
                     system_instruction=OCR_SYSTEM_PROMPT_V2,
                     response_mime_type="application/json",
-                    max_output_tokens=4000,
+                    max_output_tokens=max_output_tokens,
                 ),
             )
 
             content = response.text
             logger.info(f"[GeminiVisionProvider] Risposta Gemini ricevuta (lunghezza: {len(content) if content else 0})")
 
-            if not content:
-                raise Exception("Gemini ha restituito un contenuto vuoto.")
+            finish_reason = _gemini_finish_reason(response)
 
-            data = json.loads(content)
+            if not content:
+                suffix = f" (finish_reason={finish_reason})" if finish_reason else ""
+                raise Exception(f"Gemini ha restituito un contenuto vuoto{suffix}.")
+
+            # Parse difensivo: un output troncato per limite token arriva come JSON
+            # incompleto (es. 'Unterminated string'). Trasformalo in un messaggio chiaro
+            # con il motivo del troncamento, così il bench lo marca come fallito e
+            # leggibile invece di propagare un JSONDecodeError grezzo.
+            try:
+                data = json.loads(content)
+            except (ValueError, json.JSONDecodeError) as je:
+                if finish_reason and "MAX_TOKENS" in finish_reason.upper():
+                    hint = (
+                        f" (output troncato per limite token, finish_reason={finish_reason}; "
+                        f"alza OCR_MAX_OUTPUT_TOKENS oltre {max_output_tokens})"
+                    )
+                elif finish_reason:
+                    hint = f" (finish_reason={finish_reason})"
+                else:
+                    hint = ""
+                raise Exception(f"JSON troncato/invalido dalla risposta{hint}: {je}")
 
             # token_usage per il confronto costi (N/A se l'SDK non lo espone)
             usage = None
