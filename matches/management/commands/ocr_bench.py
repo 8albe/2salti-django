@@ -5,15 +5,22 @@ Per ogni modello richiesto esegue una estrazione reale (chiamata OpenAI,
 costo reale) e stampa confidence auto-dichiarata, latenza e token usage.
 Con --report-id confronta l'estrazione grezza con i dati validati
 (normalized_data post-review) e stampa un accuracy exact-match per campo.
+Con --show stampa un blocco leggibile per modello con i campi chiave estratti
+(squadre, punteggio, quarti, roster, eventi) per il confronto a occhio col
+referto fisico. Con --save-dir <path> salva il JSON completo estratto da
+ciascun modello in <path>/ocr_bench_<model>_<timestamp>.json.
 
 Nessuna scrittura sul DB: niente salvataggi di MatchReport/OCRRawResponse,
 niente transizioni di stato.
 """
+import json
+import re
 import time
 from types import SimpleNamespace
 
 from django.conf import settings
 from django.core.management.base import BaseCommand, CommandError
+from django.utils import timezone
 
 from matches.models import MatchReport
 from matches.services.vision_providers import GPT4oVisionProvider
@@ -46,10 +53,67 @@ def extract_comparable_fields(data):
     }
 
 
+ASSENTE = "— assente"
+
+
+def safe_model_slug(model):
+    """Rende il nome del modello sicuro per l'uso in un nome di file."""
+    return re.sub(r"[^A-Za-z0-9._-]+", "_", model)
+
+
+def build_show_block(model, data):
+    """Righe leggibili con i campi chiave estratti da un modello (per --show)."""
+    info = data.get("match_info") or {}
+    scores = data.get("scores") or {}
+    teams = data.get("teams") or {}
+    events = data.get("events") or []
+
+    lines = [f"=== {model} ==="]
+    lines.append(f"  home_team:   {info.get('home_team') or ASSENTE}")
+    lines.append(f"  away_team:   {info.get('away_team') or ASSENTE}")
+    lines.append(f"  final_score: {scores.get('final_score') or ASSENTE}")
+
+    quarters = scores.get("quarters") or {}
+    if quarters:
+        parts = " | ".join(f"{q}: {v}" for q, v in quarters.items())
+        lines.append(f"  quarti ({len(quarters)}): {parts}")
+    else:
+        lines.append(f"  quarti: {ASSENTE}")
+
+    for side, label in (("home", "roster casa"), ("away", "roster ospiti")):
+        players = (teams.get(side) or {}).get("players") or []
+        if players:
+            elenco = ", ".join(
+                f"{p.get('number') if p.get('number') is not None else '?'} "
+                f"{p.get('name') or ASSENTE}"
+                for p in players
+            )
+            lines.append(f"  {label} ({len(players)}): {elenco}")
+        else:
+            lines.append(f"  {label}: {ASSENTE}")
+
+    if events:
+        lines.append(f"  eventi ({len(events)}):")
+        for ev in events:
+            desc = ev.get("type") or ASSENTE
+            if ev.get("player_name"):
+                desc += f" — {ev['player_name']}"
+            extra = [str(x) for x in (ev.get("team"),) if x]
+            if ev.get("quarter") is not None:
+                extra.append(f"Q{ev['quarter']}")
+            if extra:
+                desc += f" ({', '.join(extra)})"
+            lines.append(f"    - {desc}")
+    else:
+        lines.append(f"  eventi: {ASSENTE}")
+    return lines
+
+
 class Command(BaseCommand):
     help = (
         "Confronta modelli OCR sulla stessa immagine (read-only, chiamate reali a OpenAI). "
-        "Uso: ocr_bench --image <path> [--models gpt-4o,gpt-4o-mini] [--report-id <id>]"
+        "Uso: ocr_bench --image <path> [--models gpt-4o,gpt-4o-mini] [--report-id <id>] "
+        "[--show] [--save-dir <path>]"
     )
 
     def add_arguments(self, parser):
@@ -64,6 +128,16 @@ class Command(BaseCommand):
             type=int,
             default=None,
             help="Se il report ha normalized_data validati, calcola accuracy exact-match per campo",
+        )
+        parser.add_argument(
+            "--show",
+            action="store_true",
+            help="Stampa un blocco leggibile per modello con i campi chiave estratti",
+        )
+        parser.add_argument(
+            "--save-dir",
+            default=None,
+            help="Salva il JSON completo estratto da ciascun modello in <path>/ocr_bench_<model>_<timestamp>.json",
         )
 
     def handle(self, *args, **options):
@@ -133,6 +207,25 @@ class Command(BaseCommand):
                 f"{tok_out if tok_out is not None else 'N/A':>8}"
             )
             results[model] = data
+
+        if options["show"] and results:
+            for model, data in results.items():
+                self.stdout.write("")
+                for line in build_show_block(model, data):
+                    self.stdout.write(line)
+
+        if options["save_dir"] and results:
+            save_dir = options["save_dir"]
+            os.makedirs(save_dir, exist_ok=True)
+            ts = timezone.localtime().strftime("%Y%m%d_%H%M%S")
+            self.stdout.write("")
+            for model, data in results.items():
+                path = os.path.join(
+                    save_dir, f"ocr_bench_{safe_model_slug(model)}_{ts}.json"
+                )
+                with open(path, "w", encoding="utf-8") as f:
+                    json.dump(data, f, indent=2, ensure_ascii=False)
+                self.stdout.write(f"Salvato: {path}")
 
         if validated_fields is not None and results:
             self.stdout.write("\nAccuracy exact-match vs dati validati:")

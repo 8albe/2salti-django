@@ -3,7 +3,9 @@ Test per il management command ocr_bench.
 
 Il provider è sempre mockato: nessuna chiamata reale a OpenAI nei test.
 """
+import json
 import os
+import shutil
 import tempfile
 from io import StringIO
 from unittest.mock import MagicMock, patch
@@ -64,14 +66,15 @@ class OcrBenchCommandTest(TestCase):
             f.write(b"fake image bytes")
         self.addCleanup(os.remove, self.image_path)
 
-    def _patch_provider(self):
+    def _patch_provider(self, extraction_factory=None):
+        factory = extraction_factory or fake_extraction
         patcher = patch("matches.management.commands.ocr_bench.GPT4oVisionProvider")
         mock_class = patcher.start()
         self.addCleanup(patcher.stop)
         mock_provider = MagicMock()
         mock_class.return_value = mock_provider
         mock_provider.extract_data.side_effect = (
-            lambda report, model=None: (fake_extraction(model), "raw")
+            lambda report, model=None: (factory(model), "raw")
         )
         return mock_provider
 
@@ -137,6 +140,95 @@ class OcrBenchCommandTest(TestCase):
         report.refresh_from_db()
         self.assertEqual(report.status, MatchReport.Status.PUBLISHED)
         self.assertEqual(report.normalized_data["match_info"]["home_team"], "ALTRA SQUADRA")
+
+    def test_show_prints_extracted_fields_per_model(self):
+        """--show stampa un blocco per modello con i campi chiave estratti."""
+        self._patch_provider()
+        out = StringIO()
+        call_command(
+            "ocr_bench",
+            "--image", self.image_path,
+            "--models", "gpt-4o,gpt-4o-mini",
+            "--show",
+            stdout=out,
+        )
+        output = out.getvalue()
+        self.assertIn("=== gpt-4o ===", output)
+        self.assertIn("=== gpt-4o-mini ===", output)
+        self.assertIn("POL. DELTA", output)
+        self.assertIn("VILLA YORK", output)
+        self.assertIn("10-8", output)
+        self.assertIn("quarti (4)", output)
+        self.assertIn("roster casa (7)", output)
+        self.assertIn("roster ospiti (7)", output)
+        self.assertIn("Casa 1", output)
+        self.assertIn("eventi (2)", output)
+        self.assertIn("GOAL", output)
+
+    def test_show_marks_missing_fields(self):
+        """--show segnala esplicitamente i campi assenti nell'estrazione."""
+        self._patch_provider(
+            extraction_factory=lambda model: {
+                "metadata": {"confidence": 0.50, "model": model},
+                "match_info": {"home_team": "POL. DELTA"},  # away_team mancante
+            }
+        )
+        out = StringIO()
+        call_command(
+            "ocr_bench",
+            "--image", self.image_path,
+            "--models", "gpt-4o",
+            "--show",
+            stdout=out,
+        )
+        output = out.getvalue()
+        self.assertIn("away_team:   — assente", output)
+        self.assertIn("final_score: — assente", output)
+        self.assertIn("quarti: — assente", output)
+        self.assertIn("roster casa: — assente", output)
+        self.assertIn("roster ospiti: — assente", output)
+        self.assertIn("eventi: — assente", output)
+
+    def test_save_dir_writes_json_per_model(self):
+        """--save-dir scrive un file JSON completo per ogni modello."""
+        self._patch_provider()
+        save_dir = os.path.join(tempfile.mkdtemp(), "bench_out")  # dir non esistente
+        self.addCleanup(shutil.rmtree, os.path.dirname(save_dir))
+        out = StringIO()
+        call_command(
+            "ocr_bench",
+            "--image", self.image_path,
+            "--models", "gpt-4o,gpt-4o-mini",
+            "--save-dir", save_dir,
+            stdout=out,
+        )
+        files = sorted(os.listdir(save_dir))
+        self.assertEqual(len(files), 2)
+        saved_models = set()
+        for fname in files:
+            self.assertTrue(fname.startswith("ocr_bench_gpt-4o"))
+            self.assertTrue(fname.endswith(".json"))
+            with open(os.path.join(save_dir, fname), encoding="utf-8") as f:
+                data = json.load(f)
+            self.assertEqual(data["match_info"]["home_team"], "POL. DELTA")
+            saved_models.add(data["metadata"]["model"])
+        self.assertEqual(saved_models, {"gpt-4o", "gpt-4o-mini"})
+        self.assertIn("Salvato:", out.getvalue())
+
+    def test_without_new_flags_no_blocks_and_no_files(self):
+        """Senza --show/--save-dir l'output resta la sola tabella di oggi."""
+        self._patch_provider()
+        out = StringIO()
+        call_command(
+            "ocr_bench",
+            "--image", self.image_path,
+            "--models", "gpt-4o",
+            stdout=out,
+        )
+        output = out.getvalue()
+        self.assertNotIn("=== gpt-4o ===", output)
+        self.assertNotIn("Salvato:", output)
+        self.assertIn("confidence", output)
 
     def test_report_without_normalized_data_warns(self):
         self._patch_provider()
