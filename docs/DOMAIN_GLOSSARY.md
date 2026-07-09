@@ -116,7 +116,7 @@ Due assi di entitlement, **ortogonali all'RBAC** (`management/permissions.py` no
 | `TrainingOccurrence` | management | management/models.py | Singola istanza di un allenamento (generata dalla ricorrenza) |
 | `TrainingAttendance` | management | management/models.py | Presenza/RSVP con geofencing; status: PENDING, PRESENT, ABSENT, JUSTIFIED |
 | `InboundEmail` | matches | matches/models.py | Traccia email ricevute per idempotenza deduplication; RFC822 message_id |
-| `OCRRawResponse` | matches | matches/models.py | Risposta originale del provider OCR (es. GPT-4V); per debug e audit; collegato a MatchReport |
+| `OCRRawResponse` | matches | matches/models.py | Risposta originale del provider OCR (Gemini); per debug e audit; collegato a MatchReport |
 | `AuditLog` | management | management/models.py | Log generico di azioni critiche di sistema (es. PUBLISH_REPORT, ONBOARDING_*); cf. `MatchReportAuditLog` dedicato ai referti |
 | `SeasonArchive` | seasons | seasons/models.py | Snapshot JSON delle statistiche di atleta/squadra per stagione passata |
 | `PilotDailyLog` | management | management/models.py | Log operativo giornaliero fase pilot; status: GREEN/YELLOW/RED; staff-only |

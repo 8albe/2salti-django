@@ -6,7 +6,8 @@ Miglioramento accuracy, preprocessing, gestione errori, dataset test, qualità d
 
 ### 8.1 Pipeline esistente
 
-- [x] Provider astratto (`vision_providers.py`), GPT-4V in prod, mock in test
+- [x] **Provider OCR ratificato (2026-07-09): Gemini unico e definitivo, modello `gemini-2.5-pro`.** Scelto dopo bench su referti reali a grafia difficile (il più accurato; latenza ~90s accettabile perché l'OCR gira in background). OpenAI **rimosso** dal codice/test/deps OCR; il seam provider (`BaseVisionProvider` + factory `OCRService` + `OCR_PROVIDER`) resta per future estensioni. Filone "scelta provider OCR" **chiuso**.
+- [x] Provider astratto (`vision_providers.py`), `GeminiVisionProvider` in prod, mock in test
 - [x] Quality gate (`ocr_quality_gate.py`) pre-EXTRACTED
 - [x] Dedup via SHA-256 (`hash_service.py`)
 - [x] Raw response salvata (`OCRRawResponse`) per audit

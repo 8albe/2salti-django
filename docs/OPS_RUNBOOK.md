@@ -312,6 +312,23 @@ L'autenticazione `git push`/`fetch` sul VPS verso `github.com/8albe/2salti-djang
 
 Quindi: se un deploy che prima passava comincia a fare 401, prima di sospettare GitHub o il token, controllare *con quale utente* gira il comando e che `~/.git-credentials` di `alberto` esista con perms `0600`. La diagnosi read-only completa del meccanismo (più la mitigazione del PAT applicata il 2026-06-21) è archiviata in Appendice A §10.14.
 
+### 3.14 OCR — provider Gemini unico: configurazione e billing (ratificato 2026-07-09)
+
+Dal 2026-07-09 l'OCR ha **un solo provider concreto: Google Gemini**, modello di default `gemini-2.5-pro` (scelto dopo bench su referti reali; il più accurato sulle grafie difficili, latenza ~90s tollerata perché l'estrazione gira in background). OpenAI è stato rimosso dal codice/test/deps OCR. Il **seam** provider resta (`BaseVisionProvider` + factory `OCRService.get_provider()` + `OCR_PROVIDER`): riaggiungere un provider = una sottoclasse `extract_data` + un ramo nella factory, senza toccare il resto.
+
+**Variabili d'ambiente OCR (`.env`):**
+
+| Var | Default | Ruolo |
+|---|---|---|
+| `OCR_PROVIDER` | `gemini` | `gemini` (reale) o `mock` (test/dev). Un valore diverso da `gemini`/`mock` cade sul mock. |
+| `GEMINI_API_KEY` | `""` | Chiave API Google Gemini. Se vuota con `OCR_PROVIDER=gemini`, la factory alza `ValueError` (nessun fallback silenzioso al mock). |
+| `GEMINI_MODEL` | `gemini-2.5-pro` | Model-string inviata all'SDK. Sovrascrivibile per test A/B senza toccare il codice. |
+| `OCR_MAX_OUTPUT_TOKENS` | `32000` | Tetto output token. Alzato da 16000 a 32000 come assicurazione anti-troncamento: i referti densi (molti eventi + due roster) coi modelli *thinking* troncavano il JSON. Env-configurabile: se un referto tronca ancora (`finish_reason=MAX_TOKENS` nel log), alzarlo qui senza deploy di codice. |
+
+> `OPENAI_API_KEY` resta in `.env`/`requirements.txt` ma **non** serve più all'OCR: la usa solo `AIStatsEngine` (chat stats NL→ORM, feature non-OCR). Non rimuoverla finché quella feature è viva.
+
+**Billing Gemini (prepagato).** L'account Google dietro la `GEMINI_API_KEY` è a **credito prepagato**: carta associata + credito ricaricato in anticipo, con **ricarica automatica** attiva per non esaurire il saldo durante l'ingestion. Attivazione/gestione del billing delegata al padre di Alberto. Se l'OCR reale inizia a fallire con errori di quota/autorizzazione lato Gemini, verificare **prima** il saldo prepagato e lo stato della ricarica automatica, poi la validità della chiave (rotazione via protocollo §8/§11, revoca lato Google prima della sostituzione).
+
 ## 4. Pulizia repo: history vs indice corrente
 
 Sono due operazioni distinte che affrontano due problemi distinti, e confonderle è un errore di categoria. È esattamente l'errore commesso il 22 aprile 2026 sulla chiusura del problema #7 e corretto il 23 aprile; la lezione merita di vivere in un posto stabile.
@@ -611,7 +628,7 @@ da stats/match detail.
 *Chiuso:* commit `b97e9e5` — event types ridotti ai 5 canonici (GOAL, EXCLUSION_20,
 YELLOW_CARD, RED_CARD, TIMEOUT) + OTHER catch-all; eliminato `EXTENDED_EVENT_TYPES`
 (codice morto), allineati prompt OCR e consumer.
-*Vive in:* `matches/services/schema.py`, `vision_providers.py`, `ocr_providers/openai.py`.
+*Vive in:* `matches/services/schema.py`, `vision_providers.py`.
 
 ### §10.4 Membership senza start_date/end_date — CHIUSO Sprint C (2026-05-27/28), poi superato da Macro 16
 *Cosa era:* `Membership` senza intervallo di tenure → storico coach ordinabile solo
