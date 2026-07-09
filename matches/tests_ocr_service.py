@@ -14,7 +14,7 @@ User = get_user_model()
 
 class OCRServiceTestCase(TestCase):
     def setUp(self):
-        # Force mock provider for all tests (env may have gpt4o)
+        # Force mock provider for all tests (env may have gemini)
         from matches.services.vision_providers import MockVisionProvider
         OCRService.set_provider(MockVisionProvider())
 

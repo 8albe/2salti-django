@@ -203,19 +203,11 @@ class OCRService:
         """Ritorna il provider configurato in base ai settings."""
         if cls._provider is None:
             from django.conf import settings
-            from .vision_providers import MockVisionProvider, GPT4oVisionProvider, GeminiVisionProvider
+            from .vision_providers import MockVisionProvider, GeminiVisionProvider
 
             provider_type = getattr(settings, 'OCR_PROVIDER', 'gemini').lower()
 
-            if provider_type == 'gpt4o' or provider_type == 'openai':
-                api_key = getattr(settings, 'OPENAI_API_KEY', None)
-                if not api_key:
-                    raise ValueError("OCR_PROVIDER configurato come 'gpt4o', ma OPENAI_API_KEY mancante.")
-                try:
-                    cls._provider = GPT4oVisionProvider()
-                except Exception as e:
-                    raise RuntimeError(f"Impossibile inizializzare GPT4oVisionProvider: {str(e)}")
-            elif provider_type == 'gemini':
+            if provider_type == 'gemini':
                 api_key = getattr(settings, 'GEMINI_API_KEY', None)
                 if not api_key:
                     raise ValueError("OCR_PROVIDER configurato come 'gemini', ma GEMINI_API_KEY mancante.")
@@ -278,7 +270,7 @@ class OCRService:
             if hasattr(provider, 'process_document'):
                 context = {'report_id': match_report.id}
                 data = provider.process_document(match_report.file.path, context=context)
-                raw_content = json.dumps(data) # OpenAIProvider already saves the raw real response in its method
+                raw_content = json.dumps(data)  # provider process_document già salva la raw response reale
             else:
                 data, raw_content = provider.extract_data(match_report)
                 

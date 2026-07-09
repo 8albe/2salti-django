@@ -1,11 +1,10 @@
 from django.test import TestCase, override_settings
 from django.core.files.uploadedfile import SimpleUploadedFile
 from matches.services.ocr_service import OCRService
-from matches.services.vision_providers import MockVisionProvider, GPT4oVisionProvider
+from matches.services.vision_providers import MockVisionProvider
 from matches.models import Match, MatchReport
 from core.models import League, Sport, Team, Society
 from django.utils import timezone
-from unittest.mock import patch
 
 
 class OCRProviderToggleTest(TestCase):
@@ -36,20 +35,7 @@ class OCRProviderToggleTest(TestCase):
         provider = OCRService.get_provider()
         self.assertIsInstance(provider, MockVisionProvider)
 
-    @override_settings(OCR_PROVIDER='gpt4o', OPENAI_API_KEY='test_key')
-    @patch('matches.services.vision_providers.GPT4oVisionProvider.__init__', return_value=None)
-    def test_gpt4o_provider_selected(self, mock_init):
-        provider = OCRService.get_provider()
-        self.assertIsInstance(provider, GPT4oVisionProvider)
-        mock_init.assert_called_once()
-
-    @override_settings(OCR_PROVIDER='gpt4o', OPENAI_API_KEY='')
-    def test_missing_api_key_raises_error(self):
-        with self.assertRaises(ValueError) as context:
-            OCRService.get_provider()
-        self.assertIn("OPENAI_API_KEY mancante", str(context.exception))
-
-    @override_settings(OCR_PROVIDER='gpt4o', OPENAI_API_KEY='')
+    @override_settings(OCR_PROVIDER='gemini', GEMINI_API_KEY='')
     def test_process_and_update_handles_init_failure_safely(self):
         # Even if get_provider raises an exception, process_and_update must handle it
         # and push the report to NEEDS_REVIEW without crashing.
@@ -57,7 +43,7 @@ class OCRProviderToggleTest(TestCase):
         self.report.refresh_from_db()
         self.assertFalse(success)
         self.assertEqual(self.report.status, MatchReport.Status.NEEDS_REVIEW)
-        self.assertIn("OPENAI_API_KEY mancante", self.report.validation_notes)
+        self.assertIn("GEMINI_API_KEY mancante", self.report.validation_notes)
         self.assertIn("Init/Config Error", self.report.validation_notes)
 
     @override_settings(OCR_PROVIDER='mock')

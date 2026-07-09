@@ -39,7 +39,7 @@ class ImagePreprocessor:
             if not perspective_corrected:
                 processed_img = ImagePreprocessor._deskew(processed_img)
 
-            # 3. Resize proporzionale (max 2000px per lato per OpenAI)
+            # 3. Resize proporzionale (max 2000px per lato per l'invio all'LLM)
             h, w = processed_img.shape[:2]
             max_dim = 2000
             if max(h, w) > max_dim:

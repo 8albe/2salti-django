@@ -1,14 +1,13 @@
 """
 Test per il management command ocr_bench.
 
-Il provider è sempre mockato: nessuna chiamata reale a OpenAI nei test.
+Il provider è sempre mockato: nessuna chiamata reale all'LLM nei test.
 """
 import json
 import os
 import shutil
 import tempfile
 from io import StringIO
-from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
 from django.core.files.uploadedfile import SimpleUploadedFile
@@ -68,8 +67,9 @@ class OcrBenchCommandTest(TestCase):
         self.addCleanup(os.remove, self.image_path)
 
     def _patch_provider(self, extraction_factory=None):
+        """Mocka GeminiVisionProvider (provider di default) sul simbolo del comando."""
         factory = extraction_factory or fake_extraction
-        patcher = patch("matches.management.commands.ocr_bench.GPT4oVisionProvider")
+        patcher = patch("matches.management.commands.ocr_bench.GeminiVisionProvider")
         mock_class = patcher.start()
         self.addCleanup(patcher.stop)
         mock_provider = MagicMock()
@@ -91,28 +91,28 @@ class OcrBenchCommandTest(TestCase):
         call_command(
             "ocr_bench",
             "--image", self.image_path,
-            "--models", "gpt-4o,gpt-4o-mini",
+            "--models", "gemini-2.5-pro,gemini-2.5-flash",
             stdout=out,
         )
         called_models = [
             c.kwargs["model"] for c in mock_provider.extract_data.call_args_list
         ]
-        self.assertEqual(called_models, ["gpt-4o", "gpt-4o-mini"])
+        self.assertEqual(called_models, ["gemini-2.5-pro", "gemini-2.5-flash"])
         output = out.getvalue()
-        self.assertIn("gpt-4o", output)
-        self.assertIn("gpt-4o-mini", output)
+        self.assertIn("gemini-2.5-pro", output)
+        self.assertIn("gemini-2.5-flash", output)
         self.assertIn("0.91", output)          # confidence
         self.assertIn("1000", output)          # prompt_tokens
         self.assertIn("250", output)           # completion_tokens
 
-    @override_settings(OCR_MODEL="gpt-4o-mini")
+    @override_settings(GEMINI_MODEL="gemini-2.5-flash")
     def test_default_model_comes_from_settings(self):
         mock_provider = self._patch_provider()
         out = StringIO()
         call_command("ocr_bench", "--image", self.image_path, stdout=out)
         self.assertEqual(mock_provider.extract_data.call_count, 1)
         self.assertEqual(
-            mock_provider.extract_data.call_args.kwargs["model"], "gpt-4o-mini"
+            mock_provider.extract_data.call_args.kwargs["model"], "gemini-2.5-flash"
         )
 
     def test_missing_image_raises(self):
@@ -123,7 +123,7 @@ class OcrBenchCommandTest(TestCase):
     def test_accuracy_with_validated_report(self):
         """Con --report-id e normalized_data, stampa l'accuracy per campo."""
         self._patch_provider()
-        validated = fake_extraction("gpt-4o")
+        validated = fake_extraction("gemini-2.5-pro")
         validated["match_info"]["home_team"] = "ALTRA SQUADRA"  # 1 mismatch voluto
         report = MatchReport.objects.create(
             match=self.match,
@@ -135,7 +135,7 @@ class OcrBenchCommandTest(TestCase):
         call_command(
             "ocr_bench",
             "--image", self.image_path,
-            "--models", "gpt-4o",
+            "--models", "gemini-2.5-pro",
             "--report-id", str(report.pk),
             stdout=out,
         )
@@ -155,13 +155,13 @@ class OcrBenchCommandTest(TestCase):
         call_command(
             "ocr_bench",
             "--image", self.image_path,
-            "--models", "gpt-4o,gpt-4o-mini",
+            "--models", "gemini-2.5-pro,gemini-2.5-flash",
             "--show",
             stdout=out,
         )
         output = out.getvalue()
-        self.assertIn("=== gpt-4o ===", output)
-        self.assertIn("=== gpt-4o-mini ===", output)
+        self.assertIn("=== gemini-2.5-pro ===", output)
+        self.assertIn("=== gemini-2.5-flash ===", output)
         self.assertIn("POL. DELTA", output)
         self.assertIn("VILLA YORK", output)
         self.assertIn("10-8", output)
@@ -184,7 +184,7 @@ class OcrBenchCommandTest(TestCase):
         call_command(
             "ocr_bench",
             "--image", self.image_path,
-            "--models", "gpt-4o",
+            "--models", "gemini-2.5-pro",
             "--show",
             stdout=out,
         )
@@ -205,7 +205,7 @@ class OcrBenchCommandTest(TestCase):
         call_command(
             "ocr_bench",
             "--image", self.image_path,
-            "--models", "gpt-4o,gpt-4o-mini",
+            "--models", "gemini-2.5-pro,gemini-2.5-flash",
             "--save-dir", save_dir,
             stdout=out,
         )
@@ -213,13 +213,13 @@ class OcrBenchCommandTest(TestCase):
         self.assertEqual(len(files), 2)
         saved_models = set()
         for fname in files:
-            self.assertTrue(fname.startswith("ocr_bench_gpt-4o"))
+            self.assertTrue(fname.startswith("ocr_bench_gemini-"))
             self.assertTrue(fname.endswith(".json"))
             with open(os.path.join(save_dir, fname), encoding="utf-8") as f:
                 data = json.load(f)
             self.assertEqual(data["match_info"]["home_team"], "POL. DELTA")
             saved_models.add(data["metadata"]["model"])
-        self.assertEqual(saved_models, {"gpt-4o", "gpt-4o-mini"})
+        self.assertEqual(saved_models, {"gemini-2.5-pro", "gemini-2.5-flash"})
         self.assertIn("Salvato:", out.getvalue())
 
     def test_without_new_flags_no_blocks_and_no_files(self):
@@ -229,11 +229,11 @@ class OcrBenchCommandTest(TestCase):
         call_command(
             "ocr_bench",
             "--image", self.image_path,
-            "--models", "gpt-4o",
+            "--models", "gemini-2.5-pro",
             stdout=out,
         )
         output = out.getvalue()
-        self.assertNotIn("=== gpt-4o ===", output)
+        self.assertNotIn("=== gemini-2.5-pro ===", output)
         self.assertNotIn("Salvato:", output)
         self.assertIn("confidence", output)
 
@@ -241,7 +241,7 @@ class OcrBenchCommandTest(TestCase):
         """Senza --dump-sent-image/--no-preprocess la chiamata al provider è identica a prima."""
         mock_provider = self._patch_provider()
         call_command(
-            "ocr_bench", "--image", self.image_path, "--models", "gpt-4o",
+            "ocr_bench", "--image", self.image_path, "--models", "gemini-2.5-pro",
             stdout=StringIO(),
         )
         kwargs = mock_provider.extract_data.call_args.kwargs
@@ -251,7 +251,7 @@ class OcrBenchCommandTest(TestCase):
         """--no-preprocess passa preprocess=False al provider."""
         mock_provider = self._patch_provider()
         call_command(
-            "ocr_bench", "--image", self.image_path, "--models", "gpt-4o",
+            "ocr_bench", "--image", self.image_path, "--models", "gemini-2.5-pro",
             "--no-preprocess",
             stdout=StringIO(),
         )
@@ -267,7 +267,7 @@ class OcrBenchCommandTest(TestCase):
         call_command(
             "ocr_bench",
             "--image", self.image_path,
-            "--models", "gpt-4o,gpt-4o-mini",
+            "--models", "gemini-2.5-pro,gemini-2.5-flash",
             "--dump-sent-image", dump_dir,
             stdout=out,
         )
@@ -275,7 +275,7 @@ class OcrBenchCommandTest(TestCase):
         self.assertEqual(len(files), 2)
         prefixes = {f.rsplit("_", 2)[0] for f in files}
         self.assertEqual(
-            prefixes, {"ocr_bench_sent_gpt-4o", "ocr_bench_sent_gpt-4o-mini"}
+            prefixes, {"ocr_bench_sent_gemini-2.5-pro", "ocr_bench_sent_gemini-2.5-flash"}
         )
         for fname in files:
             self.assertTrue(fname.endswith(".jpg"))
@@ -291,7 +291,7 @@ class OcrBenchCommandTest(TestCase):
         call_command(
             "ocr_bench",
             "--image", self.image_path,
-            "--models", "gpt-4o",
+            "--models", "gemini-2.5-pro",
             "--dump-sent-image", dump_dir,
             "--no-preprocess",
             stdout=StringIO(),
@@ -314,184 +314,41 @@ class OcrBenchCommandTest(TestCase):
         call_command(
             "ocr_bench",
             "--image", self.image_path,
-            "--models", "gpt-4o",
+            "--models", "gemini-2.5-pro",
             "--report-id", str(report.pk),
             stdout=out,
         )
         self.assertIn("accuracy non calcolabile", out.getvalue())
         self.assertNotIn("Accuracy exact-match", out.getvalue())
 
-    # --- Provider Gemini (SDK sempre mockato) ---------------------------------
-
-    def _patch_gemini_provider(self, extraction_factory=None):
-        """Come _patch_provider ma sul simbolo GeminiVisionProvider del comando."""
-        factory = extraction_factory or fake_extraction
-        patcher = patch("matches.management.commands.ocr_bench.GeminiVisionProvider")
-        mock_class = patcher.start()
-        self.addCleanup(patcher.stop)
-        mock_provider = MagicMock()
-        mock_class.return_value = mock_provider
-
-        def _fake_extract(report, model=None, preprocess=True, sent_image_callback=None):
-            if sent_image_callback:
-                sent_image_callback(report.file.path)
-            return factory(model), "raw"
-
-        mock_provider.extract_data.side_effect = _fake_extract
-        return mock_provider
-
-    def test_provider_gemini_end_to_end_mocked(self):
-        """--provider gemini gira end-to-end (mockato) con --show e --save-dir."""
-        mock_provider = self._patch_gemini_provider()
-        save_dir = os.path.join(tempfile.mkdtemp(), "bench_out")
-        self.addCleanup(shutil.rmtree, os.path.dirname(save_dir))
+    def test_provider_gemini_explicit_flag(self):
+        """--provider gemini è esplicitabile e stampato in output (seam estendibile)."""
+        mock_provider = self._patch_provider()
         out = StringIO()
         call_command(
             "ocr_bench",
             "--image", self.image_path,
             "--provider", "gemini",
-            "--models", "gemini-2.5-flash,gemini-3.1-pro",
+            "--models", "gemini-2.5-pro,gemini-2.5-flash",
             "--show",
-            "--save-dir", save_dir,
             stdout=out,
         )
         output = out.getvalue()
         self.assertIn("Provider: gemini", output)
+        self.assertIn("=== gemini-2.5-pro ===", output)
         self.assertIn("=== gemini-2.5-flash ===", output)
-        self.assertIn("=== gemini-3.1-pro ===", output)
-        self.assertIn("POL. DELTA", output)
-        # I due modelli Gemini sono passati al provider mockato
         called_models = [
             c.kwargs["model"] for c in mock_provider.extract_data.call_args_list
         ]
-        self.assertEqual(called_models, ["gemini-2.5-flash", "gemini-3.1-pro"])
-        # JSON salvati per modello
-        files = sorted(os.listdir(save_dir))
-        self.assertEqual(len(files), 2)
-        self.assertTrue(all(f.startswith("ocr_bench_gemini-") for f in files))
+        self.assertEqual(called_models, ["gemini-2.5-pro", "gemini-2.5-flash"])
 
-    @override_settings(GEMINI_MODEL="gemini-2.5-flash")
-    def test_provider_gemini_default_model_from_settings(self):
-        """--provider gemini senza --models usa settings.GEMINI_MODEL."""
-        mock_provider = self._patch_gemini_provider()
+    def test_default_provider_is_gemini(self):
+        """Senza --provider si usa GeminiVisionProvider (provider unico di default)."""
+        mock_provider = self._patch_provider()
+        out = StringIO()
         call_command(
-            "ocr_bench", "--image", self.image_path, "--provider", "gemini",
-            stdout=StringIO(),
+            "ocr_bench", "--image", self.image_path, "--models", "gemini-2.5-pro",
+            stdout=out,
         )
         self.assertEqual(mock_provider.extract_data.call_count, 1)
-        self.assertEqual(
-            mock_provider.extract_data.call_args.kwargs["model"], "gemini-2.5-flash"
-        )
-
-    def test_default_provider_is_openai(self):
-        """Senza --provider si usa ancora GPT4oVisionProvider (nessuna regressione)."""
-        gpt_mock = self._patch_provider()
-        gemini_mock = self._patch_gemini_provider()
-        call_command(
-            "ocr_bench", "--image", self.image_path, "--models", "gpt-4o",
-            stdout=StringIO(),
-        )
-        self.assertEqual(gpt_mock.extract_data.call_count, 1)
-        self.assertEqual(gemini_mock.extract_data.call_count, 0)
-
-
-def fake_openai_response(payload=None):
-    """Risposta OpenAI finta con JSON valido in schema OCR v2."""
-    content = json.dumps(payload or {
-        "metadata": {"confidence": 0.9},
-        "match_info": {"home_team": "POL. DELTA", "away_team": "VILLA YORK"},
-    })
-    return SimpleNamespace(
-        choices=[SimpleNamespace(message=SimpleNamespace(content=content, refusal=None))],
-        usage=SimpleNamespace(prompt_tokens=100, completion_tokens=50),
-    )
-
-
-class OcrBenchPreprocessBypassEndToEndTest(TestCase):
-    """
-    End-to-end sul provider reale (GPT4oVisionProvider) con client OpenAI
-    patchato e spy su ImagePreprocessor.process: verifica che --no-preprocess
-    salti davvero il preprocessing e che il dump contenga i byte inviati.
-    Nessuna chiamata reale.
-    """
-
-    def setUp(self):
-        fd, self.image_path = tempfile.mkstemp(suffix=".png")
-        with os.fdopen(fd, "wb") as f:
-            f.write(b"raw png bytes")
-        self.addCleanup(os.remove, self.image_path)
-        self.dump_dir = tempfile.mkdtemp()
-        self.addCleanup(shutil.rmtree, self.dump_dir)
-
-    @patch("matches.services.image_preprocessor.ImagePreprocessor.process")
-    @patch("openai.OpenAI")
-    def test_no_preprocess_skips_image_preprocessor(self, mock_openai, mock_process):
-        mock_client = mock_openai.return_value
-        mock_client.chat.completions.create.return_value = fake_openai_response()
-        out = StringIO()
-        call_command(
-            "ocr_bench",
-            "--image", self.image_path,
-            "--models", "gpt-4o",
-            "--no-preprocess",
-            "--dump-sent-image", self.dump_dir,
-            stdout=out,
-        )
-        mock_process.assert_not_called()
-        # Il dump è il file grezzo, con estensione originale
-        files = os.listdir(self.dump_dir)
-        self.assertEqual(len(files), 1)
-        self.assertTrue(files[0].startswith("ocr_bench_sent_gpt-4o_"))
-        self.assertTrue(files[0].endswith(".png"))
-        with open(os.path.join(self.dump_dir, files[0]), "rb") as f:
-            self.assertEqual(f.read(), b"raw png bytes")
-        # Il data URI riflette il mime reale del file grezzo
-        messages = mock_client.chat.completions.create.call_args.kwargs["messages"]
-        image_url = messages[1]["content"][1]["image_url"]["url"]
-        self.assertTrue(image_url.startswith("data:image/png;base64,"))
-
-    @patch("matches.services.image_preprocessor.ImagePreprocessor.process")
-    @patch("openai.OpenAI")
-    def test_default_still_preprocesses_and_dumps_processed_file(self, mock_openai, mock_process):
-        fd, processed_path = tempfile.mkstemp(suffix=".jpg")
-        with os.fdopen(fd, "wb") as f:
-            f.write(b"processed jpg bytes")
-        self.addCleanup(os.remove, processed_path)
-        mock_process.return_value = processed_path
-        mock_client = mock_openai.return_value
-        mock_client.chat.completions.create.return_value = fake_openai_response()
-        call_command(
-            "ocr_bench",
-            "--image", self.image_path,
-            "--models", "gpt-4o",
-            "--dump-sent-image", self.dump_dir,
-            stdout=StringIO(),
-        )
-        mock_process.assert_called_once_with(self.image_path)
-        # Il dump è l'output del preprocessing, non l'originale
-        files = os.listdir(self.dump_dir)
-        self.assertEqual(len(files), 1)
-        self.assertTrue(files[0].endswith(".jpg"))
-        with open(os.path.join(self.dump_dir, files[0]), "rb") as f:
-            self.assertEqual(f.read(), b"processed jpg bytes")
-
-    @patch("matches.services.image_preprocessor.ImagePreprocessor.process")
-    @patch("openai.OpenAI")
-    def test_dump_happens_even_if_api_call_fails(self, mock_openai, mock_process):
-        """Il dump precede la chiamata API: resta su disco anche su errore/refusal."""
-        mock_client = mock_openai.return_value
-        mock_client.chat.completions.create.side_effect = Exception("Refusal simulato")
-        out = StringIO()
-        call_command(
-            "ocr_bench",
-            "--image", self.image_path,
-            "--models", "gpt-4o",
-            "--no-preprocess",
-            "--dump-sent-image", self.dump_dir,
-            stdout=out,
-        )
-        self.assertIn("ERRORE", out.getvalue())
-        files = os.listdir(self.dump_dir)
-        self.assertEqual(len(files), 1)
-        with open(os.path.join(self.dump_dir, files[0]), "rb") as f:
-            self.assertEqual(f.read(), b"raw png bytes")
+        self.assertIn("Provider: gemini", out.getvalue())

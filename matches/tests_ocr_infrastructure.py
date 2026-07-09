@@ -1,33 +1,23 @@
-import json
 from django.test import TestCase
 from matches.models import Match, MatchReport, OCRRawResponse
-from matches.services.ocr_providers.base import BaseOCRProvider
 from core.models import Team, League, Sport, Society
 from django.utils import timezone
 from django.contrib.auth import get_user_model
 
 User = get_user_model()
 
-class DummyOCRProvider(BaseOCRProvider):
-    """Concrete implementation for testing purposes."""
-    @property
-    def provider_id(self) -> str:
-        return "dummy-provider"
-
-    def process_document(self, file_path, context=None):
-        return {"extracted": "data"}
 
 class OCRInfrastructureTest(TestCase):
     def setUp(self):
         self.sport = Sport.objects.create(name="Waterpolo")
         self.league = League.objects.create(name="Serie A", sport=self.sport)
-        
+
         self.soc_a = Society.objects.create(name="Society A", sport=self.sport, city="Rome")
         self.soc_b = Society.objects.create(name="Society B", sport=self.sport, city="Milan")
-        
+
         self.home_team = Team.objects.create(society=self.soc_a)
         self.away_team = Team.objects.create(society=self.soc_b)
-        
+
         self.match = Match.objects.create(
             league=self.league,
             home_team=self.home_team,
@@ -39,18 +29,6 @@ class OCRInfrastructureTest(TestCase):
             status=MatchReport.Status.UPLOADED,
             source_channel='FILE'
         )
-
-    def test_base_ocr_provider_abstraction(self):
-        """Verify that BaseOCRProvider cannot be instantiated directly."""
-        with self.assertRaises(TypeError):
-            BaseOCRProvider()
-
-    def test_dummy_provider_implementation(self):
-        """Verify that a concrete provider works as expected."""
-        provider = DummyOCRProvider()
-        self.assertEqual(provider.provider_id, "dummy-provider")
-        result = provider.process_document("dummy/path")
-        self.assertEqual(result["extracted"], "data")
 
     def test_ocr_raw_response_creation(self):
         """Verify that OCRRawResponse can be saved and linked to a report."""

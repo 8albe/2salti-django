@@ -10,7 +10,7 @@ logger = logging.getLogger(__name__)
 OCR_USER_TEXT = "Estrai i dati da questo referto fotografato. Rispondi solo con il JSON."
 
 # Prompt di sistema hardened v2 (per-field confidence + null preference + ambiguity channel).
-# Condiviso 1:1 tra GPT4oVisionProvider e GeminiVisionProvider: stesso schema OCR v2 in output.
+# Usato da GeminiVisionProvider: schema OCR v2 in output.
 OCR_SYSTEM_PROMPT_V2 = """
         Sei un esperto di analisi di referti di partite di pallanuoto (FIN - GUG). 
         Riceverai la FOTO di un referto ufficiale. Segui queste istruzioni spaziali:
@@ -112,11 +112,97 @@ OCR_SYSTEM_PROMPT_V2 = """
 class BaseVisionProvider:
     """
     Interfaccia base per i provider OCR/Vision.
-    Ogni nuovo provider (es. Google Vision, OpenAI GPT-4o, AWS Textract) 
+    Ogni nuovo provider (es. Google Vision, AWS Textract)
     deve ereditare da questa classe e implementare extract_data.
     """
     def extract_data(self, match_report) -> Tuple[Dict[str, Any], str]:
         raise NotImplementedError("Il metodo extract_data deve essere implementato dal provider.")
+
+    @staticmethod
+    def _normalize_response(data: Dict[str, Any], processed_path: str, original_path: str,
+                            model: str = "gemini-2.5-pro", usage=None,
+                            provider: str = "GeminiVisionProvider-v1") -> Dict[str, Any]:
+        """
+        Normalize a vision-provider response into the OCR v2 schema.
+        Fills in missing optional sections with safe defaults.
+        Trims whitespace from string fields. Passare `provider` per marcare la
+        provenienza. `usage`, se fornito, espone .prompt_tokens / .completion_tokens.
+        """
+        # Ensure metadata structure
+        if "metadata" not in data:
+            data["metadata"] = {}
+        meta = data["metadata"]
+        meta.setdefault("schema_version", "2.0")
+        meta.setdefault("confidence", 0.5)
+        meta.setdefault("confidence_fields", {})
+        meta.setdefault("extraction_warnings", [])
+        meta.update({
+            "provider": provider,
+            "extracted_at": timezone.now().isoformat(),
+            "model": model,
+            "preprocessed": processed_path != original_path
+        })
+        if usage is not None:
+            meta["token_usage"] = {
+                "prompt_tokens": getattr(usage, "prompt_tokens", None),
+                "completion_tokens": getattr(usage, "completion_tokens", None),
+            }
+
+        # Ensure match_info
+        data.setdefault("match_info", {})
+        info = data["match_info"]
+        info.setdefault("home_team", None)
+        info.setdefault("away_team", None)
+        info.setdefault("date", None)
+        # v2 optional fields
+        info.setdefault("venue", None)
+        info.setdefault("round", None)
+        info.setdefault("group", None)
+        # Trim whitespace from string fields
+        for k in ["home_team", "away_team", "competition", "city", "venue", "round", "group"]:
+            if isinstance(info.get(k), str):
+                info[k] = info[k].strip()
+
+        # Ensure officials structure (v2 — opzionale)
+        data.setdefault("officials", {
+            "confidence": None,
+            "referees": [],
+            "timekeeper": None,
+        })
+        officials = data["officials"]
+        if isinstance(officials, dict):
+            officials.setdefault("confidence", None)
+            officials.setdefault("referees", [])
+            officials.setdefault("timekeeper", None)
+            # Trim referee names
+            for ref in officials.get("referees", []):
+                if isinstance(ref, dict) and isinstance(ref.get("name"), str):
+                    ref["name"] = ref["name"].strip()
+
+        # Ensure scores structure
+        data.setdefault("scores", {})
+        scores = data["scores"]
+        if isinstance(scores.get("final_score"), str):
+            scores["final_score"] = scores["final_score"].strip()
+        scores.setdefault("quarters", {})
+
+        # Ensure teams structure
+        data.setdefault("teams", {"home": {"name": None, "players": []}, "away": {"name": None, "players": []}})
+        for side in ["home", "away"]:
+            team = data["teams"].setdefault(side, {"name": None, "players": []})
+            team.setdefault("players", [])
+            # v2 optional team fields
+            team.setdefault("coach", None)
+            team.setdefault("confidence", None)
+            # Trim player names
+            for p in team.get("players", []):
+                if isinstance(p.get("name"), str):
+                    p["name"] = p["name"].strip()
+
+        # Ensure events structure
+        data.setdefault("events", [])
+
+        return data
 
 class MockVisionProvider(BaseVisionProvider):
     """
@@ -200,204 +286,6 @@ class MockVisionProvider(BaseVisionProvider):
         return data, raw_content
 
 
-class GPT4oVisionProvider(BaseVisionProvider):
-    """
-    Provider reale che utilizza OpenAI GPT-4o Vision per estrarre dati dal referto.
-    Hardened v2: per-field confidence, ambiguity channel, null-preference enforcement.
-    """
-    def __init__(self):
-        from django.conf import settings
-        from openai import OpenAI
-        self.client = OpenAI(api_key=settings.OPENAI_API_KEY)
-
-    def extract_data(self, match_report, model: str = None, preprocess: bool = True,
-                     sent_image_callback=None) -> Dict[str, Any]:
-        """
-        preprocess=False bypassa ImagePreprocessor e invia i byte grezzi del file
-        (debug: nessun auto-rotate né downscale). sent_image_callback, se fornita,
-        riceve il path del file i cui byte vengono effettivamente inviati al modello,
-        prima della chiamata API (quindi anche in caso di errore/refusal successivo).
-        """
-        import base64
-        import json
-        import mimetypes
-        import os
-        from django.conf import settings
-        from .image_preprocessor import ImagePreprocessor
-
-        # Modello: override per-chiamata > settings.OCR_MODEL > default storico
-        model = model or getattr(settings, "OCR_MODEL", "gpt-4o")
-
-        logger.info(f"[GPT4oVisionProvider] Avvio preprocessing per report {match_report.id} (model={model})...")
-
-        # Safe access guard (Root cause hardening)
-        if not match_report.file:
-            raise ValueError("Il referto non ha alcun file associato. Impossibile eseguire OCR.")
-
-        # Preprocessing (bypassabile per debug)
-        original_path = match_report.file.path
-        if preprocess:
-            processed_path = ImagePreprocessor.process(original_path)
-            mime_type = "image/jpeg"
-        else:
-            logger.info(f"[GPT4oVisionProvider] Preprocessing bypassato per report {match_report.id}: invio immagine grezza.")
-            processed_path = original_path
-            mime_type = mimetypes.guess_type(processed_path)[0] or "image/jpeg"
-
-        logger.info(f"[GPT4oVisionProvider] Invio report a OpenAI: {processed_path}")
-
-        if sent_image_callback:
-            sent_image_callback(processed_path)
-
-        # Encoding dell'immagine effettivamente inviata
-        with open(processed_path, 'rb') as f:
-            base64_image = base64.b64encode(f.read()).decode('utf-8')
-
-        system_prompt = OCR_SYSTEM_PROMPT_V2
-
-        user_content = [
-            {
-                "type": "text",
-                "text": OCR_USER_TEXT
-            },
-            {
-                "type": "image_url",
-                "image_url": {
-                    "url": f"data:{mime_type};base64,{base64_image}",
-                    "detail": getattr(settings, "OCR_IMAGE_DETAIL", "high")
-                }
-            }
-        ]
-
-        try:
-            import json
-            response = self.client.chat.completions.create(
-                model=model,
-                messages=[
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": user_content}
-                ],
-                response_format={"type": "json_object"},
-                max_tokens=4000
-            )
-            
-            # Parsing robusto
-            content = response.choices[0].message.content
-            logger.info(f"[GPT4oVisionProvider] Risposta OpenAI ricevuta (lunghezza: {len(content) if content else 0})")
-            
-            if not content:
-                if hasattr(response.choices[0].message, 'refusal') and response.choices[0].message.refusal:
-                    logger.error(f"[GPT4oVisionProvider] OpenAI ha rifiutato la richiesta: {response.choices[0].message.refusal}")
-                    raise Exception(f"OpenAI Refusal: {response.choices[0].message.refusal}")
-                raise Exception("OpenAI ha restituito un contenuto vuoto.")
-
-            data = json.loads(content)
-
-            # Normalize the response to ensure consistent structure
-            data = self._normalize_response(
-                data, processed_path, original_path,
-                model=model,
-                usage=getattr(response, "usage", None),
-            )
-            
-            # Pulizia file temporaneo se diverso dall'originale
-            if processed_path != original_path and os.path.exists(processed_path):
-                pass  # Keep for debug
-
-            return data, content
-            
-        except Exception as e:
-            logger.error(f"Errore GPT-4o: {str(e)}")
-            raise Exception(f"Errore durante la chiamata a OpenAI: {str(e)}")
-
-    @staticmethod
-    def _normalize_response(data: Dict[str, Any], processed_path: str, original_path: str,
-                            model: str = "gpt-4o", usage=None,
-                            provider: str = "GPT4oVisionProvider-v2-hardened") -> Dict[str, Any]:
-        """
-        Normalize a vision-provider response into the OCR v2 schema.
-        Fills in missing optional sections with safe defaults.
-        Trims whitespace from string fields. Condiviso da GPT4oVisionProvider e
-        GeminiVisionProvider: passare `provider` per marcare la provenienza.
-        `usage`, se fornito, espone .prompt_tokens / .completion_tokens.
-        """
-        # Ensure metadata structure
-        if "metadata" not in data:
-            data["metadata"] = {}
-        meta = data["metadata"]
-        meta.setdefault("schema_version", "2.0")
-        meta.setdefault("confidence", 0.5)
-        meta.setdefault("confidence_fields", {})
-        meta.setdefault("extraction_warnings", [])
-        meta.update({
-            "provider": provider,
-            "extracted_at": timezone.now().isoformat(),
-            "model": model,
-            "preprocessed": processed_path != original_path
-        })
-        if usage is not None:
-            meta["token_usage"] = {
-                "prompt_tokens": getattr(usage, "prompt_tokens", None),
-                "completion_tokens": getattr(usage, "completion_tokens", None),
-            }
-
-        # Ensure match_info
-        data.setdefault("match_info", {})
-        info = data["match_info"]
-        info.setdefault("home_team", None)
-        info.setdefault("away_team", None)
-        info.setdefault("date", None)
-        # v2 optional fields
-        info.setdefault("venue", None)
-        info.setdefault("round", None)
-        info.setdefault("group", None)
-        # Trim whitespace from string fields
-        for k in ["home_team", "away_team", "competition", "city", "venue", "round", "group"]:
-            if isinstance(info.get(k), str):
-                info[k] = info[k].strip()
-
-        # Ensure officials structure (v2 — opzionale)
-        data.setdefault("officials", {
-            "confidence": None,
-            "referees": [],
-            "timekeeper": None,
-        })
-        officials = data["officials"]
-        if isinstance(officials, dict):
-            officials.setdefault("confidence", None)
-            officials.setdefault("referees", [])
-            officials.setdefault("timekeeper", None)
-            # Trim referee names
-            for ref in officials.get("referees", []):
-                if isinstance(ref, dict) and isinstance(ref.get("name"), str):
-                    ref["name"] = ref["name"].strip()
-
-        # Ensure scores structure
-        data.setdefault("scores", {})
-        scores = data["scores"]
-        if isinstance(scores.get("final_score"), str):
-            scores["final_score"] = scores["final_score"].strip()
-        scores.setdefault("quarters", {})
-
-        # Ensure teams structure
-        data.setdefault("teams", {"home": {"name": None, "players": []}, "away": {"name": None, "players": []}})
-        for side in ["home", "away"]:
-            team = data["teams"].setdefault(side, {"name": None, "players": []})
-            team.setdefault("players", [])
-            # v2 optional team fields
-            team.setdefault("coach", None)
-            team.setdefault("confidence", None)
-            # Trim player names
-            for p in team.get("players", []):
-                if isinstance(p.get("name"), str):
-                    p["name"] = p["name"].strip()
-
-        # Ensure events structure
-        data.setdefault("events", [])
-
-        return data
-
-
 def _gemini_finish_reason(response):
     """
     Estrae il finish_reason del primo candidate se l'SDK google-genai lo espone
@@ -420,11 +308,11 @@ def _gemini_finish_reason(response):
 class GeminiVisionProvider(BaseVisionProvider):
     """
     Provider reale che utilizza Google Gemini (SDK google-genai) per estrarre
-    dati dal referto. Espone la STESSA interfaccia extract_data di
-    GPT4oVisionProvider (stessi parametri model/preprocess/sent_image_callback,
-    stesso schema OCR v2 in output, stesso prompt di sistema OCR_SYSTEM_PROMPT_V2).
-    Il modello di default è letto da settings.GEMINI_MODEL con fallback a
-    'gemini-2.5-pro'; --models nel bench può passare qualsiasi model string.
+    dati dal referto. Interfaccia extract_data: parametri
+    model/preprocess/sent_image_callback, schema OCR v2 in output, prompt di
+    sistema OCR_SYSTEM_PROMPT_V2. Il modello di default è letto da
+    settings.GEMINI_MODEL con fallback a 'gemini-2.5-pro'; --models nel bench
+    può passare qualsiasi model string.
     """
     def __init__(self):
         from django.conf import settings
@@ -434,7 +322,6 @@ class GeminiVisionProvider(BaseVisionProvider):
     def extract_data(self, match_report, model: str = None, preprocess: bool = True,
                      sent_image_callback=None) -> Tuple[Dict[str, Any], str]:
         """
-        Stesso contratto di GPT4oVisionProvider.extract_data:
         preprocess=False bypassa ImagePreprocessor e invia i byte grezzi;
         sent_image_callback, se fornita, riceve il path del file effettivamente
         inviato al modello, prima della chiamata API. Ritorna (data, raw_content).
@@ -452,7 +339,7 @@ class GeminiVisionProvider(BaseVisionProvider):
         if not match_report.file:
             raise ValueError("Il referto non ha alcun file associato. Impossibile eseguire OCR.")
 
-        # Preprocessing (bypassabile per debug) — identico al provider OpenAI.
+        # Preprocessing (bypassabile per debug).
         # Import lazy: nel path raw (preprocess=False) non tocchiamo cv2.
         original_path = match_report.file.path
         if preprocess:
@@ -528,7 +415,7 @@ class GeminiVisionProvider(BaseVisionProvider):
                     completion_tokens=getattr(usage_meta, "candidates_token_count", None),
                 )
 
-            data = GPT4oVisionProvider._normalize_response(
+            data = self._normalize_response(
                 data, processed_path, original_path,
                 model=model,
                 usage=usage,
