@@ -159,7 +159,7 @@ class GeminiVisionProviderTest(TestCase):
         self.assertIn("Gemini", str(ctx.exception))
 
     def test_uses_default_max_output_tokens(self):
-        """Senza setting esplicito, il provider alza il limite di output a 16000."""
+        """Senza setting esplicito, il provider alza il limite di output a 32000."""
         response = SimpleNamespace(
             text=_gemini_json_payload("gemini-2.5-flash"), usage_metadata=None
         )
@@ -168,7 +168,7 @@ class GeminiVisionProviderTest(TestCase):
         with patch.dict(sys.modules, fake_mods):
             provider.extract_data(self.report, preprocess=False)
         _, cfg_kwargs = fake_mods["google.genai.types"].GenerateContentConfig.call_args
-        self.assertEqual(cfg_kwargs["max_output_tokens"], 16000)
+        self.assertEqual(cfg_kwargs["max_output_tokens"], 32000)
 
     @override_settings(OCR_MAX_OUTPUT_TOKENS=12345)
     def test_max_output_tokens_configurable_via_settings(self):

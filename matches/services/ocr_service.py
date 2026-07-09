@@ -205,7 +205,7 @@ class OCRService:
             from django.conf import settings
             from .vision_providers import MockVisionProvider, GPT4oVisionProvider, GeminiVisionProvider
 
-            provider_type = getattr(settings, 'OCR_PROVIDER', 'mock').lower()
+            provider_type = getattr(settings, 'OCR_PROVIDER', 'gemini').lower()
 
             if provider_type == 'gpt4o' or provider_type == 'openai':
                 api_key = getattr(settings, 'OPENAI_API_KEY', None)

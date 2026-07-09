@@ -424,7 +424,7 @@ class GeminiVisionProvider(BaseVisionProvider):
     GPT4oVisionProvider (stessi parametri model/preprocess/sent_image_callback,
     stesso schema OCR v2 in output, stesso prompt di sistema OCR_SYSTEM_PROMPT_V2).
     Il modello di default è letto da settings.GEMINI_MODEL con fallback a
-    'gemini-2.5-flash'; --models nel bench può passare qualsiasi model string.
+    'gemini-2.5-pro'; --models nel bench può passare qualsiasi model string.
     """
     def __init__(self):
         from django.conf import settings
@@ -445,7 +445,7 @@ class GeminiVisionProvider(BaseVisionProvider):
         from google.genai import types
 
         # Modello: override per-chiamata > settings.GEMINI_MODEL > default
-        model = model or getattr(settings, "GEMINI_MODEL", "gemini-2.5-flash")
+        model = model or getattr(settings, "GEMINI_MODEL", "gemini-2.5-pro")
 
         logger.info(f"[GeminiVisionProvider] Avvio preprocessing per report {match_report.id} (model={model})...")
 
@@ -476,7 +476,7 @@ class GeminiVisionProvider(BaseVisionProvider):
         # facilmente a 4000, producendo JSON incompleto. Default alto ma entro il massimo
         # supportato dai modelli Gemini candidati (2.5-flash: 65k; 3.x pro-preview: ampio).
         # Configurabile via settings.OCR_MAX_OUTPUT_TOKENS senza toccare il codice.
-        max_output_tokens = getattr(settings, "OCR_MAX_OUTPUT_TOKENS", 16000)
+        max_output_tokens = getattr(settings, "OCR_MAX_OUTPUT_TOKENS", 32000)
 
         try:
             response = self.client.models.generate_content(

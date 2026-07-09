@@ -38,7 +38,7 @@ from matches.services.vision_providers import GPT4oVisionProvider, GeminiVisionP
 # GeminiVisionProvider senza che un riferimento catturato all'import li scavalchi.
 PROVIDER_MODEL_SETTINGS = {
     "openai": ("OCR_MODEL", "gpt-4o"),
-    "gemini": ("GEMINI_MODEL", "gemini-2.5-flash"),
+    "gemini": ("GEMINI_MODEL", "gemini-2.5-pro"),
 }
 
 # Campi top-level confrontati per l'accuracy exact-match
