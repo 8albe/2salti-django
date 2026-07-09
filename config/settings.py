@@ -173,8 +173,12 @@ LOGGING = {
 }
 
 # --- OCR PROVIDER CONFIGURATION ---
-# Supported providers: 'mock', 'gpt4o'
-OCR_PROVIDER = os.getenv("OCR_PROVIDER", "mock")
+# Provider OCR unico: 'gemini' (reale) o 'mock' (test/dev).
+OCR_PROVIDER = os.getenv("OCR_PROVIDER", "gemini")
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
+GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-2.5-pro")
+OCR_MAX_OUTPUT_TOKENS = int(os.getenv("OCR_MAX_OUTPUT_TOKENS", "32000"))
+# OPENAI_API_KEY: usata SOLO da AIStatsEngine (chat stats non-OCR), non dall'OCR.
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
 
 # --- NOTIFICATIONS CONFIGURATION ---
