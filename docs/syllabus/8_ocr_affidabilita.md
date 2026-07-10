@@ -10,7 +10,7 @@ Miglioramento accuracy, preprocessing, gestione errori, dataset test, qualità d
 - [x] Provider astratto (`vision_providers.py`), `GeminiVisionProvider` in prod, mock in test
 - [x] Quality gate (`ocr_quality_gate.py`) pre-EXTRACTED
 - [x] Dedup via SHA-256 (`hash_service.py`)
-- [x] Raw response salvata (`OCRRawResponse`) per audit
+- [x] Raw response salvata (campo `MatchReport.raw_api_response`) per audit
 - [x] Workflow stati referto completo (UPLOADED → PROCESSING → EXTRACTED → VALIDATED → PUBLISHED + branch NEEDS_REVIEW/REJECTED)
 
 ### 8.2 Affidabilità da migliorare
