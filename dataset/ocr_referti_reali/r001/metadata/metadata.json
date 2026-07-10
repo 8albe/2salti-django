@@ -6,7 +6,7 @@
         "format": "PDF",
         "quality": "high",
         "difficulty": "medium",
-        "handwriting": "none",
+        "handwriting": "partial",
         "usability": "high"
     },
     "description": "Primo referto reale di pallanuoto. Formato tabellare standard, stampato, alta leggibilità.",
