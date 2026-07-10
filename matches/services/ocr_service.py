@@ -301,28 +301,33 @@ class OCRService:
                     logger.warning(f"MatchDiscovery: Impossibile individuare il match per il referto {match_report.id}")
             
             match = match_report.match
-            
-            # Resolve Teams against linked match teams
-            if resolve_team_entity(data.get('match_info', {}).get('home_team'), [match.home_team]):
-                reconciliation["home_team_id"] = match.home_team.id
-            
-            if resolve_team_entity(data.get('match_info', {}).get('away_team'), [match.away_team]):
-                reconciliation["away_team_id"] = match.away_team.id
-                
-            # Resolve Players against rosters
-            for side in ['home', 'away']:
-                team_obj = getattr(match, f"{side}_team")
-                if team_obj:
-                    roster = list(team_obj.get_roster())
-                    side_players = data.get('teams', {}).get(side, {}).get('players', [])
-                    for p_ocr in side_players:
-                        p_name = p_ocr.get('name')
-                        if p_name:
-                            matched_athlete = resolve_athlete(p_name, roster)
-                            if matched_athlete:
-                                # We store the User ID since it's the target for MatchEvents
-                                reconciliation[f"{side}_players"][p_name] = matched_athlete.user.id
-            
+
+            # La reconciliation ha senso solo se il report è collegato a un match.
+            # Se la discovery non ha trovato nulla (match=None), saltiamo team/roster
+            # senza dereferenziare match: il report viene poi fermato in NEEDS_REVIEW
+            # dal ramo "no match" del quality gate qui sotto.
+            if match:
+                # Resolve Teams against linked match teams
+                if resolve_team_entity(data.get('match_info', {}).get('home_team'), [match.home_team]):
+                    reconciliation["home_team_id"] = match.home_team.id
+
+                if resolve_team_entity(data.get('match_info', {}).get('away_team'), [match.away_team]):
+                    reconciliation["away_team_id"] = match.away_team.id
+
+                # Resolve Players against rosters
+                for side in ['home', 'away']:
+                    team_obj = getattr(match, f"{side}_team")
+                    if team_obj:
+                        roster = list(team_obj.get_roster())
+                        side_players = data.get('teams', {}).get(side, {}).get('players', [])
+                        for p_ocr in side_players:
+                            p_name = p_ocr.get('name')
+                            if p_name:
+                                matched_athlete = resolve_athlete(p_name, roster)
+                                if matched_athlete:
+                                    # We store the User ID since it's the target for MatchEvents
+                                    reconciliation[f"{side}_players"][p_name] = matched_athlete.user.id
+
             normalized_data['reconciliation'] = reconciliation
             match_report.normalized_data = normalized_data
             # --- END AUTO-RECONCILIATION ---
