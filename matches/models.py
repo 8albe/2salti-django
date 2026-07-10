@@ -299,30 +299,3 @@ class MatchReportAuditLog(models.Model):
     def __str__(self):
         status_change = f" ({self.old_status} -> {self.new_status})" if self.old_status and self.new_status else ""
         return f"{self.created_at.strftime('%Y-%m-%d %H:%M')} - {self.action}{status_change} su {self.report}"
-
-
-class OCRRawResponse(models.Model):
-    """
-    Modello tecnico per salvare la risposta originale dei provider OCR.
-    Fondamentale per debug, audit e tracciabilità totale (Rules: Audit Log, Tracciabilità).
-    """
-    report = models.ForeignKey(MatchReport, on_delete=models.CASCADE, related_name='ocr_responses')
-    provider_id = models.CharField(max_length=100, help_text="ID del provider (es: openai-gpt4o)")
-    
-    # Payload originale
-    raw_response = models.JSONField(help_text="Risposta JSON completa del provider")
-    
-    # Metadata tecnici
-    status_code = models.IntegerField(null=True, blank=True)
-    request_id = models.CharField(max_length=255, blank=True, help_text="ID univoco della richiesta fornito dal provider")
-    latency_ms = models.IntegerField(null=True, blank=True, help_text="Latenza della richiesta in millisecondi")
-    
-    created_at = models.DateTimeField(auto_now_add=True)
-
-    class Meta:
-        ordering = ['-created_at']
-        verbose_name = "Risposta Raw OCR"
-        verbose_name_plural = "Risposte Raw OCR"
-
-    def __str__(self):
-        return f"RawResponse {self.provider_id} for {self.report} ({self.created_at.strftime('%Y-%m-%d %H:%M')})"

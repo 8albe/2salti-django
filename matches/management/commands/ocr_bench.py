@@ -16,7 +16,7 @@ chiamata API, quindi anche se la chiamata poi fallisce.
 Con --no-preprocess bypassa ImagePreprocessor e invia l'immagine grezza
 (niente auto-rotate a portrait né downscale).
 
-Nessuna scrittura sul DB: niente salvataggi di MatchReport/OCRRawResponse,
+Nessuna scrittura sul DB: niente salvataggi di MatchReport,
 niente transizioni di stato.
 """
 import json
