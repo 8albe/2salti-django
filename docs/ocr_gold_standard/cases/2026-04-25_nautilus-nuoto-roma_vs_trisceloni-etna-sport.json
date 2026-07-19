@@ -1,0 +1,55 @@
+{
+  "case_id": "2026-04-25_nautilus-nuoto-roma_vs_trisceloni-etna-sport",
+  "schema_version": "1.0",
+  "verified_by": "Alberto Galbiati",
+  "verified_at": "2026-07-19",
+  "verification_method": "collazione a mano del referto cartaceo originale",
+
+  "match": {
+    "db_match_pk": null,
+    "db_league_pk": null,
+    "db_league_name": null,
+    "db_lookup_note": "Non verificato in questo giro contro il DB live. In un backup prod locale del 2026-07-04 (db_prod_pre_zero9_20260704_1545.sqlite3, sola lettura) non risulta alcun Match per questa coppia/data (atteso: la data, 25/04/2026, precede il backup, quindi se il match non c'era gia' allora non e' un problema di finestra temporale). 'Trisceloni Etna Sport' non risulta ne' come Team ne' come Society in quel backup — vedi risposta al punto 5 del task.",
+    "season": "2025/2026",
+    "date": "2026-04-25",
+    "competition_on_paper": "Campionato maschile Serie B",
+    "venue_on_paper": "Le Cupole",
+    "city_on_paper": null,
+    "home_team": {
+      "db_team_pk": 3,
+      "db_team_name": "Nautilus N. Roma",
+      "name_on_paper": "Nautilus Nuoto Roma"
+    },
+    "away_team": {
+      "db_team_pk": null,
+      "db_team_name": null,
+      "name_on_paper": "Trisceloni Etna Sport"
+    }
+  },
+
+  "truth": {
+    "scores": {
+      "final_score": "20-12",
+      "quarters": {
+        "1": [4, 2],
+        "2": [5, 3],
+        "3": [6, 3],
+        "4": [5, 4]
+      }
+    }
+  },
+
+  "not_verified": [
+    "roster casa e trasferta (nomi, numeri di maglia)",
+    "eventi (marcatori, minuti, esclusioni, cartellini)",
+    "ufficiali di gara (arbitro, segretario, cronometrista)",
+    "attribuzione dei gol ai singoli giocatori per periodo"
+  ],
+
+  "extractions": [],
+
+  "findings": [
+    "Somma parziali verificata: 4+5+6+5=20, 2+3+3+4=12, coerente col finale 20-12.",
+    "'Trisceloni Etna Sport' assente sia da Team sia da Society nel backup prod consultato (2026-07-04): un eventuale referto per questo match andrebbe orfano per assenza reale della squadra, non per fallimento del fuzzy matching (§8.6) — la squadra semplicemente non esiste ancora a DB."
+  ]
+}

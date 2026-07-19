@@ -5,6 +5,11 @@ cartaceo**, non da un modello. Serve a misurare l'accuratezza reale dei provider
 OCR (Macro 8) invece della loro confidence auto-dichiarata, che si è dimostrata
 attivamente fuorviante (§"Perché esiste" sotto).
 
+**Stato (2026-07-19): 5 casi.** 1 con estrazioni già confrontate (il caso
+fondativo, 11/04/2026 — vedi §"Perché esiste"); 4 pronti per il bench ma senza
+alcuna estrazione OCR associata (`extractions: []`) — si popoleranno quando
+verranno fatti girare.
+
 ## Perché sta in `docs/` e non in `matches/fixtures/`
 
 Non è una fixture Django: non si carica con `loaddata`, non popola un DB di test
@@ -37,10 +42,34 @@ merge.
 | `match` | Aggancio al DB (`db_match_pk`, `db_league_pk`) e alle squadre, con **`name_on_paper`** accanto a `db_team_name`: la divergenza fra i due è essa stessa un dato (fallimento della discovery). |
 | `truth` | **Solo i campi effettivamente verificati da umano.** Ogni campo non collazionato sta in `not_verified` — mai inferito, mai copiato da un'estrazione. |
 | `not_verified` | Elenco esplicito di ciò che nessuno ha ancora controllato. Impedisce che un campo non verificato venga scambiato per verità. |
-| `extractions[]` | Una voce per estrazione, con `provider`, `model`, `db_report_pk`, quanto estratto, la confidence auto-dichiarata e il `verdict` campo per campo. |
+| `extractions[]` | Una voce per estrazione, con `provider`, `model`, `db_report_pk`, quanto estratto, la confidence auto-dichiarata e il `verdict` campo per campo. **Può essere vuoto (`[]`)**: un caso è gold standard per la sola `truth` verificata, anche prima che qualunque provider lo abbia mai letto — le estrazioni si aggiungono quando il referto viene fatto girare nel bench. |
 | `findings` | Cosa insegna questo caso, in forma citabile dalla documentazione. |
 
 `verdict` usa tre soli valori: `correct`, `wrong`, `unverified`.
+
+## Regola di dominio: la stagione non si deduce dalla data
+
+La stagione sportiva va da **settembre a luglio** e attraversa due anni solari
+(es. `2025/2026`). Dedurre la stagione dall'anno solare della data di gara è
+**sbagliato per definizione**: una gara datata aprile, maggio, giugno o luglio
+appartiene alla stagione iniziata l'anno solare *precedente*, non a quello
+scritto nella data. Nei casi di questo dataset si trascrive sempre la **data
+come scritta sul referto** (campo `match.date`); il campo `match.season` va
+compilato leggendo la stagione effettiva del campionato (calendario/lega), mai
+inferendola a mano dall'anno della data. Registrata anche in
+[DOMAIN_GLOSSARY.md](../DOMAIN_GLOSSARY.md) §"Stagione".
+
+## Nessuna lettura di un modello entra in `truth` senza verifica umana
+
+Vale per i provider OCR **e per Claude in chat**. In questa stessa sessione,
+mentre si preparavano i casi 2–5 di questo dataset, Claude in chat ha letto
+"2025" dove il referto originale riportava "2026" — con la stessa sicurezza
+con cui i provider OCR di §"Perché esiste" hanno dichiarato `confidence 1.0`
+su valori sbagliati. Il pattern è lo stesso indipendentemente dal modello: un
+sistema che legge un documento denso può essere internamente coerente e
+comunque falso. Il campo `truth` di questo dataset accetta **solo** valori
+riportati da un umano che ha guardato l'originale cartaceo (`verified_by` +
+`verification_method`); nessuna eccezione per "il modello sembrava sicuro".
 
 ## Come aggiungere un caso
 
