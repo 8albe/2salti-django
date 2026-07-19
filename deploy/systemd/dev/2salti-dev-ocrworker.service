@@ -6,6 +6,9 @@ After=network.target
 User=alberto
 Group=www-data
 WorkingDirectory=/opt/2salti-dev
+# Senza questa, Python bufferizza stdout a blocchi quando non scrive su un
+# terminale: il worker gira ma e' cieco in journald (OPS_RUNBOOK §3.17).
+Environment=PYTHONUNBUFFERED=1
 ExecStart=/opt/2salti-dev/.venv/bin/python manage.py ocr_worker
 Restart=always
 RestartSec=5

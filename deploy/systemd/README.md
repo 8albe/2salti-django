@@ -59,6 +59,16 @@ sudo systemctl daemon-reload
 sudo systemctl enable --now 2salti-dev-ocrworker.service
 ```
 
+> **Trappola: unit Python + log applicativi → serve `PYTHONUNBUFFERED=1`.**
+> Python bufferizza `stdout` a blocchi quando non scrive su un terminale, e
+> sotto systemd non lo è mai: senza questa variabile il servizio gira
+> regolarmente ma è **cieco in journald** — si vedono solo le righe di systemd,
+> e il primo output applicativo compare quando il buffer si riempie (o mai, in
+> un processo long-running che stampa poco). `stderr` invece è line-buffered e
+> arriva subito, quindi il sintomo è asimmetrico: gli errori si vedono, il
+> normale funzionamento no. Ogni unit nuova che esegue direttamente Python deve
+> avere `Environment=PYTHONUNBUFFERED=1`. Dettaglio in OPS_RUNBOOK §3.17.
+
 Il worker esce da solo (exit 0) quando si accorge che l'SHA di `HEAD` è
 cambiato, ma **solo a coda vuota**, mai a metà job; `Restart=always` lo
 rilancia col codice nuovo entro pochi secondi. Su prod, dove il pull è
