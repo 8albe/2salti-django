@@ -1,0 +1,143 @@
+{
+  "case_id": "2025-12-06_pol-delta_vs_villa-york",
+  "schema_version": "1.0",
+  "verified_by": "Alberto Galbiati",
+  "verified_at": "2026-07-19",
+  "verification_method": "collazione a mano del referto cartaceo originale, corroborata dalla storia cronometrica del referto",
+
+  "match": {
+    "db_match_pk": 1,
+    "db_league_pk": 2,
+    "db_league_name": "serie B Maschile",
+    "season": "2025/2026",
+    "date": "2025-12-06",
+    "home_team": {
+      "db_team_pk": 1,
+      "db_team_name": "Pol. Delta",
+      "name_on_paper": "POL. DELTA"
+    },
+    "away_team": {
+      "db_team_pk": 2,
+      "db_team_name": "Villa York",
+      "name_on_paper": "VILLA YORK"
+    }
+  },
+
+  "truth": {
+    "scores": {
+      "final_score": "15-9",
+      "quarters": {
+        "1": [6, 2],
+        "2": [1, 2],
+        "3": [3, 4],
+        "4": [5, 1]
+      }
+    }
+  },
+
+  "corroboration": {
+    "source": "storia cronometrica del referto (sequenza dei gol con il minuto)",
+    "why_independent": "e' una zona del foglio distinta dal riquadro dei parziali: le due sono compilate separatamente durante la gara, quindi la loro concordanza non e' una ricopiatura ma una conferma.",
+    "progression": ["6-2", "7-4", "10-8", "15-9"],
+    "check": "i cumulati della progressione coincidono con la somma progressiva dei parziali verificati (6-2, 7-4, 10-8, 15-9).",
+    "method_note": "regola metodologica per i casi futuri: quando riquadro dei parziali e storia cronometrica concordano, la fiducia nella truth e' piu' alta di una singola lettura; quando divergono, il caso va marcato e non chiuso."
+  },
+
+  "not_verified": [
+    "metadati di gara letti da Claude e NON collazionati con lo stesso rigore: citta' Roma, impianto Foro Italico, competizione Serie B maschile, orario di inizio 19:00",
+    "roster casa e trasferta (nomi, numeri di maglia)",
+    "eventi (marcatori, minuti, esclusioni, cartellini)",
+    "ufficiali di gara (arbitro, segretario, cronometrista)",
+    "attribuzione dei gol ai singoli giocatori per periodo"
+  ],
+
+  "extractions": [
+    {
+      "provider": "GPT4oVisionProvider-v2-hardened",
+      "model": "gpt-4o",
+      "db_report_pk": 7,
+      "extracted_at": "2026-04-12",
+      "extracted": {
+        "match_info": {
+          "home_team": "POL. DELTA",
+          "away_team": "VILLA YORK",
+          "date": "2025-12-06",
+          "competition": null,
+          "city": null
+        },
+        "scores": {
+          "final_score": "15-9",
+          "quarters": {
+            "1": [5, 2],
+            "2": [4, 2],
+            "3": [3, 1],
+            "4": [3, 4]
+          }
+        },
+        "counts": {
+          "events": 42,
+          "home_roster": 13,
+          "away_roster": 13
+        }
+      },
+      "self_reported_confidence": {
+        "overall": 1.0,
+        "final_score": 1.0,
+        "quarters": 1.0,
+        "home_team": 1.0,
+        "away_team": 1.0,
+        "home_roster": 1.0,
+        "away_roster": 1.0,
+        "events": 1.0
+      },
+      "verdict": {
+        "final_score": "correct",
+        "quarter_1": "wrong",
+        "quarter_2": "wrong",
+        "quarter_3": "wrong",
+        "quarter_4": "wrong",
+        "home_team_name": "correct",
+        "away_team_name": "correct",
+        "date": "correct",
+        "roster": "unverified",
+        "events": "unverified"
+      },
+      "notes": [
+        "Punteggio finale corretto (15-9) e tutti e quattro i parziali sbagliati.",
+        "Errori compensativi: 5+4+3+3 = 15 e 2+2+1+4 = 9, quindi il controllo 'somma parziali == finale' passa su parziali interamente falsi.",
+        "confidence auto-dichiarata 1.0 su OGNI campo, compresi i quattro parziali errati: e' il caso con la confidence piu' alta e la qualita' peggiore sui parziali.",
+        "Il modello non ha estratto competizione ne' citta' (null), pur essendo presenti sul foglio."
+      ]
+    }
+  ],
+
+  "findings": [
+    "Quarto caso su quattro in cui i parziali a DB sono tutti sbagliati: con questo la popolazione dei match a DB e' al 100% di errore (4/4).",
+    "Anche qui la somma dei parziali torna esattamente al finale dichiarato: il controllo strutturale 'somma parziali == punteggio finale' (BLUEPRINT §9) ha un tasso di rilevazione dello 0% su una popolazione con tasso di errore del 100%. Non e' un controllo debole: su questa classe di errore e' inutile per costruzione, perche' parziali e totale derivano dalla stessa lettura (o i parziali vengono ricostruiti a partire dal totale).",
+    "Il punteggio finale e' corretto, i parziali no: coerente con l'ipotesi (n=4) che il totale sia il campo piu' affidabile e i parziali il meno affidabile. Ipotesi, non legge.",
+    "La verita' e' corroborata da una seconda zona del foglio (storia cronometrica) indipendente dal riquadro dei parziali: e' la prima volta che un caso del dataset ha due fonti concordi sull'originale."
+  ],
+
+  "db_correction": {
+    "applied_on": "2026-07-19",
+    "environments": ["dev"],
+    "audit_action": "MATCH_SCORE_CORRECTED",
+    "before": {
+      "home_score": 15,
+      "away_score": 9,
+      "quarter_scores": {"1": [5, 2], "2": [4, 2], "3": [3, 1], "4": [3, 4]},
+      "is_data_verified": false,
+      "has_report": false
+    },
+    "after": {
+      "home_score": 15,
+      "away_score": 9,
+      "quarter_scores": {"1": [6, 2], "2": [1, 2], "3": [3, 4], "4": [5, 1]},
+      "is_data_verified": true,
+      "has_report": true
+    },
+    "standings_impact": "nessuno: il match 1 non ha referti PUBLISHED, quindi non entra nel calcolo della classifica (StandingsService filtra is_finished=True + reports__status='PUBLISHED'). Rebuild lega 2 e check_data_integrity puliti.",
+    "side_correction": "has_report era False pur avendo il report 7 collegato: backfill del solo dato con audit MATCH_HAS_REPORT_BACKFILLED. La causa e' applicativa (il flag non viene scritto dai percorsi di collegamento a posteriori) e NON e' stata toccata.",
+    "caveat": "report 7.normalized_data NON corretto: non ripubblicare i report 7, 8, 10, 11, 16 finche' il loro normalized_data non viene corretto separatamente (la pubblicazione sovrascriverebbe la correzione sul Match)."
+  }
+}
