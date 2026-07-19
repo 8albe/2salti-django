@@ -1,6 +1,6 @@
 ## 22. OCR asincrono — coda DB-backed con worker systemd
 
-Stato: 🚧 In corso (direzione decisa 2026-07-19; **giro 1 completato su dev il 2026-07-19**)
+Stato: 🚧 In corso (direzione decisa 2026-07-19; **giri 1 e 2 completati su dev il 2026-07-19**; restano il deploy prod — giro 3 — e la rimozione dei timeout 300s — giro 4)
 
 Togliere l'elaborazione OCR dal request cycle. Fino al 2026-07-19 `OCRService.process_and_update()` girava **sincrono** dentro la richiesta HTTP (upload view + admin action `process_ocr`), ~80s a referto con Gemini: worker gunicorn bloccato per tutta la durata, pool saturabile con 3 upload concorrenti (OPS_RUNBOOK §10.20), timeout gunicorn+nginx alzati a 300s come **cerotto provvisorio** (OPS_RUNBOOK §3.16).
 
@@ -44,6 +44,36 @@ Sanata la classe di bug su tutti i punti che enumerano gli stati o assumono la p
 
 Regressione: `matches/tests_review_page_states.py`, 8 test che esercitano la review page su **tutti** gli stati del modello, con e senza partita collegata. Suite: 596 test OK (2 skipped).
 
+### As-built giro 2 (2026-07-19, dev)
+
+Chiude la guardia sugli orfani, aggancia l'osservabilità e sana un buco di metodo.
+
+**Backstop `recover_stale_reports`.** Comando (`--minutes`, default 15; `--dry-run`) + unit `Type=oneshot` e timer `OnCalendar=*:0/15` in `deploy/systemd/{prod,dev}/`. La semantica ratificata è il **requeue capped**, non il `NEEDS_REVIEW` diretto dello sketch di OPS_RUNBOOK §10.19: sotto il cap il referto torna in `QUEUED` con audit `ocr_stale_requeue` e ripartenza immediata (nessun backoff — non ha fallito, gli è morto sotto il worker); a tentativi esauriti va in `NEEDS_REVIEW` + notifica. Lo sketch era stato scritto quando non esistevano né worker né retry; col cap a `MAX_ATTEMPTS` che già protegge dalle poison pill, arrendersi al primo orfano brucerebbe referti sani. Il comando **delega** a `OCRQueueService.requeue_stale()`, lo stesso metodo della sweep di avvio del worker: una regola, due inneschi, e un test che verifica proprio la condivisione del code path.
+
+**Osservabilità in `ops_check`.** Tre segnali: profondità della coda (`QUEUED > 10` → YELLOW), referti in `PROCESSING` oltre soglia (→ **RED**, è il sintomo netto di worker morto), referti con tentativi esauriti (→ YELLOW). Motivazione: un worker fermo non ha sintomi propri — i referti smettono di avanzare e basta, senza errori, senza mail, senza pagine rotte.
+
+**Il buco di metodo — copertura parametrica estesa.** Il giro 1 aveva scoperto che l'introduzione di `QUEUED` aveva rotto **7 punti su 14** che enumeravano gli stati a mano, con la suite verde: ogni catena `{% if status == '...' %}` aveva un ramo `{% else %}` che assorbiva lo stato nuovo in silenzio, e nessun test forzava un referto attraverso le pagine in ogni stato. Il giro 1 aveva coperto solo review page e cockpit. Il giro 2 estende la tecnica a tutte le superfici e, soprattutto, rimuove la causa:
+
+- Nuovo modulo `matches/status_presentation.py`: mappa unica stato→**tono semantico**, palette per tema (`dark`/`light`/`dot`/`border`/`admin`), e **bucket operativi come partizione totale e disgiunta**. Un solo mapping stato→tono e N palette: aggiungere un tema non tocca gli stati, aggiungere uno stato non tocca i temi.
+- Le cinque catene inline nei template diventano il filtro `status_classes` (templatetag `report_status`).
+- Test in `matches/tests_status_coverage.py`: la checklist si deriva da `Status.choices`, quindi un decimo stato entra in copertura da solo e fa fallire la suite finché non è classificato. Le mappe si verificano per **totalità**, non per valore (non si asserisce che PUBLISHED sia verde — è estetica che cambia — ma che ogni stato abbia tono, bucket e classe in ogni tema).
+- Audit sui template sulla forma di quello del gate di visibilità del risultato: scandisce il filesystem e fallisce se un template *nuovo* reintroduce una catena inline, con allowlist motivata e guardia anti-ruggine sulla regex.
+
+**Punti trovati rotti nel farlo, e corretti:**
+
+| Punto | Difetto |
+|---|---|
+| `core/management/commands/audit_db_inventory.py` | la lista dei non-finali aveva perso `QUEUED` dal rilascio della coda: i referti accodati sparivano dall'inventario. **Bug reale già stale**, non ipotetico |
+| `management/views.py` (cockpit) | `DRAFT` non ricadeva in nessuno dei 5 KPI: i referti digitali in bozza erano invisibili allo staff. Mancava anche `done` dall'aggregate |
+| `matches/admin.py` `status_colored` | `DRAFT` assente dal dizionario colori → fallback nero, indistinguibile da `REJECTED` |
+| `matches/api_views_reports.py` | `NON_FINAL_STATES` era una copia locale: un futuro stato transitorio sarebbe stato dichiarato `is_final` e il client avrebbe smesso di fare polling su un referto ancora in lavorazione |
+| `ops_cockpit.html`, `staff_dashboard.html` | stampavano il **codice grezzo** (`NEEDS_REVIEW`) invece dell'etichetta italiana |
+| badge chains dei 4 template | `report_queue` copriva 5 stati su 9; in `match_detail` un referto `REJECTED` era graficamente identico a uno `VALIDATED` |
+
+Test: 43 nuovi (`tests_status_coverage.py`, `tests_recover_stale_command.py`). Suite: **663 test OK** (2 skipped), provider mockato.
+
+**Rinviato per disegno:** la scadenza batch dei `MatchJuryLink` sullo stesso timer. Il lazy-at-read funziona già, e accoppiare due macchine a stati non correlate sullo stesso innesco allarga scope e superficie di test senza risolvere un problema osservato.
+
 ### Ambito
 
 - [x] Enqueue al posto della chiamata sincrona nei **due** entry point: upload view e admin action `process_ocr`
@@ -51,8 +81,8 @@ Regressione: `matches/tests_review_page_states.py`, 8 test che esercitano la rev
 - [x] Worker come **servizio systemd** dedicato (unit versionata in `deploy/systemd/`, pattern OPS_RUNBOOK §9)
 - [x] Endpoint di polling `GET /api/referti/{id}/status` (contratto BLUEPRINT §11)
 - [x] UX upload: risposta immediata + stato in polling
-- [ ] Guardia `recover_stale_reports` + timer systemd, e aggancio a `ops_check` (profondità coda, referti stale) — **giro 2**, chiude OPS_RUNBOOK §10.19
-- [ ] Deploy su prod: migration gated dopo backup DB, install unit worker — **giro 3**
+- [x] Guardia `recover_stale_reports` + timer systemd, e aggancio a `ops_check` (profondità coda, referti stale) — **giro 2**, chiude OPS_RUNBOOK §10.19 (su dev; install del timer su prod nel giro 3)
+- [ ] Deploy su prod: migration gated dopo backup DB, install unit worker **e unit del backstop**, `OPTIONS timeout` + logging in `config/settings.py` — **giro 3**
 - [ ] Rimozione dei timeout 300s — **giro 4**, dopo un periodo di osservazione su prod
 
 ### Dipendenze ops

@@ -30,6 +30,8 @@ sudo systemctl reload 2salti
 
 Se il pull tocca solo documentazione, test, fixture di dati o altri artefatti non letti dal runtime, il reload non serve e il deploy è allineato al momento in cui il pull termina. Nel dubbio, fare comunque il reload: il costo è minimo e il rischio di saltarlo è che una modifica di runtime non diventi attiva.
 
+**Dal 2026-07-19 (Macro 22) il runtime di prod non è più un solo processo.** Accanto a gunicorn gira il worker OCR (`2salti-ocrworker.service`), che esegue lo stesso codice del service web: un pull che tocca `matches/services/`, `matches/models.py` o le migration riguarda anche lui. Il worker si riavvia da solo quando si accorge che l'SHA di `HEAD` è cambiato, ma **solo a coda vuota** — se in quel momento sta elaborando un referto (~80s con Gemini) continua col codice vecchio finché non finisce, e se la coda non si svuota mai il restart non arriva mai. Su prod, dove il pull è manuale, il `sudo systemctl restart 2salti-ocrworker` esplicito accanto al reload di `2salti` è quindi la regola, non un'ottimizzazione: il SIGTERM concede `TimeoutStopSec=150` per chiudere il job in corso, quindi il restart è sicuro anche a coda piena. Un eventuale referto ucciso da un SIGKILL resta in `PROCESSING` e lo recupera il backstop (§10.19).
+
 L'introduzione di un meccanismo di allineamento automatico — post-commit hook nella home che ricordi il pull, cron che rilevi divergenze, o qualsiasi altra soluzione equivalente — vive nel backlog come side-quest aperta. Finché non è implementata, la disciplina manuale è l'unico meccanismo; se la nota di sessione del giorno include un commit significativo e non menziona il pull sul deploy, è probabile che il deploy stia già accumulando deriva.
 
 ### 2.1 Workflow standard di sessione
@@ -43,7 +45,7 @@ Tre workflow da seguire in modo disciplinato ogni sessione.
 3. Entro 2 minuti `dev.2salti.com` si aggiorna automaticamente (auto-pull attivo su `/opt/2salti-dev/`).
 4. Testa su `dev.2salti.com`.
 5. Quando OK: `git checkout master && git merge dev && git push origin master`.
-6. Sul VPS: `cd /opt/2salti-new && git pull origin master` + `sudo systemctl reload 2salti` (o `restart` se cambia `ExecStart` o variabili d'ambiente).
+6. Sul VPS: `cd /opt/2salti-new && git pull origin master` + `sudo systemctl reload 2salti` (o `restart` se cambia `ExecStart` o variabili d'ambiente) + `sudo systemctl restart 2salti-ocrworker` (dal 2026-07-19, Macro 22: il worker OCR è un secondo processo che gira lo stesso codice e va riavviato insieme al service).
 7. `2salti.com` aggiornato — verifica con `curl -I https://2salti.com/` dopo `sleep 3` (vedi §12.2).
 
 **B. Fine sessione — aggiornamento memoria**
@@ -540,6 +542,13 @@ Nello stesso commit sono cambiate le negazioni in `.gitignore`. Il repo ignora `
 
 Il worker OCR ha una particolarità rispetto a gunicorn: esce da solo (exit 0) quando si accorge che l'SHA di `HEAD` è cambiato, ma **solo a coda vuota**, mai a metà job; `Restart=always` lo rilancia col codice nuovo entro pochi secondi. Su dev questo evita di dover toccare l'autopull (che è fuori repo e richiederebbe una riga di sudoers in più); su prod, dove il pull è manuale, resta buona norma un `sudo systemctl restart 2salti-ocrworker` esplicito accanto al restart di `2salti`.
 
+**Unit del backstop orfani — aggiunte 2026-07-19 (Macro 22 giro 2).** Alle unit sopra si affiancano `prod/2salti-recover-stale.{service,timer}` e `dev/2salti-dev-recover-stale.{service,timer}`: un `Type=oneshot` che lancia `manage.py recover_stale_reports`, pilotato da un timer `OnCalendar=*:0/15` con `Persistent=true` e `RandomizedDelaySec=60` (lo sfasamento evita l'accavallamento con gli altri timer sul minuto tondo). Due differenze deliberate rispetto alla unit del worker, che non vanno "uniformate" per simmetria:
+
+- **Nessun `PYTHONUNBUFFERED=1`.** Serve al worker perché è long-running e senza flush resta cieco in journald per ore (§3.17); un oneshot che termina in un secondo svuota comunque i buffer all'uscita del processo.
+- **Nessun `Restart=`.** Il comando è idempotente e senza stato: se un giro fallisce, quello dopo rifà esattamente lo stesso lavoro 15 minuti dopo. Un restart automatico su un oneshot periodico aggiunge solo rumore.
+
+Il timer è un **backstop, non il meccanismo primario**: il recupero rapido lo fa la sweep di avvio del worker. Questo copre il caso che quella non vede — il worker fermo e basta, che quindi non si riavvia mai.
+
 **Config nginx — stesso pattern, chiuso il 2026-07-19.** Le copie canoniche vivono in `deploy/nginx/prod/2salti` e `deploy/nginx/dev/2salti-dev`, con `README.md` di procedura (stesso schema di `deploy/gunicorn/`). I file attivi vivono fuori repo in `/etc/nginx/sites-available/` (symlink in `sites-enabled/`); sync repo→sistema manuale via `sudo cp` + `nginx -t` + `systemctl reload nginx` — il `nginx -t` prima del reload non è opzionale, un errore di sintassi non deve arrivare a un reload che uccide il proxy. Le due config divergono volutamente (dev non ha `proxy_read_timeout` esteso). Debito §10.17 chiuso da questo versionamento.
 
 ## 10. Debiti aperti
@@ -555,19 +564,37 @@ Registro vivo di problemi noti che richiedono follow-up. Non sono trappole (§3)
 
 Durante il deploy §2.6, `pip install -r requirements.txt` su prod ha fatto **downgrade** di pacchetti installati a mano più di recente: Django 5.0.3→5.0, openai 2.31→2.29, numpy 2.4.4→2.4.3, python-dotenv 1.2.2→1.2.1. I pin nel file sono più vecchi dello stato reale dei box. Da allineare in un giro dedicato: portare i pin allo stato corretto valutando in particolare i **fix di sicurezza Django** persi col rientro da 5.0.3 a 5.0 (i patch release 5.0.x sono in gran parte security/bugfix). Fino ad allora: **non** rilanciare `pip install -r requirements.txt` sui box se non serve.
 
-### §10.19 Nessuna guardia sui referti appesi in `PROCESSING` — APERTO 2026-07-19
+### §10.19 Nessuna guardia sui referti appesi in `PROCESSING` — CHIUSO 2026-07-19 (Macro 22 giro 2)
 
-Se il worker muore a metà OCR (timeout gunicorn, deploy/restart, crash), il referto resta in `PROCESSING` **per sempre**: nessun recovery automatico, e la review queue non lo ripropone. Successo il 2026-07-19 con i timeout 30s (§3.16). Serve un comando `recover_stale_reports` (referti in `PROCESSING` da più di N minuti → `NEEDS_REVIEW` + audit log) agganciabile ai timer systemd esistenti — incluso nello scope della **Macro 22** (OCR asincrono). Sblocco manuale usato il 2026-07-19, nella forma (dal box, python del venv, pk espliciti dei referti appesi):
+~~Se il worker muore a metà OCR il referto resta in `PROCESSING` per sempre: nessun recovery automatico, e la review queue non lo ripropone.~~ **Risolto** su dev dal giro 2 con due inneschi che condividono una sola regola: la sweep di avvio del worker (nessuna soglia — girando un solo worker, all'avvio ogni referto in `PROCESSING` è per definizione orfano) e il comando `recover_stale_reports` su timer ogni 15 minuti, che copre il caso che la sweep non vede: il worker fermo e basta, che quindi non si riavvia mai. Entrambi passano da `OCRQueueService.requeue_stale()`, quindi l'esito su un dato referto non dipende da chi lo recupera.
 
-```bash
-python manage.py shell -c "from matches.models import MatchReport; MatchReport.objects.filter(pk__in=[...], status='PROCESSING').update(status='NEEDS_REVIEW')"
-```
+**La semantica implementata devia dallo sketch qui sopra, ed è la deviazione il punto.** Lo sketch prescriveva `PROCESSING` da più di N minuti → `NEEDS_REVIEW`, ed era scritto il mattino del 2026-07-19, quando non esistevano né worker né retry: mandare tutto in revisione umana era l'unica opzione disponibile. Col claim che incrementa `ocr_attempts` e il backoff introdotti nel giro 1, quella regola brucerebbe un referto perfettamente sano per un singolo restart sfortunato. La semantica ratificata è quindi il **requeue capped**:
 
-riporta i referti in coda di revisione umana senza rilanciare l'OCR (nessun retry automatico: rilanciare è una scelta del reviewer via admin action `process_ocr`).
+| Condizione | Azione |
+|---|---|
+| `PROCESSING`, `ocr_started_at` più vecchio di `--minutes` (default 15), `ocr_attempts < 3` | torna in `QUEUED`, audit `ocr_stale_requeue`, `ocr_next_attempt_at = now` (nessun backoff: non ha fallito, gli è morto sotto il worker) |
+| idem ma `ocr_attempts >= 3` | `NEEDS_REVIEW` + audit `ocr_failed` + notifica staff |
 
-### §10.20 Saturazione del pool worker con OCR sincrono — APERTO 2026-07-19
+Il cap a `MAX_ATTEMPTS` regge già la protezione contro le poison pill — un referto che uccide il worker ogni volta esaurisce i tentativi e si ferma — quindi il backstop può permettersi di riprovare invece di arrendersi al primo orfano.
 
-Prod ha `workers = 3` e l'OCR gira sincrono nel request cycle (~80s a referto, §3.16): **3 upload OCR concorrenti bloccano l'intero pool** per ~80s ciascuno e il sito smette di rispondere a qualunque richiesta finché un worker non si libera. Mitigato oggi solo dalla bassa concorrenza reale (pilot). Non si risolve alzando i worker: si risolve togliendo l'OCR dal request cycle (**Macro 22**).
+Diagnostica prima di agire: `python manage.py recover_stale_reports --dry-run` stampa cosa farebbe, distinguendo i due esiti, senza scrivere nulla. `--minutes` sposta la soglia. Lo sblocco manuale via `shell -c` usato il 2026-07-19 non serve più e **non va più usato**: scavalcava l'audit trail e non passava dalla notifica.
+
+Osservabilità agganciata nello stesso giro (§ `ops_check`): profondità della coda, referti in `PROCESSING` oltre soglia (RED — è il sintomo netto di worker morto), referti con tentativi esauriti. Serviva perché un worker fermo non ha sintomi propri: i referti smettono di avanzare e basta, senza errori né pagine rotte.
+
+Residuo: install ed enable del timer su **prod** restano da fare (giro 3, gated Alberto). Su prod la guardia non è quindi ancora attiva.
+
+### §10.20 Saturazione del pool worker con OCR sincrono — RISOLTO SU DEV 2026-07-19, aperto su prod
+
+~~Prod ha `workers = 3` e l'OCR gira sincrono nel request cycle (~80s a referto, §3.16): **3 upload OCR concorrenti bloccano l'intero pool** per ~80s ciascuno e il sito smette di rispondere a qualunque richiesta finché un worker non si libera.~~
+
+**La causa è rimossa nel codice** (Macro 22 giro 1): l'OCR non gira più nel request cycle. I due entry point — upload view e admin action `process_ocr` — accodano e rispondono subito; l'elaborazione avviene nel processo `ocr_worker`, fuori da gunicorn. Il pool **non è più saturabile dagli upload**: una richiesta di upload ora dura quanto una scrittura su DB, non ~80s, e nessun worker gunicorn resta occupato da una chiamata a Gemini.
+
+Due precisazioni che impediscono di leggere questa voce come chiusa:
+
+- **Su prod non è ancora vero.** Il codice è live solo su dev; il deploy su prod (migration gated dopo backup DB + install della unit worker) è il giro 3. Fino ad allora prod ha ancora l'OCR sincrono e questo debito è attivo esattamente come descritto sopra.
+- **I timeout 300s restano**, su entrambi i box. Gunicorn `timeout = 300` e nginx `proxy_read_timeout 300s` sono il cerotto che questa macro elimina, ma la rimozione è deliberatamente rinviata al **giro 4**, dopo un periodo di osservazione dell'asincrono su prod: toglierli prima significherebbe rimuovere la rete di sicurezza mentre si sta ancora verificando che il sostituto regga. Finché ci sono, un residuo di path sincrono (es. `process_and_update` usato in diagnostica) non causa un 500 immediato.
+
+La voce si chiude col giro 4, non prima.
 
 ### §10.21 `MatchReport` registrato su due admin site — APERTO 2026-07-19 (minore)
 

@@ -3,7 +3,7 @@
 Questo documento descrive le macchine a stati implementate nel codice.
 Se il blueprint di prodotto o altri documenti dicono cose diverse, **questo file vince**.
 
-Ultimo aggiornamento: 2026-07-19 (§1: stato QUEUED e coda OCR asincrona — Macro 22 giro 1)
+Ultimo aggiornamento: 2026-07-19 (§1: recupero orfani in PROCESSING, requeue capped — Macro 22 giro 2)
 Generato leggendo:
 - `accounts/models.py`
 - `matches/api_views_digital.py`
@@ -61,7 +61,8 @@ Generato leggendo:
 | `REJECTED` | `QUEUED` | `OCRService.enqueue()` — riprocessamento | Come sopra | `matches/services/ocr_service.py` |
 | `QUEUED` | `PROCESSING` | `OCRQueueService.claim()` — claim del worker | `ocr_started_at` valorizzato, `ocr_attempts` incrementato | `matches/services/ocr_queue.py` |
 | `PROCESSING` | `QUEUED` | `OCRQueueService.schedule_retry()` — errore tecnico del provider | `ocr_next_attempt_at` = now + backoff (60s, 120s), `ocr_error` salvato, audit action=`ocr_retry` | `matches/services/ocr_queue.py` |
-| `PROCESSING` | `QUEUED` | `OCRQueueService.requeue_stale()` — referto orfano recuperato | `ocr_started_at` azzerato, audit action=`ocr_stale_requeue` | `matches/services/ocr_queue.py` |
+| `PROCESSING` | `QUEUED` | `OCRQueueService.requeue_stale()` — referto orfano recuperato, con tentativi residui. Innescata dalla sweep di avvio del worker (nessuna soglia) o dal backstop `recover_stale_reports` (soglia 15 min) | `ocr_started_at` azzerato, `ocr_next_attempt_at` = now (nessun backoff), `ocr_attempts` **invariato**, audit action=`ocr_stale_requeue` | `matches/services/ocr_queue.py` |
+| `PROCESSING` | `NEEDS_REVIEW` | `OCRQueueService.requeue_stale()` — referto orfano con tentativi **esauriti**: delega a `fail_permanently()` | audit action=`ocr_failed`, notifica staff | `matches/services/ocr_queue.py` |
 | `PROCESSING` | `NEEDS_REVIEW` | `OCRQueueService.fail_permanently()` — tentativi esauriti (3) | `validation_notes` con errore tecnico, audit action=`ocr_failed`, notifica staff | `matches/services/ocr_queue.py` |
 | `UPLOADED` | `REJECTED` | `OCRService.enqueue()` — canale FILE senza file | `validation_notes` con errore (fail veloce sincrono) | `matches/services/ocr_service.py` |
 | `PROCESSING` | `EXTRACTED` | `OCRService.process_claimed()` — OCR OK + quality gate OK | `normalized_data` popolato, `validation_notes` con gate results, audit log `OCR_PROCESSING_SUCCESS`, link a `match` | `matches/services/ocr_service.py` |
@@ -92,9 +93,17 @@ polling ogni 3s, prende il referto con un claim atomico ed esegue
   → `NEEDS_REVIEW` senza retry. *Tecnico* (provider 5xx, timeout, rete) →
   ritorno in `QUEUED` con backoff 60s/120s, fino a 3 tentativi, poi
   `NEEDS_REVIEW` + notifica.
-- **Orfani in `PROCESSING`:** la sweep di avvio del worker li riaccoda (girando
-  un solo worker, all'avvio sono per definizione orfani). Il backstop periodico
-  `recover_stale_reports` arriva col giro 2.
+- **Orfani in `PROCESSING`:** due inneschi, **una sola regola**. La sweep di
+  avvio del worker li riaccoda senza soglia temporale (girando un solo worker,
+  all'avvio ogni referto in `PROCESSING` è per definizione orfano); il backstop
+  periodico `recover_stale_reports` (timer ogni 15 min, giro 2) applica la
+  soglia `ocr_started_at` più vecchio di 15 minuti e copre il caso che la sweep
+  non vede — il worker fermo e basta, che quindi non si riavvia mai.
+  Entrambi passano da `OCRQueueService.requeue_stale()`: l'esito su un dato
+  referto non dipende da chi lo recupera.
+  Il recupero **non** incrementa `ocr_attempts` (si contano al claim) e non
+  applica backoff: l'orfano non ha fallito, gli è morto sotto il worker, quindi
+  `ocr_next_attempt_at = now`.
 - **`UPLOADED` non è uno stato di coda:** i referti creati da admin o da
   `ingest_emails` restano lì finché qualcuno non li accoda esplicitamente.
 
