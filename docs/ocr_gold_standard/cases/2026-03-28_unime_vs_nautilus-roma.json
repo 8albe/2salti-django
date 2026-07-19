@@ -6,10 +6,10 @@
   "verification_method": "collazione a mano del referto cartaceo originale",
 
   "match": {
-    "db_match_pk": null,
-    "db_league_pk": null,
-    "db_league_name": null,
-    "db_lookup_note": "Non verificato in questo giro contro il DB live. In un backup prod locale del 2026-07-04 (db_prod_pre_zero9_20260704_1545.sqlite3, sola lettura) risulta gia' presente un Match (id=2, league_id=3 'serie B Maschile') fra Team pk=3 ('Nautilus N. Roma') e Team pk=4 ('Unime'), is_finished=1, has_report=1, ma nel DB il TEAM CASA registrato e' Nautilus (home_score=12) e il team trasferta e' Unime (away_score=10) — l'OPPOSTO dell'assegnazione casa/trasferta di questo caso (qui home=Unime=12 per nota 'ospitante Unime' sul referto, comunque marcata come metadato non verificato). Punteggio 12 e 10 combaciano nei due punteggi totali ma sono attribuiti a squadre invertite rispetto a questa verita' cartacea; anche i parziali DB ({1:[3,2],2:[2,3],3:[4,3],4:[3,2]} per Nautilus-casa) non si allineano a quelli qui verificati nemmeno invertendo casa/trasferta. Discrepanza reale, non spiegata: da riverificare sul sistema live, NON corretta in questo giro (fuori scope, tocca prod).",
+    "db_match_pk": 2,
+    "db_league_pk": 3,
+    "db_league_name": "serie B Maschile",
+    "db_lookup_note": "Verificato sul sistema vivo il 2026-07-19 (dev e prod identici a quella data per questo match). Match id=2, report id=8 (NEEDS_REVIEW, mai pubblicato). PRIMA della correzione, il DB aveva casa/trasferta INVERTITI rispetto a questa verita' cartacea: home_team=Nautilus N. Roma (12), away_team=Unime (10) — il vincitore registrato era sbagliato. CORRETTO SU DEV il 2026-07-19: scambiate le FK home_team/away_team insieme a punteggio e parziali nella stessa transazione (audit MATCH_SCORE_CORRECTED, before/after allegati; is_data_verified ora True). Nessun MatchEvent e nessuna Convocation collegati al match (recon pre-correzione: zero effetti collaterali su altre tabelle). PROD ancora al valore invertito: correzione preparata ma non eseguita (fuori scope di questo giro, richiede intervento di Alberto). report.normalized_data del report 8 NON toccato: conserva ancora la vecchia attribuzione casa/trasferta. Non ripubblicare il report 8 finche' normalized_data non e' corretto separatamente, altrimenti publish_report() sovrascrive il Match dal normalized_data ancora invertito.",
     "season": "2025/2026",
     "date": "2026-03-28",
     "competition_on_paper": "Serie B",
@@ -51,6 +51,7 @@
 
   "findings": [
     "Somma parziali verificata: 4+3+3+2=12, 2+1+4+3=10, coerente col finale 12-10.",
-    "Un Match per questa coppia squadre/data risulta gia' presente in un backup prod locale del 2026-07-04 con gli stessi due punteggi totali (12 e 10) ma attribuiti a squadre invertite rispetto a questa verita' cartacea, e con parziali che non tornano nemmeno invertendo casa/trasferta: vedi match.db_lookup_note. Potenziale errore di attribuzione casa/trasferta gia' a DB su un referto gia' pubblicato — non verificato live, non corretto in questo giro."
+    "Confermato sul sistema vivo: casa/trasferta erano invertiti a DB, con conseguenza diretta sul vincitore registrato (falsava anche i punti classifica, sebbene qui senza impatto reale perche' nessun report e' mai stato PUBLISHED per questo match). E' una classe di errore distinta dai parziali compensativi: nessun controllo aritmetico la rileva, perche' i numeri sono tutti presenti e coerenti — cambia solo a chi sono attribuiti (vedi syllabus §8.5, 'inversione casa/trasferta').",
+    "Corretto su dev il 2026-07-19 scambiando le FK home_team/away_team insieme a punteggio e parziali nella stessa transazione; prod ancora da correggere."
   ]
 }

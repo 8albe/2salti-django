@@ -6,10 +6,10 @@
   "verification_method": "collazione a mano del referto cartaceo originale",
 
   "match": {
-    "db_match_pk": null,
-    "db_league_pk": null,
-    "db_league_name": null,
-    "db_lookup_note": "Non verificato in questo giro contro il DB live (nessun accesso diretto dall'ambiente di lavoro). In un backup prod locale del 2026-07-04 (db_prod_pre_zero9_20260704_1545.sqlite3, sola lettura) risulta gia' presente un Match (id=4, league_id=5 'Juniores M - U18A') fra Team pk=7 ('Olimpic Roma P.N.') e Team pk=8 ('Libertas Roma Eur'), is_finished=1, has_report=1, home_score=20, away_score=1 — punteggio finale coerente con questa verita' cartacea, ma quarter_scores DB = {1:[5,0],2:[5,0],3:[5,0],4:[5,1]}, DIVERSO dai parziali verificati qui (5-0/4-0/5-1/6-0): stessa somma (20-1), distribuzione diversa. Da riverificare sul sistema live prima di fidarsi del dato a DB o di usarlo per ocr_bench.",
+    "db_match_pk": 4,
+    "db_league_pk": 5,
+    "db_league_name": "Juniores M - U18A",
+    "db_lookup_note": "Verificato sul sistema vivo il 2026-07-19 (dev e prod identici a quella data per questo match). Match id=4, report id=11 (NEEDS_REVIEW, mai pubblicato). PRIMA della correzione, quarter_scores a DB = {'1':[5,0],'2':[5,0],'3':[5,0],'4':[5,1]} — stesso finale 20-1 di questa verita' cartacea ma tutti e 4 i parziali sbagliati (errore compensativo: la somma torna comunque al totale). CORRETTO SU DEV il 2026-07-19 (audit MATCH_SCORE_CORRECTED, before/after allegati; is_data_verified ora True). PROD ancora al valore sbagliato: correzione preparata ma non eseguita (fuori scope di questo giro, richiede intervento di Alberto). report.normalized_data del report 11 NON toccato: non ripubblicare il report 11 finche' non e' corretto separatamente, altrimenti publish_report() sovrascrive il Match dal normalized_data ancora sbagliato.",
     "season": "2025/2026",
     "date": "2026-04-12",
     "competition_on_paper": "Camp. Juniores M",
@@ -51,6 +51,7 @@
   "findings": [
     "Somma parziali verificata: 5+4+5+6=20, 0+0+1+0=1, coerente col finale 20-1.",
     "Nome sul cartaceo 'Olympic Roma P.N.' vs nome a DB 'Olimpic Roma P.N.' (Team pk=7): stessa divergenza di pattern gia' osservata nel primo caso gold (Bellator Frusino / BELLATOR FROSINONE, §8.6) — rischio di mancato aggancio in discovery se il fuzzy matching non tollera questa variante.",
-    "Un Match per questa coppia squadre/data risulta gia' presente in un backup prod locale del 2026-07-04 con lo stesso punteggio finale ma parziali diversi da quelli appena verificati sul cartaceo: vedi match.db_lookup_note. Non verificato live, non corretto in questo giro."
+    "Confermato sul sistema vivo: il Match a DB aveva lo stesso punteggio finale ma tutti e 4 i parziali sbagliati con somma comunque coerente al totale — errore compensativo, terzo caso su tre confrontabili con questo pattern (vedi syllabus §8.5). Corretto su dev il 2026-07-19, prod ancora da correggere.",
+    "Distribuzione DB pre-correzione (5-0/5-0/5-0/5-1) sospettosamente regolare: possibile firma di allucinazione, ipotesi da verificare su altri casi (syllabus §8.5)."
   ]
 }

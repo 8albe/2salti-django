@@ -9,7 +9,7 @@
     "db_match_pk": null,
     "db_league_pk": null,
     "db_league_name": null,
-    "db_lookup_note": "Non verificato in questo giro contro il DB live. In un backup prod locale del 2026-07-04 (db_prod_pre_zero9_20260704_1545.sqlite3, sola lettura) non risulta alcun Match per questa coppia/data (atteso: la data, 25/04/2026, precede il backup, quindi se il match non c'era gia' allora non e' un problema di finestra temporale). 'Trisceloni Etna Sport' non risulta ne' come Team ne' come Society in quel backup — vedi risposta al punto 5 del task.",
+    "db_lookup_note": "Verificato sul sistema vivo il 2026-07-19 (dev e prod, identici su questo punto): nessun Match per questa coppia/data, 'Trisceloni Etna Sport' assente sia da Team sia da Society. Conferma quanto gia' visto nel backup prod locale del 2026-07-04.",
     "season": "2025/2026",
     "date": "2026-04-25",
     "competition_on_paper": "Campionato maschile Serie B",
