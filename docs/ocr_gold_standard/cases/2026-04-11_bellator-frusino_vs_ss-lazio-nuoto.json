@@ -1,0 +1,184 @@
+{
+  "case_id": "2026-04-11_bellator-frusino_vs_ss-lazio-nuoto",
+  "schema_version": "1.0",
+  "verified_by": "Alberto Galbiati",
+  "verified_at": "2026-07-19",
+  "verification_method": "collazione a mano del referto cartaceo originale",
+
+  "match": {
+    "db_match_pk": 3,
+    "db_league_pk": 4,
+    "db_league_name": "Allievi nazionali - U16A",
+    "season": "2025/2026",
+    "date": "2026-04-11",
+    "competition_on_paper": "ALLIEVI NAZIONALI",
+    "venue_on_paper": "STADIO DEL NUOTO",
+    "city_on_paper": "FROSINONE",
+    "home_team": {
+      "db_team_pk": 5,
+      "db_team_name": "Bellator Frusino",
+      "name_on_paper": "BELLATOR FROSINONE"
+    },
+    "away_team": {
+      "db_team_pk": 6,
+      "db_team_name": "SS. Lazio Nuoto",
+      "name_on_paper": "SS LAZIO NUOTO"
+    }
+  },
+
+  "truth": {
+    "scores": {
+      "final_score": "4-19",
+      "quarters": {
+        "1": [1, 3],
+        "2": [0, 5],
+        "3": [3, 6],
+        "4": [0, 5]
+      }
+    }
+  },
+
+  "not_verified": [
+    "roster casa e trasferta (nomi, numeri di maglia)",
+    "eventi (marcatori, minuti, esclusioni, cartellini)",
+    "ufficiali di gara (arbitro, segretario, cronometrista)",
+    "attribuzione dei gol ai singoli giocatori per periodo"
+  ],
+
+  "extractions": [
+    {
+      "provider": "GeminiVisionProvider-v1",
+      "model": "gemini-2.5-pro",
+      "db_report_pk": 16,
+      "extracted_at": "2026-07-19",
+      "extracted": {
+        "match_info": {
+          "home_team": "BELLATOR FROSINONE",
+          "away_team": "SS LAZIO NUOTO",
+          "date": "2026-04-11"
+        },
+        "scores": {
+          "final_score": "5-19",
+          "quarters": {
+            "1": [1, 3],
+            "2": [0, 5],
+            "3": [3, 5],
+            "4": [1, 6]
+          }
+        },
+        "counts": {
+          "events": 31,
+          "home_roster": 14,
+          "away_roster": 13
+        }
+      },
+      "self_reported_confidence": {
+        "overall": 0.9,
+        "final_score": 1.0,
+        "quarters": 1.0,
+        "home_team": 1.0,
+        "away_team": 1.0,
+        "home_roster": 0.85,
+        "away_roster": 0.9,
+        "events": 0.9
+      },
+      "verdict": {
+        "final_score": "wrong",
+        "quarter_1": "correct",
+        "quarter_2": "correct",
+        "quarter_3": "wrong",
+        "quarter_4": "wrong",
+        "home_team_name": "correct",
+        "away_team_name": "correct",
+        "date": "correct",
+        "roster": "unverified",
+        "events": "unverified"
+      },
+      "notes": [
+        "Punteggio casa 5 invece di 4.",
+        "Errori sui parziali compensativi: 1+0+3+1 = 5 e 3+5+5+6 = 19, quindi la somma torna al totale dichiarato e il controllo strutturale passa.",
+        "confidence_fields.final_score = 1.0 su un valore errato."
+      ]
+    },
+    {
+      "provider": "GPT4oVisionProvider-v2-hardened",
+      "model": "gpt-4o",
+      "db_report_pk": 10,
+      "extracted_at": "2026-04-12",
+      "extracted": {
+        "match_info": {
+          "home_team": "BELLATOR FROSINONE",
+          "away_team": "S.S. LAZIO NUOTO",
+          "date": "2026-04-11"
+        },
+        "scores": {
+          "final_score": "11-19",
+          "quarters": {
+            "1": [2, 2],
+            "2": [4, 5],
+            "3": [2, 4],
+            "4": [3, 8]
+          }
+        },
+        "counts": {
+          "events": 28,
+          "home_roster": 15,
+          "away_roster": 15
+        }
+      },
+      "self_reported_confidence": {
+        "overall": 0.9,
+        "final_score": 1.0,
+        "quarters": 0.9,
+        "home_team": 1.0,
+        "away_team": 1.0,
+        "home_roster": 0.95,
+        "away_roster": 0.95,
+        "events": 0.85
+      },
+      "verdict": {
+        "final_score": "wrong",
+        "quarter_1": "wrong",
+        "quarter_2": "wrong",
+        "quarter_3": "wrong",
+        "quarter_4": "wrong",
+        "home_team_name": "correct",
+        "away_team_name": "correct",
+        "date": "correct",
+        "roster": "unverified",
+        "events": "unverified"
+      },
+      "notes": [
+        "Punteggio casa 11 invece di 4: tutti e quattro i parziali sbagliati.",
+        "Errori compensativi anche qui: 2+4+2+3 = 11 e 2+5+4+8 = 19.",
+        "confidence_fields.final_score = 1.0 e quarters = 0.9 con 4 parziali su 4 errati.",
+        "Questa estrazione e' la fonte del dato errato che stava a DB (11-19) fino alla correzione del 2026-07-19."
+      ]
+    }
+  ],
+
+  "findings": [
+    "Entrambi i provider hanno sbagliato il punteggio finale: nessuno dei due e' utilizzabile senza review umana.",
+    "Entrambi hanno dichiarato confidence 1.0 sul punteggio finale errato: la confidence auto-dichiarata non e' solo non calibrata, e' attivamente fuorviante.",
+    "In entrambe le estrazioni gli errori sui parziali si compensano e la somma torna al totale: il controllo 'somma parziali == punteggio finale' (BLUEPRINT §9) passa su dati falsi. Verifica la coerenza interna, non la verita'.",
+    "Il punteggio away (19) e' corretto in entrambe le estrazioni, quello home no in entrambe: l'errore non e' casuale sul singolo campo.",
+    "La squadra di casa e' 'BELLATOR FROSINONE' sul cartaceo ma 'Bellator Frusino' a DB: la discovery non riconosce la squadra e genera un referto orfano anche se la squadra esiste."
+  ],
+
+  "db_correction": {
+    "applied_on": "2026-07-19",
+    "environments": ["dev"],
+    "audit_action": "MATCH_SCORE_CORRECTED",
+    "before": {
+      "home_score": 11,
+      "away_score": 19,
+      "quarter_scores": {"1": [2, 2], "2": [4, 5], "3": [2, 4], "4": [3, 8]}
+    },
+    "after": {
+      "home_score": 4,
+      "away_score": 19,
+      "quarter_scores": {"1": [1, 3], "2": [0, 5], "3": [3, 6], "4": [0, 5]}
+    },
+    "standings_impact": "nessuno: il match 3 non ha referti PUBLISHED, quindi non entra nel calcolo della classifica (StandingsService filtra is_finished=True + reports__status='PUBLISHED')."
+  }
+}
