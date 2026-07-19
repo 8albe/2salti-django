@@ -150,6 +150,9 @@ def api_digital_report_close(request, report_id):
     if report.uploader != request.user and not request.user.can_review:
         return JsonResponse({'error': 'Permission denied'}, status=403)
 
+    if report.status != MatchReport.Status.DRAFT:
+        return JsonResponse({'error': f'Cannot close report in state {report.status}'}, status=400)
+
     # 1. Structural Validation
     success, error_msg = OCRSchemaValidator.validate(report.raw_extracted_data)
     if not success:

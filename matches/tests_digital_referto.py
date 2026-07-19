@@ -244,16 +244,14 @@ class DigitalReportCloseTestCase(DigitalReportBaseTestCase):
         self.assertEqual(first.status_code, 200)
 
         second = self.client.post(self.close_url)
-        # get_object_or_404(..., source_channel='DIGITAL') trova comunque il
-        # referto (ormai NEEDS_REVIEW): OCRSchemaValidator lo rivalida (payload
-        # ancora valido) e la view lo transiziona di nuovo, senza guardia sullo
-        # stato corrente. Fotografa il comportamento as-is.
-        self.assertEqual(second.status_code, 200)
+        # Guardia di stato aggiunta: un referto già fuori DRAFT (qui NEEDS_REVIEW
+        # dal primo close) viene respinto senza rivalidare né ritransizionare.
+        self.assertEqual(second.status_code, 400)
 
         self.report.refresh_from_db()
         self.assertEqual(self.report.status, MatchReport.Status.NEEDS_REVIEW)
         close_logs = MatchReportAuditLog.objects.filter(report=self.report, action='close_digital')
-        self.assertEqual(close_logs.count(), 2)
+        self.assertEqual(close_logs.count(), 1)
 
     def test_close_forbidden_for_other_user(self):
         self.report.raw_extracted_data = valid_digital_payload()
