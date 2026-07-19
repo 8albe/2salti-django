@@ -32,7 +32,7 @@ Decisioni di prodotto **RATIFICATE 2026-07-19**:
 ### 14.4 Chiusura, firma e immutabilità
 
 - [x] **Immutabilità post-chiusura (principio invariato, già de facto a codice):** fuori da `DRAFT`, update e close vengono rifiutati (400, `test_double_close_rejected`); correzioni post-chiusura solo via admin con audit log completo.
-- [ ] **Firma "PIN personale arbitro" — da ripensare nel nuovo modello.** Un PIN *personale* presuppone un'identità registrata che nel modello no-account non esiste. La funzione di firma leggera è il candidato naturale per il codice breve predisposto-ma-spento di §14.2 — da decidere in fase di design, nessuna scelta presa qui. (Oggi il close non richiede alcun PIN: `test_close_as_is_no_pin_signature_required`.)
+- [x] **Firma arbitro = nome e cognome digitati al close (DECISA 2026-07-19, as-built).** Il PIN *personale* è decaduto: presupponeva un'identità registrata che nel modello no-account non esiste. Al close del canale digitale è ora obbligatorio un campo firma **nome+cognome** (validazione: ≥2 token), persistito su `MatchReport.referee_signature` e nell'audit log (`after.referee_signature`) con timestamp. Il **codice breve 4-6 cifre resta predisposto-ma-spento come anti-abuso** (§14.2), **NON come firma**: i due concetti non vanno mescolati (zero codice in questo giro). Test: `test_close_requires_signature`, `test_close_rejects_signature_without_surname`, `test_close_valid_payload_transitions_to_needs_review`.
 
 ### 14.5 Aggiornamento 2026-07 (contatto federale) — integrato 2026-07-19
 
@@ -49,6 +49,18 @@ Decisioni di prodotto **RATIFICATE 2026-07-19**:
 - Generazione QR del link (necessaria per l'ipotesi (a) di consegna; utile in entrambe).
 - Emissione: endpoint/azione staff per generare il link di una partita (proposta BLUEPRINT §11: `POST /api/matches/{id}/jury-link`).
 - Igiene anti-enumerazione: token lungo non indovinabile + throttling sugli accessi falliti (non è un secondo fattore, è igiene minima).
+
+### 14.6-bis As-built — fondamenta backend (giro 2026-07-19)
+
+Costruito e verde (49 test dedicati; suite intera 561 OK). La **view pubblica di compilazione (UI), il QR e l'offline-first restano fuori scope** (giri futuri).
+
+- **Modello `MatchJuryLink`** (in `matches/models.py`): FK `match`, `token` (secrets, `token_urlsafe(32)`, unique+index), `status` (`ACTIVE→CONSUMED/REVOKED/EXPIRED`, nessun ritorno), `created_by` (SET_NULL), `created_at`, `expires_at` (= created + 7gg), `revoked_at`, `consumed_at`, `report` (SET_NULL, valorizzato al consume). **Un solo ACTIVE per match** garantito da un partial unique index (`UniqueConstraint(fields=['match'], condition=Q(status='ACTIVE'))` — SQLite supporta indici parziali), rinforzato dal service che revoca in transazione il precedente. Migration additiva `0018`.
+- **Service `JuryLinkService`** (`matches/services/jury_link_service.py`): `issue` (revoca precedente + crea), `revoke`, `resolve` (ACTIVE + non scaduto; **scadenza valutata a lettura**, degrada lazy a `EXPIRED`; niente cron), `consume`, `active_for_match`.
+- **Firma al close** = nome+cognome digitati, obbligatoria, su `MatchReport.referee_signature` + audit (§14.4).
+- **Emissione/revoca**: `POST /api/matches/{id}/jury-link/` e `.../revoke/`, gate `_check_digital_report_permissions` (staff digitale/admin). ⚠️ **Il RBAC non è society-scoped**: `staff_role` è globale, quindi "staff della società del match" non esiste come gate; scelto il gate esistente più coerente e restrittivo. Vera scoping per-società = debito futuro. Risposta neutra rispetto al canale: fornisce l'URL `/r/{token}`, **nessun QR generato**.
+- **Accesso via token** su start/update/close (`api_views_digital.py`): l'anonimo con token ACTIVE valido per QUEL match affianca l'utente autenticato (path autenticato **intatto**); nessun account creato, `uploader=None`, ogni azione via link tracciata in audit con `user=None`.
+- **Ciclo di vita agganciato al close**: transizione referto `DRAFT→NEEDS_REVIEW` e link `→CONSUMED` **atomici** (`transaction.atomic`); consume solo su close **riuscito**; guardia idempotenza `03d3860` preservata. Un close autenticato consuma comunque l'eventuale link ACTIVE pendente sul match.
+- **Landing `GET /r/{token}`**: risoluzione minima JSON (match/bozza) — valido 200, scaduto/revocato/consumato 410, inesistente 404. **Nessuna UI.**
 
 ---
 

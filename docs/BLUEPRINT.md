@@ -84,7 +84,7 @@ Mappa del prodotto: pagine pubbliche, superfici post-login, profili e strumenti 
 | Autenticato    | Bacheca (Atleti / Genitori) | Comunicazioni società gated: scrittura Club Pro, lettura tutti |
 | Autenticato    | Chatbot Panel               | Interfaccia AI per query e comandi operativi                   |
 | Profili        | Atleta / Coach / Arbitro    | Identità sportiva, storico e Season Recap (Premium)            |
-| Admin / Giuria | Form Referto Digitale       | Compilazione mobile, firma PIN, sync offline                   |
+| Admin / Giuria | Form Referto Digitale       | Compilazione mobile, firma nome+cognome, sync offline          |
 | Admin          | Cockpit Workflow            | Review OCR, validazione, audit log e publishing                |
 
 ## 4. Home page: architettura dettagliata
@@ -331,7 +331,7 @@ Strumento dedicato alla giuria e agli arbitri per l'ingestione nativa del dato d
 - Le Live Alerts push partono solo quando la connessione è attiva; offline il referto resta valido ma muto verso gli abbonati.
 
 #### 7.4.3 Firma e Statistiche
-- **Firma Arbitro**: Inserimento PIN personale a fine gara. Il referto diventa immutabile; correzioni solo via admin audit log.
+- **Firma Arbitro** (deciso 2026-07-19, as-built): a fine gara l'arbitro **digita nome e cognome** nel campo firma del close (obbligatorio). Il PIN *personale* è decaduto: nel modello a link monouso (§7.4.1) non esiste un'identità registrata da cui derivarlo. La firma è persistita sul referto e nell'audit log con timestamp; il referto entra in `NEEDS_REVIEW` (mai auto-publish) e diventa immutabile fuori da `DRAFT` (correzioni solo via admin audit log). Il codice breve 4-6 cifre resta predisposto-ma-spento **come anti-abuso** (§7.4.1), non come firma.
 - **Livelli di Statistiche**: unico livello **Base** (gratis): Gol, cartellini, espulsioni, timeout, parziali, nomi squadre, luogo, orario. Il livello Avanzato è accantonato su feedback federale 2026-07 (quelle statistiche non vengono rilevate nemmeno in Serie A); idea conservata in FUTURE_IDEAS.md.
 - **Principio del Dato Certo**: Se un dato non è rilevato, il sistema mostra "non rilevato", mai valori inventati (coerente con il principio "Null invece di invenzione" del Cap. 1).
 - **Form UX**: Mobile-first, validazioni inline (es. somma parziali == totale gol), più veloce del cartaceo. È lo strumento con cui proporre alla federazione il passaggio dal cartaceo al digitale: deve essere più rapido e meno error-prone della compilazione manuale.
@@ -545,7 +545,7 @@ Sopra l'interfaccia, in mezzo il layer applicativo, sotto il motore OCR/AI e il 
 | POST /api/referti/process | Lancia OCR/AI sul job | stato elaborazione |
 | POST /api/referti/digital/start | Crea un referto digitale nativo (giuria) | id referto + draft iniziale |
 | PUT /api/referti/digital/{id} | Aggiorna il draft digitale (sync offline) | bozza salvata |
-| POST /api/referti/digital/{id}/close | Firma PIN arbitro e chiude il referto | stato workflow + immutabilità |
+| POST /api/referti/digital/{id}/close | Firma arbitro (nome+cognome, obbligatoria) e chiude il referto in NEEDS_REVIEW | stato workflow + immutabilità |
 | GET /api/referti/{id}/status | Stato workflow del referto | UPLOADED / EXTRACTED / ... |
 | GET /api/referti/{id}/results | JSON estratto e warning (livello Base) | payload per admin |
 | PUT /api/referti/{id}/validate | Correzione e approvazione admin | stato aggiornato |
@@ -555,8 +555,9 @@ Sopra l'interfaccia, in mezzo il layer applicativo, sotto il motore OCR/AI e il 
 | GET /api/referees/{id} | Profilo arbitro | designazioni + partite |
 | GET /api/teams/{id} | Scheda squadra | rosa, stats, ultime gare |
 | GET /api/ai/chatbot | Interfaccia Chatbot con function calling | bot_response + eventuali azioni |
-| POST /api/matches/{id}/jury-link | Emissione link monouso per-partita (staff/società, sostituisce jury/token/issue) | URL + QR + scadenza |
-| GET /r/{token} | Accesso pubblico giuria via link monouso (nessun login) | referto precompilato |
+| POST /api/matches/{id}/jury-link | Emissione link monouso per-partita (staff/admin, sostituisce jury/token/issue) | URL `/r/{token}` + scadenza (as-built: risposta neutra, **QR fuori scope** — non generato) |
+| POST /api/matches/{id}/jury-link/revoke | Revoca il link ACTIVE del match (staff/admin) | n. link revocati |
+| GET /r/{token} | Accesso pubblico giuria via link monouso (nessun login) | as-built: risoluzione JSON match/bozza (UI fuori scope); 410 se scaduto/revocato/consumato, 404 se inesistente |
 | GET/PUT /api/user/preferences | Layout widget e tema utente Premium | preferenze persistenti |
 
 ### Infrastruttura e operations
@@ -654,7 +655,7 @@ Il modello economico si basa su tre piani paralleli che sbloccano diverse profon
 
 ### Priorità di esecuzione
 
-1. **Nucleo affidabile del dato**: Referto Digitale (form mobile, offline, PIN), OCR fallback, validazione, database e profili sportivi pre-caricati.
+1. **Nucleo affidabile del dato**: Referto Digitale (form mobile, offline, firma nome+cognome), OCR fallback, validazione, database e profili sportivi pre-caricati.
 2. **Modulo account**: registrazione, verifica email a click, pagamento tre piani.
 3. **Claim e membership**: ricerca profilo, codici di attivazione, notifiche al club admin, approvazioni e revoche.
 4. **Area pubblica robusta e dashboard private** per ruoli verificati, con distinzione netta tra guest, Freemium, Premium e Club Pro.
@@ -668,7 +669,7 @@ Il modello economico si basa su tre piani paralleli che sbloccano diverse profon
 - **Chatbot AI**: esclusiva Premium, con function calling e RBAC server-side obbligatorio.
 - **Bacheca mista**: scrittura gated Club Pro, lettura gratis per tutti gli iscritti, notifiche push solo Premium.
 - **Accesso giuria** (aggiornata 2026-07-19, sostituisce "Certificazione giuria"): link monouso per-partita, valido fino alla chiusura del referto con backstop 7 giorni; revoca manuale admin disponibile; nessun secondo fattore in v1 (codice breve 4-6 cifre predisposto ma spento). Il token match-specific federale è irrealizzabile per vincolo GUG/portale (v. §7.4.1).
-- **Firma referto**: PIN arbitro rende il referto immutabile post-firma; correzioni successive solo via admin con audit log completo.
+- **Firma referto** (aggiornata 2026-07-19): l'arbitro **digita nome e cognome** al close (il PIN personale è decaduto col modello no-account); il referto entra in NEEDS_REVIEW e diventa immutabile fuori da DRAFT; correzioni successive solo via admin con audit log completo (v. §7.4.3).
 - **Profili sportivi creati dal sistema**: gli utenti non creano da zero il proprio profilo sportivo, lo rivendicano.
 - **Verifica identità**: verifica leggera a click su email (l'utente clicca il link e parte l'iter). SPID/CIE e documento+selfie accantonati per eccesso di attrito.
 - **Accesso dati privati**: richiede SEMPRE due condizioni — email confermata + collegamento sportivo valido (membership approvata; per il genitore ai dati del figlio: certificazione society-vouching `CERTIFICATA`).

@@ -3,9 +3,12 @@
 Questo documento descrive le macchine a stati implementate nel codice.
 Se il blueprint di prodotto o altri documenti dicono cose diverse, **questo file vince**.
 
-Ultimo aggiornamento: 2026-06-22
+Ultimo aggiornamento: 2026-07-19 (aggiunta §12 MatchJuryLink — Macro 14)
 Generato leggendo:
 - `accounts/models.py`
+- `matches/api_views_digital.py`
+- `matches/api_views_jury.py`
+- `matches/services/jury_link_service.py`
 - `accounts/middleware.py`
 - `accounts/views.py`
 - `matches/models.py`
@@ -416,16 +419,59 @@ Nessuna transizione automatica rilevata — gestito manualmente dall'admin.
 
 ---
 
+## 12. MatchJuryLink (Link giuria monouso — Macro 14)
+
+**Model:** `matches.MatchJuryLink`
+**Field di stato:** `status` (CharField, `TextChoices`)
+**File modello:** [matches/models.py](matches/models.py) (in coda) — **Servizio:** [matches/services/jury_link_service.py](matches/services/jury_link_service.py)
+**Default:** `ACTIVE`
+**Migration:** `0018` (additiva: nuovo modello + partial unique index + `MatchReport.referee_signature`)
+
+> **Natura della macchina:** link monouso per l'accesso **no-account** della giuria alla compilazione del referto digitale di **una** partita. "Monouso" = un ciclo di vita, non un singolo click: il link resta valido per più sessioni/visite durante la compilazione e **muore alla chiusura del referto** (`CONSUMED`). Nessuna transizione di ritorno da alcuno stato terminale. Scadenza **valutata a lettura** (nessun cron in questo giro): un link `ACTIVE` oltre `expires_at` è degradato lazy a `EXPIRED` al primo `resolve`/landing.
+
+### Stati
+
+| Valore DB | Label | Descrizione | Iniziale? | Finale? |
+|---|---|---|---|---|
+| `ACTIVE` | Attivo | Link emesso e valido (finché non scade o si chiude il referto) | Sì | No |
+| `CONSUMED` | Consumato | Referto chiuso con successo tramite il ciclo di vita del link | No | Sì |
+| `REVOKED` | Revocato | Revocato da staff/admin, o auto-revocato dall'emissione di un nuovo link sullo stesso match | No | Sì |
+| `EXPIRED` | Scaduto | Backstop 7 giorni superato (degrado lazy a lettura) | No | Sì |
+
+### Transizioni
+
+| Da | A | Trigger | Side effects | File |
+|---|---|---|---|---|
+| — | `ACTIVE` | `JuryLinkService.issue(match, created_by)` | Revoca in transazione l'eventuale `ACTIVE` precedente; `token = secrets.token_urlsafe(32)`; `expires_at = now + 7gg` | [jury_link_service.py](matches/services/jury_link_service.py) `issue` |
+| `ACTIVE` | `CONSUMED` | Close riuscito del referto digitale (`api_digital_report_close`) | **Atomico** col `DRAFT→NEEDS_REVIEW` del referto; `consumed_at`, `report` valorizzati; solo su close riuscito | [api_views_digital.py](matches/api_views_digital.py) `close` → `JuryLinkService.consume` |
+| `ACTIVE` | `REVOKED` | `JuryLinkService.revoke(match)` (endpoint `.../jury-link/revoke/`) **oppure** nuova `issue` sullo stesso match | `revoked_at` valorizzato | [jury_link_service.py](matches/services/jury_link_service.py) `revoke` / `issue` |
+| `ACTIVE` | `EXPIRED` | Primo `resolve`/landing dopo `expires_at` (lazy, niente cron) | `status='EXPIRED'` persistito; trattato come invalido | [jury_link_service.py](matches/services/jury_link_service.py) `resolve` / [api_views_jury.py](matches/api_views_jury.py) `jury_link_landing` |
+
+### Guardrails
+
+- **Un solo `ACTIVE` per match:** garantito a livello DB da un partial unique index `UniqueConstraint(fields=['match'], condition=Q(status='ACTIVE'))` (SQLite supporta indici parziali), rinforzato applicativamente: `issue` revoca il precedente `ACTIVE` in `transaction.atomic()` prima di crearne uno nuovo.
+- **Consume solo su close riuscito:** un close respinto (guardia di stato non-DRAFT → 400; firma mancante → 400; schema invalido → 422) **non** consuma il link, che resta `ACTIVE`. Il consume è dentro l'`atomic` del close, contestuale al cambio stato del referto.
+- **Token morto non riapre:** un secondo close via lo stesso token dopo `CONSUMED` fallisce in autenticazione (403), prima della guardia di stato — il link non risolve più.
+- **Accesso via token ortogonale all'auth:** `resolve(token, match)` accetta il link solo se `ACTIVE`, non scaduto e appartenente a **quel** match. L'accesso autenticato esistente alle API digitali resta intatto; il token affianca l'anonimo, non lo sostituisce all'utente.
+- **Emissione = riga stessa come audit:** `MatchReportAuditLog.report` non è nullable e l'emissione precede il referto, quindi l'audit dell'emissione è la riga `MatchJuryLink` (`created_by` + `created_at`). Le azioni **via** link (start/update/close) sono loggate in `MatchReportAuditLog` con `user=None`.
+
+### Firma arbitro (collegata al close)
+
+Il close del canale digitale richiede ora un campo firma **nome+cognome** obbligatorio (≥2 token), persistito su `MatchReport.referee_signature` e in `MatchReportAuditLog.after`. Sostituisce il PIN personale (decaduto nel modello no-account). Il close finisce **sempre** in `NEEDS_REVIEW` (invariante di sicurezza: nessun auto-publish dal canale digitale). Vedi §1 e BLUEPRINT §7.4.3.
+
+---
+
 ## Funzionalità descritte nel Blueprint ma non implementate
 
 Le seguenti funzionalità sono descritte in `BLUEPRINT.md` ma **non hanno modelli o campo corrispondente nel codice**:
 
 | Funzionalità | Sezione Blueprint | Stato |
 |---|---|---|
-| **Match_Jury_Links** — link monouso per-partita, valido fino a chiusura referto + backstop 7 giorni (sostituisce il token 30-min, decaduto per vincolo federale GUG/portale — v. [syllabus/14](syllabus/14_referto_digitale_mobile.md) §14.2) | §7.4.1 | Non implementato |
-| **Firma arbitro / PIN** — referto immutabile post-firma, correzioni solo via admin | §7.4.3 | Non implementato |
+| **Match_Jury_Links** — link monouso per-partita | §7.4.1 | ✅ **Fondamenta backend as-built (2026-07-19, dev)** — modello/service/endpoint/accesso-token/landing. Macchina in §12. UI/QR/offline-first fuori scope (giri futuri) |
+| **Firma arbitro** — nome+cognome al close, referto immutabile post-firma | §7.4.3 | ✅ **As-built (2026-07-19, dev)** — `MatchReport.referee_signature`, obbligatoria al close, in audit. PIN personale decaduto |
+| UI mobile compilazione referto / QR / offline-first (Service Worker + IndexedDB) | §7.4 | Non implementato (giri futuri Macro 14 + Macro 21) |
 
-**Verdetto:** sono funzionalità di roadmap futura, non implementazione attuale. Il Blueprint le include come obiettivi di progetto; non indicano un bug.
+**Verdetto:** le fondamenta backend del link giuria e la firma arbitro sono ora a codice su dev (v. §12); restano di roadmap futura la UI di compilazione, il QR e l'offline-first. Il Blueprint le include come obiettivi di progetto; non indicano un bug.
 
 ---
 
@@ -452,8 +498,8 @@ In ordine di priorità:
 5. **[BASSA] Documentare le transizioni di `AccountProfileLink` lato admin:**
    L'approvazione/rifiuto del claim avviene via Django admin senza servizio dedicato. Valutare se aggiungere un servizio esplicito con audit trail (come per `MembershipRequest`).
 
-6. **[BASSA] Decidere il futuro di firma arbitro:**
-   ~~Jury token~~ **CHIUSO il 19-lug-2026** — Blueprint §7.4.1 riscritto sul modello link monouso per-partita (`Match_Jury_Links`), ratificato in [syllabus/14](syllabus/14_referto_digitale_mobile.md) §14.2; il token federale 30-min è decaduto per vincolo GUG/portale, non emendabile (archiviato in FUTURE_IDEAS.md §1). Resta da aggiornare il Blueprint §7.4.3 con una nota esplicita che segnala la firma arbitro/PIN come "non implementata — roadmap futura".
+6. ~~**[BASSA] Decidere il futuro di firma arbitro:**~~
+   ~~Jury token~~ **CHIUSO il 19-lug-2026** — Blueprint §7.4.1 riscritto sul modello link monouso per-partita (`Match_Jury_Links`), ratificato in [syllabus/14](syllabus/14_referto_digitale_mobile.md) §14.2; il token federale 30-min è decaduto per vincolo GUG/portale, non emendabile (archiviato in FUTURE_IDEAS.md §1). **Firma arbitro DECISA e as-built (19-lug-2026):** nome+cognome digitati al close (obbligatorio), persistiti su `MatchReport.referee_signature` + audit; PIN personale decaduto; il codice breve 4-6 cifre resta anti-abuso spento. Blueprint §7.4.3 e syllabus/14 §14.4/§14.6-bis aggiornati; macchina del link in §12. **Fondamenta backend Macro 14 complete su dev;** UI/QR/offline-first fuori scope (giri futuri).
 
 ---
 
