@@ -1,47 +1,54 @@
-## 14. Referto digitale mobile (Jury App)
+## 14. Referto digitale mobile (giuria)
 
-Stato: 🧊 Differito
+Stato: 🔄 In corso (sbloccata 2026-07-19 — vincolo federale noto e aggirato per design; era 🧊 dal 2026-06-02)
 
-App/interfaccia mobile per arbitri/giuria. Jury Tokens, firma PIN, offline-first. Convergenza JSON con OCR su `schema_version: 2.0`.
+Interfaccia web mobile con cui la giuria compila il referto al posto del cartaceo. Accesso via **link monouso per-partita** (nessun account, nessuna app da installare), offline-first, convergenza JSON con OCR su `schema_version: 2.0`.
 
-> **Differimento (2026-06-02):** le decisioni di prodotto sono complete (vedi §14.1–14.3). L'implementazione è rinviata perché bloccata sull'accordo/integrazione federale per l'emissione dei Jury Token (issuer = federazione/lega), oggi non disponibile.
-> È una dipendenza esterna reale, non un rinvio di comodo: senza l'autorità emittente non è progettabile il flusso di certificazione.
+> **Sblocco (2026-07-19) — risposta federale, verificata con contatto diretto.** Le designazioni delle giurie sono gestite dal **GUG, organo NAZIONALE**; vengono comunicate **via mail attraverso il portale federale**; il portale **non sarà reso accessibile a terzi** perché gestisce i dati personali dei tesserati FIN. Il modello Jury Token (BLUEPRINT §7.4.1 pre-2026-07-19: token `match_id`+`user_id` emesso dalla federazione/lega) presupponeva la FIN come autorità emittente e l'accesso a un'anagrafica tesserati che non avremo mai: **irrealizzabile, non emendabile** — archiviato in [FUTURE_IDEAS.md §1](../FUTURE_IDEAS.md). Il modello che lo sostituisce identifica la **PARTITA, non la persona** (§14.2). La macro quindi **non è più differita per dipendenza esterna**: il vincolo è noto e aggirato per design, si può progettare e costruire. Prossimo canale FIN: segreteria generale (mail in programma, non ancora inviata) — rileva solo per l'open question sulla consegna del link.
 
-### 14.1 Ruolo e identità giuria
+### 14.1 Identità giuria — decisione precedente SUPERATA
 
-- [x] **Decisione PRESA:** nuovo valore enum `jury` in `User.role` (NON sotto-ruolo di referee). Allineato a BLUEPRINT §7.1 ("Giuria (Cert)" è già ruolo distinto).
-- [ ] Migrazione DB additiva (nessun backfill utenti esistenti) — *implementazione differita*
+- [x] ~~Nuovo valore enum `jury` in `User.role`~~ — **SUPERATA (2026-07-19)**: nel modello a link monouso la giuria **non ha account** e non serve alcun ruolo utente per il flusso di compilazione. Il gap "ruolo jury" registrato in Macro 15 resta rilevante solo se un ruolo giuria servisse per altri scopi (oggi nessuno individuato).
 
-### 14.2 Jury Tokens
+### 14.2 Accesso — link monouso per-partita (riscritta 2026-07-19, sostituisce "Jury Tokens")
 
-- [ ] Modello `JuryToken` (match-specific, `user_id` + `match_id`)
-- [ ] Finestra validità 30 min pre-match
-- [ ] Revoca automatica al fischio finale
-- [ ] Revoca manuale admin
-- [ ] Endpoint emissione token `POST /api/jury/token/issue`
-- [x] **Decisione PRESA:** issuer token = **federazione/lega** (NON club). Conferma BLUEPRINT §7.4.1 e §13. Implementazione differita: dipende dall'accordo federale (vedi nota differimento sopra).
+Decisioni di prodotto **RATIFICATE 2026-07-19**:
 
-### 14.3 Form Referto Digitale mobile
+- [x] **Modello di accesso: link monouso per-partita.** Il link è legato alla sola partita; chi lo apre trova il referto già precompilato con squadre, data e luogo (la precompilazione da `Match` esiste già in `api_digital_report_start`). Nessun account, nessuna registrazione, nessuna app da installare, **nessun dato personale della giuria raccolto**.
+- [x] **Durata: il link vive finché il referto non viene chiuso/firmato; alla chiusura muore.** Backstop assoluto di sicurezza: scadenza comunque **7 giorni dopo la generazione**, per evitare link vivi all'infinito su referti mai chiusi. *(Il backstop 7 giorni è un'aggiunta di Alberto in sede di ratifica, non una richiesta esplicita emersa dal confronto federale.)*
+- [x] **Sicurezza: nessun secondo fattore in v1.** Chi ha il link può compilare. Razionale: ogni attrito aggiunto uccide l'adozione con una giuria a bassa alfabetizzazione digitale (feedback §14.5); il rischio su una singola partita è basso; il danno peggiore (referto sbagliato) è già intercettato dal quality gate e dalla review admin (il close entra in `NEEDS_REVIEW`, mai auto-publish — verificato a codice). Un **codice breve a 4-6 cifre resta PREDISPOSTO nel design ma SPENTO**: si attiva solo se emergesse un abuso reale.
+- [ ] **OPEN QUESTION — consegna del link (da decidere con la FIN, NON scegliere ora).** Ipotesi sul tavolo: (a) QR code stampato/consegnato dalla società ospitante a bordo vasca; (b) link incluso nella mail di designazione GUG. Canale: segreteria generale FIN (mail in programma).
 
-- [x] Workflow `DRAFT → VALIDATED → PUBLISHED` per `source_channel=DIGITAL` (vedi macro 8 §8.3, STATE_MACHINES.md §1)
-  - ⚠️ *Nota aperta (doc-vs-codice), da verificare in fase implementativa:* il workflow è marcato fatto, ma `api_views_digital.py::api_digital_report_close` chiude il referto digitale in `NEEDS_REVIEW` (coda review), non direttamente in VALIDATED/PUBLISHED.
+**Cosa decade del modello precedente** (mai implementato — nessuna riga di codice): modello `JuryToken` (`match_id`+`user_id`, issuer federazione/lega), endpoint `POST /api/jury/token/issue` (ripensato in emissione piattaforma-side, v. BLUEPRINT §11), finestra di validità 30 min pre-match e revoca automatica al fischio finale (sostituite da vita-fino-a-chiusura + backstop 7 giorni; resta la revoca manuale admin).
+
+### 14.3 Form Referto Digitale mobile (invariata nella sostanza)
+
+- [x] Workflow `DRAFT → NEEDS_REVIEW → (ramo review) → VALIDATED → PUBLISHED` per `source_channel=DIGITAL` — **verificato a codice 2026-07-19**: `api_digital_report_close` chiude in `NEEDS_REVIEW` (coda review) con audit log e guardie di idempotenza su update e close (17 test as-is in `tests_digital_referto.py`, commit `5ff6d11` + fix `03d3860`). La nota doc-vs-codice del 2026-06 è risolta: la convergenza con l'OCR avviene sul ramo review, non con salto diretto a VALIDATED.
 - [x] REST CRUD draft digitale in `api_views_digital.py` + routing `api_urls.py`
 - [ ] UI mobile compilazione referto (solo livello Base; Avanzato accantonato 2026-07, vedi §14.5)
-- [ ] Sync offline-first (Service Worker + IndexedDB)
-- [x] **Decisione PRESA:** conflict resolution = **single-writer lock per match** (NON last-write-wins, NON merge field-level). Handover-on-failure = dettaglio implementativo aperto, da definire in fase implementazione.
+- [ ] Sync offline-first (Service Worker + IndexedDB — stesso mattone tecnico della Macro 21 PWA)
+- [x] **Decisione PRESA (invariata):** conflict resolution = **single-writer lock per match** (NON last-write-wins, NON merge field-level). Handover-on-failure = dettaglio implementativo aperto, da definire in fase implementazione.
 
-### 14.4 Firma arbitro
+### 14.4 Chiusura, firma e immutabilità
 
-- [ ] Firma PIN arbitro a fine gara
-- [ ] Immutabilità referto firmato (hash/lock sul `MatchReport`)
-- [ ] Correzioni post-firma solo via admin con audit log completo
+- [x] **Immutabilità post-chiusura (principio invariato, già de facto a codice):** fuori da `DRAFT`, update e close vengono rifiutati (400, `test_double_close_rejected`); correzioni post-chiusura solo via admin con audit log completo.
+- [ ] **Firma "PIN personale arbitro" — da ripensare nel nuovo modello.** Un PIN *personale* presuppone un'identità registrata che nel modello no-account non esiste. La funzione di firma leggera è il candidato naturale per il codice breve predisposto-ma-spento di §14.2 — da decidere in fase di design, nessuna scelta presa qui. (Oggi il close non richiede alcun PIN: `test_close_as_is_no_pin_signature_required`.)
 
-### 14.5 Aggiornamento 2026-07 (contatto federale)
+### 14.5 Aggiornamento 2026-07 (contatto federale) — integrato 2026-07-19
 
-- **Contatto federale stabilito** alle finali nazionali U18 (2026-07): la dipendenza esterna che motiva il differimento è in movimento, non più totalmente bloccata. Lo stato resta 🧊 finché non c'è un accordo concreto.
-- **Feedback giuria raccolto:** il problema principale non è la compilazione in sé (che va comunque resa semplicissima), ma la **distribuzione e l'accesso** — età media della giuria alta, molti non usano dispositivi elettronici. Serve un modo estremamente semplice per (a) far arrivare il referto da compilare alla persona giusta e (b) fargli caricare il risultato.
-- **Open question di design (in attesa di risposta dal contatto federale):** possibile uso di un identificativo federale (badge / tessera / numero ID) per riconoscere un membro di giuria e assegnarlo a una specifica partita. Nessuna soluzione progettata: solo documentata.
-- **Livello statistiche Avanzato accantonato:** la federazione conferma che le statistiche avanzate (palombelle, contropiedi, parate, ecc.) non vengono rilevate nemmeno in Serie A. Resta il solo livello Base; idea conservata in [FUTURE_IDEAS.md](../FUTURE_IDEAS.md) §1.
+- Contatto federale stabilito alle finali nazionali U18 (2026-07); **risposta ricevuta il 2026-07-19** (vedi nota di sblocco in testa).
+- **Feedback giuria (invariato, ora centrale):** il problema principale non è la compilazione ma la **distribuzione e l'accesso** — età media della giuria alta, molti non usano dispositivi elettronici. Il modello a link monouso (+ ipotesi QR a bordo vasca) è la risposta diretta a questo feedback.
+- ~~Open question sull'identificativo federale (badge/tessera/numero ID)~~ — **chiusa negativamente 2026-07-19**: nessun accesso all'anagrafica federale (vedi nota di sblocco). Resta aperta solo la consegna del link (§14.2).
+- **Livello statistiche Avanzato accantonato** (invariato): resta il solo livello Base; idea conservata in [FUTURE_IDEAS.md](../FUTURE_IDEAS.md) §1.
+
+### 14.6 Cosa servirà a codice (lista per il giro di build — NON design dettagliato)
+
+- Modello del link per-partita (proposta: `MatchJuryLink`): FK a `Match`, token URL-safe generato server-side, stato (attivo/consumato/revocato), `expires_at` (backstop 7 giorni), campo predisposto per il codice breve (spento). Migration additiva.
+- View pubblica di compilazione **senza login** via token nel path: i tre endpoint digitali esistenti sono `@login_required` + `_check_digital_report_permissions` (staff/referee/superuser) — il canale pubblico li **affianca**, non li sostituisce, riusando la precompilazione di `api_digital_report_start` e il CRUD esistente, vincolato al solo referto della partita del link.
+- Aggancio del ciclo di vita: consumo/morte del link alla transizione `DRAFT → NEEDS_REVIEW` di `api_digital_report_close`; revoca manuale admin.
+- Generazione QR del link (necessaria per l'ipotesi (a) di consegna; utile in entrambe).
+- Emissione: endpoint/azione staff per generare il link di una partita (proposta BLUEPRINT §11: `POST /api/matches/{id}/jury-link`).
+- Igiene anti-enumerazione: token lungo non indovinabile + throttling sugli accessi falliti (non è un secondo fattore, è igiene minima).
 
 ---
 

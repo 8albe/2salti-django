@@ -61,7 +61,7 @@ Il progetto genera valore differenziato in base al ruolo e al piano di abbonamen
 | ----------------------- | --------------- | --------------- | ------------- | ----------- |
 | Consultazione Bacheca   | Club Pro        | Tutti (Gratis)  | Web/App       | No          |
 | Notifiche Push Bacheca  | Club Pro        | Solo Premium    | Push Act.     | Si          |
-| Referto Digitale        | Giuria (Gratis) | Tutti (via API) | Offline-first | Si (Token)  |
+| Referto Digitale        | Giuria (Gratis) | Tutti (via API) | Offline-first | Si (Link monouso) |
 | Chatbot AI              | Premium         | Solo Premium    | Web/App       | Si (Hard)   |
 | Live Alerts (Referto)   | Premium         | Solo Premium    | Push Act.     | Si          |
 | Season Recap            | Premium         | Solo Premium    | Batch PDF     | Si          |
@@ -283,7 +283,7 @@ Prima della personalizzazione Premium, ogni utente riceve un setup di default ba
 | **Allenatore** | Roster, Registro presenze, Stats team | Gestione Team, Dati | Scrittura area team | Report partita post-match |
 | **Dirigente** | KPI Club, Richieste membership, Sponsor | Club Admin | Gestione Club | Nuove richieste |
 | **Arbitro** | Mie designazioni, Storico, Rimborsi | Archivio Arbitrale | Update match assigned | Nuove designazioni |
-| **Giuria (Cert)**| Match corrente (Form Referto) | Live Match Tool | Edit match token-spec | Nessuna |
+| **Giuria (Cert)**| Match corrente (Form Referto) | Live Match Tool | Edit match via link monouso per-partita | Nessuna |
 | **Admin** | Cockpit completo, System health | Super Admin Panel | Full access | Errori critici pipeline |
 
 La personalizzazione Premium permette di sovrascrivere questi default riordinando o nascondendo widget e cambiando il tema colore.
@@ -315,11 +315,15 @@ Esperienza differenziata tra Guest e Autenticato:
 
 Strumento dedicato alla giuria e agli arbitri per l'ingestione nativa del dato di partita. Sostituisce il cartaceo come fonte primaria.
 
-#### 7.4.1 Accesso e Certificazione (Giuria)
-- **Utilizzo**: Esclusivamente da smartphone. Gratis per la giuria.
-- **Token Match-Specific**: L'account giuria riceve un token legato a un singolo `match_id` + `user_id`, emesso dalla federazione/lega.
-- **Finestra di validità**: Attivo da 30 minuti prima del match; revoca automatica al fischio finale. Un account senza token attivo non può modificare alcun referto.
-- **Certificazione**: Richiede workflow di sicurezza (emissione token → validazione → scadenza → revoca manuale admin).
+#### 7.4.1 Accesso Giuria — link monouso per-partita (riscritto 2026-07-19)
+
+> **Vincolo federale (verificato con contatto diretto, 2026-07):** le designazioni delle giurie sono gestite dal **GUG, organo NAZIONALE**, e comunicate via mail attraverso il **portale federale**, che **non sarà reso accessibile a terzi** perché gestisce i dati personali dei tesserati FIN. Il modello precedente — token legato a `match_id`+`user_id` emesso dalla federazione/lega — presupponeva la FIN come autorità emittente e un'anagrafica tesserati non ottenibile: **irrealizzabile**, archiviato in FUTURE_IDEAS.md §1. Il modello attuale identifica la **partita, non la persona**.
+
+- **Utilizzo**: da smartphone via browser (nessuna app da installare, nessun account, nessuna registrazione). Gratis per la giuria; nessun dato personale della giuria raccolto.
+- **Link monouso per-partita**: la piattaforma genera un link legato alla sola partita; chi lo apre trova il referto già precompilato con squadre, data e luogo.
+- **Durata**: il link resta valido finché il referto non viene chiuso/firmato e muore alla chiusura. Backstop assoluto di sicurezza: scadenza comunque 7 giorni dopo la generazione, contro link vivi all'infinito su referti mai chiusi. Revoca manuale admin sempre disponibile.
+- **Sicurezza (v1)**: nessun secondo fattore — chi ha il link può compilare. Razionale: ogni attrito aggiunto uccide l'adozione con una giuria a bassa alfabetizzazione digitale; il rischio su una singola partita è basso e il danno peggiore (referto sbagliato) è già intercettato dal quality gate e dalla review admin. Un codice breve a 4-6 cifre resta **predisposto nel design ma spento**, da attivare solo se emergesse un abuso reale.
+- **Consegna del link**: **APERTA, da decidere con la FIN** — (a) QR code stampato/consegnato dalla società ospitante a bordo vasca, oppure (b) link incluso nella mail di designazione GUG. Prossimo canale: segreteria generale FIN.
 
 #### 7.4.2 Architettura Offline-First
 - Compilazione locale tramite Service Worker + IndexedDB.
@@ -519,7 +523,7 @@ Il dominio adotta la **stagione come asse** del tesseramento, non più le date l
 - **Activation_Codes**: codici società per membership sportiva.
 - **Sponsor_Assets**: sponsor caricati dalle società, con placement (pagina società, profili atleti).
 - **User_Preferences**: layout widget, tema colore, notifiche opt-in per ciascun utente Premium.
-- **Jury_Tokens**: token match-specific emessi per i giurati certificati, con scadenza e stato revoca.
+- **Match_Jury_Links** (sostituisce Jury_Tokens, 2026-07-19): link monouso per-partita per la compilazione del referto digitale da parte della giuria, senza account; legato al solo match, con stato (attivo/consumato/revocato) e scadenza backstop 7 giorni. Il modello Jury_Tokens a identità federata è archiviato in FUTURE_IDEAS.md §1.
 - **ChatMessage**: canale di chat informale per squadra (messaggistica diretta tra membri), complementare alla Bacheca (Post/Comment) che resta il canale strutturato.
 
 ### Principi di integrità
@@ -551,7 +555,8 @@ Sopra l'interfaccia, in mezzo il layer applicativo, sotto il motore OCR/AI e il 
 | GET /api/referees/{id} | Profilo arbitro | designazioni + partite |
 | GET /api/teams/{id} | Scheda squadra | rosa, stats, ultime gare |
 | GET /api/ai/chatbot | Interfaccia Chatbot con function calling | bot_response + eventuali azioni |
-| POST /api/jury/token/issue | Emissione token giuria match-specific | token + finestra validità |
+| POST /api/matches/{id}/jury-link | Emissione link monouso per-partita (staff/società, sostituisce jury/token/issue) | URL + QR + scadenza |
+| GET /r/{token} | Accesso pubblico giuria via link monouso (nessun login) | referto precompilato |
 | GET/PUT /api/user/preferences | Layout widget e tema utente Premium | preferenze persistenti |
 
 ### Infrastruttura e operations
@@ -635,7 +640,7 @@ Il modello economico si basa su tre piani paralleli che sbloccano diverse profon
 - **Utente Premium**: paga per servizi avanzati personali (Alerts, Chatbot, Season Recap, personalizzazione).
 - **Società (Club Pro)**: paga per visibilità (Sponsor, pagina società) e comunicazione diretta (Bacheca push).
 - **Eccezione pilota (Zero9 Roma)**: la società pilota è **comped a vita** perché fa da cavia del sistema-società completo. Su Zero9 i ricavi vengono dagli sponsor/aziende. È l'**unica** eccezione al modello Club Pro: non lo ribalta.
-- **Giuria certificata**: utilizzo del Referto Digitale sempre gratuito, via token match-specific emesso dalla federazione/lega.
+- **Giuria**: utilizzo del Referto Digitale sempre gratuito, via link monouso per-partita generato dalla piattaforma (v. §7.4.1; il token federale è decaduto 2026-07-19).
 - **Fruizione contenuti**: la lettura della bacheca e la consultazione dati base restano gratis per tutti gli utenti iscritti alla società (anche Freemium). Le notifiche push sulla bacheca arrivano solo ai Premium.
 
 ### Funnel di attivazione
@@ -662,7 +667,7 @@ Il modello economico si basa su tre piani paralleli che sbloccano diverse profon
 - **Widget Layout**: sistema a slot fissi riordinabili per dashboard utente e pagine club. Niente drag&drop libero in v1.
 - **Chatbot AI**: esclusiva Premium, con function calling e RBAC server-side obbligatorio.
 - **Bacheca mista**: scrittura gated Club Pro, lettura gratis per tutti gli iscritti, notifiche push solo Premium.
-- **Certificazione giuria**: token match-specific con finestra 30 minuti pre-match, revoca automatica al fischio finale, revoca manuale admin disponibile.
+- **Accesso giuria** (aggiornata 2026-07-19, sostituisce "Certificazione giuria"): link monouso per-partita, valido fino alla chiusura del referto con backstop 7 giorni; revoca manuale admin disponibile; nessun secondo fattore in v1 (codice breve 4-6 cifre predisposto ma spento). Il token match-specific federale è irrealizzabile per vincolo GUG/portale (v. §7.4.1).
 - **Firma referto**: PIN arbitro rende il referto immutabile post-firma; correzioni successive solo via admin con audit log completo.
 - **Profili sportivi creati dal sistema**: gli utenti non creano da zero il proprio profilo sportivo, lo rivendicano.
 - **Verifica identità**: verifica leggera a click su email (l'utente clicca il link e parte l'iter). SPID/CIE e documento+selfie accantonati per eccesso di attrito.
@@ -674,7 +679,7 @@ Il modello economico si basa su tre piani paralleli che sbloccano diverse profon
 
 ## Punti da validare con il product owner
 
-- **[Federazione]** ✅ **RISOLTO (2026-06-02):** l'autorità emittente dei token giuria è la **federazione/lega** (NON il club). Conferma §7.4.1 e §14 (Baseline); vedi SYLLABUS Macro 14 §14.2.
+- **[Federazione]** ✅ **SUPERATO (2026-07-19; era "RISOLTO 2026-06-02" con issuer = federazione/lega):** il modello token federale è decaduto — le designazioni sono del GUG (organo nazionale) e il portale federale non sarà accessibile a terzi (dati personali tesserati FIN). L'accesso giuria è ora a **link monouso per-partita** emesso dalla piattaforma (v. §7.4.1); resta aperta solo la **consegna del link** (da definire con la FIN, segreteria generale). Vedi SYLLABUS Macro 14 §14.2.
 - **[Conflitti]** ✅ **RISOLTO (2026-06-02):** conflict resolution = single-writer lock per match (un solo device writer-attivo alla volta; NON last-write-wins, NON merge). Vedi SYLLABUS Macro 14 §14.3.
 - **[UX]** Opzione "sito esterno": Redirect diretto (Opzione A) vs Pagina teaser con badge (Opzione B).
 - **[Chatbot]** Function calling aperto (Opzione A) vs Lista chiusa whitelist comandi (Opzione B).

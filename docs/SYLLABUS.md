@@ -55,7 +55,7 @@ Punto d'ingresso operativo del progetto. Per la visione di prodotto vedi [BLUEPR
 ## 13. Season Archive e Season Recap PDF 🧊
 → [Dettaglio](syllabus/13_season_archive.md)
 
-## 14. Referto digitale mobile (Jury App) 🧊
+## 14. Referto digitale mobile (giuria) 🔄
 → [Dettaglio](syllabus/14_referto_digitale_mobile.md)
 
 ## 15. Stabilità tecnica — test suite e debito 🔄
