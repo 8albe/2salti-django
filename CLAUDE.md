@@ -39,7 +39,7 @@ In caso di contraddizione tra documenti: `STATE_MACHINES.md > DOMAIN_GLOSSARY.md
 The following files require explicit confirmation before any change:
 
 - `config/settings.py` — even seemingly harmless variables can break production.
-- `deploy/gunicorn/**` (canonical gunicorn configs), `2salti_nginx_config`, `*.service` — deployment configuration. The root `gunicorn_config.py` is gitignored; the tracked copies live in [deploy/gunicorn/](deploy/gunicorn/).
+- `deploy/gunicorn/**` (canonical gunicorn configs), `deploy/nginx/**` (canonical nginx configs), `*.service` — deployment configuration. The root `gunicorn_config.py` is gitignored; the tracked copies live in [deploy/gunicorn/](deploy/gunicorn/).
 - `accounts/middleware.py` — the onboarding state machine is fragile and coupled to wizard redirects.
 - `matches/services/standings_service.py` — ranking logic; any change risks corrupting historical standings.
 - Any migration already applied in production.
@@ -134,7 +134,7 @@ ENVIRONMENT_NAME        # production
 ### Deployment
 
 - Gunicorn config: canonical copies versioned in [deploy/gunicorn/](deploy/gunicorn/) (`prod/` and `dev/`; sync procedure in its `README.md`, same pattern as `deploy/systemd/` — OPS_RUNBOOK §9). The active files live out of repo at `/opt/2salti-new/gunicorn_config.py` and `/opt/2salti-dev/gunicorn_config.py` (loaded via `--config`); the root `gunicorn_config.py` is gitignored and the two box configs diverge by design. Prod binds to `unix:/tmp/2salti.sock`, `timeout = 300` (provisional for synchronous OCR — Macro 22).
-- Nginx config: [2salti_nginx_config](2salti_nginx_config)
+- Nginx config: canonical copies versioned in [deploy/nginx/](deploy/nginx/) (`prod/` and `dev/`; sync procedure in its `README.md`, same pattern as `deploy/gunicorn/` — OPS_RUNBOOK §9). The active files live out of repo at `/etc/nginx/sites-available/2salti` and `/etc/nginx/sites-available/2salti-dev`, applied manually (`cp` + `nginx -t` + `systemctl reload nginx`).
 - Systemd service files in project root: `2salti.service`, plus timers for ops checks, pilot reports, and scheduler
 - `2salti-monitor.timer` fires `OnCalendar=*-*-* 00,06,12,18:00:00` in UTC; it sends email only when `DataIntegrityService` detects standings discrepancies. Times are UTC, so perceived hours shift by ±1h across DST transitions (March/October).
 - Structured logging: gunicorn writes to `/var/log/2salti/error.log` (weekly rotation, 12 copies kept) and `/var/log/2salti/access.log` (daily rotation, 7 copies kept), configured via `/etc/logrotate.d/2salti`. The `gunicorn_config.py` is loaded explicitly via `--config` in the systemd unit; `journalctl -u 2salti.service` only carries unit lifecycle events, not application logs.
