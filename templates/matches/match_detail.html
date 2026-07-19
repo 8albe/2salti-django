@@ -96,7 +96,7 @@
                 <div class="flex items-center gap-3 px-4 py-2 rounded-xl bg-white/5 border border-white/10 text-xs">
                     <span class="w-2 h-2 rounded-full 
                         {% if report.status == 'PUBLISHED' %}bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.6)]
-                        {% elif report.status == 'UPLOADED' %}bg-amber-500 animate-pulse
+                        {% elif report.status == 'UPLOADED' or report.status == 'QUEUED' or report.status == 'PROCESSING' %}bg-amber-500 animate-pulse
                         {% else %}bg-slate-500{% endif %}"></span>
                     <span class="text-slate-400">Referto: <strong class="text-white">{{ report.get_status_display }}</strong></span>
                     {% if request.user.is_staff or request.user.is_superuser %}

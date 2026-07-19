@@ -599,10 +599,11 @@ def ops_cockpit(request):
 
     # I KPI richiesti basati sugli stati reali del modello MatchReport
     # Status.EXTRACTED e Status.VALIDATED sono quelli pronti per la revisione/pubblicazione
-    # Status.UPLOADED e Status.PROCESSING sono quelli ancora in coda tecnica
+    # Status.UPLOADED, Status.QUEUED e Status.PROCESSING sono quelli ancora in
+    # coda tecnica (QUEUED = accodato al worker OCR, Macro 22)
     stats = MatchReport.objects.aggregate(
         pending_review=models.Count('id', filter=models.Q(status__in=[MatchReport.Status.EXTRACTED, MatchReport.Status.VALIDATED])),
-        in_flight=models.Count('id', filter=models.Q(status__in=[MatchReport.Status.UPLOADED, MatchReport.Status.PROCESSING])),
+        in_flight=models.Count('id', filter=models.Q(status__in=[MatchReport.Status.UPLOADED, MatchReport.Status.QUEUED, MatchReport.Status.PROCESSING])),
         needs_review=models.Count('id', filter=models.Q(status=MatchReport.Status.NEEDS_REVIEW)),
         failed=models.Count('id', filter=models.Q(status=MatchReport.Status.REJECTED)),
         published_24h=models.Count('id', filter=models.Q(status=MatchReport.Status.PUBLISHED, published_at__gte=last_24h))

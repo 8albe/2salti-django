@@ -12,13 +12,17 @@
                         <i class="fas fa-file-alt text-blue-400"></i>
                         <span>Referto Originale</span>
                     </h3>
-                    <a href="{{ report.file.url }}" target="_blank" 
+                    {% if report.file %}
+                    <a href="{{ report.file.url }}" target="_blank"
                        class="text-xs bg-slate-800 hover:bg-slate-700 text-slate-300 px-3 py-1.5 rounded-full border border-slate-700 transition-all">
                         <i class="fas fa-external-link-alt mr-1"></i> Apri Originale
                     </a>
+                    {% endif %}
                 </div>
-                
+
                 <div class="flex-grow bg-slate-900/50 rounded-2xl border border-white/5 overflow-hidden relative">
+                    {# `report.file.url` su un FileField vuoto solleva ValueError: guardia obbligatoria #}
+                    {% if report.file %}
                     {% with file_ext=report.file.url|lower %}
                     {% if ".pdf" in file_ext %}
                         <iframe src="{{ report.file.url }}" class="w-full h-full border-0"></iframe>
@@ -28,6 +32,11 @@
                         </div>
                     {% endif %}
                     {% endwith %}
+                    {% else %}
+                        <div class="w-full h-full flex items-center justify-center text-slate-500 text-sm">
+                            <i class="fas fa-file-circle-xmark mr-2"></i> File non trovato
+                        </div>
+                    {% endif %}
                 </div>
             </div>
         </div>
@@ -275,17 +284,24 @@
                     </div>
 
                     <div class="pt-6 space-y-3">
-                        <button type="submit" 
+                        {# Senza partita collegata il salvataggio non ha bersaglio: prima si collega #}
+                        {% if match %}
+                        <button type="submit"
                                 class="w-full py-4 rounded-xl font-bold text-black shadow-lg transition-all flex items-center justify-center gap-2 bg-blue-500 hover:bg-blue-400 hover:scale-[1.02] active:scale-[0.98]">
                             <i class="fas fa-check-circle"></i> Conferma e Pubblica Dati
                         </button>
                         <p class="text-center text-[10px] text-slate-500 uppercase tracking-widest font-bold">
                             I dati verranno sincronizzati immediatamente
                         </p>
-                        <a href="{% url 'match_detail' match.id %}" 
+                        <a href="{% url 'match_detail' match.id %}"
                            class="block w-full py-3 text-center text-slate-500 hover:text-slate-300 transition-colors text-sm font-medium">
                             Esci e torna al match
                         </a>
+                        {% else %}
+                        <p class="text-center text-[11px] text-amber-400/80 leading-relaxed">
+                            Collega il referto a una partita (qui sopra) per poter salvare punteggi ed eventi.
+                        </p>
+                        {% endif %}
                     </div>
                 </form>
             </div>

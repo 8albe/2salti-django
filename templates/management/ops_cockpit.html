@@ -88,12 +88,13 @@
                         <tr class="hover:bg-slate-50 transition-colors">
                             <td class="px-4 py-4 font-mono text-xs">#{{ report.id }}</td>
                             <td class="px-4 py-4">
-                                <div class="font-bold text-slate-900 text-xs">{{ report.match.home_team.name }} vs {{ report.match.away_team.name }}</div>
+                                <div class="font-bold text-slate-900 text-xs">{% if report.match %}{{ report.match.home_team.name }} vs {{ report.match.away_team.name }}{% else %}<span class="text-slate-400 italic">nessuna partita collegata</span>{% endif %}</div>
                                 <div class="mt-1 flex items-center gap-1.5">
                                     <span class="px-1.5 py-0.5 rounded text-[9px] font-bold uppercase 
                                         {% if report.status == 'NEEDS_REVIEW' %}bg-orange-100 text-orange-700
                                         {% elif report.status == 'EXTRACTED' %}bg-blue-100 text-blue-700
                                         {% elif report.status == 'VALIDATED' %}bg-green-100 text-green-700
+                                        {% elif report.status == 'QUEUED' or report.status == 'PROCESSING' %}bg-indigo-100 text-indigo-700
                                         {% else %}bg-slate-100 text-slate-600{% endif %}">
                                         {{ report.status }}
                                     </span>

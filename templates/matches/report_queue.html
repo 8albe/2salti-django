@@ -89,6 +89,7 @@
                                 {% if report.status == 'PUBLISHED' %}bg-emerald-500/20 text-emerald-400
                                 {% elif report.status == 'REJECTED' %}bg-rose-500/20 text-rose-400
                                 {% elif report.status == 'UPLOADED' %}bg-amber-500/20 text-amber-400
+                                {% elif report.status == 'QUEUED' or report.status == 'PROCESSING' %}bg-indigo-500/20 text-indigo-400
                                 {% else %}bg-slate-800 text-slate-400{% endif %}">
                                 {{ report.get_status_display }}
                             </span>
