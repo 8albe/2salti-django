@@ -45,7 +45,10 @@ class MatchReportAdminForm(forms.ModelForm):
     
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.fields['match'].required = False
+        # 'match' is removed from the form when the admin marks it readonly
+        # (every change view: see MatchReportAdmin.get_readonly_fields)
+        if 'match' in self.fields:
+            self.fields['match'].required = False
 
     def clean_file(self):
         file = self.cleaned_data.get('file')
