@@ -3,7 +3,7 @@
 Questo documento descrive le macchine a stati implementate nel codice.
 Se il blueprint di prodotto o altri documenti dicono cose diverse, **questo file vince**.
 
-Ultimo aggiornamento: 2026-07-19 (aggiunta §12 MatchJuryLink — Macro 14)
+Ultimo aggiornamento: 2026-07-19 (§1: stato QUEUED e coda OCR asincrona — Macro 22 giro 1)
 Generato leggendo:
 - `accounts/models.py`
 - `matches/api_views_digital.py`
@@ -15,6 +15,8 @@ Generato leggendo:
 - `matches/services/publishing_service.py`
 - `matches/services/integrity_service.py`
 - `matches/services/ocr_service.py`
+- `matches/services/ocr_queue.py`
+- `matches/management/commands/ocr_worker.py`
 - `matches/views.py`
 - `management/models.py`
 - `management/admin.py`
@@ -39,8 +41,9 @@ Generato leggendo:
 | Valore DB | Label | Descrizione breve | Iniziale? | Finale? |
 |---|---|---|---|---|
 | `DRAFT` | Bozza (Digitale) | Referto digitale nativo creato ma non ancora pronto | Sì (solo DIGITAL) | No |
-| `UPLOADED` | Caricato (In attesa) | File caricato, in coda per OCR | Sì (solo FILE) | No |
-| `PROCESSING` | In Elaborazione OCR | OCR provider in esecuzione | No | No |
+| `UPLOADED` | Caricato (In attesa) | File caricato, **non** ancora accodato: in attesa di una decisione | Sì (solo FILE) | No |
+| `QUEUED` | In Coda OCR | Accodato per il worker, non ancora preso in carico | No | No |
+| `PROCESSING` | In Elaborazione OCR | Claim fatto da un worker, OCR provider in esecuzione | No | No |
 | `EXTRACTED` | Dati Estratti (Da Revisionare) | OCR completato con successo e superato quality gate | No | No |
 | `VALIDATED` | Validato (Approvato Admin) | Approvato manualmente da un reviewer | No | No |
 | `PUBLISHED` | Pubblicato (Statistiche Aggiornate) | Report attivo: match aggiornato, standings ricalcolati | No | Sì (stabile) |
@@ -53,19 +56,47 @@ Generato leggendo:
 |---|---|---|---|---|
 | — | `UPLOADED` | `upload_report()` — caricamento file | `file_hash` calcolato, uploader loggato | `matches/views.py` |
 | — | `DRAFT` | `create_digital_report()` — referto digitale | `match.has_report = True` | `matches/views.py` |
-| `UPLOADED` | `PROCESSING` | `OCRService.process_and_update()` | Avvio OCR provider, salvataggio intermedio | `matches/services/ocr_service.py` |
-| `NEEDS_REVIEW` | `PROCESSING` | `OCRService.process_and_update()` — riprocessamento | Come sopra | `matches/services/ocr_service.py` |
-| `REJECTED` | `PROCESSING` | `OCRService.process_and_update()` — riprocessamento | Come sopra | `matches/services/ocr_service.py` |
-| `UPLOADED` | `REJECTED` | `OCRService.process_and_update()` | `validation_notes` con errore | `matches/services/ocr_service.py` r. 255 |
-| `PROCESSING` | `EXTRACTED` | `OCRService.process_and_update()` — OCR OK + quality gate OK | `normalized_data` popolato, `validation_notes` con gate results, audit log `OCR_PROCESSING_SUCCESS`, link a `match` | `matches/services/ocr_service.py` r. 366 |
-| `PROCESSING` | `NEEDS_REVIEW` | `OCRService.process_and_update()` — quality gate bloccante | `validation_notes` con gate results, `NotificationService.notify_report_needs_review()` | `matches/services/ocr_service.py` r. 361 |
-| `PROCESSING` | `NEEDS_REVIEW` | `OCRService.process_and_update()` — eccezione OCR | `validation_notes` con errore, notifica staff | `matches/services/ocr_service.py` r. 385 |
+| `UPLOADED` | `QUEUED` | `OCRService.enqueue()` — upload view e admin action | `ocr_queued_at` valorizzato, `MatchReportAuditLog` action=`enqueue` | `matches/services/ocr_service.py` |
+| `NEEDS_REVIEW` | `QUEUED` | `OCRService.enqueue()` — riprocessamento | Come sopra | `matches/services/ocr_service.py` |
+| `REJECTED` | `QUEUED` | `OCRService.enqueue()` — riprocessamento | Come sopra | `matches/services/ocr_service.py` |
+| `QUEUED` | `PROCESSING` | `OCRQueueService.claim()` — claim del worker | `ocr_started_at` valorizzato, `ocr_attempts` incrementato | `matches/services/ocr_queue.py` |
+| `PROCESSING` | `QUEUED` | `OCRQueueService.schedule_retry()` — errore tecnico del provider | `ocr_next_attempt_at` = now + backoff (60s, 120s), `ocr_error` salvato, audit action=`ocr_retry` | `matches/services/ocr_queue.py` |
+| `PROCESSING` | `QUEUED` | `OCRQueueService.requeue_stale()` — referto orfano recuperato | `ocr_started_at` azzerato, audit action=`ocr_stale_requeue` | `matches/services/ocr_queue.py` |
+| `PROCESSING` | `NEEDS_REVIEW` | `OCRQueueService.fail_permanently()` — tentativi esauriti (3) | `validation_notes` con errore tecnico, audit action=`ocr_failed`, notifica staff | `matches/services/ocr_queue.py` |
+| `UPLOADED` | `REJECTED` | `OCRService.enqueue()` — canale FILE senza file | `validation_notes` con errore (fail veloce sincrono) | `matches/services/ocr_service.py` |
+| `PROCESSING` | `EXTRACTED` | `OCRService.process_claimed()` — OCR OK + quality gate OK | `normalized_data` popolato, `validation_notes` con gate results, audit log `OCR_PROCESSING_SUCCESS`, link a `match` | `matches/services/ocr_service.py` |
+| `PROCESSING` | `NEEDS_REVIEW` | `OCRService.process_claimed()` — quality gate bloccante (incluso il path no-match) | `validation_notes` con gate results, `NotificationService.notify_report_needs_review()`. **Nessun retry**: è un esito, non un errore | `matches/services/ocr_service.py` |
+| `PROCESSING` | `NEEDS_REVIEW` | `OCRService.process_and_update()` — eccezione OCR nel path **sincrono** (test, diagnostica) | `validation_notes` con errore, notifica staff | `matches/services/ocr_service.py` |
 | `EXTRACTED` | `VALIDATED` | `report_review()` — reviewer setta stato manualmente | `validated_by`, `validated_at` settati; `MatchReportAuditLog` action=`validate` | `matches/views.py` r. 316–321 |
 | `NEEDS_REVIEW` | `VALIDATED` | `report_review()` — reviewer override | Come sopra | `matches/views.py` |
 | `NEEDS_REVIEW` | `EXTRACTED` | `report_review()` — reviewer ri-qualifica | Come sopra senza `validated_by` | `matches/views.py` |
 | `VALIDATED` | `PUBLISHED` | `PublishingService.publish_report()` | Match aggiornato (punteggi, quarti, `is_finished=True`); MatchEvent ricreati; stats atleti aggiornate; standings rebuild sincrono; `MatchReportAuditLog` action=`publish`; `AuditLog` action=`PUBLISH_REPORT` | `matches/services/publishing_service.py` r. 139–142 |
 | `PUBLISHED` | `PUBLISHED` | `PublishingService.publish_report()` — ripubblicazione | Come sopra; `MatchReportAuditLog` action=`republish` | `matches/services/publishing_service.py` r. 58 |
 | `PUBLISHED` | `VALIDATED` | `PublishingService.publish_report()` — de-pubblicazione automatica | Scatta quando un *altro* report per lo stesso match viene pubblicato; `internal_notes` aggiornate; `MatchReportAuditLog` action=`depublish` | `matches/services/publishing_service.py` r. 123–137 |
+
+### Coda OCR asincrona (Macro 22, giro 1 — 2026-07-19)
+
+Dal 2026-07-19 l'OCR **non gira più nel request cycle**. I due entry point
+(upload view e admin action `process_ocr`) chiamano `OCRService.enqueue()`, che
+porta il referto in `QUEUED`; il worker `ocr_worker` (servizio systemd) fa
+polling ogni 3s, prende il referto con un claim atomico ed esegue
+`OCRService.process_claimed()`.
+
+- **Claim atomico:** `UPDATE ... WHERE pk=? AND status='QUEUED'`. Chi vede
+  rowcount 1 possiede il job. Nessuna transazione resta aperta durante la
+  chiamata al provider (~80s): su SQLite bloccherebbe ogni altro writer.
+- **`ocr_attempts` si incrementa al claim, non all'esito.** Un worker che muore
+  a metà job ha comunque consumato un tentativo: nessun referto può diventare
+  una poison pill che cicla all'infinito.
+- **Due classi di fallimento.** Di *merito* (quality gate, incluso il no-match)
+  → `NEEDS_REVIEW` senza retry. *Tecnico* (provider 5xx, timeout, rete) →
+  ritorno in `QUEUED` con backoff 60s/120s, fino a 3 tentativi, poi
+  `NEEDS_REVIEW` + notifica.
+- **Orfani in `PROCESSING`:** la sweep di avvio del worker li riaccoda (girando
+  un solo worker, all'avvio sono per definizione orfani). Il backstop periodico
+  `recover_stale_reports` arriva col giro 2.
+- **`UPLOADED` non è uno stato di coda:** i referti creati da admin o da
+  `ingest_emails` restano lì finché qualcuno non li accoda esplicitamente.
 
 ### Guardrails
 
