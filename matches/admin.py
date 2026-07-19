@@ -188,27 +188,33 @@ class MatchReportAdmin(admin.ModelAdmin):
         return response
 
     def status_colored(self, obj):
-        colors = {'UPLOADED': 'gray', 'PROCESSING': 'orange', 'EXTRACTED': 'blue', 'NEEDS_REVIEW': 'red', 'VALIDATED': 'green', 'PUBLISHED': 'darkgreen', 'REJECTED': 'black'}
+        colors = {'UPLOADED': 'gray', 'QUEUED': 'purple', 'PROCESSING': 'orange', 'EXTRACTED': 'blue', 'NEEDS_REVIEW': 'red', 'VALIDATED': 'green', 'PUBLISHED': 'darkgreen', 'REJECTED': 'black'}
         color = colors.get(obj.status, 'black')
         return format_html('<span style="color: {}; font-weight: bold;">{}</span>', color, obj.get_status_display())
     status_colored.short_description = 'Stato'
 
-    @admin.action(description="Elabora OCR")
+    @admin.action(description="Elabora OCR (accoda)")
     def process_ocr(self, request, queryset):
-        extracted_count = 0
-        needs_review_count = 0
+        # Macro 22: l'azione accoda, non elabora. L'esito arriva in background
+        # (worker `ocr_worker`) e si legge dalla colonna Stato / dalle notifiche
+        # NEEDS_REVIEW: contarlo qui non avrebbe senso, e' asincrono per natura.
+        queued_count = 0
         skipped_count = 0
-        error_count = 0
         for report in queryset:
-            if report.status not in [MatchReport.Status.UPLOADED, MatchReport.Status.REJECTED, MatchReport.Status.NEEDS_REVIEW]:
+            if report.status not in OCRService.ENQUEUEABLE_STATES:
                 skipped_count += 1
                 continue
-            if OCRService.process_and_update(report):
-                report.refresh_from_db()
-                if report.status in [MatchReport.Status.EXTRACTED, MatchReport.Status.VALIDATED]: extracted_count += 1
-                elif report.status == MatchReport.Status.NEEDS_REVIEW: needs_review_count += 1
-            else: error_count += 1
-        self.message_user(request, f"Estraiti: {extracted_count}, In Review: {needs_review_count}, Errori: {error_count}.", messages.INFO)
+            if OCRService.enqueue(report, user=request.user):
+                queued_count += 1
+            else:
+                # Precondizione fallita dopo il filtro (es. file mancante -> REJECTED).
+                skipped_count += 1
+        self.message_user(
+            request,
+            f"Accodati: {queued_count}, Saltati: {skipped_count}. "
+            f"L'elaborazione avviene in background: aggiorna la lista per vedere lo stato.",
+            messages.INFO,
+        )
 
     @admin.action(description="Pubblica Referti")
     def publish_reports(self, request, queryset):

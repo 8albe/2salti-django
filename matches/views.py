@@ -153,17 +153,19 @@ def upload_report(request, match_id=None):
             report.status = 'UPLOADED'
             report.save()
             
-            # --- AUTO-OCR TRIGGER ---
+            # --- ACCODAMENTO OCR ASINCRONO (Macro 22) ---
+            # L'elaborazione la esegue il worker `ocr_worker`: qui si accoda e
+            # si risponde subito. Lo stato lo segue la review page in polling.
             from .services.ocr_service import OCRService
-            OCRService.process_and_update(report)
-            
+            OCRService.enqueue(report, user=request.user)
+
             if match:
                 match.has_report = True
                 match.save()
                 from management.utils import log_action
                 log_action(request.user, match.home_team.society, "REPORT_UPLOADED", target=report)
             
-            messages.success(request, "Referto caricato ed elaborato con successo.")
+            messages.success(request, "Referto caricato: elaborazione in corso.")
             return redirect('report_review', report_id=report.id)
     else:
         form = MatchReportUploadForm()

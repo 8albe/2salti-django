@@ -151,6 +151,7 @@ class MatchReport(models.Model):
     class Status(models.TextChoices):
         DRAFT = 'DRAFT', 'Bozza (Digitale)'
         UPLOADED = 'UPLOADED', 'Caricato (In attesa)'
+        QUEUED = 'QUEUED', 'In Coda OCR'
         PROCESSING = 'PROCESSING', 'In Elaborazione OCR'
         EXTRACTED = 'EXTRACTED', 'Dati Estratti (Da Revisionare)'
         VALIDATED = 'VALIDATED', 'Validato (Approvato Admin)'
@@ -198,6 +199,18 @@ class MatchReport(models.Model):
         max_length=200, blank=True,
         help_text="Firma arbitro (nome e cognome) digitata alla chiusura del referto digitale"
     )
+
+    # Coda OCR asincrona (Macro 22). Campi di lavorazione del worker: inerti
+    # per il canale DIGITAL, che non passa dalla coda.
+    ocr_attempts = models.PositiveSmallIntegerField(
+        default=0, help_text="Tentativi di elaborazione OCR (incrementato al claim del worker)"
+    )
+    ocr_queued_at = models.DateTimeField(null=True, blank=True, help_text="Istante di accodamento (ordinamento FIFO)")
+    ocr_next_attempt_at = models.DateTimeField(
+        null=True, blank=True, help_text="Non eleggibile al claim prima di questo istante (backoff retry)"
+    )
+    ocr_started_at = models.DateTimeField(null=True, blank=True, help_text="Istante del claim (base per lo stale detection)")
+    ocr_error = models.TextField(blank=True, help_text="Ultimo errore tecnico OCR (diagnostica worker)")
 
     # Review / Audit
     validation_notes = models.TextField(blank=True, help_text="Note di validazione (visibili se necessario)")

@@ -36,6 +36,21 @@
         <!-- RIGHT: Revision Form -->
         <div class="{% if report.source_channel == 'DIGITAL' %}lg:w-1/2 mx-auto{% else %}lg:w-1/3{% endif %}">
             <div class="glass-panel p-6 sticky top-8">
+                {% if report.status == 'QUEUED' or report.status == 'PROCESSING' %}
+                <div id="ocr-progress-banner"
+                     class="mb-8 p-4 rounded-2xl bg-blue-500/10 border border-blue-500/20"
+                     data-status-url="{% url 'api_report_status' report.id %}">
+                    <div class="flex items-center gap-3 text-blue-400 mb-2">
+                        <i class="fas fa-circle-notch fa-spin"></i>
+                        <span class="text-xs font-bold uppercase tracking-widest">Elaborazione OCR in corso</span>
+                    </div>
+                    <p class="text-[11px] text-blue-200/70 leading-relaxed">
+                        Il referto è <span id="ocr-progress-state">{{ report.get_status_display }}</span>.
+                        L'estrazione richiede circa un minuto: questa pagina si aggiorna da sola appena è pronta.
+                    </p>
+                </div>
+                {% endif %}
+
                 {% if report.status == 'NEEDS_REVIEW' %}
                 <div class="mb-8 p-4 rounded-2xl bg-amber-500/10 border border-amber-500/20">
                     <div class="flex items-center gap-3 text-amber-500 mb-2">
@@ -277,4 +292,40 @@
         </div>
     </div>
 </div>
+
+{# Polling dello stato OCR (Macro 22): attivo solo mentre il referto e' in coda
+   o in elaborazione. A esito pronto (is_final) la pagina si ricarica una volta
+   sola e mostra i dati estratti. I retry del worker sono invisibili qui. #}
+<script>
+(function () {
+    var banner = document.getElementById('ocr-progress-banner');
+    if (!banner) { return; }
+
+    var statusUrl = banner.dataset.statusUrl;
+    var label = document.getElementById('ocr-progress-state');
+    var POLL_MS = 4000;
+
+    function poll() {
+        fetch(statusUrl, { headers: { 'X-Requested-With': 'XMLHttpRequest' }, credentials: 'same-origin' })
+            .then(function (res) {
+                if (!res.ok) { throw new Error('status ' + res.status); }
+                return res.json();
+            })
+            .then(function (data) {
+                if (data.is_final) {
+                    window.location.reload();
+                    return;
+                }
+                if (label && data.status_display) { label.textContent = data.status_display; }
+                window.setTimeout(poll, POLL_MS);
+            })
+            .catch(function () {
+                // Errore di rete o sessione scaduta: si riprova, senza rumore.
+                window.setTimeout(poll, POLL_MS * 2);
+            });
+    }
+
+    window.setTimeout(poll, POLL_MS);
+})();
+</script>
 {% endblock %}

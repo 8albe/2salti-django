@@ -1,5 +1,5 @@
 from django.urls import path
-from . import api_views, api_views_digital, api_views_jury
+from . import api_views, api_views_digital, api_views_jury, api_views_reports
 
 urlpatterns = [
     # Legacy API v1 (mapped under /api/)
@@ -8,6 +8,9 @@ urlpatterns = [
     path('v1/match/<int:match_id>/', api_views.api_match_detail, name='api_match_detail'),
     path('v1/athlete/<int:athlete_id>/', api_views.api_athlete_detail, name='api_athlete_detail'),
     path('v1/ai-query/', api_views.api_ai_query, name='api_ai_query'),
+
+    # Stato workflow referto (polling post-upload asincrono, Macro 22)
+    path('referti/<int:report_id>/status/', api_views_reports.api_report_status, name='api_report_status'),
 
     # Digital Report API
     path('referti/digital/start/', api_views_digital.api_digital_report_start, name='api_digital_report_start'),
