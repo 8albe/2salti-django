@@ -19,7 +19,7 @@ class ImagePreprocessor:
     def process(image_path, output_name=None):
         """
         Processa un'immagine e restituisce il path del file preprocessato.
-        Pipeline: EXIF Fix -> Perspective correction -> Auto-rotate -> Deskew -> Contrast -> Resize
+        Pipeline: EXIF Fix -> Perspective correction -> Deskew -> Contrast -> Resize
         """
         try:
             # 0. Fix EXIF Rotation (Pillow) prima di passare a OpenCV
@@ -35,24 +35,21 @@ class ImagePreprocessor:
             processed_img = ImagePreprocessor._correct_perspective(img)
             perspective_corrected = processed_img is not img
 
-            # 2. Auto-rotate to portrait (HACK: la maggior parte dei referti sono verticali)
-            processed_img = ImagePreprocessor._auto_rotate_to_portrait(processed_img)
-
-            # 3. Deskewing (solo se non abbiamo già fatto la prospettiva, che è più potente)
+            # 2. Deskewing (solo se non abbiamo già fatto la prospettiva, che è più potente)
             if not perspective_corrected:
                 processed_img = ImagePreprocessor._deskew(processed_img)
 
-            # 4. Resize proporzionale (max 2000px per lato per OpenAI)
+            # 3. Resize proporzionale (max 2000px per lato per l'invio all'LLM)
             h, w = processed_img.shape[:2]
             max_dim = 2000
             if max(h, w) > max_dim:
                 scale = max_dim / max(h, w)
                 processed_img = cv2.resize(processed_img, (int(w * scale), int(h * scale)), interpolation=cv2.INTER_AREA)
 
-            # 5. Compensazione ombre adattiva
+            # 4. Compensazione ombre adattiva
             processed_img = ImagePreprocessor._compensate_shadows(processed_img)
 
-            # 6. Correzione Contrasto (CLAHE)
+            # 5. Correzione Contrasto (CLAHE)
             final_img = ImagePreprocessor._apply_clahe(processed_img)
 
             # Salvataggio
@@ -187,7 +184,12 @@ class ImagePreprocessor:
 
     @staticmethod
     def _auto_rotate_to_portrait(img):
-        """Se l'immagine è landscape, la ruota di 90 gradi assuming referto is portrait."""
+        """
+        Se l'immagine è landscape, la ruota di 90 gradi assuming referto is portrait.
+        NON PIU' INVOCATO da process(): i referti reali sono sia orizzontali sia
+        verticali, quindi ruotare by aspect-ratio corrompeva metà dei referti
+        orizzontali. Lasciato definito (non invocato) per reversibilità minima.
+        """
         h, w = img.shape[:2]
         if w > h:
             logger.info("Auto-rotating image to portrait mode.")

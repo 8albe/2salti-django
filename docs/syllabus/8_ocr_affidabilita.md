@@ -6,15 +6,17 @@ Miglioramento accuracy, preprocessing, gestione errori, dataset test, qualità d
 
 ### 8.1 Pipeline esistente
 
-- [x] Provider astratto (`vision_providers.py`), GPT-4V in prod, mock in test
+- [x] **Provider OCR ratificato (2026-07-09): Gemini unico e definitivo, modello `gemini-2.5-pro`.** Scelto dopo bench su referti reali a grafia difficile (il più accurato; latenza ~90s accettabile perché l'OCR gira in background). OpenAI **rimosso** dal codice/test/deps OCR; il seam provider (`BaseVisionProvider` + factory `OCRService` + `OCR_PROVIDER`) resta per future estensioni. Filone "scelta provider OCR" **chiuso**.
+- [x] Provider astratto (`vision_providers.py`), `GeminiVisionProvider` in prod, mock in test
 - [x] Quality gate (`ocr_quality_gate.py`) pre-EXTRACTED
 - [x] Dedup via SHA-256 (`hash_service.py`)
-- [x] Raw response salvata (`OCRRawResponse`) per audit
+- [x] Raw response salvata (campo `MatchReport.raw_api_response`) per audit
 - [x] Workflow stati referto completo (UPLOADED → PROCESSING → EXTRACTED → VALIDATED → PUBLISHED + branch NEEDS_REVIEW/REJECTED)
 
 ### 8.2 Affidabilità da migliorare
 
 - [ ] Dataset di test con referti reali rappresentativi (accuracy baseline misurabile)
+  - Nota (2026-07-19): Mistral OCR 4 registrato come provider candidato da benchmarcare contro `gemini-2.5-pro` con `ocr_bench` sul dataset gold quando sarà costruito — nessuna implementazione ora.
 - [ ] Gestione multi-page PDF: concatenazione pagine prima dell'estrazione
 - [ ] Metriche qualità: success rate per campo, tempo medio upload→publish
 - [x] Cluster E KO residui — guardia early-return in `ocr_service.py:254` che cortocircuita exception path per NEEDS_REVIEW

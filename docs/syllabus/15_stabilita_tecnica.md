@@ -77,7 +77,7 @@ KO residui sulla test suite e debiti tecnici aperti.
 - [ ] Aggiungere test dedicati per **Convocations** (state machine 4 stati + property time-based) — view + URL già live (`convocation_create` in `management/urls.py`), manca solo la copertura test dedicata
 - [ ] Aggiungere test dedicati per **Training Management** (presenze + geofencing) — view + URL già live (`training_list`, `training_create`, `training_rsvp` in `management/urls.py`), manca solo la copertura test dedicata
 - [ ] Aggiungere test dedicati per **Team Communications** (Post, Comment, ChatMessage) — view + URL già live (`post_create`, `chat_view` in `management/urls.py`), manca solo la copertura test dedicata
-- ~~Aggiungere test dedicati per **Sponsors** (JSONField serialization)~~ — **task stale rimosso**: modello `Sponsor` non esiste nel codice
+- ~~Aggiungere test dedicati per **Sponsors** (JSONField serialization)~~ — **task superato**: il modello relazionale `Sponsor` esiste (Macro 9, migration `core/0022_sponsor.py`) con test dedicati in `core/tests_sponsor.py`; il legacy JSONField `Society.sponsors` resta deprecato
 
 ---
 

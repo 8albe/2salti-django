@@ -45,7 +45,7 @@ class StatusSemanticsTestCase(TestCase):
         """
         with patch('matches.services.ocr_service.OCRService.get_provider') as mock_get:
             provider = MagicMock(spec=BaseVisionProvider)
-            provider.extract_data.side_effect = Exception("OpenAI API Timeout")
+            provider.extract_data.side_effect = Exception("Gemini API Timeout")
             mock_get.return_value = provider
             
             success = OCRService.process_and_update(self.report)
@@ -55,7 +55,7 @@ class StatusSemanticsTestCase(TestCase):
             
             self.assertEqual(self.report.status, MatchReport.Status.NEEDS_REVIEW)
             self.assertIn("Errore Tecnico OCR", self.report.validation_notes)
-            self.assertIn("OpenAI API Timeout", self.report.validation_notes)
+            self.assertIn("Gemini API Timeout", self.report.validation_notes)
 
 if __name__ == "__main__":
     from django.core.management import call_command

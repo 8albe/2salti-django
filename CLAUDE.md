@@ -8,7 +8,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Non-Negotiable Rules
 
-- **Never** call OpenAI in tests — use `OCR_PROVIDER=mock` or patch `vision_providers.py`.
+- **Never** call the real OCR provider (Gemini) in tests — use `OCR_PROVIDER=mock` or patch `vision_providers.py`.
 - **Never** modify committed migrations. Always create new ones via `makemigrations`.
 - **Never** reference `User` directly — always use `get_user_model()`.
 - **Never** write to `LeagueStanding` directly — always go through `StandingsService.rebuild_for_league()` in `matches/services/standings_service.py`.
@@ -28,7 +28,7 @@ Prima di iniziare qualunque task, identifica quale documento consultare.
 | Mapping termini blueprint ↔ modelli Django | [[DOMAIN_GLOSSARY.md]] | 30+ entità, note tecniche su Match.is_public e onboarding_state |
 | Procedure operative infrastruttura | [[OPS_RUNBOOK.md]] | Deploy, trappole tecniche, protocollo protected file, sicurezza |
 | Capire il "perché" di una decisione di prodotto | [[BLUEPRINT.md]] | visione, UX, business model (italiano) |
-| Roadmap e priorità feature | [[SYLLABUS.md]] | 20 macro-obiettivi funzionali con dettaglio in [docs/syllabus/](docs/syllabus/) |
+| Roadmap e priorità feature | [[SYLLABUS.md]] | 21 macro-obiettivi funzionali con dettaglio in [docs/syllabus/](docs/syllabus/) |
 | Idee fuori scope / parcheggiate | [[FUTURE_IDEAS.md]] | feature eliminate o rinviate (Shop, Media Gallery, Venue, visione multi-sport) con motivo e cosa le riaprirebbe |
 | Regole, comandi, convenzioni di sviluppo | CLAUDE.md (questo file) | regole operative |
 
@@ -105,16 +105,19 @@ Mapping tra termini italiani del blueprint e modelli Django: [docs/DOMAIN_GLOSSA
 
 ### OCR edge cases
 
-- Multi-page PDFs: concatenate pages before extraction.
-- Rotated or skewed photos: the provider handles orientation — do not pre-process.
+- Multi-page PDFs: **not implemented** — `PDFProcessor` exists in `matches/services/pdf_processor.py` but is never imported (dead code, no PDF lib in requirements). Open task.
+- Rotated or skewed photos: handled by `ImagePreprocessor` (EXIF fix + OpenCV auto-rotate/deskew), invoked by `GeminiVisionProvider` before the API call — do not add further pre-processing.
 - Near-duplicates (different scans of same report): **not** deduplicated automatically — reviewer must decide.
 
 ### Key Environment Variables
 
 ```
 SECRET_KEY, DEBUG, ALLOWED_HOSTS, CSRF_TRUSTED_ORIGINS
-OPENAI_API_KEY          # GPT-4V for OCR
-OCR_PROVIDER            # gpt4o | mock
+OCR_PROVIDER            # gemini | mock   (unico provider OCR: Gemini)
+GEMINI_API_KEY          # Google Gemini for OCR
+GEMINI_MODEL            # default gemini-2.5-pro
+OCR_MAX_OUTPUT_TOKENS   # default 32000 (anti-troncamento referti densi)
+OPENAI_API_KEY          # GPT-4o per AIStatsEngine (chat stats, NON-OCR)
 EMAIL_HOST_USER / EMAIL_HOST_PASSWORD
 TELEGRAM_BOT_TOKEN / TELEGRAM_CHAT_ID  # optional ops notifications
 ENVIRONMENT_NAME        # production
@@ -195,7 +198,7 @@ Quando il task lo dichiara esplicitamente, si lavora un'intera macro in batch su
 
 I test vivono accanto al codice delle rispettive app, con nomi `tests_*.py` o `test_*.py`.
 
-Mock the OCR provider via `OCR_PROVIDER=mock` or by patching `vision_providers.py` — never call OpenAI in tests.
+Mock the OCR provider via `OCR_PROVIDER=mock` or by patching `vision_providers.py` — never call the real OCR provider (Gemini) in tests.
 
 ## Task Examples
 

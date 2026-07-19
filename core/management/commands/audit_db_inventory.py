@@ -49,7 +49,6 @@ from matches.models import (
     MatchEvent,
     MatchReport,
     MatchReportAuditLog,
-    OCRRawResponse,
 )
 
 try:
@@ -502,22 +501,6 @@ class Command(BaseCommand):
         }
 
     def collect_other(self) -> dict:
-        ocr_total = OCRRawResponse.objects.count()
-        # JSON size approx: sum char lengths of raw_response (cast to text)
-        ocr_size_mb = None
-        try:
-            # Pull a sample sum to estimate. For sqlite we can iterate; for large DB
-            # this can be slow, but DB di sviluppo è piccolo.
-            total_chars = 0
-            for r in OCRRawResponse.objects.all().iterator():
-                try:
-                    total_chars += len(json.dumps(r.raw_response, default=str))
-                except Exception:
-                    pass
-            ocr_size_mb = round(total_chars / (1024 * 1024), 3)
-        except Exception:
-            ocr_size_mb = None
-
         inbound_total = InboundEmail.objects.count()
 
         season_archive_total = SeasonArchive.objects.count() if SeasonArchive else 0
@@ -526,10 +509,6 @@ class Command(BaseCommand):
             "inbound_email": {
                 "total": inbound_total,
                 "processed_with_success": inbound_total,  # tutti i record qui significano "elaborato"
-            },
-            "ocr_raw_response": {
-                "total": ocr_total,
-                "estimated_size_mb": ocr_size_mb,
             },
             "ai_query_log": {"total": AIQueryLog.objects.count()},
             "training": {"total": Training.objects.count()},
@@ -880,8 +859,6 @@ class Command(BaseCommand):
         H("15. ALTRE TABELLE")
         o = data["other"]
         L.append(f"  InboundEmail:        {o['inbound_email']['total']}")
-        L.append(f"  OCRRawResponse:      {o['ocr_raw_response']['total']}  "
-                 f"(~{o['ocr_raw_response']['estimated_size_mb']} MB)")
         L.append(f"  AIQueryLog:          {o['ai_query_log']['total']}")
         L.append(f"  Training:            {o['training']['total']}")
         L.append(f"  TrainingOccurrence:  {o['training_occurrence']['total']}")

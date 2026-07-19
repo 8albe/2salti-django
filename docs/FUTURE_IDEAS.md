@@ -6,7 +6,7 @@ Creato il 2026-07-01, nel giro preparatorio della potatura documentale (restrizi
 
 ## 1. Eliminato dallo scope (mai costruito — esisteva solo in documentazione)
 
-Le prime quattro voci sotto non hanno una riga di codice, un modello o una migration: erano solo pianificazione. Verificato nell'inventario read-only del 2026-07-01 (grep su modelli, viste, migration, requirements). La quinta (minuti giocati) è stata aggiunta il 2026-07-02 in chiusura della Macro 4: anche lei mai costruita.
+Le prime quattro voci sotto non hanno una riga di codice, un modello o una migration: erano solo pianificazione. Verificato nell'inventario read-only del 2026-07-01 (grep su modelli, viste, migration, requirements). La quinta (minuti giocati) è stata aggiunta il 2026-07-02 in chiusura della Macro 4: anche lei mai costruita. La sesta (statistiche avanzate del referto digitale) è stata aggiunta il 2026-07-19 su feedback federale: anche lei mai costruita.
 
 ### Shop vetrina / Shop_Orders / webhook HMAC
 Era la vetrina prodotti delle società con pulsante "Richiesta Materiale": nessun checkout in-app, 2salti faceva da intermediario inoltrando l'ordine allo shop della società via webhook outbound firmato HMAC (o email strutturata), con log degli ordini in una entità `Shop_Orders`. Parcheggiata perché mai costruita e perché il suo valore dipende da un sistema-società maturo e da accordi commerciali coi club che oggi non esistono; restavano aperti anche i punti SLA/retry del webhook. La riaprirebbe una domanda reale delle società paganti per l'intermediazione del materiale. (Storico: BLUEPRINT v3.x §2, §3, §10, §13, §14.)
@@ -22,6 +22,9 @@ Era il modello a regime per la nascita delle società sulla piattaforma: le part
 
 ### Minuti giocati per atleta
 Era la metrica "minuti giocati" nel profilo pubblico dell'atleta, accanto a gol, presenze ed espulsioni. Parcheggiata perché mai costruita e bloccata a monte: richiede eventi di sostituzione SUB_IN/SUB_OUT che il modello Match_Events non traccia (oggi elenca solo gol, espulsione, cartellino, timeout, rigore) — modellare le sostituzioni è il prerequisito. La riaprirebbe l'aggiunta degli eventi sostituzione a Match_Events con il relativo calcolo dei minuti. (Storico: SYLLABUS Macro 4, task residuo.)
+
+### Statistiche avanzate pallanuoto (livello Avanzato del referto digitale)
+Era il secondo livello di compilazione del referto digitale, a scelta della giuria accanto al livello Base (gol, cartellini, espulsioni, timeout, parziali): palombelle, contropiedi, rigori causati, parate e simili. Accantonata su feedback federale raccolto alle finali nazionali U18 (2026-07): la federazione conferma che queste statistiche non vengono rilevate nemmeno in Serie A — non esiste quindi una fonte reale del dato, e il principio del Dato Certo vieta di inventarla. La riaprirebbe una rilevazione reale da parte di giurie/federazione (o di rilevatori dedicati a bordo vasca). (Storico: BLUEPRINT §7.4.3; SYLLABUS Macro 14.)
 
 ---
 
@@ -40,6 +43,6 @@ Cosa riaprirebbe la visione: un prodotto pallanuoto consolidato (dati reali, soc
 ### Referto digitale giuria completo (Jury App) + Jury Token FIN
 È lo strumento mobile con cui la giuria sostituisce il referto cartaceo come fonte primaria del dato: compilazione offline-first (Service Worker + IndexedDB, sync automatica al ritorno della rete), token match-specific emessi dalla federazione/lega con finestra di validità 30 minuti pre-match e revoca automatica al fischio finale, firma PIN dell'arbitro con immutabilità del referto post-firma (correzioni solo via admin con audit log), ruolo utente `jury` dedicato.
 
-Stato reale al parcheggio: le decisioni di prodotto sono **chiuse** (issuer dei token = federazione/lega, non il club; conflict resolution = single-writer lock per match; livelli statistiche Base/Avanzato scelti). A codice esiste solo il REST CRUD del draft digitale (`api_views_digital.py`: start/update/close, con chiusura in NEEDS_REVIEW); mancano UI mobile, offline-first, modello token, ruolo `jury` e firma PIN.
+Stato reale al parcheggio: le decisioni di prodotto sono **chiuse** (issuer dei token = federazione/lega, non il club; conflict resolution = single-writer lock per match; livello statistiche = solo Base, Avanzato accantonato 2026-07 — vedi §1). A codice esiste solo il REST CRUD del draft digitale (`api_views_digital.py`: start/update/close, con chiusura in NEEDS_REVIEW); mancano UI mobile, offline-first, modello token, ruolo `jury` e firma PIN.
 
 Perché è differita e non abbandonata: senza l'autorità emittente federale il flusso di certificazione della giuria non è nemmeno progettabile — è una dipendenza esterna reale (accordo/integrazione FIN), non un rinvio di comodo. La feature resta **dentro lo scope** come infrastruttura di ingestione del dato ("referto digitale compilabile dalla giuria, anche offline") e si sblocca con l'accordo federale. (Riferimenti vivi: SYLLABUS Macro 14; BLUEPRINT §7.4.)

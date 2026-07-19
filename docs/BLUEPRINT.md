@@ -50,7 +50,7 @@ Il progetto genera valore differenziato in base al ruolo e al piano di abbonamen
 | --- | --- | --- |
 | Atleta | Profilo, gol, presenze, crescita | Season Recap, Dashboard personalizzata |
 | Genitore / Tifoso | Consultazione bacheca e statistiche | Live Alerts push, Chatbot AI, widget personalizzati |
-| Allenatore | Rendimento squadra, record | Statistiche avanzate, gestione bacheca (via Club Pro) |
+| Allenatore | Rendimento squadra, record | Gestione bacheca (via Club Pro) |
 | Arbitro / Giuria | Consultazione cronologia | Referto digitale mobile, firma ufficiale, certificazione |
 | Societa / Lega | Pagina base, roster, calendario | Bacheca push, Sponsor, Widget Club |
 | Admin | Cockpit unico di governo | Monitoraggio pipeline, audit log, gestione permessi |
@@ -328,10 +328,8 @@ Strumento dedicato alla giuria e agli arbitri per l'ingestione nativa del dato d
 
 #### 7.4.3 Firma e Statistiche
 - **Firma Arbitro**: Inserimento PIN personale a fine gara. Il referto diventa immutabile; correzioni solo via admin audit log.
-- **Livelli di Statistiche** (scelta giuria, entrambi gratis):
-    - **Base**: Gol, cartellini, espulsioni, timeout, parziali, nomi squadre, luogo, orario.
-    - **Avanzato**: Palombelle, contropiedi, rigori causati, parate, ecc.
-- **Principio del Dato Certo**: Se il dato avanzato non è rilevato, il sistema mostra "non rilevato", mai valori inventati (coerente con il principio "Null invece di invenzione" del Cap. 1).
+- **Livelli di Statistiche**: unico livello **Base** (gratis): Gol, cartellini, espulsioni, timeout, parziali, nomi squadre, luogo, orario. Il livello Avanzato è accantonato su feedback federale 2026-07 (quelle statistiche non vengono rilevate nemmeno in Serie A); idea conservata in FUTURE_IDEAS.md.
+- **Principio del Dato Certo**: Se un dato non è rilevato, il sistema mostra "non rilevato", mai valori inventati (coerente con il principio "Null invece di invenzione" del Cap. 1).
 - **Form UX**: Mobile-first, validazioni inline (es. somma parziali == totale gol), più veloce del cartaceo. È lo strumento con cui proporre alla federazione il passaggio dal cartaceo al digitale: deve essere più rapido e meno error-prone della compilazione manuale.
 
 ### 7.5 Chatbot AI (L'impiegato virtuale)
@@ -545,7 +543,7 @@ Sopra l'interfaccia, in mezzo il layer applicativo, sotto il motore OCR/AI e il 
 | PUT /api/referti/digital/{id} | Aggiorna il draft digitale (sync offline) | bozza salvata |
 | POST /api/referti/digital/{id}/close | Firma PIN arbitro e chiude il referto | stato workflow + immutabilità |
 | GET /api/referti/{id}/status | Stato workflow del referto | UPLOADED / EXTRACTED / ... |
-| GET /api/referti/{id}/results | JSON estratto e warning (supporto Base/Avanzato) | payload per admin |
+| GET /api/referti/{id}/results | JSON estratto e warning (livello Base) | payload per admin |
 | PUT /api/referti/{id}/validate | Correzione e approvazione admin | stato aggiornato |
 | GET /api/matches | Lista partite con filtri | match list |
 | GET /api/players/{id} | Profilo atleta | bio + season stats |

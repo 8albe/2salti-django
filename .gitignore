@@ -129,3 +129,8 @@ docs/.stfolder/
 audit_season_phase0.py
 dryrun_season_phase0.py
 predict_home.py
+
+# scratch di lavoro OCR, non dataset
+/ocr_bench_out/
+/referto_test*.jpeg
+/referto_test*.jpg

@@ -1,135 +1,17 @@
 import logging
 import json
+from types import SimpleNamespace
 from typing import Dict, Any, Tuple
 from django.utils import timezone
 
 logger = logging.getLogger(__name__)
 
-class BaseVisionProvider:
-    """
-    Interfaccia base per i provider OCR/Vision.
-    Ogni nuovo provider (es. Google Vision, OpenAI GPT-4o, AWS Textract) 
-    deve ereditare da questa classe e implementare extract_data.
-    """
-    def extract_data(self, match_report) -> Tuple[Dict[str, Any], str]:
-        raise NotImplementedError("Il metodo extract_data deve essere implementato dal provider.")
+# Testo utente inviato insieme all'immagine del referto (condiviso tra i provider vivi).
+OCR_USER_TEXT = "Estrai i dati da questo referto fotografato. Rispondi solo con il JSON."
 
-class MockVisionProvider(BaseVisionProvider):
-    """
-    Provider Mock che simula un'estrazione OCR perfetta usando i dati del database.
-    Usato per test e sviluppo senza chiamate a servizi esterni.
-    """
-    def extract_data(self, match_report) -> Tuple[Dict[str, Any], str]:
-        match = match_report.match
-        
-        logger.info(f"[MockVisionProvider] Simulo estrazione per report {match_report.id}")
-
-        data = {
-            "metadata": {
-                "schema_version": "2.0",
-                "provider": "MockVisionProvider-v1",
-                "extracted_at": timezone.now().isoformat(),
-                "confidence": 0.98,
-                "confidence_fields": {
-                    "home_team": 0.99,
-                    "away_team": 0.99,
-                    "final_score": 0.99,
-                    "quarters": 0.95,
-                    "home_roster": 0.90,
-                    "away_roster": 0.90,
-                    "events": 0.85,
-                    "officials": 0.80,
-                },
-                "extraction_warnings": []
-            },
-            "match_info": {
-                "home_team": match.home_team.society.name if match.home_team else "Unknown Home",
-                "away_team": match.away_team.society.name if match.away_team else "Unknown Away",
-                "competition": match.league.name if match.league else "Unknown Competition",
-                "date": match.match_date.strftime("%Y-%m-%d") if match.match_date else None,
-                "city": match.location or "Not specified",
-                "venue": None,
-                "round": None,
-                "group": None,
-            },
-            "officials": {
-                "confidence": 0.80,
-                "referees": [
-                    {"name": "Arbitro Mock Primo", "role": "1st"},
-                    {"name": "Arbitro Mock Secondo", "role": "2nd"},
-                ],
-                "timekeeper": "Segnapunti Mock",
-            },
-            "teams": {
-                "home": {
-                    "name": match.home_team.society.name if match.home_team else "Home",
-                    "coach": "Allenatore Mock Casa",
-                    "confidence": 0.90,
-                    "players": [
-                        {"number": 1, "name": "Portiere Mock"},
-                        {"number": 10, "name": "Capitano Mock"}
-                    ]
-                },
-                "away": {
-                    "name": match.away_team.society.name if match.away_team else "Away",
-                    "coach": "Allenatore Mock Ospite",
-                    "confidence": 0.90,
-                    "players": [
-                        {"number": 1, "name": "Opponente Mock"},
-                        {"number": 5, "name": "Difensore Mock"}
-                    ]
-                }
-            },
-            "scores": {
-                "final_score": f"{match.home_score or 0}-{match.away_score or 0}",
-                "quarters": match.quarter_scores or {}
-            },
-            "events": [
-                {"type": "GOAL", "player_name": "Capitano Mock", "minute": 5, "team": "home", "quarter": 1},
-                {"type": "EXCLUSION_20", "player_name": "Difensore Mock", "minute": 15, "team": "away", "quarter": 2},
-                {"type": "TIMEOUT", "player_name": None, "minute": 18, "team": "home", "quarter": 2, "sanction_duration": None},
-            ],
-            "notes": "Estrazione simulata dal MockVisionProvider v2."
-        }
-        
-        raw_content = json.dumps(data, indent=4, ensure_ascii=False)
-        return data, raw_content
-
-
-class GPT4oVisionProvider(BaseVisionProvider):
-    """
-    Provider reale che utilizza OpenAI GPT-4o Vision per estrarre dati dal referto.
-    Hardened v2: per-field confidence, ambiguity channel, null-preference enforcement.
-    """
-    def __init__(self):
-        from django.conf import settings
-        from openai import OpenAI
-        self.client = OpenAI(api_key=settings.OPENAI_API_KEY)
-
-    def extract_data(self, match_report) -> Dict[str, Any]:
-        import base64
-        import json
-        import os
-        from .image_preprocessor import ImagePreprocessor
-        
-        logger.info(f"[GPT4oVisionProvider] Avvio preprocessing per report {match_report.id}...")
-        
-        # Safe access guard (Root cause hardening)
-        if not match_report.file:
-            raise ValueError("Il referto non ha alcun file associato. Impossibile eseguire OCR.")
-
-        # Preprocessing
-        original_path = match_report.file.path
-        processed_path = ImagePreprocessor.process(original_path)
-        
-        logger.info(f"[GPT4oVisionProvider] Invio report preprocessato a OpenAI: {processed_path}")
-
-        # Encoding dell'immagine preprocessata
-        with open(processed_path, 'rb') as f:
-            base64_image = base64.b64encode(f.read()).decode('utf-8')
-
-        # Hardened v2 prompt — per-field confidence + null preference + ambiguity channel
-        system_prompt = """
+# Prompt di sistema hardened v2 (per-field confidence + null preference + ambiguity channel).
+# Usato da GeminiVisionProvider: schema OCR v2 in output.
+OCR_SYSTEM_PROMPT_V2 = """
         Sei un esperto di analisi di referti di partite di pallanuoto (FIN - GUG). 
         Riceverai la FOTO di un referto ufficiale. Segui queste istruzioni spaziali:
         
@@ -227,62 +109,24 @@ class GPT4oVisionProvider(BaseVisionProvider):
         Rispondi SOLO con il JSON. Non aggiungere testo, commenti o markdown.
         """
 
-        user_content = [
-            {
-                "type": "text",
-                "text": "Estrai i dati da questo referto fotografato. Rispondi solo con il JSON."
-            },
-            {
-                "type": "image_url",
-                "image_url": {
-                    "url": f"data:image/jpeg;base64,{base64_image}"
-                }
-            }
-        ]
-
-        try:
-            import json
-            response = self.client.chat.completions.create(
-                model="gpt-4o",
-                messages=[
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": user_content}
-                ],
-                response_format={"type": "json_object"},
-                max_tokens=4000
-            )
-            
-            # Parsing robusto
-            content = response.choices[0].message.content
-            logger.info(f"[GPT4oVisionProvider] Risposta OpenAI ricevuta (lunghezza: {len(content) if content else 0})")
-            
-            if not content:
-                if hasattr(response.choices[0].message, 'refusal') and response.choices[0].message.refusal:
-                    logger.error(f"[GPT4oVisionProvider] OpenAI ha rifiutato la richiesta: {response.choices[0].message.refusal}")
-                    raise Exception(f"OpenAI Refusal: {response.choices[0].message.refusal}")
-                raise Exception("OpenAI ha restituito un contenuto vuoto.")
-
-            data = json.loads(content)
-            
-            # Normalize the response to ensure consistent structure
-            data = self._normalize_response(data, processed_path, original_path)
-            
-            # Pulizia file temporaneo se diverso dall'originale
-            if processed_path != original_path and os.path.exists(processed_path):
-                pass  # Keep for debug
-
-            return data, content
-            
-        except Exception as e:
-            logger.error(f"Errore GPT-4o: {str(e)}")
-            raise Exception(f"Errore durante la chiamata a OpenAI: {str(e)}")
+class BaseVisionProvider:
+    """
+    Interfaccia base per i provider OCR/Vision.
+    Ogni nuovo provider (es. Google Vision, AWS Textract)
+    deve ereditare da questa classe e implementare extract_data.
+    """
+    def extract_data(self, match_report) -> Tuple[Dict[str, Any], str]:
+        raise NotImplementedError("Il metodo extract_data deve essere implementato dal provider.")
 
     @staticmethod
-    def _normalize_response(data: Dict[str, Any], processed_path: str, original_path: str) -> Dict[str, Any]:
+    def _normalize_response(data: Dict[str, Any], processed_path: str, original_path: str,
+                            model: str = "gemini-2.5-pro", usage=None,
+                            provider: str = "GeminiVisionProvider-v1") -> Dict[str, Any]:
         """
-        Normalize GPT-4o response to ensure consistent structure.
+        Normalize a vision-provider response into the OCR v2 schema.
         Fills in missing optional sections with safe defaults.
-        Trims whitespace from string fields.
+        Trims whitespace from string fields. Passare `provider` per marcare la
+        provenienza. `usage`, se fornito, espone .prompt_tokens / .completion_tokens.
         """
         # Ensure metadata structure
         if "metadata" not in data:
@@ -293,11 +137,16 @@ class GPT4oVisionProvider(BaseVisionProvider):
         meta.setdefault("confidence_fields", {})
         meta.setdefault("extraction_warnings", [])
         meta.update({
-            "provider": "GPT4oVisionProvider-v2-hardened",
+            "provider": provider,
             "extracted_at": timezone.now().isoformat(),
-            "model": "gpt-4o",
+            "model": model,
             "preprocessed": processed_path != original_path
         })
+        if usage is not None:
+            meta["token_usage"] = {
+                "prompt_tokens": getattr(usage, "prompt_tokens", None),
+                "completion_tokens": getattr(usage, "completion_tokens", None),
+            }
 
         # Ensure match_info
         data.setdefault("match_info", {})
@@ -354,3 +203,227 @@ class GPT4oVisionProvider(BaseVisionProvider):
         data.setdefault("events", [])
 
         return data
+
+class MockVisionProvider(BaseVisionProvider):
+    """
+    Provider Mock che simula un'estrazione OCR perfetta usando i dati del database.
+    Usato per test e sviluppo senza chiamate a servizi esterni.
+    """
+    def extract_data(self, match_report) -> Tuple[Dict[str, Any], str]:
+        match = match_report.match
+        
+        logger.info(f"[MockVisionProvider] Simulo estrazione per report {match_report.id}")
+
+        data = {
+            "metadata": {
+                "schema_version": "2.0",
+                "provider": "MockVisionProvider-v1",
+                "extracted_at": timezone.now().isoformat(),
+                "confidence": 0.98,
+                "confidence_fields": {
+                    "home_team": 0.99,
+                    "away_team": 0.99,
+                    "final_score": 0.99,
+                    "quarters": 0.95,
+                    "home_roster": 0.90,
+                    "away_roster": 0.90,
+                    "events": 0.85,
+                    "officials": 0.80,
+                },
+                "extraction_warnings": []
+            },
+            "match_info": {
+                "home_team": match.home_team.society.name if match.home_team else "Unknown Home",
+                "away_team": match.away_team.society.name if match.away_team else "Unknown Away",
+                "competition": match.league.name if match.league else "Unknown Competition",
+                "date": match.match_date.strftime("%Y-%m-%d") if match.match_date else None,
+                "city": match.location or "Not specified",
+                "venue": None,
+                "round": None,
+                "group": None,
+            },
+            "officials": {
+                "confidence": 0.80,
+                "referees": [
+                    {"name": "Arbitro Mock Primo", "role": "1st"},
+                    {"name": "Arbitro Mock Secondo", "role": "2nd"},
+                ],
+                "timekeeper": "Segnapunti Mock",
+            },
+            "teams": {
+                "home": {
+                    "name": match.home_team.society.name if match.home_team else "Home",
+                    "coach": "Allenatore Mock Casa",
+                    "confidence": 0.90,
+                    "players": [
+                        {"number": 1, "name": "Portiere Mock"},
+                        {"number": 10, "name": "Capitano Mock"}
+                    ]
+                },
+                "away": {
+                    "name": match.away_team.society.name if match.away_team else "Away",
+                    "coach": "Allenatore Mock Ospite",
+                    "confidence": 0.90,
+                    "players": [
+                        {"number": 1, "name": "Opponente Mock"},
+                        {"number": 5, "name": "Difensore Mock"}
+                    ]
+                }
+            },
+            "scores": {
+                "final_score": f"{match.home_score or 0}-{match.away_score or 0}",
+                "quarters": match.quarter_scores or {}
+            },
+            "events": [
+                {"type": "GOAL", "player_name": "Capitano Mock", "minute": 5, "team": "home", "quarter": 1},
+                {"type": "EXCLUSION_20", "player_name": "Difensore Mock", "minute": 15, "team": "away", "quarter": 2},
+                {"type": "TIMEOUT", "player_name": None, "minute": 18, "team": "home", "quarter": 2, "sanction_duration": None},
+            ],
+            "notes": "Estrazione simulata dal MockVisionProvider v2."
+        }
+        
+        raw_content = json.dumps(data, indent=4, ensure_ascii=False)
+        return data, raw_content
+
+
+def _gemini_finish_reason(response):
+    """
+    Estrae il finish_reason del primo candidate se l'SDK google-genai lo espone
+    (es. 'MAX_TOKENS' quando l'output viene troncato). Ritorna una stringa o None.
+    Difensivo: qualunque forma inattesa della response non deve far esplodere il parse.
+    """
+    try:
+        candidates = getattr(response, "candidates", None) or []
+        if not candidates:
+            return None
+        fr = getattr(candidates[0], "finish_reason", None)
+        if fr is None:
+            return None
+        # google-genai espone un enum: preferisci .name, fallback a str().
+        return getattr(fr, "name", None) or str(fr)
+    except Exception:
+        return None
+
+
+class GeminiVisionProvider(BaseVisionProvider):
+    """
+    Provider reale che utilizza Google Gemini (SDK google-genai) per estrarre
+    dati dal referto. Interfaccia extract_data: parametri
+    model/preprocess/sent_image_callback, schema OCR v2 in output, prompt di
+    sistema OCR_SYSTEM_PROMPT_V2. Il modello di default è letto da
+    settings.GEMINI_MODEL con fallback a 'gemini-2.5-pro'; --models nel bench
+    può passare qualsiasi model string.
+    """
+    def __init__(self):
+        from django.conf import settings
+        from google import genai
+        self.client = genai.Client(api_key=getattr(settings, "GEMINI_API_KEY", ""))
+
+    def extract_data(self, match_report, model: str = None, preprocess: bool = True,
+                     sent_image_callback=None) -> Tuple[Dict[str, Any], str]:
+        """
+        preprocess=False bypassa ImagePreprocessor e invia i byte grezzi;
+        sent_image_callback, se fornita, riceve il path del file effettivamente
+        inviato al modello, prima della chiamata API. Ritorna (data, raw_content).
+        """
+        import mimetypes
+        import os
+        from django.conf import settings
+        from google.genai import types
+
+        # Modello: override per-chiamata > settings.GEMINI_MODEL > default
+        model = model or getattr(settings, "GEMINI_MODEL", "gemini-2.5-pro")
+
+        logger.info(f"[GeminiVisionProvider] Avvio preprocessing per report {match_report.id} (model={model})...")
+
+        if not match_report.file:
+            raise ValueError("Il referto non ha alcun file associato. Impossibile eseguire OCR.")
+
+        # Preprocessing (bypassabile per debug).
+        # Import lazy: nel path raw (preprocess=False) non tocchiamo cv2.
+        original_path = match_report.file.path
+        if preprocess:
+            from .image_preprocessor import ImagePreprocessor
+            processed_path = ImagePreprocessor.process(original_path)
+            mime_type = "image/jpeg"
+        else:
+            logger.info(f"[GeminiVisionProvider] Preprocessing bypassato per report {match_report.id}: invio immagine grezza.")
+            processed_path = original_path
+            mime_type = mimetypes.guess_type(processed_path)[0] or "image/jpeg"
+
+        logger.info(f"[GeminiVisionProvider] Invio report a Gemini: {processed_path}")
+
+        if sent_image_callback:
+            sent_image_callback(processed_path)
+
+        with open(processed_path, "rb") as f:
+            image_bytes = f.read()
+
+        # Limite di output token: i referti densi (molti eventi + due roster) troncano
+        # facilmente a 4000, producendo JSON incompleto. Default alto ma entro il massimo
+        # supportato dai modelli Gemini candidati (2.5-flash: 65k; 3.x pro-preview: ampio).
+        # Configurabile via settings.OCR_MAX_OUTPUT_TOKENS senza toccare il codice.
+        max_output_tokens = getattr(settings, "OCR_MAX_OUTPUT_TOKENS", 32000)
+
+        try:
+            response = self.client.models.generate_content(
+                model=model,
+                contents=[
+                    types.Part.from_bytes(data=image_bytes, mime_type=mime_type),
+                    OCR_USER_TEXT,
+                ],
+                config=types.GenerateContentConfig(
+                    system_instruction=OCR_SYSTEM_PROMPT_V2,
+                    response_mime_type="application/json",
+                    max_output_tokens=max_output_tokens,
+                ),
+            )
+
+            content = response.text
+            logger.info(f"[GeminiVisionProvider] Risposta Gemini ricevuta (lunghezza: {len(content) if content else 0})")
+
+            finish_reason = _gemini_finish_reason(response)
+
+            if not content:
+                suffix = f" (finish_reason={finish_reason})" if finish_reason else ""
+                raise Exception(f"Gemini ha restituito un contenuto vuoto{suffix}.")
+
+            # Parse difensivo: un output troncato per limite token arriva come JSON
+            # incompleto (es. 'Unterminated string'). Trasformalo in un messaggio chiaro
+            # con il motivo del troncamento, così il bench lo marca come fallito e
+            # leggibile invece di propagare un JSONDecodeError grezzo.
+            try:
+                data = json.loads(content)
+            except (ValueError, json.JSONDecodeError) as je:
+                if finish_reason and "MAX_TOKENS" in finish_reason.upper():
+                    hint = (
+                        f" (output troncato per limite token, finish_reason={finish_reason}; "
+                        f"alza OCR_MAX_OUTPUT_TOKENS oltre {max_output_tokens})"
+                    )
+                elif finish_reason:
+                    hint = f" (finish_reason={finish_reason})"
+                else:
+                    hint = ""
+                raise Exception(f"JSON troncato/invalido dalla risposta{hint}: {je}")
+
+            # token_usage per il confronto costi (N/A se l'SDK non lo espone)
+            usage = None
+            usage_meta = getattr(response, "usage_metadata", None)
+            if usage_meta is not None:
+                usage = SimpleNamespace(
+                    prompt_tokens=getattr(usage_meta, "prompt_token_count", None),
+                    completion_tokens=getattr(usage_meta, "candidates_token_count", None),
+                )
+
+            data = self._normalize_response(
+                data, processed_path, original_path,
+                model=model,
+                usage=usage,
+                provider="GeminiVisionProvider-v1",
+            )
+
+            return data, content
+
+        except Exception as e:
+            logger.error(f"Errore Gemini: {str(e)}")
+            raise Exception(f"Errore durante la chiamata a Gemini: {str(e)}")

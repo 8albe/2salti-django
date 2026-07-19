@@ -3,7 +3,7 @@ from django.conf import settings
 
 INTEGRATION_REGISTRY = {
     'OCR': {
-        'status': 'REAL' if getattr(settings, 'OCR_PROVIDER', 'mock') == 'gpt4o' else 'SIMULATED',
+        'status': 'REAL' if getattr(settings, 'OCR_PROVIDER', 'mock') != 'mock' else 'SIMULATED',
         'provider': getattr(settings, 'OCR_PROVIDER', 'mock'),
         'description': 'Estrazione dati dai referti cartacei/PDF via Vision API.'
     },

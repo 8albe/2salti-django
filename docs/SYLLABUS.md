@@ -1,6 +1,6 @@
 # SYLLABUS — Roadmap operativa 2salti
 
-Aggiornato: 2026-07-06
+Aggiornato: 2026-07-19
 
 Punto d'ingresso operativo del progetto. Per la visione di prodotto vedi [BLUEPRINT.md](BLUEPRINT.md).
 
@@ -75,4 +75,7 @@ Punto d'ingresso operativo del progetto. Per la visione di prodotto vedi [BLUEPR
 
 ## 20. Modello Venue / Impianto ❌
 → Rimossa dallo scope (2026-07-06; rientra solo su decisione esplicita) → [Dettaglio](syllabus/20_venue_impianto.md)
+
+## 21. App multipiattaforma (PWA-first) ⏳
+→ [Dettaglio](syllabus/21_app_multipiattaforma.md)
 

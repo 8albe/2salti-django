@@ -203,18 +203,18 @@ class OCRService:
         """Ritorna il provider configurato in base ai settings."""
         if cls._provider is None:
             from django.conf import settings
-            from .vision_providers import MockVisionProvider, GPT4oVisionProvider
-            
-            provider_type = getattr(settings, 'OCR_PROVIDER', 'mock').lower()
-            
-            if provider_type == 'gpt4o' or provider_type == 'openai':
-                api_key = getattr(settings, 'OPENAI_API_KEY', None)
+            from .vision_providers import MockVisionProvider, GeminiVisionProvider
+
+            provider_type = getattr(settings, 'OCR_PROVIDER', 'gemini').lower()
+
+            if provider_type == 'gemini':
+                api_key = getattr(settings, 'GEMINI_API_KEY', None)
                 if not api_key:
-                    raise ValueError("OCR_PROVIDER configurato come 'gpt4o', ma OPENAI_API_KEY mancante.")
+                    raise ValueError("OCR_PROVIDER configurato come 'gemini', ma GEMINI_API_KEY mancante.")
                 try:
-                    cls._provider = GPT4oVisionProvider()
+                    cls._provider = GeminiVisionProvider()
                 except Exception as e:
-                    raise RuntimeError(f"Impossibile inizializzare GPT4oVisionProvider: {str(e)}")
+                    raise RuntimeError(f"Impossibile inizializzare GeminiVisionProvider: {str(e)}")
             else:
                 cls._provider = MockVisionProvider()
         return cls._provider
@@ -270,7 +270,7 @@ class OCRService:
             if hasattr(provider, 'process_document'):
                 context = {'report_id': match_report.id}
                 data = provider.process_document(match_report.file.path, context=context)
-                raw_content = json.dumps(data) # OpenAIProvider already saves the raw real response in its method
+                raw_content = json.dumps(data)  # provider process_document già salva la raw response reale
             else:
                 data, raw_content = provider.extract_data(match_report)
                 
@@ -301,28 +301,33 @@ class OCRService:
                     logger.warning(f"MatchDiscovery: Impossibile individuare il match per il referto {match_report.id}")
             
             match = match_report.match
-            
-            # Resolve Teams against linked match teams
-            if resolve_team_entity(data.get('match_info', {}).get('home_team'), [match.home_team]):
-                reconciliation["home_team_id"] = match.home_team.id
-            
-            if resolve_team_entity(data.get('match_info', {}).get('away_team'), [match.away_team]):
-                reconciliation["away_team_id"] = match.away_team.id
-                
-            # Resolve Players against rosters
-            for side in ['home', 'away']:
-                team_obj = getattr(match, f"{side}_team")
-                if team_obj:
-                    roster = list(team_obj.get_roster())
-                    side_players = data.get('teams', {}).get(side, {}).get('players', [])
-                    for p_ocr in side_players:
-                        p_name = p_ocr.get('name')
-                        if p_name:
-                            matched_athlete = resolve_athlete(p_name, roster)
-                            if matched_athlete:
-                                # We store the User ID since it's the target for MatchEvents
-                                reconciliation[f"{side}_players"][p_name] = matched_athlete.user.id
-            
+
+            # La reconciliation ha senso solo se il report è collegato a un match.
+            # Se la discovery non ha trovato nulla (match=None), saltiamo team/roster
+            # senza dereferenziare match: il report viene poi fermato in NEEDS_REVIEW
+            # dal ramo "no match" del quality gate qui sotto.
+            if match:
+                # Resolve Teams against linked match teams
+                if resolve_team_entity(data.get('match_info', {}).get('home_team'), [match.home_team]):
+                    reconciliation["home_team_id"] = match.home_team.id
+
+                if resolve_team_entity(data.get('match_info', {}).get('away_team'), [match.away_team]):
+                    reconciliation["away_team_id"] = match.away_team.id
+
+                # Resolve Players against rosters
+                for side in ['home', 'away']:
+                    team_obj = getattr(match, f"{side}_team")
+                    if team_obj:
+                        roster = list(team_obj.get_roster())
+                        side_players = data.get('teams', {}).get(side, {}).get('players', [])
+                        for p_ocr in side_players:
+                            p_name = p_ocr.get('name')
+                            if p_name:
+                                matched_athlete = resolve_athlete(p_name, roster)
+                                if matched_athlete:
+                                    # We store the User ID since it's the target for MatchEvents
+                                    reconciliation[f"{side}_players"][p_name] = matched_athlete.user.id
+
             normalized_data['reconciliation'] = reconciliation
             match_report.normalized_data = normalized_data
             # --- END AUTO-RECONCILIATION ---

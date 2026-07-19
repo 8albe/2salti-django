@@ -56,7 +56,14 @@ class NotificationService:
         """
         timestamp = timezone.now().strftime("%Y-%m-%d %H:%M:%S")
         match = report.match
-        subject = f"[2salti OPS] - REVISIONE NECESSARIA: {match.home_team} vs {match.away_team}"
+        # Un referto può entrare in NEEDS_REVIEW anche senza match collegato
+        # (discovery fallita): in quel caso non dereferenziare match.
+        if match:
+            subject = f"[2salti OPS] - REVISIONE NECESSARIA: {match.home_team} vs {match.away_team}"
+            match_label = str(match)
+        else:
+            subject = f"[2salti OPS] - REVISIONE NECESSARIA: Referto #{report.id} (nessuna partita collegata)"
+            match_label = "(nessuna partita collegata)"
         
         # Estrai motivazione dai validation_notes (spesso JSON)
         import json
@@ -72,7 +79,7 @@ class NotificationService:
         
         message = (
             f"Un referto è stato bloccato e richiede revisione tecnica manuale.\n"
-            f"Partita: {match}\n"
+            f"Partita: {match_label}\n"
             f"Stato: {report.get_status_display()}\n"
             f"Data/Ora: {timestamp}\n\n"
             f"Motivazione Blocco:\n"
@@ -80,7 +87,7 @@ class NotificationService:
             f"Revisiona qui: {admin_url}\n"
         )
         
-        logger.warning(f"NEEDS_REVIEW_ALERT: Report {report.id} for {match}")
+        logger.warning(f"NEEDS_REVIEW_ALERT: Report {report.id} for {match_label}")
 
         # Email
         recipients = getattr(settings, 'OPS_EMAIL_RECIPIENTS', [])
@@ -97,7 +104,7 @@ class NotificationService:
                 logger.error(f"Failed to send NEEDS_REVIEW email for report {report.id}: {str(e)}")
 
         # Telegram
-        telegram_msg = f"🔍 *REVISIONE NECESSARIA*\nMatch: {match}\n\nMotivo:\n{reason}\n\n[Apri Cockpit]({admin_url})"
+        telegram_msg = f"🔍 *REVISIONE NECESSARIA*\nMatch: {match_label}\n\nMotivo:\n{reason}\n\n[Apri Cockpit]({admin_url})"
         NotificationService._send_telegram_message(telegram_msg)
 
     @staticmethod
