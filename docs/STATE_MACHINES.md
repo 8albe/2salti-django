@@ -422,7 +422,7 @@ Le seguenti funzionalità sono descritte in `BLUEPRINT.md` ma **non hanno modell
 
 | Funzionalità | Sezione Blueprint | Stato |
 |---|---|---|
-| **Jury token** — token match-specific con finestra 30 min, revoca automatica al fischio | §7.4.1 | Non implementato |
+| **Match_Jury_Links** — link monouso per-partita, valido fino a chiusura referto + backstop 7 giorni (sostituisce il token 30-min, decaduto per vincolo federale GUG/portale — v. [syllabus/14](syllabus/14_referto_digitale_mobile.md) §14.2) | §7.4.1 | Non implementato |
 | **Firma arbitro / PIN** — referto immutabile post-firma, correzioni solo via admin | §7.4.3 | Non implementato |
 
 **Verdetto:** sono funzionalità di roadmap futura, non implementazione attuale. Il Blueprint le include come obiettivi di progetto; non indicano un bug.
@@ -452,8 +452,8 @@ In ordine di priorità:
 5. **[BASSA] Documentare le transizioni di `AccountProfileLink` lato admin:**
    L'approvazione/rifiuto del claim avviene via Django admin senza servizio dedicato. Valutare se aggiungere un servizio esplicito con audit trail (come per `MembershipRequest`).
 
-6. **[BASSA] Decidere il futuro di Jury token e firma arbitro:**
-   Aggiornare il Blueprint §7.4.1 e §7.4.3 con una nota esplicita che segnala queste funzionalità come "non implementate — roadmap futura", per evitare che chi legge il blueprint si aspetti di trovare codice corrispondente.
+6. **[BASSA] Decidere il futuro di firma arbitro:**
+   ~~Jury token~~ **CHIUSO il 19-lug-2026** — Blueprint §7.4.1 riscritto sul modello link monouso per-partita (`Match_Jury_Links`), ratificato in [syllabus/14](syllabus/14_referto_digitale_mobile.md) §14.2; il token federale 30-min è decaduto per vincolo GUG/portale, non emendabile (archiviato in FUTURE_IDEAS.md §1). Resta da aggiornare il Blueprint §7.4.3 con una nota esplicita che segnala la firma arbitro/PIN come "non implementata — roadmap futura".
 
 ---
 
