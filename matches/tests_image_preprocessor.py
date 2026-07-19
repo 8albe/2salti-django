@@ -1,5 +1,6 @@
 import os
 import logging
+import shutil
 import tempfile
 import unittest
 from unittest.mock import patch
@@ -24,12 +25,24 @@ class ImagePreprocessorRealDataTest(unittest.TestCase):
 
     @unittest.skipUnless(_DATASET_AVAILABLE, "Real dataset not available on this machine")
     def test_real_image_processing(self):
-        image_path = os.path.join(REAL_DATASET_PATH, "r001/raw/reale_01.jpeg")
-        output_path = ImagePreprocessor.process(image_path)
-        self.assertTrue(
-            output_path and os.path.exists(output_path),
-            f"Processed image not created or path invalid: {output_path}"
-        )
+        source_path = os.path.join(REAL_DATASET_PATH, "r001/raw/reale_01.jpeg")
+
+        # ImagePreprocessor.process() deriva sempre l'output nella stessa
+        # directory del path sorgente (sia per l'exif-fix che per il _proc.jpg):
+        # lavoriamo su una copia in tmp per non scrivere mai accanto al dataset reale.
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            image_path = os.path.join(tmp_dir, "reale_01.jpeg")
+            shutil.copyfile(source_path, image_path)
+
+            output_path = ImagePreprocessor.process(image_path)
+            self.assertTrue(
+                output_path and os.path.exists(output_path),
+                f"Processed image not created or path invalid: {output_path}"
+            )
+            self.assertEqual(
+                os.path.dirname(output_path), tmp_dir,
+                "Il derivato processato non deve finire fuori dalla tmp dir (dataset reale intatto)."
+            )
 
 
 class ImagePreprocessorRotationTest(unittest.TestCase):
