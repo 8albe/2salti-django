@@ -29,6 +29,21 @@ Il contratto API è descritto nel BLUEPRINT §11: l'upload restituisce `job_id` 
 
 Suite: 588 test OK (2 skipped), provider mockato.
 
+#### Fix post-collaudo giro 1 (2026-07-19, dev)
+
+Il primo upload reale su dev ha prodotto un **500 sulla review page**, non nel worker: `matches/views.py` dereferenziava `report.match` senza guardia nel ramo GET (`match.home_score`, `match.quarter_scores`) e nel ramo POST. Il referto era ancora `QUEUED` e senza partita collegata, quindi `match` era `None`.
+
+Il bug **preesisteva** all'asincrono (un referto orfano finiva in `NEEDS_REVIEW` con `match=None` anche prima), ma era raro: la redirect dopo l'upload avveniva a elaborazione conclusa. Con l'enqueue la redirect è immediata, quindi il caso "review page senza match" da eccezione è diventato la norma — e con esso sono emersi altri due dereferenziamenti nudi nel template (`report.file.url` su file assente, `{% url 'match_detail' match.id %}` con match `None`).
+
+Sanata la classe di bug su tutti i punti che enumerano gli stati o assumono la partita:
+
+- `matches/views.py`: initial della form difensivo; nuova costante `REVIEW_STATUS_INITIAL` con lookup **sempre** con default (`QUEUED`/`PROCESSING` → `EXTRACTED`, ogni altro stato passa inalterato); POST senza partita respinto con messaggio invece che con `AttributeError`.
+- `management/views.py`: KPI `in_flight` del cockpit non contava i referti `QUEUED`.
+- Template `report_review.html` (viewer file e pulsanti), `report_queue.html`, `match_detail.html`, `ops_cockpit.html` (badge di stato + partita assente).
+- Verificati e già corretti: `matches/admin.py` (`status_colored` ha `QUEUED`, lookup con default), `api_views_reports.py` (`NON_FINAL_STATES`), `ocr_queue.py`/`ocr_service.py`.
+
+Regressione: `matches/tests_review_page_states.py`, 8 test che esercitano la review page su **tutti** gli stati del modello, con e senza partita collegata. Suite: 596 test OK (2 skipped).
+
 ### Ambito
 
 - [x] Enqueue al posto della chiamata sincrona nei **due** entry point: upload view e admin action `process_ocr`
