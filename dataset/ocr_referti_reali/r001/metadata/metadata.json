@@ -1,14 +1,14 @@
 {
     "id": "r001",
-    "filename": "referto_reale_01_pallanuoto.pdf",
+    "filename": "reale_01.jpeg",
     "sport": "Pallanuoto",
     "attributes": {
-        "format": "PDF",
+        "format": "JPEG",
         "quality": "high",
         "difficulty": "medium",
         "handwriting": "partial",
         "usability": "high"
     },
-    "description": "Primo referto reale di pallanuoto. Formato tabellare standard, stampato, alta leggibilità.",
+    "description": "Primo referto reale di pallanuoto. Foto smartphone di modulo FIN prestampato compilato a mano, alta leggibilità.",
     "tags": ["pallanuoto", "real", "high-quality"]
 }
