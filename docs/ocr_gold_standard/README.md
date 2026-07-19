@@ -5,10 +5,16 @@ cartaceo**, non da un modello. Serve a misurare l'accuratezza reale dei provider
 OCR (Macro 8) invece della loro confidence auto-dichiarata, che si è dimostrata
 attivamente fuorviante (§"Perché esiste" sotto).
 
-**Stato (2026-07-19): 5 casi.** 1 con estrazioni già confrontate (il caso
-fondativo, 11/04/2026 — vedi §"Perché esiste"); 4 pronti per il bench ma senza
-alcuna estrazione OCR associata (`extractions: []`) — si popoleranno quando
-verranno fatti girare.
+**Stato (2026-07-19): 6 casi.** 2 con estrazioni già confrontate (il caso
+fondativo 11/04/2026 — vedi §"Perché esiste" — e il 06/12/2025 Pol. Delta vs
+Villa York); 4 pronti per il bench ma senza alcuna estrazione OCR associata
+(`extractions: []`) — si popoleranno quando verranno fatti girare.
+
+Con il sesto caso i **quattro** match presenti a DB sono tutti stati collazionati
+sul cartaceo e tutti e quattro avevano dati sbagliati (4/4). In tutti e quattro la
+somma dei parziali tornava al finale dichiarato: il controllo strutturale ha
+rilevato **0 casi su 4**. Dettaglio in
+[docs/syllabus/8_ocr_affidabilita.md](../syllabus/8_ocr_affidabilita.md) §8.5(d).
 
 ## Perché sta in `docs/` e non in `matches/fixtures/`
 
@@ -77,7 +83,14 @@ riportati da un umano che ha guardato l'originale cartaceo (`verified_by` +
    fermati: non esiste gold standard di seconda mano.
 2. Copia un file esistente in `cases/`, sostituisci **tutti** i campi.
 3. Riporta in `truth` solo ciò che hai verificato davvero; tutto il resto in
-   `not_verified`.
+   `not_verified`. Se un campo l'ha letto un modello e non un umano, va in
+   `not_verified` anche se sembra ovvio (es. impianto, città, orario).
+3b. **Cerca la corroborazione dentro il foglio.** Il riquadro dei parziali e la
+   storia cronometrica (sequenza dei gol col minuto) sono due zone compilate
+   separatamente: se i cumulati della progressione coincidono con i parziali,
+   la `truth` ha due fonti concordi e va registrata nel campo `corroboration`
+   (vedi `2025-12-06_pol-delta_vs_villa-york.json`). Se divergono, il caso non
+   si chiude: si marca e si torna sul cartaceo.
 4. Per ogni estrazione già esistente a DB, incolla i valori reali da
    `MatchReport.normalized_data` (non a memoria) e compila `verdict`.
 5. Se la correzione tocca dati a DB, registrala anche nell'audit log
