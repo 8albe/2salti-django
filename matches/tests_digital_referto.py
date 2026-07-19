@@ -187,33 +187,69 @@ class DigitalReportCloseTestCase(DigitalReportBaseTestCase):
         self.report = MatchReport.objects.get(id=self.report_id)
         self.close_url = reverse('api_digital_report_close', args=[self.report_id])
 
+    def _close(self, signature="Mario Rossi"):
+        """POST close con firma arbitro (obbligatoria dal giro Macro 14)."""
+        payload = {} if signature is None else {"signature": signature}
+        return self.client.post(
+            self.close_url, data=json.dumps(payload), content_type='application/json'
+        )
+
     def test_close_valid_payload_transitions_to_needs_review(self):
         self.report.raw_extracted_data = valid_digital_payload()
         self.report.save()
 
         self.client.force_login(self.uploader)
-        response = self.client.post(self.close_url)
+        response = self._close(signature="Mario Rossi")
         self.assertEqual(response.status_code, 200)
 
         self.report.refresh_from_db()
         self.assertEqual(self.report.status, MatchReport.Status.NEEDS_REVIEW)
+        # Firma persistita sul referto.
+        self.assertEqual(self.report.referee_signature, "Mario Rossi")
 
         log = MatchReportAuditLog.objects.get(report=self.report, action='close_digital')
         self.assertEqual(log.old_status, MatchReport.Status.DRAFT)
         self.assertEqual(log.new_status, MatchReport.Status.NEEDS_REVIEW)
+        # Firma tracciata anche in audit log.
+        self.assertEqual(log.after.get('referee_signature'), "Mario Rossi")
 
-    def test_close_as_is_no_pin_signature_required(self):
+    def test_close_requires_signature(self):
         """
-        Fotografa il comportamento attuale: close chiude in NEEDS_REVIEW senza
-        alcuna firma PIN arbitro, nonostante BLUEPRINT descriva l'endpoint come
-        "firma PIN arbitro e chiude" (Macro 14 §14.3, discrepanza doc-vs-codice
-        già nota e non risolta in questo giro).
+        Macro 14: la firma arbitro (nome e cognome) e' obbligatoria al close del
+        canale digitale. Senza firma -> 400, nessuna transizione, nessun audit.
         """
         self.report.raw_extracted_data = valid_digital_payload()
         self.report.save()
 
         self.client.force_login(self.uploader)
-        response = self.client.post(self.close_url)
+        response = self._close(signature=None)
+        self.assertEqual(response.status_code, 400)
+
+        self.report.refresh_from_db()
+        self.assertEqual(self.report.status, MatchReport.Status.DRAFT)
+        self.assertFalse(
+            MatchReportAuditLog.objects.filter(report=self.report, action='close_digital').exists()
+        )
+
+    def test_close_rejects_signature_without_surname(self):
+        """Firma con un solo token (manca il cognome) -> 400."""
+        self.report.raw_extracted_data = valid_digital_payload()
+        self.report.save()
+
+        self.client.force_login(self.uploader)
+        response = self._close(signature="Mario")
+        self.assertEqual(response.status_code, 400)
+
+        self.report.refresh_from_db()
+        self.assertEqual(self.report.status, MatchReport.Status.DRAFT)
+
+    def test_close_never_auto_publishes(self):
+        """Invariante di sicurezza: il close finisce in NEEDS_REVIEW, mai PUBLISHED."""
+        self.report.raw_extracted_data = valid_digital_payload()
+        self.report.save()
+
+        self.client.force_login(self.uploader)
+        response = self._close()
         self.assertEqual(response.status_code, 200)
 
         self.report.refresh_from_db()
@@ -221,12 +257,13 @@ class DigitalReportCloseTestCase(DigitalReportBaseTestCase):
         self.assertNotEqual(self.report.status, MatchReport.Status.PUBLISHED)
 
     def test_close_invalid_payload_rejected_without_transition(self):
-        # Payload privo delle chiavi root richieste da OCRSchemaValidator
+        # Payload privo delle chiavi root richieste da OCRSchemaValidator.
+        # La firma e' valida: si deve raggiungere la validazione schema (422).
         self.report.raw_extracted_data = {"metadata": {"confidence": 1.0}}
         self.report.save()
 
         self.client.force_login(self.uploader)
-        response = self.client.post(self.close_url)
+        response = self._close(signature="Mario Rossi")
         self.assertEqual(response.status_code, 422)
 
         self.report.refresh_from_db()
@@ -240,12 +277,13 @@ class DigitalReportCloseTestCase(DigitalReportBaseTestCase):
         self.report.save()
 
         self.client.force_login(self.uploader)
-        first = self.client.post(self.close_url)
+        first = self._close()
         self.assertEqual(first.status_code, 200)
 
-        second = self.client.post(self.close_url)
-        # Guardia di stato aggiunta: un referto già fuori DRAFT (qui NEEDS_REVIEW
-        # dal primo close) viene respinto senza rivalidare né ritransizionare.
+        second = self._close()
+        # Guardia di stato (fix 03d3860): un referto già fuori DRAFT (qui
+        # NEEDS_REVIEW dal primo close) è respinto senza rivalidare né
+        # ritransizionare (guardia valutata prima della firma).
         self.assertEqual(second.status_code, 400)
 
         self.report.refresh_from_db()
