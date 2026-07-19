@@ -146,7 +146,9 @@ class OCRQueueService:
                 )
                 exhausted.append(report.pk)
 
-        if requeued or exhausted:
+        if (requeued or exhausted) and not dry_run:
+            # In dry-run non si logga: una riga "N riaccodati" in journald senza
+            # che nulla sia stato scritto e' peggio di nessuna riga.
             logger.warning(
                 "[OCR_QUEUE] Sweep stale: %s riaccodati, %s esauriti -> NEEDS_REVIEW",
                 len(requeued), len(exhausted),

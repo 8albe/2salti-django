@@ -1,0 +1,19 @@
+[Unit]
+Description=2salti backstop referti orfani in PROCESSING (coda OCR) - DEV
+After=network.target
+
+[Service]
+Type=oneshot
+User=alberto
+Group=www-data
+WorkingDirectory=/opt/2salti-dev
+# Nessun PYTHONUNBUFFERED qui, a differenza della unit del worker: quello e' un
+# processo long-running che senza flush resta cieco in journald per ore
+# (OPS_RUNBOOK §3.17). Questo e' un oneshot che termina in un secondo, e Python
+# svuota comunque i buffer all'uscita del processo.
+ExecStart=/opt/2salti-dev/.venv/bin/python manage.py recover_stale_reports
+# Il comando e' idempotente e non ha stato: se un giro fallisce, quello dopo
+# (15 minuti) rifa' esattamente lo stesso lavoro. Niente Restart.
+
+[Install]
+WantedBy=multi-user.target

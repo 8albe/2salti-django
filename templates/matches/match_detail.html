@@ -1,6 +1,7 @@
 {% extends 'base.html' %}
 {% load static %}
 {% load match_visibility %}
+{% load report_status %}
 
 {% block extra_head %}
 <!-- Font Awesome for icons -->
@@ -115,10 +116,7 @@
             <div class="mt-12 pt-8 border-t border-white/5 flex flex-wrap justify-center gap-4">
                 {% for report in reports %}
                 <div class="flex items-center gap-3 px-4 py-2 rounded-xl bg-white/5 border border-white/10 text-xs">
-                    <span class="w-2 h-2 rounded-full 
-                        {% if report.status == 'PUBLISHED' %}bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.6)]
-                        {% elif report.status == 'UPLOADED' or report.status == 'QUEUED' or report.status == 'PROCESSING' %}bg-amber-500 animate-pulse
-                        {% else %}bg-slate-500{% endif %}"></span>
+                    <span class="w-2 h-2 rounded-full {{ report.status|status_classes:'dot' }}"></span>
                     <span class="text-slate-400">Referto: <strong class="text-white">{{ report.get_status_display }}</strong></span>
                     {% if request.user.is_staff or request.user.is_superuser %}
                     <a href="{% url 'report_review' report.id %}" class="text-blue-400 font-bold hover:underline ml-2">Review →</a>

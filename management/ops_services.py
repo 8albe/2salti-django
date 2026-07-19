@@ -28,6 +28,7 @@ class OpsCheckRunner:
         self._check_systemd_services()
         self._check_pilot_log()
         self._check_smtp_health()
+        self._check_ocr_queue()
         if self.mode in ['afternoon', 'evening']:
             self._check_unresolved_issues()
             
@@ -145,6 +146,82 @@ class OpsCheckRunner:
 
     def _check_smtp_health(self):
         pass
+
+    # Profondita' della coda oltre la quale si segnala: con un solo worker e
+    # ~80s per referto, 10 in attesa sono ~13 minuti di arretrato. Sotto questa
+    # soglia la coda sta semplicemente lavorando.
+    OCR_QUEUE_DEPTH_WARN = 10
+
+    def _check_ocr_queue(self):
+        """
+        Salute della coda OCR (Macro 22, giro 2).
+
+        Serve perche' il worker che si ferma non ha sintomi propri: i referti
+        smettono di avanzare e basta: nessun errore, nessuna mail, nessuna
+        pagina rotta. Chi guarda vede solo upload che restano "in elaborazione".
+        Queste tre metriche rendono il silenzio visibile.
+        """
+        from datetime import timedelta
+
+        from matches.models import MatchReport
+        from matches.services.ocr_queue import OCRQueueService
+
+        now = timezone.now()
+        stale_cutoff = now - timedelta(minutes=OCRQueueService.STALE_MINUTES)
+
+        queued = MatchReport.objects.filter(status=MatchReport.Status.QUEUED).count()
+        stale_processing = MatchReport.objects.filter(
+            status=MatchReport.Status.PROCESSING, ocr_started_at__lte=stale_cutoff,
+        ).count()
+        exhausted = MatchReport.objects.filter(
+            status=MatchReport.Status.NEEDS_REVIEW,
+            ocr_attempts__gte=OCRQueueService.MAX_ATTEMPTS,
+        ).count()
+
+        # (b) Referti piantati in PROCESSING: il sintomo piu' netto di worker
+        # morto. Il backstop `recover_stale_reports` li riaccoda, ma se ne
+        # trova di continuo vuol dire che nessuno li sta consumando.
+        if stale_processing:
+            self._add_finding(
+                "Referti OCR piantati in PROCESSING",
+                "RED",
+                "Il worker `ocr_worker` e' fermo o muore a meta' job: i referti restano claimati senza avanzare.",
+                f"{stale_processing} referti fermi da oltre {OCRQueueService.STALE_MINUTES} minuti: "
+                "gli utenti vedono l'elaborazione bloccata a tempo indefinito.",
+                human_action_required=True,
+                recommended_action=(
+                    "Verificare `systemctl status 2salti-ocrworker` e i log in journald; "
+                    "il timer `2salti-recover-stale` li riaccoda ma non rimpiazza il worker."
+                ),
+                outcome_category="Urgent intervention required",
+            )
+
+        # (a) Profondita' della coda: alta anche senza referti stale significa
+        # worker vivo ma troppo lento, o appena riavviato con arretrato.
+        if queued > self.OCR_QUEUE_DEPTH_WARN:
+            self._add_finding(
+                "Coda OCR profonda",
+                "YELLOW",
+                "Arrivo di referti piu' rapido della capacita' del singolo worker, oppure worker riavviato con arretrato.",
+                f"{queued} referti in attesa di elaborazione: i tempi di attesa percepiti crescono.",
+                human_action_required=False,
+                recommended_action="Monitorare: se non rientra da sola, valutare un secondo worker (Macro 22 giro 4).",
+                outcome_category="Monitoring only — no action needed now",
+            )
+
+        # (c) Tentativi esauriti: gia' notificati uno a uno al momento del
+        # fallimento, ma qui se ne vede l'accumulo — un picco indica un guasto
+        # sistemico del provider, non sfortuna sul singolo referto.
+        if exhausted:
+            self._add_finding(
+                "Referti OCR con tentativi esauriti",
+                "YELLOW",
+                f"Referti falliti {OCRQueueService.MAX_ATTEMPTS} volte di fila: provider OCR degradato o file illeggibili.",
+                f"{exhausted} referti in NEEDS_REVIEW dopo aver esaurito i tentativi: richiedono lavorazione manuale.",
+                human_action_required=True,
+                recommended_action="Rivedere i referti in NEEDS_REVIEW nell'admin e riaccodarli con l'azione 'Elabora OCR'.",
+                outcome_category="Urgent intervention required",
+            )
 
     def _check_unresolved_issues(self):
         open_bugs = PilotBug.objects.filter(severity='S1').exclude(status__in=['CLOSED', 'VERIFIED'])

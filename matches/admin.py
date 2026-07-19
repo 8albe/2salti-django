@@ -172,12 +172,14 @@ class MatchReportAdmin(admin.ModelAdmin):
 
     def changelist_view(self, request, extra_context=None):
         from django.db.models import Q
+
+        from matches.status_presentation import OPEN_STATUSES
         response = super().changelist_view(request, extra_context)
         if hasattr(response, 'context_data'):
             try: qs = response.context_data['cl'].queryset
             except: qs = self.get_queryset(request)
             queue_kpi = {
-                'total': qs.exclude(status__in=['PUBLISHED', 'REJECTED']).count(),
+                'total': qs.filter(status__in=OPEN_STATUSES).count(),
                 'needs_review': qs.filter(status='NEEDS_REVIEW').count(),
                 'blocked': qs.filter(Q(validation_notes__startswith='{') & ~Q(validation_notes__icontains='"blocking": []') | ~Q(validation_notes__startswith='{') & Q(validation_notes__icontains='Fallito')).count(),
                 'ready_to_publish': qs.filter(status='VALIDATED').count(),
@@ -188,8 +190,11 @@ class MatchReportAdmin(admin.ModelAdmin):
         return response
 
     def status_colored(self, obj):
-        colors = {'UPLOADED': 'gray', 'QUEUED': 'purple', 'PROCESSING': 'orange', 'EXTRACTED': 'blue', 'NEEDS_REVIEW': 'red', 'VALIDATED': 'green', 'PUBLISHED': 'darkgreen', 'REJECTED': 'black'}
-        color = colors.get(obj.status, 'black')
+        # Il colore arriva dalla mappa unica in `matches.status_presentation`:
+        # il dizionario che stava qui ometteva DRAFT, che finiva sul fallback
+        # 'black' e diventava graficamente indistinguibile da REJECTED.
+        from matches.status_presentation import classes_for
+        color = classes_for(obj.status, 'admin')
         return format_html('<span style="color: {}; font-weight: bold;">{}</span>', color, obj.get_status_display())
     status_colored.short_description = 'Stato'
 

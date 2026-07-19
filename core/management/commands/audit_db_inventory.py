@@ -282,7 +282,11 @@ class Command(BaseCommand):
         by_status = dict(
             MatchReport.objects.values_list("status").annotate(c=Count("id")).values_list("status", "c")
         )
-        non_final_statuses = ["DRAFT", "UPLOADED", "PROCESSING", "EXTRACTED", "NEEDS_REVIEW"]
+        # Derivato, non elencato a mano: la lista scritta qui aveva perso
+        # QUEUED dall'introduzione della coda OCR (Macro 22), e i referti
+        # accodati sparivano silenziosamente dall'inventario dei non-finali.
+        from matches.status_presentation import OPEN_STATUSES
+        non_final_statuses = sorted(OPEN_STATUSES)
         non_final_items = []
         for r in MatchReport.objects.filter(status__in=non_final_statuses).select_related("uploader").order_by("id"):
             non_final_items.append({

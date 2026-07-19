@@ -14,9 +14,14 @@ from management.permissions import get_membership_context
 from .models import MatchReport
 from .api_views_digital import _check_digital_report_permissions
 
+from .status_presentation import PIPELINE_STATUSES
+
 # Stati in cui il referto e' ancora in mano alla pipeline OCR: finche' lo
 # stato e' uno di questi, il client continua a fare polling.
-NON_FINAL_STATES = {MatchReport.Status.QUEUED, MatchReport.Status.PROCESSING}
+# La lista NON si scrive qui: viverne una copia locale significa che un nuovo
+# stato transitorio verrebbe dichiarato `is_final: true` e il client smetterebbe
+# di aggiornare la pagina su un referto ancora in lavorazione.
+NON_FINAL_STATES = PIPELINE_STATUSES
 
 
 def _can_read_report_status(request, report):
