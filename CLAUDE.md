@@ -28,7 +28,7 @@ Prima di iniziare qualunque task, identifica quale documento consultare.
 | Mapping termini blueprint ↔ modelli Django | [[DOMAIN_GLOSSARY.md]] | 30+ entità, note tecniche su Match.is_public e onboarding_state |
 | Procedure operative infrastruttura | [[OPS_RUNBOOK.md]] | Deploy, trappole tecniche, protocollo protected file, sicurezza |
 | Capire il "perché" di una decisione di prodotto | [[BLUEPRINT.md]] | visione, UX, business model (italiano) |
-| Roadmap e priorità feature | [[SYLLABUS.md]] | 21 macro-obiettivi funzionali con dettaglio in [docs/syllabus/](docs/syllabus/) |
+| Roadmap e priorità feature | [[SYLLABUS.md]] | 22 macro-obiettivi funzionali con dettaglio in [docs/syllabus/](docs/syllabus/) |
 | Idee fuori scope / parcheggiate | [[FUTURE_IDEAS.md]] | feature eliminate o rinviate (Shop, Media Gallery, Venue, visione multi-sport) con motivo e cosa le riaprirebbe |
 | Regole, comandi, convenzioni di sviluppo | CLAUDE.md (questo file) | regole operative |
 
@@ -39,7 +39,7 @@ In caso di contraddizione tra documenti: `STATE_MACHINES.md > DOMAIN_GLOSSARY.md
 The following files require explicit confirmation before any change:
 
 - `config/settings.py` — even seemingly harmless variables can break production.
-- `gunicorn_config.py`, `2salti_nginx_config`, `*.service` — deployment configuration.
+- `deploy/gunicorn/**` (canonical gunicorn configs), `2salti_nginx_config`, `*.service` — deployment configuration. The root `gunicorn_config.py` is gitignored; the tracked copies live in [deploy/gunicorn/](deploy/gunicorn/).
 - `accounts/middleware.py` — the onboarding state machine is fragile and coupled to wizard redirects.
 - `matches/services/standings_service.py` — ranking logic; any change risks corrupting historical standings.
 - Any migration already applied in production.
@@ -133,7 +133,7 @@ ENVIRONMENT_NAME        # production
 
 ### Deployment
 
-- Gunicorn config: [gunicorn_config.py](gunicorn_config.py) — binds to `unix:/tmp/2salti.sock`
+- Gunicorn config: canonical copies versioned in [deploy/gunicorn/](deploy/gunicorn/) (`prod/` and `dev/`; sync procedure in its `README.md`, same pattern as `deploy/systemd/` — OPS_RUNBOOK §9). The active files live out of repo at `/opt/2salti-new/gunicorn_config.py` and `/opt/2salti-dev/gunicorn_config.py` (loaded via `--config`); the root `gunicorn_config.py` is gitignored and the two box configs diverge by design. Prod binds to `unix:/tmp/2salti.sock`, `timeout = 300` (provisional for synchronous OCR — Macro 22).
 - Nginx config: [2salti_nginx_config](2salti_nginx_config)
 - Systemd service files in project root: `2salti.service`, plus timers for ops checks, pilot reports, and scheduler
 - `2salti-monitor.timer` fires `OnCalendar=*-*-* 00,06,12,18:00:00` in UTC; it sends email only when `DataIntegrityService` detects standings discrepancies. Times are UTC, so perceived hours shift by ±1h across DST transitions (March/October).

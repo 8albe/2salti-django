@@ -138,6 +138,20 @@ Deploy reale dev→prod con lo stesso pattern di §2.4 (merge `--no-ff` `dev`→
 
 **Correzione — SSL `2salti.com`/`dev.2salti.com` VALIDO (non scaduto).** Il certificato è **valido**, rinnovato il **14-giu** (vedi §10.9, Let's Encrypt 2026-06-14 → 2026-09-12). La nota "SSL forse scaduto" rimasta in coda da Macro 16 è **stale**: era vera allo smoke post-Macro 16 ma chiusa il 14-giu. L'automazione di rinnovo ancora rotta riguarda i **domini di Damiano**, non quelli di Alberto (cron `certbot-2salti` scoped, §10.9).
 
+### 2.6 Deploy 2026-07-19 — `2276290` → `d7bf3cd` → `394e7fd` → `62f5a16` (filone OCR, migration distruttiva `0017`)
+
+Deploy reale dev→prod con lo stesso pattern di §2.4/§2.5 (merge `--no-ff` `dev`→`master` da home + push; pull ff su prod; `migrate` manuale gated dopo backup). Tre merge in giornata: **`d7bf3cd`** (filone OCR completo, 26 commit: Gemini provider unico, rimozione `OCRRawResponse` con `matches/0017`, fix crash no-match, guardia di stato su close referto digitale), **`394e7fd`** (timeout gunicorn 300s + config versionate in `deploy/gunicorn/`, vedi §3.16 e §9), **`62f5a16`** (fix `KeyError 'match'` nella changeform admin di `MatchReport`, `matches/forms.py` — `f408cab`). Prod portato da `2276290` a **`62f5a16`**.
+
+**Rituale eseguito per la `0017`** (distruttiva, `DeleteModel` → `DROP TABLE matches_ocrrawresponse`):
+
+1. **Backup DB fresco pre-apply**; gate di validità = `PRAGMA integrity_check` + dimensione plausibile, **non** byte-identità (learning §2.5); file `.sha256` con la **sola riga del backup**, una riga.
+2. **Verifica che `matches_ocrrawresponse` fosse vuota** su prod (mai scritta dal path vivo — la raw response vive in `MatchReport.raw_api_response`).
+3. **Dry-run della migration su copia dell'intero progetto in `/tmp`** — non basta puntare una env var a una copia del DB, perché il path del DB è hardcoded in `config/settings.py` (gotcha §3.15) — con SHA256 del DB prod reale verificato **invariato** prima/dopo il dry-run.
+4. **Restart del service PRIMA del `migrate`.** Il pull aveva già portato su disco il codice nuovo (che non referenzia più `OCRRawResponse`), ma i worker in RAM giravano ancora col codice vecchio che conosceva la tabella. Riavviare prima del `DROP` garantisce che nessun processo attivo referenzi la tabella al momento della cancellazione; l'ordine inverso (migrate → restart) lascia una finestra in cui il codice vecchio può toccare una tabella già droppata.
+5. `migrate` scoped sulla `0017`, poi smoke.
+
+**Smoke OCR reale su prod — esito.** Lo smoke con Gemini vivo ha fatto emergere in cascata i due timeout mancanti: prima il **timeout gunicorn 30s di default** (worker abortito a metà chiamata Gemini ~80s → 500 al client, referto appeso in `PROCESSING`), poi — alzato quello a 300s — il **`proxy_read_timeout` nginx 60s di default** (504 al browser mentre il backend completava comunque). Dettaglio e regola in §3.16. Dopo entrambi i fix, estrazione end-to-end **completata su prod** (report 16, `gemini-2.5-pro`); l'esito ha però evidenziato una **divergenza di estrazione ad alta confidence** sullo stesso match rispetto a un report storico — caso registrato nel syllabus Macro 8 come motivazione del gold standard. I referti rimasti appesi in `PROCESSING` sono stati sbloccati a mano (comando in §10.19; guardia automatica mancante = debito, parte della Macro 22).
+
 ## 3. Trappole tecniche note
 
 ### 3.1 `git rm --cached` + file dirty = pull abortito
@@ -270,7 +284,7 @@ Gunicorn cerca un file `gunicorn_config.py` nella working directory all'avvio e 
 
 Il rischio concreto è in due scenari: (a) `WorkingDirectory=` nel unit file viene cambiato e punta a una directory che contiene un `gunicorn_config.py` legacy o orfano — è esattamente l'incidente del 23 aprile 2026 risolto col problema #3, dove il config in repo era inerte ma stava per tornare attivo a un cambio di working dir; (b) il `gunicorn_config.py` nel repo viene rinominato o spostato e qualcuno ne ricrea uno in quella posizione per altri motivi.
 
-Cosa fare: tenere il `gunicorn_config.py` nel repo coerente con il config esplicito caricato via `--config`, oppure non averlo affatto in CWD del service. Verificare a freddo con `lsof -p <gunicorn_pid> | grep config` o leggendo l'output di `systemctl cat 2salti` per vedere `WorkingDirectory` e `ExecStart` insieme.
+Cosa fare: tenere il `gunicorn_config.py` nel repo coerente con il config esplicito caricato via `--config`, oppure non averlo affatto in CWD del service. Dal 2026-07-19 il file alla root del repo è **gitignorato** (nella home non esiste proprio) e le copie canoniche vivono in `deploy/gunicorn/{prod,dev}/` col pattern §9: sui box di deploy il file in CWD **è** quello caricato via `--config`, quindi lo scenario (b) resta l'unico rischio residuo. Verificare a freddo con `lsof -p <gunicorn_pid> | grep config` o leggendo l'output di `systemctl cat 2salti` per vedere `WorkingDirectory` e `ExecStart` insieme.
 
 ### 3.10 Tag Django con newline interno emesso come testo letterale
 
@@ -327,9 +341,18 @@ Dal 2026-07-09 l'OCR ha **un solo provider concreto: Google Gemini**, modello di
 
 > `OPENAI_API_KEY` resta in `.env`/`requirements.txt` ma **non** serve più all'OCR: la usa solo `AIStatsEngine` (chat stats NL→ORM, feature non-OCR). Non rimuoverla finché quella feature è viva.
 
+
 **Billing Gemini (prepagato).** L'account Google dietro la `GEMINI_API_KEY` è a **credito prepagato**: carta associata + credito ricaricato in anticipo, con **ricarica automatica** attiva per non esaurire il saldo durante l'ingestion. Attivazione/gestione del billing delegata al padre di Alberto. Se l'OCR reale inizia a fallire con errori di quota/autorizzazione lato Gemini, verificare **prima** il saldo prepagato e lo stato della ricarica automatica, poi la validità della chiave (rotazione via protocollo §8/§11, revoca lato Google prima della sostituzione). **Tetto di spesa (chiuso 2026-07-10):** su Google AI Studio è impostato un **Project Spend Cap ~$15/mese** — hard block reale denominato in dollari, con enforcement ~10 min di ritardo; failure mode = OCR in pausa fino al ciclo successivo. È distinto dal **tier cap** dell'account (~$250/mese Tier 1, indipendente). `AIStatsEngine` gira su OpenAI e **non** è coperto da questo tetto.
 
-**Deploy prod del filone OCR — attenzione: migration distruttiva.** Il delta `master..dev` del filone OCR include la migration **`matches/0017_delete_ocrrawresponse`** (`DeleteModel` → `DROP TABLE matches_ocrrawresponse`; il modello morto `OCRRawResponse` è stato rimosso, la raw response vive ora nel campo `MatchReport.raw_api_response`). A differenza del resto del filone (solo config/codice), questo deploy **non è a sola migration nulla**: prima del `migrate` su prod, **backup DB**, **verificare che `matches_ocrrawresponse` sia vuota** (in prod non è mai stata scritta dal path vivo), dry-run su copia scratch + hash SHA256, poi `migrate` eseguito a mano da Alberto.
+**Deploy prod del filone OCR — attenzione: migration distruttiva.** Il delta `master..dev` del filone OCR include la migration **`matches/0017_delete_ocrrawresponse`** (`DeleteModel` → `DROP TABLE matches_ocrrawresponse`; il modello morto `OCRRawResponse` è stato rimosso, la raw response vive ora nel campo `MatchReport.raw_api_response`). A differenza del resto del filone (solo config/codice), questo deploy **non è a sola migration nulla**: prima del `migrate` su prod, **backup DB**, **verificare che `matches_ocrrawresponse` sia vuota** (in prod non è mai stata scritta dal path vivo), dry-run su copia scratch + hash SHA256, poi `migrate` eseguito a mano da Alberto. **Eseguito il 2026-07-19** — sequenza completa, rituale e learning in **§2.6**.
+
+### 3.15 Dry-run di una migration: il path del DB è hardcoded, serve copiare l'intero progetto
+
+`config/settings.py` **non legge alcuna variabile d'ambiente per il path del DB**: `DATABASES['default']['NAME'] = BASE_DIR / 'db.sqlite3'` ([config/settings.py:76](../config/settings.py)), hardcoded su `BASE_DIR`. Quindi il dry-run di una migration **non si può fare puntando una env var a una copia del DB** — quell'env var non esiste. L'unico modo è copiare l'**intero progetto** in `/tmp` (tar escludendo `.venv`, `.git`, `media`, `staticfiles`), mettere la copia del DB dentro la copia del progetto, ed eseguire lì il `migrate` con il **python del venv del box** (su prod, il venv di `/opt/2salti-new/`): `BASE_DIR` della copia risolve sul DB della copia. Verificare **sempre** lo SHA256 del DB reale prima/dopo il dry-run per provare che non sia stato toccato. Inaugurato per la `0017` (deploy §2.6).
+
+### 3.16 OCR sincrono nel request cycle: servono DUE timeout (gunicorn E nginx)
+
+L'OCR gira **sincrono dentro il request cycle**: `OCRService.process_and_update(report)` è chiamato inline dalla upload view ([matches/views.py:158](../matches/views.py)) e dall'admin action `process_ocr` ([matches/admin.py:206](../matches/admin.py)), ~80s a referto con Gemini. Col `timeout` gunicorn di default (30s) il master abortisce il worker a metà chiamata: 500 al client e referto appeso in `PROCESSING` (§10.19). Il fix richiede **due timeout, non uno**: `timeout = 300` in `gunicorn_config.py` **e** `proxy_read_timeout 300s` nel blocco `location /` di nginx (default nginx: 60s). Alzare solo il primo sposta l'errore, non lo risolve: gunicorn completa, ma nginx chiude la connessione a 60s → **504 lato browser** mentre il backend finisce comunque il lavoro. Entrambi i 300s sono un **cerotto provvisorio**: cadono quando l'OCR esce dal request cycle (Macro 22, syllabus).
 
 ## 4. Pulizia repo: history vs indice corrente
 
@@ -488,10 +511,38 @@ C'è una direzione di drift inversa che merita menzione esplicita perché è il 
 
 Il punto strutturale, simmetrico alla sezione 2, è che il versionamento del 25 aprile non ha eliminato la classe di problemi del drift — ha solo creato l'infrastruttura per gestirlo. Finché la sincronizzazione resta manuale, la disciplina operativa è l'unico meccanismo. Un eventuale meccanismo di allineamento automatico — file watcher su `/etc/systemd/system/2salti.service` che alerti su divergenza dalla copia in repo, o pre-commit hook che blocchi commit della unit se il sistema ha una copia diversa — vive nel backlog come side-quest aperta, accanto al meccanismo simmetrico per il drift home ↔ deploy.
 
+**Config gunicorn — stesso pattern dal 2026-07-19.** Le copie canoniche delle config gunicorn sono versionate in `deploy/gunicorn/prod/` e `deploy/gunicorn/dev/`, con un `README.md` di procedura che è la fonte di verità tecnica (come il README di `deploy/systemd/`). I file attivi vivono fuori repo (`/opt/2salti-new/gunicorn_config.py` e `/opt/2salti-dev/gunicorn_config.py`, caricati dalle unit via `--config`); il `gunicorn_config.py` alla root del repo è **gitignorato** e le due config **divergono volutamente** (socket, worker, logging) — mai copiare prod su dev o viceversa. Sync repo→`/opt` manuale: `cp` + `systemctl reload` (o `restart` se cambia `bind` o altri parametri letti solo all'avvio del master). Il tema simmetrico su nginx (`2salti_nginx_config`) resta **non risolto** — debito §10.17.
+
 ## 10. Debiti aperti
 
 Registro vivo di problemi noti che richiedono follow-up. Non sono trappole (§3) né bug attivi: sono incoerenze scoperte ma non risolte, da affrontare in sessioni dedicate.
-> Le voci §10.1-10.16 sono CHIUSE e archiviate in Appendice A, che ne conserva razionale, commit e test. Nessuna voce aperta al momento.
+> Le voci §10.1-10.16 sono CHIUSE e archiviate in Appendice A, che ne conserva razionale, commit e test. Le voci §10.17-10.21 (aperte 2026-07-19, emerse dal deploy §2.6) sono APERTE.
+
+### §10.17 `2salti_nginx_config` fuori repo — APERTO 2026-07-19
+
+La config nginx attiva vive solo su sistema (`/etc/nginx/`): stesso tema di versionamento risolto per la unit systemd (§9) e per le config gunicorn (`deploy/gunicorn/`), **non ancora affrontato** per nginx. Il pattern `/2salti_nginx_config` in `.gitignore` esiste, ma nella home il file non c'è proprio: nessuna copia canonica in repo. Aggravante concreta: il fix `proxy_read_timeout 300s` del 2026-07-19 (§3.16) è stato applicato **direttamente sul sistema** e non è versionato da nessuna parte — un ripristino della config nginx da zero lo perderebbe e reintrodurrebbe i 504 sull'OCR. Da portare sotto `deploy/nginx/` col pattern §9.
+
+### §10.18 Pin di `requirements.txt` più vecchi dell'installato su prod (downgrade da pip install) — APERTO 2026-07-19
+
+Durante il deploy §2.6, `pip install -r requirements.txt` su prod ha fatto **downgrade** di pacchetti installati a mano più di recente: Django 5.0.3→5.0, openai 2.31→2.29, numpy 2.4.4→2.4.3, python-dotenv 1.2.2→1.2.1. I pin nel file sono più vecchi dello stato reale dei box. Da allineare in un giro dedicato: portare i pin allo stato corretto valutando in particolare i **fix di sicurezza Django** persi col rientro da 5.0.3 a 5.0 (i patch release 5.0.x sono in gran parte security/bugfix). Fino ad allora: **non** rilanciare `pip install -r requirements.txt` sui box se non serve.
+
+### §10.19 Nessuna guardia sui referti appesi in `PROCESSING` — APERTO 2026-07-19
+
+Se il worker muore a metà OCR (timeout gunicorn, deploy/restart, crash), il referto resta in `PROCESSING` **per sempre**: nessun recovery automatico, e la review queue non lo ripropone. Successo il 2026-07-19 con i timeout 30s (§3.16). Serve un comando `recover_stale_reports` (referti in `PROCESSING` da più di N minuti → `NEEDS_REVIEW` + audit log) agganciabile ai timer systemd esistenti — incluso nello scope della **Macro 22** (OCR asincrono). Sblocco manuale usato il 2026-07-19, nella forma (dal box, python del venv, pk espliciti dei referti appesi):
+
+```bash
+python manage.py shell -c "from matches.models import MatchReport; MatchReport.objects.filter(pk__in=[...], status='PROCESSING').update(status='NEEDS_REVIEW')"
+```
+
+riporta i referti in coda di revisione umana senza rilanciare l'OCR (nessun retry automatico: rilanciare è una scelta del reviewer via admin action `process_ocr`).
+
+### §10.20 Saturazione del pool worker con OCR sincrono — APERTO 2026-07-19
+
+Prod ha `workers = 3` e l'OCR gira sincrono nel request cycle (~80s a referto, §3.16): **3 upload OCR concorrenti bloccano l'intero pool** per ~80s ciascuno e il sito smette di rispondere a qualunque richiesta finché un worker non si libera. Mitigato oggi solo dalla bassa concorrenza reale (pilot). Non si risolve alzando i worker: si risolve togliendo l'OCR dal request cycle (**Macro 22**).
+
+### §10.21 `MatchReport` registrato su due admin site — APERTO 2026-07-19 (minore)
+
+`MatchReport` è registrato sia su `op_admin_site` con `MatchReportAdmin` ([matches/admin.py:416](../matches/admin.py)) sia sul default admin site via `@admin.register(MatchReport)` su una sottoclasse `MatchReportAdminDefault` con `has_module_permission=False` ([matches/admin.py:418-420](../matches/admin.py); stesso pattern per `Match`). Doppiamente **inerte** a runtime — il default admin site non è nemmeno montato negli URL (`/admin/` punta a `op_admin_site`, [config/urls.py:27](../config/urls.py)) — ma confondente in lettura: due registrazioni dello stesso modello, di cui una nascosta e irraggiungibile. Da pulire in un giro cosmetico, non urgente.
 
 ## 11. Sicurezza operativa e frontiera reversibile
 

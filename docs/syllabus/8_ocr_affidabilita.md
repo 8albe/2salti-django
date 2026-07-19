@@ -15,7 +15,7 @@ Miglioramento accuracy, preprocessing, gestione errori, dataset test, qualità d
 
 ### 8.2 Affidabilità da migliorare
 
-- [ ] Dataset di test con referti reali rappresentativi (accuracy baseline misurabile)
+- [ ] **Dataset gold standard con referti reali rappresentativi — priorità ALZATA (2026-07-19).** Caso motivante emerso dallo smoke prod: lo stesso match (Bellator Frusino vs SS. Lazio Nuoto, 11/04/2026) ha **due estrazioni divergenti sul punteggio finale** — report 10 (`gpt-4o`): 11-19 con confidence 0.9; report 16 (`gemini-2.5-pro`): 5-19 con confidence 0.85 ma `confidence_fields.final_score = 0.99`. Una delle due è sbagliata con confidence altissima: prova concreta che l'autovalutazione del modello **non è calibrata** e che serve una verità di riferimento umana. Il gold standard serve a **due scopi distinti**: (1) misurare l'accuratezza per campo; (2) verificare la calibrazione della confidence per tarare la soglia del quality gate.
   - Nota (2026-07-19): Mistral OCR 4 registrato come provider candidato da benchmarcare contro `gemini-2.5-pro` con `ocr_bench` sul dataset gold quando sarà costruito — nessuna implementazione ora.
 - [ ] Gestione multi-page PDF: concatenazione pagine prima dell'estrazione
 - [ ] Metriche qualità: success rate per campo, tempo medio upload→publish

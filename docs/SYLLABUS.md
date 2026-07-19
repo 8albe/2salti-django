@@ -79,3 +79,6 @@ Punto d'ingresso operativo del progetto. Per la visione di prodotto vedi [BLUEPR
 ## 21. App multipiattaforma (PWA-first) ⏳
 → [Dettaglio](syllabus/21_app_multipiattaforma.md)
 
+## 22. OCR asincrono — coda DB-backed con worker systemd ⏳
+→ [Dettaglio](syllabus/22_ocr_asincrono.md)
+
