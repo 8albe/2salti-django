@@ -42,6 +42,20 @@ class Match(models.Model):
         return self.reports.filter(status='PUBLISHED').exists()
 
     @property
+    def is_result_public(self):
+        """
+        Il risultato (finale e parziali) e' mostrabile in pubblico?
+
+        True se i dati sono verificati a mano OPPURE se esiste un referto
+        PUBLISHED. Unico punto di verita': `services.result_visibility`.
+        Piu' largo di `is_public`, che resta il gate degli EVENTI (tabellino):
+        un match verificato a mano ha un risultato certo ma non ha eventi
+        finche' un referto non viene pubblicato.
+        """
+        from .services.result_visibility import is_result_public
+        return is_result_public(self)
+
+    @property
     def google_maps_url(self):
         """Genera link google maps per la location"""
         if not self.location:

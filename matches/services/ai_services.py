@@ -8,6 +8,7 @@ from openai import OpenAI
 
 from matches.models import Match, MatchEvent, MatchReport, AIQueryLog
 from core.models import League, Team
+from .result_visibility import result_public_q
 from accounts.models import User
 
 logger = logging.getLogger(__name__)
@@ -189,11 +190,14 @@ class AIStatsEngine:
 
     def _get_player_goals(self, player: User, filters: Dict) -> Dict:
         """Secure ORM logic for goal counting."""
+        # Gate unico del risultato (BLUEPRINT cap. 14): l'AI non e' una porta di
+        # servizio. Qualunque dato di partita che esce da qui passa dallo stesso
+        # criterio del pubblico, non da un filtro locale.
         qs = MatchEvent.objects.filter(
-            player=player, 
+            result_public_q('match__'),
+            player=player,
             event_type='GOAL',
-            match__reports__status='PUBLISHED'
-        )
+        ).distinct()
 
         last_n = filters.get("last_n")
         if last_n:
@@ -202,8 +206,8 @@ class AIStatsEngine:
             if team:
                 match_ids = Match.objects.filter(
                     Q(home_team=team) | Q(away_team=team),
-                    reports__status='PUBLISHED'
-                ).order_by('-match_date').values_list('id', flat=True)[:last_n]
+                    result_public_q(),
+                ).distinct().order_by('-match_date').values_list('id', flat=True)[:last_n]
                 qs = qs.filter(match_id__in=list(match_ids))
                 time_context = f"nelle ultime {last_n} partite"
             else:

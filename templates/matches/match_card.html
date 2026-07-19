@@ -1,3 +1,4 @@
+{% load match_visibility %}
 <div
     class="glass-panel p-4 hover:bg-white/5 transition-all group relative overflow-hidden border-l-4 {% if match.is_finished %}border-l-slate-600{% else %}border-l-green-500{% endif %}">
     <a href="{% url 'match_detail' match.id %}" class="block relative z-10">
@@ -24,12 +25,18 @@
 
             <!-- VS / SCORE -->
             <div class="flex flex-col items-center">
-                {% if match.is_finished %}
+                {% if match.is_finished and match|result_visible_to:request.user %}
                 <div
                     class="text-3xl font-display font-bold text-white tracking-widest bg-black/20 px-4 py-1 rounded-lg">
                     {{ match.home_score }}-{{ match.away_score }}
                 </div>
                 <span class="text-xs text-slate-500 mt-1">Conclusa</span>
+                {% elif match.is_finished %}
+                <div
+                    class="text-3xl font-display font-bold text-slate-600 tracking-widest bg-black/20 px-4 py-1 rounded-lg">
+                    {% unverified_score_placeholder %}
+                </div>
+                <span class="text-xs text-amber-500/80 mt-1">{% unverified_result_label %}</span>
                 {% else %}
                 <div class="text-2xl font-display font-bold text-slate-600">VS</div>
                 {% if match.match_date|date:"Y-m-d" == now|date:"Y-m-d" %}

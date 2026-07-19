@@ -1,3 +1,4 @@
+{% load match_visibility %}
 <!-- MATCH LIST HEADER -->
 <div class="flex items-center justify-end mb-4 px-2">
     <span class="text-slate-400 text-sm font-medium">{{ matches|length }} Partite</span>
@@ -25,8 +26,10 @@
 
             <!-- VS/SCORE (Center) -->
             <div class="mx-2 sm:mx-4 flex items-center justify-center w-10 text-center flex-shrink-0">
-                {% if match.is_finished %}
+                {% if match.is_finished and match|result_visible_to:request.user %}
                 <span class="text-blue-400 font-mono text-sm font-bold">{{ match.home_score }}-{{ match.away_score }}</span>
+                {% elif match.is_finished %}
+                <span class="text-amber-500/70 font-bold text-[10px]" title="{% unverified_result_label %}">{% unverified_score_placeholder %}</span>
                 {% else %}
                 <span class="text-slate-600 font-bold text-[10px]">VS</span>
                 {% endif %}

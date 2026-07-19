@@ -1,6 +1,7 @@
 {% extends 'base.html' %}
 {% load static %}
 {% load core_extras %}
+{% load match_visibility %}
 
 {% block content %}
 <div class="space-y-16 animate-fade-in">
@@ -62,9 +63,15 @@
 
                 <!-- Result -->
                 <div class="flex flex-col items-center">
+                    {% if featured_match|result_visible_to:request.user %}
                     <div class="text-5xl md:text-7xl font-display font-black text-white tracking-tighter">
                         {{ featured_match.home_score }} - {{ featured_match.away_score }}
                     </div>
+                    {% else %}
+                    <div class="text-5xl md:text-7xl font-display font-black text-slate-600 tracking-tighter">
+                        {% unverified_score_placeholder %} - {% unverified_score_placeholder %}
+                    </div>
+                    {% endif %}
                     <span class="mt-4 px-4 py-1 rounded-full bg-blue-500/10 border border-blue-500/20 text-[10px] font-black text-blue-400 uppercase tracking-widest">
                         Tabellino Certificato
                     </span>

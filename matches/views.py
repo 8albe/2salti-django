@@ -78,11 +78,18 @@ def match_detail(request, match_id):
     max_q_events = match.events.aggregate(models.Max('quarter'))['quarter__max'] or 0
     max_q = max(default_q, max_q_data, max_q_events)
     
+    # Gate del risultato (BLUEPRINT cap. 1, Principio del Dato Certo): i parziali
+    # non finiscono nemmeno nel contesto se lo spettatore non puo' vederli.
+    # Il template ricontrolla comunque: qui e' difesa in profondita', non il gate.
+    from .services.result_visibility import can_see_result
+    result_visible = can_see_result(match, request.user)
+
     q_range = range(1, max_q + 1)
     qs_processed = []
-    for q in q_range:
-        score = match.quarter_scores.get(str(q), [0, 0])
-        qs_processed.append({'q': q, 'home': score[0], 'away': score[1]})
+    if result_visible:
+        for q in q_range:
+            score = match.quarter_scores.get(str(q), [0, 0])
+            qs_processed.append({'q': q, 'home': score[0], 'away': score[1]})
 
     from core.services.seo_service import SEOService
     from django.urls import reverse
