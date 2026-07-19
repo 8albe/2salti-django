@@ -133,3 +133,4 @@ predict_home.py
 # scratch di lavoro OCR, non dataset
 /ocr_bench_out/
 /referto_test*.jpeg
+/referto_test*.jpg
