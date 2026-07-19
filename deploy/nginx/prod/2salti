@@ -1,0 +1,33 @@
+server {
+    listen 80;
+    server_name 2salti.com www.2salti.com;
+    return 301 https://2salti.com$request_uri;
+}
+
+server {
+    listen 443 ssl;
+    server_name 2salti.com;
+
+    client_max_body_size 50M;
+
+    ssl_certificate /etc/letsencrypt/live/2salti.com/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/2salti.com/privkey.pem;
+    include /etc/letsencrypt/options-ssl-nginx.conf;
+    ssl_dhparam /etc/letsencrypt/ssl-dhparams.pem;
+
+    location = /favicon.ico { access_log off; log_not_found off; }
+    
+    location /static/ {
+        alias /opt/2salti-new/staticfiles/;
+    }
+
+    location /media/ {
+        alias /opt/2salti-new/media/;
+    }
+
+    location / {
+        include proxy_params;
+        proxy_pass http://unix:/tmp/2salti.sock;
+	proxy_read_timeout 300s;
+    }
+}
