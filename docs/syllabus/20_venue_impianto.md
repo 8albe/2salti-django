@@ -25,4 +25,4 @@ Il modello Venue era **l'unico residuo aperto** della [Macro 3 — Pagina pubbli
 
 ---
 
-← [Macro precedente](19_monetizzazione_stripe.md)
+← [Macro precedente](19_monetizzazione_stripe.md) | → [Macro successiva](21_app_multipiattaforma.md)

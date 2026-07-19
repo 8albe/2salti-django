@@ -16,6 +16,7 @@ Miglioramento accuracy, preprocessing, gestione errori, dataset test, qualità d
 ### 8.2 Affidabilità da migliorare
 
 - [ ] Dataset di test con referti reali rappresentativi (accuracy baseline misurabile)
+  - Nota (2026-07-19): Mistral OCR 4 registrato come provider candidato da benchmarcare contro `gemini-2.5-pro` con `ocr_bench` sul dataset gold quando sarà costruito — nessuna implementazione ora.
 - [ ] Gestione multi-page PDF: concatenazione pagine prima dell'estrazione
 - [ ] Metriche qualità: success rate per campo, tempo medio upload→publish
 - [x] Cluster E KO residui — guardia early-return in `ocr_service.py:254` che cortocircuita exception path per NEEDS_REVIEW
