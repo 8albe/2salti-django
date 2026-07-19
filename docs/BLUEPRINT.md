@@ -155,7 +155,7 @@ Scopo: Una pagina elenco, filtrabile e veloce da leggere.
 
 - Filtri per stagione, competizione, squadra, round, stato partita.
 
-- Lista match con data, squadre, risultato, luogo e link al dettaglio.
+- Lista match con data, squadre, risultato, luogo e link al dettaglio. Il **risultato compare solo se verificato** (gate del risultato pubblico, §14): per una partita disputata ma non ancora verificata la riga mostra la partita e un placeholder al posto del punteggio.
 
 - Gestione stato: programmata, in corso, disputata, pubblicata.
 
@@ -169,9 +169,9 @@ Scopo: E la pagina che deve dare credibilita all'intero sistema.
 
 ### Blocchi da prevedere:
 
-- Header con metadata: data, luogo, competizione, round, squadre e risultato finale.
+- Header con metadata: data, luogo, competizione, round, squadre e risultato finale. Il risultato finale e' soggetto al **gate del risultato pubblico** (§14): se i dati non sono verificati, al suo posto compare "Risultato da verificare" e la partita resta comunque pubblica con tutti gli altri metadata.
 
-- Tabellino principale con score per squadra e, se disponibile, breakdown per tempi.
+- Tabellino principale con score per squadra e, se disponibile, breakdown per tempi. Anche il breakdown per tempi e' sotto lo stesso gate: parziali non verificati non si mostrano (Principio del Dato Certo, §7.4.3) — sono anzi il campo che si e' rivelato meno affidabile nelle estrazioni OCR (SYLLABUS Macro 8 §8.5).
 
 - Eventi partita: gol, espulsioni, carte, presenza, note arbitri.
 
@@ -333,7 +333,7 @@ Strumento dedicato alla giuria e agli arbitri per l'ingestione nativa del dato d
 #### 7.4.3 Firma e Statistiche
 - **Firma Arbitro** (deciso 2026-07-19, as-built): a fine gara l'arbitro **digita nome e cognome** nel campo firma del close (obbligatorio). Il PIN *personale* è decaduto: nel modello a link monouso (§7.4.1) non esiste un'identità registrata da cui derivarlo. La firma è persistita sul referto e nell'audit log con timestamp; il referto entra in `NEEDS_REVIEW` (mai auto-publish) e diventa immutabile fuori da `DRAFT` (correzioni solo via admin audit log). Il codice breve 4-6 cifre resta predisposto-ma-spento **come anti-abuso** (§7.4.1), non come firma.
 - **Livelli di Statistiche**: unico livello **Base** (gratis): Gol, cartellini, espulsioni, timeout, parziali, nomi squadre, luogo, orario. Il livello Avanzato è accantonato su feedback federale 2026-07 (quelle statistiche non vengono rilevate nemmeno in Serie A); idea conservata in FUTURE_IDEAS.md.
-- **Principio del Dato Certo**: Se un dato non è rilevato, il sistema mostra "non rilevato", mai valori inventati (coerente con il principio "Null invece di invenzione" del Cap. 1).
+- **Principio del Dato Certo**: Se un dato non è rilevato, il sistema mostra "non rilevato", mai valori inventati (coerente con il principio "Null invece di invenzione" del Cap. 1). Il principio non vale solo per il dato *mancante* ma anche per quello **non ancora verificato**: da qui il gate del risultato pubblico (§14), che sostituisce con un placeholder esplicito il punteggio di una partita i cui dati non sono stati validati.
 - **Form UX**: Mobile-first, validazioni inline (es. somma parziali == totale gol), più veloce del cartaceo. È lo strumento con cui proporre alla federazione il passaggio dal cartaceo al digitale: deve essere più rapido e meno error-prone della compilazione manuale.
 
 ### 7.5 Chatbot AI (L'impiegato virtuale)
@@ -675,6 +675,7 @@ Il modello economico si basa su tre piani paralleli che sbloccano diverse profon
 - **Accesso dati privati**: richiede SEMPRE due condizioni — email confermata + collegamento sportivo valido (membership approvata; per il genitore ai dati del figlio: certificazione society-vouching `CERTIFICATA`).
 - **Pallanuoto-only (prodotto), sport-generico (codice)**: la pallanuoto è lo sport del prodotto; visione, naming e copy sono pallanuoto. L'impianto tecnico resta sport-generico (modello `Sport` + FK sotto `Society`/`League`/`Season` intatti, navigator da auto-nascondere) — vedi §1 nota tecnica e FUTURE_IDEAS §2.
 - **Rollout a imbuto**: largo = risultati pubblici per tutti; sistema-società completo acceso solo per il pilota Zero9 (~1 anno), poi clonato per le nuove società. Vedi §1 "Strategia di rollout a imbuto".
+- **Gate del risultato pubblico** (ratificata 2026-07-19): la pagina pubblica **non mostra il risultato di una partita i cui dati non sono verificati**. Un risultato è mostrabile se `is_data_verified=True` **oppure** se esiste almeno un referto in stato `PUBLISHED` — due strade legittime alla verità (validazione umana diretta; workflow di pubblicazione del referto, lo stesso criterio già usato per le classifiche, così il gate pubblico non introduce un terzo concetto di "verificato"). Se non è mostrabile si nasconde **solo il risultato** (finale e parziali), sostituito da un placeholder esplicito; **la partita resta pubblica** con squadre, data, luogo e competizione. Il gate vale solo sul pubblico: staff e admin continuano a vedere il punteggio, perché vederlo è ciò che serve per verificarlo. È l'applicazione diretta di **"Null invece di invenzione"** (§1) e del **Principio del Dato Certo** (§7.4.3): un dato non certo si dichiara tale, non si mostra come se lo fosse. Motivazione empirica: al 2026-07-19 il 100% dei match a DB (4/4) proveniva da estrazioni OCR mai validate e **tutti e quattro** sono risultati sbagliati alla collazione sul cartaceo (SYLLABUS Macro 8 §8.5). Implementazione: gate unico in `matches/services/result_visibility.py`, consumato da template, API e AI Stats Engine.
 
 ---
 

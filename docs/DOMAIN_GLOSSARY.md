@@ -22,7 +22,7 @@ Questo documento è il ponte tra il linguaggio di prodotto usato nel blueprint (
 
 | Termine blueprint | Modello Django | App | File | Status | Note |
 |---|---|---|---|---|---|
-| Partita / Match | `Match` | matches | matches/models.py | ✅ | Contiene score, quarter_scores, referees, has_report, is_finished, is_public (vedi note tecniche sotto) |
+| Partita / Match | `Match` | matches | matches/models.py | ✅ | Contiene score, quarter_scores, referees, has_report, is_finished, is_data_verified, is_public, is_result_public (vedi note tecniche sotto) |
 | Squadra / Team | `Team` | core | core/models.py | ✅ | FK verso Society e League; nome auto-generato da Society + category |
 | Società | `Society` | core | core/models.py | ✅ | Creata dal Presidente nel wizard onboarding |
 | Sport | `Sport` | core | core/models.py | ✅ | Schema **multi-sport-capable** (point_system, period_label, hex_color), ma **prodotto pallanuoto-only** (decisione 2026-07 → [FUTURE_IDEAS.md](FUTURE_IDEAS.md) §2) |
@@ -41,6 +41,7 @@ Questo documento è il ponte tra il linguaggio di prodotto usato nel blueprint (
 ### Note tecniche su `Match`
 
 - **`Match.is_public` è una `@property` calcolata, non un campo DB.** Si appoggia su `reports.filter(status='PUBLISHED').exists()` — è True solo se il match ha almeno un `MatchReport` in stato `PUBLISHED`. Conseguenza pratica: **non è filtrabile via ORM QuerySet**. Una chiamata tipo `Match.objects.filter(is_public=True)` solleva `FieldError`. Per ottenere lo stesso risultato lato DB usare `Match.objects.filter(reports__status='PUBLISHED').distinct()`.
+- **`Match.is_result_public` è il gate del RISULTATO, da non confondere con `is_public`** (dal 2026-07-19, BLUEPRINT §14). Anch'essa `@property` calcolata e quindi non filtrabile via ORM; è True se `is_data_verified=True` **oppure** se esiste un referto `PUBLISHED`. È quindi **più larga** di `is_public`: un match validato a mano ha un risultato mostrabile ma non ha eventi, perché gli eventi nascono dalla pubblicazione del referto. Divisione dei ruoli: `is_public` continua a gatare il **tabellino/eventi**, `is_result_public` gata **punteggio finale e parziali**. Unico punto di verità: `matches/services/result_visibility.py`, che espone anche `result_public_q(prefix='')` per filtrare lato DB — `Match.objects.filter(result_public_q()).distinct()` (il `.distinct()` è obbligatorio: il ramo sui report attraversa una to-many). Consumo nei template solo via `{% load match_visibility %}` + `match|result_visible_to:request.user`, che aggiunge l'eccezione staff/admin.
 - **`Match.has_report` è un flag one-way.** Viene settato a `True` quando un `MatchReport` viene associato al match (quattro punti di scrittura noti: `matches/views.py:132`, `:505`, `:561`, `admin.py:221`), ma **non viene mai riabbassato a `False`** se il report viene successivamente eliminato o de-pubblicato. Significa che `has_report=True` indica "in passato è stato associato un report", non "esiste un report attivo adesso". Per il check "ha un report attivo" usare le relazioni dirette su `reports`.
 
 ---
