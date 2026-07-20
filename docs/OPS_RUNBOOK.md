@@ -30,7 +30,7 @@ sudo systemctl reload 2salti
 
 Se il pull tocca solo documentazione, test, fixture di dati o altri artefatti non letti dal runtime, il reload non serve e il deploy è allineato al momento in cui il pull termina. Nel dubbio, fare comunque il reload: il costo è minimo e il rischio di saltarlo è che una modifica di runtime non diventi attiva.
 
-**Dal 2026-07-19 (Macro 22) il runtime di prod non è più un solo processo.** Accanto a gunicorn gira il worker OCR (`2salti-ocrworker.service`), che esegue lo stesso codice del service web: un pull che tocca `matches/services/`, `matches/models.py` o le migration riguarda anche lui. Il worker si riavvia da solo quando si accorge che l'SHA di `HEAD` è cambiato, ma **solo a coda vuota** — se in quel momento sta elaborando un referto (~80s con Gemini) continua col codice vecchio finché non finisce, e se la coda non si svuota mai il restart non arriva mai. Su prod, dove il pull è manuale, il `sudo systemctl restart 2salti-ocrworker` esplicito accanto al reload di `2salti` è quindi la regola, non un'ottimizzazione: il SIGTERM concede `TimeoutStopSec=150` per chiudere il job in corso, quindi il restart è sicuro anche a coda piena. Un eventuale referto ucciso da un SIGKILL resta in `PROCESSING` e lo recupera il backstop (§10.19).
+**Dal 2026-07-20 (Macro 22, deploy §2.7) il runtime di prod non è più un solo processo.** Accanto a gunicorn gira il worker OCR (`2salti-ocrworker.service`), **installato e in esercizio su prod dal 2026-07-20** — fino a quella data questa sezione descriveva lo stato target, non quello reale: il worker esisteva solo su dev. Esegue lo stesso codice del service web: un pull che tocca `matches/services/`, `matches/models.py` o le migration riguarda anche lui. Il worker si riavvia da solo quando si accorge che l'SHA di `HEAD` è cambiato, ma **solo a coda vuota** — se in quel momento sta elaborando un referto (~80s con Gemini) continua col codice vecchio finché non finisce, e se la coda non si svuota mai il restart non arriva mai. Su prod, dove il pull è manuale, il `sudo systemctl restart 2salti-ocrworker` esplicito accanto al reload di `2salti` è quindi la regola, non un'ottimizzazione: il SIGTERM concede `TimeoutStopSec=150` per chiudere il job in corso, quindi il restart è sicuro anche a coda piena. Un eventuale referto ucciso da un SIGKILL resta in `PROCESSING` e lo recupera il backstop (§10.19).
 
 L'introduzione di un meccanismo di allineamento automatico — post-commit hook nella home che ricordi il pull, cron che rilevi divergenze, o qualsiasi altra soluzione equivalente — vive nel backlog come side-quest aperta. Finché non è implementata, la disciplina manuale è l'unico meccanismo; se la nota di sessione del giorno include un commit significativo e non menziona il pull sul deploy, è probabile che il deploy stia già accumulando deriva.
 
@@ -153,6 +153,28 @@ Deploy reale dev→prod con lo stesso pattern di §2.4/§2.5 (merge `--no-ff` `d
 5. `migrate` scoped sulla `0017`, poi smoke.
 
 **Smoke OCR reale su prod — esito.** Lo smoke con Gemini vivo ha fatto emergere in cascata i due timeout mancanti: prima il **timeout gunicorn 30s di default** (worker abortito a metà chiamata Gemini ~80s → 500 al client, referto appeso in `PROCESSING`), poi — alzato quello a 300s — il **`proxy_read_timeout` nginx 60s di default** (504 al browser mentre il backend completava comunque). Dettaglio e regola in §3.16. Dopo entrambi i fix, estrazione end-to-end **completata su prod** (report 16, `gemini-2.5-pro`); l'esito ha però evidenziato una **divergenza di estrazione ad alta confidence** sullo stesso match rispetto a un report storico — caso registrato nel syllabus Macro 8 come motivazione del gold standard. I referti rimasti appesi in `PROCESSING` sono stati sbloccati a mano (comando in §10.19; guardia automatica mancante = debito, parte della Macro 22).
+
+### 2.7 Deploy 2026-07-20 — `62f5a16` → `36296a5` (Giro 3: Macro 22 completa, gate del risultato pubblico, correzione dei 4 match)
+
+Deploy consolidato **in finestra unica**, con lo stesso pattern di §2.5/§2.6 (merge `dev`→`master` da home + push; pull su prod; `migrate` manuale gated dopo backup). Prod portato da `62f5a16` a **`36296a5`** (24 commit). Migration applicate **`0018`** (link giuria + `referee_signature`) e **`0019`** (`ocr_queue`), **entrambe additive** — l'unico `AlterField` della `0019` è sui `choices` di `status`, no-op a livello DB.
+
+**Perché in finestra unica.** Il gate del risultato pubblico e la correzione dei 4 match sono **interdipendenti per sequenza**: il gate da solo avrebbe prodotto una home con quattro "Risultato da verificare" (su prod i 4 match avevano `is_data_verified=False` e zero referti `PUBLISHED`); le correzioni da sole avrebbero ripubblicato dati corretti senza la rete di sicurezza del gate. Deployarli separatamente era la scelta sbagliata in entrambi gli ordini.
+
+**Sequenza eseguita** (checklist a blocchi in `scratch/giro3_deploy_prod_20260720.sh`, untracked: è una **checklist da eseguire un blocco alla volta leggendo l'output**, non uno script da lanciare con `bash` — l'intestazione del file lo dice esplicitamente):
+
+1. **Backup DB prod** (`/var/tmp/db.sqlite3.giro3-20260720`), gate = `PRAGMA integrity_check` + dimensione plausibile, `.sha256` con la **sola riga del backup** (learning §2.5).
+2. **Demozione protettiva del report 16**, `EXTRACTED` → `NEEDS_REVIEW` con audit su `MatchReportAuditLog`, **prima di ogni altra cosa**. In `EXTRACTED` il report era a un click da "pubblica", e `publish_report()` avrebbe sovrascritto il match col `normalized_data` ancora sbagliato, vanificando la correzione durante la finestra stessa. Il `normalized_data` non è stato toccato.
+3. **Diff a `config/settings.py`** (protected file, applicato a mano da Alberto): `OPTIONS={'timeout': 20}` sulla connessione SQLite + due logger a `INFO` (`matches.services.ocr_queue`, `matches.management.commands.ocr_worker`). Commit dedicato `144a458` su `dev` **prima** del merge, così da entrare nella stessa finestra. **WAL escluso deliberatamente**: in WAL il DB non è più un solo file e il rituale di backup — che copia e verifica il solo `db.sqlite3` — diventerebbe silenziosamente incompleto; serve un giro che riveda prima la procedura di backup.
+4. **Merge `dev`→`master` + push**, poi pull su prod.
+5. **`restart 2salti` PRIMA del `migrate`**, poi `migrate`, poi `collectstatic` (rituale §2.6 punto 4). Con migration **additive** il verso del rischio si inverte rispetto alla `0017` distruttiva — qui la finestra scomoda è codice nuovo su schema vecchio — quindi i tre comandi vanno in sequenza immediata, senza pause.
+6. **Correzione dei 4 match**, una transazione per match, con audit `MATCH_SCORE_CORRECTED` (+ `MATCH_HAS_REPORT_BACKFILLED` sul match 1), poi `rebuild_standings --verify` e `check_data_integrity` per lega.
+7. **Install delle unit su prod** (sudo): `2salti-ocrworker.service`, `2salti-recover-stale.service` e `.timer` da `deploy/systemd/prod/`, `daemon-reload`, `enable --now` del **service worker e del TIMER** (non del service oneshot del backstop, che è innescato dal timer), infine `restart 2salti-ocrworker` esplicito.
+
+**Esito.** I 4 match hanno `is_data_verified=True` e `is_result_public=True`; verifica browser: risultati e parziali corretti su tutte e quattro le pagine, nessun placeholder, match 2 con **Unime correttamente come squadra di casa**, nessun errore JS. In admin i report 7, 8, 10, 11, 16 sono **tutti** in `NEEDS_REVIEW`. `ops_check --mode morning` GREEN con un solo finding innocuo ("No Pilot Logs Found", severità GREEN — vedi §3.18). Nel journal del worker: SIGTERM con uscita pulita, riavvio, e la riga `Avvio (interval=3.0s, revision=36296a51…)` **nello stesso secondo del restart** — conferma dal vivo su prod che `PYTHONUNBUFFERED` (§3.17) e i due logger a `INFO` funzionano insieme.
+
+**Quello che il deploy NON ha fatto, per disegno.** Il `normalized_data` dei report 7, 8, 10, 11, 16 resta sbagliato: la correzione ha toccato **solo** i `Match`. Non esiste guardrail a codice che impedisca di pubblicarli — la protezione è documentale (§10.22) e, da oggi, il fatto che nessuno di loro sia più in `EXTRACTED`.
+
+**Quasi-incidente: il PASSO 3d saltato per copia-incolla.** La correzione del match 4 è stata **omessa** passando da un blocco all'altro della checklist. `rebuild_standings --verify` e `check_data_integrity` sono passati **puliti sul dato ancora sbagliato**, perché i parziali vecchi del match 4 (`5-0 / 5-0 / 5-0 / 5-1`) sommavano comunque a 20-1. L'errore è stato intercettato **solo** dall'asserzione finale contro i valori collazionati a mano (PASSO 6 della checklist di correzione). È la conferma dal vivo — su un caso non costruito, in condizioni reali — del finding del 2026-07-19: il controllo "somma parziali == finale" ha tasso di rilevazione **nullo** su questa classe di errore (SYLLABUS Macro 8 §8.5(b) e §8.5(d)). La lezione operativa generale è in §6.5.
 
 ## 3. Trappole tecniche note
 
@@ -375,7 +397,21 @@ La regola è quindi: **ogni unit *long-running* che esegue direttamente l'interp
 
 La soluzione applicativa alternativa — chiamare `self.stdout.flush()` dopo ogni `write()` nel management command — è stata scartata: è una disciplina manuale da ripetere a ogni call site, che si dimentica alla prima modifica e non copre l'output che non passa dal codice del comando (traceback, messaggi interni di Django, librerie di terzi). La variabile d'ambiente risolve il problema alla radice per l'intero processo.
 
-**Nota collegata, non risolta da questa trappola.** Con `LOGGING` impostato a livello root `WARNING` ([config/settings.py](../config/settings.py)), tutte le `logger.info` del worker — claim di un referto, completamento con durata e stato finale — vengono **scartate prima di arrivare a qualunque handler**, quindi non compaiono in journald nemmeno con `PYTHONUNBUFFERED` attivo. Passano solo `WARNING` ed `ERROR`: retry, sweep degli orfani, fallimento definitivo. Alzare il livello (o dare al logger `matches` un livello dedicato `INFO`) è una modifica a `config/settings.py`, che è protected file: da valutare in un giro dedicato se si vuole la traccia operativa completa del worker nel journal.
+**Nota collegata — RISOLTA il 2026-07-20.** Con `LOGGING` a livello root `WARNING` ([config/settings.py](../config/settings.py)), tutte le `logger.info` del worker — claim di un referto, completamento con durata e stato finale — venivano **scartate prima di arrivare a qualunque handler**, quindi non comparivano in journald nemmeno con `PYTHONUNBUFFERED` attivo: passavano solo `WARNING` ed `ERROR` (retry, sweep degli orfani, fallimento definitivo). Risolto nel deploy §2.7 con due entry `LOGGING` dedicate a `INFO` per `matches.services.ocr_queue` e `matches.management.commands.ocr_worker`, **lasciando il root a `WARNING`** per non allagare il journal con l'`INFO` di Django e delle librerie. Le due condizioni sono **congiunte e vanno tenute insieme**: `PYTHONUNBUFFERED` senza il livello `INFO` dà un journal che scorre ma tace sul ciclo normale; il livello `INFO` senza `PYTHONUNBUFFERED` dà righe che esistono ma arrivano ore dopo. Verificato su prod il 2026-07-20 (§2.7): la riga di avvio del worker compare **nello stesso secondo** del restart.
+
+### 3.18 `ops_check`: `--mode` obbligatorio e dettaglio dei findings non esposto a CLI
+
+Due asperità dello stesso comando, entrambe da conoscere prima di usarlo in diagnostica.
+
+**`--mode` è obbligatorio** (`required=True`, valori `morning`/`afternoon`/`evening`): `python manage.py ops_check` senza argomenti esce con errore, non con un default. I tre modi non sono equivalenti — `_check_pilot_log` gira solo in `morning`, `_check_unresolved_issues` solo in `afternoon`/`evening` — quindi il modo scelto cambia quali check vengono eseguiti.
+
+**Il dettaglio dei findings non è stampabile a CLI in alcun modo.** Il comando stampa lo stato aggregato e il **conteggio** (`Findings: N`), mai il contenuto: non esiste flag di dettaglio e non c'è alcun ramo su `verbosity`, quindi anche `-v 2` non aggiunge nulla. Le uniche due vie per leggere un finding sono il **JSON persistito** in `logs/ops/ops_check_<timestamp>_<mode>.json` (scritto da `persist_results()` a ogni run, anche manuale) e l'**email** inviata da `send_report()`. Per leggere l'ultimo run:
+
+```bash
+python3 -m json.tool "$(ls -t /opt/2salti-new/logs/ops/ops_check_*_morning.json | head -1)"
+```
+
+Conseguenza da non fraintendere in diagnostica: **`Findings: 1` con `Status: GREEN` non è una contraddizione.** `_add_finding` alza `overall_status` solo per severità `YELLOW` o `RED`; esiste un finding di severità **`GREEN`** — "No Pilot Logs Found (Pilot likely pending start)", emesso quando `PilotDailyLog` è vuota — che viene contato ma non cambia lo stato. È il caso osservato su prod il 2026-07-20 (§2.7) ed è innocuo: segnala solo che il log giornaliero del pilota non è mai stato compilato.
 
 ## 4. Pulizia repo: history vs indice corrente
 
@@ -439,6 +475,18 @@ Prima di scrivere un prompt che dice "modifica §3.2 del file X", verificare che
 Sintomo: prompt rifiutato da Claude Code con "la struttura non corrisponde", oppure modifica applicata in punto sbagliato.
 
 Cosa fare: prima di scrivere riferimenti numerici, chiedere a Claude Code `grep -n "^#" <file>` per mappare l'indice header attuale.
+
+### 6.5 In una procedura manuale a blocchi, la rete è l'asserzione contro valori esterni
+
+**Origine 2026-07-20 (deploy §2.7).** Nella correzione dei 4 match su prod il blocco del match 4 è stato **saltato** per un errore di copia-incolla fra un blocco e l'altro. I due controlli di verifica previsti dalla procedura — `rebuild_standings --verify` e `check_data_integrity` — sono passati **puliti sul dato ancora sbagliato**, perché i parziali vecchi sommavano comunque al finale corretto. A intercettare l'omissione è stata **solo** l'asserzione finale che confrontava i valori a DB con quelli collazionati a mano dal referto cartaceo.
+
+La regola che se ne ricava vale ben oltre l'episodio: **in una procedura manuale a più blocchi, i controlli di coerenza interna non sono una rete.** Verificano che i dati siano consistenti *con sé stessi*, e un blocco saltato lascia dietro dati che restano perfettamente consistenti con sé stessi — semplicemente sono quelli vecchi. La rete che funziona è l'asserzione finale contro **valori esterni** noti in anticipo: nel caso dei match, i numeri collazionati sul cartaceo; in generale, qualunque verità che non provenga dallo stesso processo che si sta verificando.
+
+Corollari pratici per chi scrive una checklist operativa:
+
+- **Chiudere sempre con un blocco di asserzioni** su valori attesi scritti *prima* di iniziare, che fallisca rumorosamente. Un `assert` che confronta con una costante scritta a mano vale più di tre comandi di verifica che ricalcolano dal dato stesso.
+- **Un check che passa verde non dice che il blocco è stato eseguito**, dice solo che quello che c'è a DB è internamente coerente. Sono due affermazioni diverse e la seconda non implica la prima.
+- È l'istanza operativa di un finding già registrato sul lato dati (SYLLABUS Macro 8 §8.5(b)): un controllo che non può fallire non può nemmeno rilevare. Qui si è manifestato su una **procedura**, non su un'estrazione OCR, il che suggerisce che la classe di problema non è specifica dell'OCR.
 
 ## 7. Convenzioni di lavoro
 
@@ -554,7 +602,7 @@ Il timer è un **backstop, non il meccanismo primario**: il recupero rapido lo f
 ## 10. Debiti aperti
 
 Registro vivo di problemi noti che richiedono follow-up. Non sono trappole (§3) né bug attivi: sono incoerenze scoperte ma non risolte, da affrontare in sessioni dedicate.
-> Le voci §10.1-10.16 sono CHIUSE e archiviate in Appendice A, che ne conserva razionale, commit e test. Le voci §10.17-10.21 (aperte 2026-07-19, emerse dal deploy §2.6) sono APERTE.
+> Le voci §10.1-10.16 sono CHIUSE e archiviate in Appendice A, che ne conserva razionale, commit e test. Delle voci aperte il 2026-07-19 dal deploy §2.6, **§10.17 e §10.19 sono CHIUSE** (la seconda col deploy §2.7) e restano aperte **§10.18, §10.20** (solo per il giro 4) **e §10.21**. Il deploy §2.7 ha aggiunto **§10.22 e §10.23**.
 
 ### §10.17 `2salti_nginx_config` fuori repo — CHIUSO 2026-07-19
 
@@ -581,9 +629,9 @@ Diagnostica prima di agire: `python manage.py recover_stale_reports --dry-run` s
 
 Osservabilità agganciata nello stesso giro (§ `ops_check`): profondità della coda, referti in `PROCESSING` oltre soglia (RED — è il sintomo netto di worker morto), referti con tentativi esauriti. Serviva perché un worker fermo non ha sintomi propri: i referti smettono di avanzare e basta, senza errori né pagine rotte.
 
-Residuo: install ed enable del timer su **prod** restano da fare (giro 3, gated Alberto). Su prod la guardia non è quindi ancora attiva.
+~~Residuo: install ed enable del timer su **prod** restano da fare (giro 3, gated Alberto). Su prod la guardia non è quindi ancora attiva.~~ **Residuo chiuso il 2026-07-20** (deploy §2.7): `2salti-recover-stale.service` e `.timer` installati ed enabled su prod insieme alla unit del worker; verificato `active (waiting)` con trigger ogni 15 minuti. La guardia è ora attiva su **entrambi** i box.
 
-### §10.20 Saturazione del pool worker con OCR sincrono — RISOLTO SU DEV 2026-07-19, aperto su prod
+### §10.20 Saturazione del pool worker con OCR sincrono — CAUSA RIMOSSA SU PROD 2026-07-20, voce aperta solo per il giro 4
 
 ~~Prod ha `workers = 3` e l'OCR gira sincrono nel request cycle (~80s a referto, §3.16): **3 upload OCR concorrenti bloccano l'intero pool** per ~80s ciascuno e il sito smette di rispondere a qualunque richiesta finché un worker non si libera.~~
 
@@ -591,7 +639,7 @@ Residuo: install ed enable del timer su **prod** restano da fare (giro 3, gated 
 
 Due precisazioni che impediscono di leggere questa voce come chiusa:
 
-- **Su prod non è ancora vero.** Il codice è live solo su dev; il deploy su prod (migration gated dopo backup DB + install della unit worker) è il giro 3. Fino ad allora prod ha ancora l'OCR sincrono e questo debito è attivo esattamente come descritto sopra.
+- ~~**Su prod non è ancora vero.** Il codice è live solo su dev; il deploy su prod (migration gated dopo backup DB + install della unit worker) è il giro 3.~~ **Superato il 2026-07-20** (deploy §2.7): il codice è live **anche su prod** e la unit del worker è installata e in esercizio. La causa della saturazione è quindi rimossa su entrambi i box e il debito **non è più attivo** come descritto sopra. Resta però un residuo di collaudo, non di implementazione: alla data del deploy il worker su prod **non ha ancora elaborato un solo referto reale** (la coda era vuota e nessun upload è stato fatto nella finestra), quindi l'asincrono su prod è verificato come *processo che parte, si ferma e si riavvia correttamente*, non come *pipeline che porta un referto da upload a estrazione*. Il primo upload reale su prod è il collaudo end-to-end mancante.
 - **I timeout 300s restano**, su entrambi i box. Gunicorn `timeout = 300` e nginx `proxy_read_timeout 300s` sono il cerotto che questa macro elimina, ma la rimozione è deliberatamente rinviata al **giro 4**, dopo un periodo di osservazione dell'asincrono su prod: toglierli prima significherebbe rimuovere la rete di sicurezza mentre si sta ancora verificando che il sostituto regga. Finché ci sono, un residuo di path sincrono (es. `process_and_update` usato in diagnostica) non causa un 500 immediato.
 
 La voce si chiude col giro 4, non prima.
@@ -599,6 +647,33 @@ La voce si chiude col giro 4, non prima.
 ### §10.21 `MatchReport` registrato su due admin site — APERTO 2026-07-19 (minore)
 
 `MatchReport` è registrato sia su `op_admin_site` con `MatchReportAdmin` ([matches/admin.py:416](../matches/admin.py)) sia sul default admin site via `@admin.register(MatchReport)` su una sottoclasse `MatchReportAdminDefault` con `has_module_permission=False` ([matches/admin.py:418-420](../matches/admin.py); stesso pattern per `Match`). Doppiamente **inerte** a runtime — il default admin site non è nemmeno montato negli URL (`/admin/` punta a `op_admin_site`, [config/urls.py:27](../config/urls.py)) — ma confondente in lettura: due registrazioni dello stesso modello, di cui una nascosta e irraggiungibile. Da pulire in un giro cosmetico, non urgente.
+
+### §10.22 Nessun guardrail a codice contro la pubblicazione dei report con `normalized_data` sbagliato — APERTO 2026-07-20
+
+I report **7, 8, 10, 11, 16** hanno `normalized_data` con punteggio e/o attribuzione casa/trasferta errati. Le correzioni del 2026-07-19 (dev) e del 2026-07-20 (prod, §2.7) hanno toccato **solo** i `Match`, mai i report: è una scelta deliberata, non una dimenticanza — correggere il `normalized_data` è un giro separato del filone OCR.
+
+Il rischio è che `publish_report()` ([matches/services/publishing_service.py](../matches/services/publishing_service.py)) sovrascriva `home_score`, `away_score` e `quarter_scores` leggendo dal `normalized_data` non corretto — e, per il match 2, ricrei gli eventi con l'attribuzione squadra ancora invertita — **vanificando silenziosamente** la correzione. Non c'è nulla nel codice che lo impedisca: nessun flag sul report, nessun controllo in `publish_report()`, nessun blocco in admin.
+
+Mitigazione oggi in essere, tutta non-tecnica: (a) questa voce e la nota gemella in SYLLABUS Macro 8 §8.5; (b) il fatto che dal 2026-07-20 **nessuno dei cinque è più in `EXTRACTED`** — sono tutti in `NEEDS_REVIEW`, quindi più lontani di un click dalla pubblicazione, ma non protetti. La direzione da valutare in un giro dedicato è un flag esplicito sul report (`normalized_data_is_stale` o equivalente) che `publish_report()` controlli e rifiuti, invece di affidarsi alla memoria di chi guarda la coda.
+
+### §10.23 Report 15 orfano in `UPLOADED`, mai accodato — APERTO 2026-07-20 (da decidere)
+
+Censito su prod il 2026-07-20, **non presente** nel censimento del 2026-07-19 (che copriva 7, 8, 10, 11, 16). Stato verificato a DB, in sola lettura:
+
+| Campo | Valore |
+|---|---|
+| `status` | `UPLOADED` (non `QUEUED`) |
+| `match_id` | `None` — è l'**unico** referto orfano a DB |
+| `source_channel` | `FILE`, con file allegato presente (`match_reports/reale_05_*.jpg`) |
+| `normalized_data` | vuoto (`{}`) — **mai elaborato** |
+| `ocr_attempts` / `ocr_queued_at` / `ocr_started_at` | `0` / `None` / `None` |
+| `created_at` | 2026-04-19 |
+
+**Non è raggiungibile dal worker** e non lo sarà mai da solo: l'accodamento è **esplicito** per disegno (Macro 22 giro 1 — `QUEUED` è distinto da `UPLOADED` proprio perché i referti creati da admin o da `ingest_emails` non devono partire da soli). Un referto in `UPLOADED` resta fermo a tempo indefinito senza che nulla lo segnali: **non compare in nessuno dei tre segnali di coda** di `ops_check` (che guardano `QUEUED`, `PROCESSING` stale ed `esauriti`), e il backstop `recover_stale_reports` guarda solo `PROCESSING`. È un punto cieco della strumentazione, non un malfunzionamento.
+
+Anomalia minore rilevata nello stesso censimento: `in_review_at` è valorizzato (2026-04-19) pur essendo lo stato `UPLOADED` — residuo di una transizione passata, non coerente con lo stato attuale.
+
+**Non toccato per disegno**: non accodato, non collegato a un match, non eliminato. È materiale di lavoro del filone OCR (potenziale caso gold aggiuntivo, o candidato di prova per il primo collaudo end-to-end del worker su prod — vedi §10.20). La decisione su cosa farne è di prodotto: censito qui perché non se ne perda traccia.
 
 ## 11. Sicurezza operativa e frontiera reversibile
 

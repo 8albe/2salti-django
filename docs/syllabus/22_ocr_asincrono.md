@@ -1,6 +1,6 @@
 ## 22. OCR asincrono — coda DB-backed con worker systemd
 
-Stato: 🚧 In corso (direzione decisa 2026-07-19; **giri 1 e 2 completati su dev il 2026-07-19**; restano il deploy prod — giro 3 — e la rimozione dei timeout 300s — giro 4)
+Stato: 🔄 In corso (direzione decisa 2026-07-19; **giri 1 e 2 completati su dev il 2026-07-19**; **giro 3 — deploy prod — completato il 2026-07-20**: l'asincrono è in produzione. Restano il **collaudo end-to-end su prod**, mai eseguito, e la rimozione dei timeout 300s — giro 4)
 
 Togliere l'elaborazione OCR dal request cycle. Fino al 2026-07-19 `OCRService.process_and_update()` girava **sincrono** dentro la richiesta HTTP (upload view + admin action `process_ocr`), ~80s a referto con Gemini: worker gunicorn bloccato per tutta la durata, pool saturabile con 3 upload concorrenti (OPS_RUNBOOK §10.20), timeout gunicorn+nginx alzati a 300s come **cerotto provvisorio** (OPS_RUNBOOK §3.16).
 
@@ -74,6 +74,16 @@ Test: 43 nuovi (`tests_status_coverage.py`, `tests_recover_stale_command.py`). S
 
 **Rinviato per disegno:** la scadenza batch dei `MatchJuryLink` sullo stesso timer. Il lazy-at-read funziona già, e accoppiare due macchine a stati non correlate sullo stesso innesco allarga scope e superficie di test senza risolvere un problema osservato.
 
+### As-built giro 3 (2026-07-20, prod)
+
+Deploy in **finestra unica** insieme al gate del risultato pubblico e alla correzione dei 4 match (sequenza completa e razionale in OPS_RUNBOOK §2.7). Prod da `62f5a16` a `36296a5`; migration `0018` e `0019` applicate, entrambe additive.
+
+- **Unit installate ed enabled su prod**: `2salti-ocrworker.service` più `2salti-recover-stale.service` e `.timer`. Si abilita il **timer**, non il service oneshot del backstop. Chiude il residuo di OPS_RUNBOOK §10.19: la guardia sugli orfani è ora attiva su entrambi i box.
+- **`config/settings.py`** (commit dedicato `144a458`): `OPTIONS={'timeout': 20}` sulla connessione SQLite e due logger a `INFO` — `matches.services.ocr_queue` e `matches.management.commands.ocr_worker` — con il **root lasciato a `WARNING`**. **WAL escluso deliberatamente**: in WAL il DB non è più un solo file e il rituale di backup, che copia e verifica il solo `db.sqlite3`, diventerebbe silenziosamente incompleto. Serve un giro che riveda prima la procedura di backup.
+- **Osservabilità confermata sul campo.** Nel journal di prod: SIGTERM con uscita pulita, riavvio, e la riga `Avvio (interval=3.0s, revision=36296a51…)` **nello stesso secondo del restart**. È la prova che le due condizioni sono congiunte: `PYTHONUNBUFFERED` sulla unit (OPS §3.17) fa scorrere il buffer, il livello `INFO` fa esistere le righe. Una sola delle due non basta.
+
+**Quello che il giro 3 NON dimostra.** Il worker su prod **non ha ancora elaborato un solo referto reale**: la coda era vuota per tutta la finestra e nessun upload è stato fatto. Quindi l'asincrono su prod è verificato come *processo che parte, si ferma e si riavvia correttamente*, non come *pipeline che porta un referto da upload a estrazione*. È la ragione per cui questa macro **non è chiusa**: il primo upload reale su prod è il collaudo mancante, e il candidato naturale è il referto 15 (orfano in `UPLOADED`, mai accodato — OPS_RUNBOOK §10.23).
+
 ### Ambito
 
 - [x] Enqueue al posto della chiamata sincrona nei **due** entry point: upload view e admin action `process_ocr`
@@ -81,13 +91,14 @@ Test: 43 nuovi (`tests_status_coverage.py`, `tests_recover_stale_command.py`). S
 - [x] Worker come **servizio systemd** dedicato (unit versionata in `deploy/systemd/`, pattern OPS_RUNBOOK §9)
 - [x] Endpoint di polling `GET /api/referti/{id}/status` (contratto BLUEPRINT §11)
 - [x] UX upload: risposta immediata + stato in polling
-- [x] Guardia `recover_stale_reports` + timer systemd, e aggancio a `ops_check` (profondità coda, referti stale) — **giro 2**, chiude OPS_RUNBOOK §10.19 (su dev; install del timer su prod nel giro 3)
-- [ ] Deploy su prod: migration gated dopo backup DB, install unit worker **e unit del backstop**, `OPTIONS timeout` + logging in `config/settings.py` — **giro 3**
+- [x] Guardia `recover_stale_reports` + timer systemd, e aggancio a `ops_check` (profondità coda, referti stale) — **giro 2**, chiude OPS_RUNBOOK §10.19 (residuo dell'install su prod chiuso col giro 3)
+- [x] Deploy su prod: migration gated dopo backup DB, install unit worker **e unit del backstop**, `OPTIONS timeout` + logging in `config/settings.py` — **giro 3, 2026-07-20** (OPS_RUNBOOK §2.7)
+- [ ] **Collaudo end-to-end su prod**: un referto reale che attraversi upload → `QUEUED` → claim → estrazione. Mai eseguito: alla chiusura del giro 3 la coda era vuota
 - [ ] Rimozione dei timeout 300s — **giro 4**, dopo un periodo di osservazione su prod
 
 ### Dipendenze ops
 
-Unit systemd nuova (install ed enable gated Alberto, comandi nel `README.md` di `deploy/systemd/`), procedura di deploy da aggiornare (su prod il worker va riavviato insieme al service), monitoring del worker e della coda da agganciare a `ops_check`/timer (giro 2).
+~~Unit systemd nuova (install ed enable gated Alberto, comandi nel `README.md` di `deploy/systemd/`), procedura di deploy da aggiornare (su prod il worker va riavviato insieme al service), monitoring del worker e della coda da agganciare a `ops_check`/timer (giro 2).~~ **Tutte soddisfatte al 2026-07-20**: unit installate ed enabled su prod (giro 3), procedura di deploy aggiornata in OPS_RUNBOOK §2 e §2.1 (il `restart 2salti-ocrworker` esplicito è ora parte del rituale), osservabilità agganciata a `ops_check` (giro 2).
 
 ### Uscita
 
