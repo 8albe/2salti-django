@@ -24,6 +24,12 @@
     "competition_on_paper": "Serie B",
     "venue_on_paper": null,
     "city_on_paper": null,
+    "legibility": {
+      "score": 2,
+      "assessed_by": "Alberto Galbiati",
+      "assessed_at": "2026-07-20",
+      "notes": "Faticoso: almeno un campo si legge solo per contesto."
+    },
     "home_team": {
       "db_team_pk": 4,
       "db_team_name": "Unime",

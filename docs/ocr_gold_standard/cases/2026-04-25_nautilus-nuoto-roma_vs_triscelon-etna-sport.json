@@ -5,6 +5,11 @@
   "verified_at": "2026-07-20",
   "verification_method": "collazione a mano del referto cartaceo originale",
 
+  "image_status": {
+    "status": "in arrivo",
+    "note": "Il cartaceo di questo caso e' stato fotografato da Alberto il 2026-07-20, ma il file non e' ancora caricato sul VPS. Nessun 'db_report_pk' e nessun path immagine sono stati inventati: il caso resta senza immagine risolvibile (ocr_bench --gold-all lo salta con avviso, per README) finche' il path non viene comunicato esplicitamente. Quando il file sara' disponibile, aggiungere il riferimento qui (o come 'db_report_pk' se agganciato a un report reale) per abilitare 'ocr_bench --gold-case ... --image <path>'."
+  },
+
   "corrections": [
     {
       "corrected_at": "2026-07-20",
@@ -26,6 +31,12 @@
     "competition_on_paper": "Campionato maschile Serie B",
     "venue_on_paper": "Le Cupole",
     "city_on_paper": null,
+    "legibility": {
+      "score": 2,
+      "assessed_by": "Alberto Galbiati",
+      "assessed_at": "2026-07-20",
+      "notes": "Faticoso: almeno un campo si legge solo per contesto."
+    },
     "home_team": {
       "db_team_pk": 3,
       "db_team_name": "Nautilus N. Roma",

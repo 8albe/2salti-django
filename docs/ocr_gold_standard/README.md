@@ -172,6 +172,16 @@ Nessun default: un caso senza `match.legibility` non è "presunto leggibile",
 sotto gli occhi, come la collazione stessa — si popola con lo stesso rigore,
 non retroattivamente a memoria.
 
+**Lettura del dataset (2026-07-20).** Con tutti e sei i casi valutati, la
+distribuzione di `legibility.score` è: **0 a 4, due a 3, tre a 2, uno a 1** —
+cioè **quattro casi su sei sotto la soglia (< 3) in cui la truth stessa è a
+rischio** (regola sopra). Non è un dato sul dataset, cioè su come è stato
+costruito: è un dato sul **dominio** — referti compilati a mano a bordo vasca,
+spesso in fretta e in condizioni difficili — e va tenuto presente in ogni
+confronto fra provider OCR. Un campione con questa distribuzione di
+leggibilità non è un caso limite scelto ad arte: è rappresentativo della
+popolazione reale di referti che il sistema deve affrontare.
+
 ## Come aggiungere un caso
 
 1. Collaziona il referto cartaceo a mano. Se non hai l'originale sotto gli occhi,

@@ -24,6 +24,12 @@
     "competition_on_paper": "Camp. Juniores M",
     "venue_on_paper": "Foro Italico",
     "city_on_paper": "Roma",
+    "legibility": {
+      "score": 3,
+      "assessed_by": "Alberto Galbiati",
+      "assessed_at": "2026-07-20",
+      "notes": "Leggibile: qualche campo richiede una seconda occhiata, nessuno richiede di dedurre dal contesto."
+    },
     "home_team": {
       "db_team_pk": 7,
       "db_team_name": "Olimpic Roma P.N.",

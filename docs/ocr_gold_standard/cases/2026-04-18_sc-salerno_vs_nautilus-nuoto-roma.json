@@ -24,6 +24,12 @@
     "competition_on_paper": "Serie B maschile",
     "venue_on_paper": "Piscina Volturno",
     "city_on_paper": null,
+    "legibility": {
+      "score": 2,
+      "assessed_by": "Alberto Galbiati",
+      "assessed_at": "2026-07-20",
+      "notes": "Faticoso: almeno un campo si legge solo per contesto."
+    },
     "home_team": {
       "db_team_pk": null,
       "db_team_name": null,
