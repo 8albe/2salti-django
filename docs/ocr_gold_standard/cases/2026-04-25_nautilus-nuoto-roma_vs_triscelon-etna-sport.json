@@ -6,8 +6,9 @@
   "verification_method": "collazione a mano del referto cartaceo originale",
 
   "image_status": {
-    "status": "in arrivo",
-    "note": "Il cartaceo di questo caso e' stato fotografato da Alberto il 2026-07-20, ma il file non e' ancora caricato sul VPS. Nessun 'db_report_pk' e nessun path immagine sono stati inventati: il caso resta senza immagine risolvibile (ocr_bench --gold-all lo salta con avviso, per README) finche' il path non viene comunicato esplicitamente. Quando il file sara' disponibile, aggiungere il riferimento qui (o come 'db_report_pk' se agganciato a un report reale) per abilitare 'ocr_bench --gold-case ... --image <path>'."
+    "status": "disponibile",
+    "path": "/opt/2salti-dev/media/match_reports/referto_triscelon_20260425.jpg",
+    "note": "File caricato sul VPS dev il 2026-07-20 (680029 byte, fotografato da Alberto). Questo caso NON ha 'db_report_pk' (nessun report a DB per questa coppia/data, vedi 'match.db_lookup_note'): l'immagine non si risolve automaticamente da 'ocr_bench --gold-all', che salterebbe il caso con avviso. Va benchato con path esplicito: 'python manage.py ocr_bench --gold-case 2026-04-25_nautilus-nuoto-roma_vs_triscelon-etna-sport --image /opt/2salti-dev/media/match_reports/referto_triscelon_20260425.jpg' (eseguire da dove gira l'app sul VPS dev, o adattare il path se il file viene copiato altrove)."
   },
 
   "corrections": [

@@ -5,10 +5,14 @@ cartaceo**, non da un modello. Serve a misurare l'accuratezza reale dei provider
 OCR (Macro 8) invece della loro confidence auto-dichiarata, che si è dimostrata
 attivamente fuorviante (§"Perché esiste" sotto).
 
-**Stato (2026-07-19): 6 casi.** 2 con estrazioni già confrontate (il caso
-fondativo 11/04/2026 — vedi §"Perché esiste" — e il 06/12/2025 Pol. Delta vs
-Villa York); 4 pronti per il bench ma senza alcuna estrazione OCR associata
-(`extractions: []`) — si popoleranno quando verranno fatti girare.
+**Stato (2026-07-20): 6 casi, tutti benchabili.** 2 con estrazioni già
+confrontate (il caso fondativo 11/04/2026 — vedi §"Perché esiste" — e il
+06/12/2025 Pol. Delta vs Villa York); 4 pronti per il bench ma senza alcuna
+estrazione OCR associata (`extractions: []`) — si popoleranno quando verranno
+fatti girare. Non esistono più casi truth-only: l'ultimo a mancare
+dell'immagine (Triscelon Etna Sport, 25/04/2026) l'ha ricevuta il 2026-07-20;
+non avendo `db_report_pk` (nessun report a DB per questa coppia/data), va
+benchato con `--image` esplicito — vedi `image_status` nel suo file caso.
 
 Con il sesto caso i **quattro** match presenti a DB sono tutti stati collazionati
 sul cartaceo e tutti e quattro avevano dati sbagliati (4/4). In tutti e quattro la
