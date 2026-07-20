@@ -755,19 +755,39 @@ class Command(BaseCommand):
                 self.stdout.write(f"Salvato: {path}")
 
     def _print_gold_comparison(self, case_id, model, fields, inversion):
-        """Tabella per-campo del confronto con la truth + check di inversione."""
+        """Tabella per-campo del confronto con la truth + check di inversione.
+
+        Le colonne 'truth' ed 'estratto' portano testo libero letto dall'OCR
+        (nomi squadra) e non hanno una lunghezza massima nota: la larghezza si
+        calcola sul contenuto più lungo di questo run, mai su una costante
+        fissa, altrimenti un valore più lungo della colonna sbanda
+        l'allineamento delle colonne successive e può leggersi come troncato
+        (successo con "BELLATOR FROSINONE" contro una colonna larga 18).
+        """
         self.stdout.write(f"\n--- Confronto con truth: {case_id} — {model} ---")
-        header = f"{'campo':<20} {'truth':>18} {'estratto':>18} {'esito':>8} {'confidence':>11}"
-        self.stdout.write(header)
-        self.stdout.write("-" * len(header))
+        headers = ("campo", "truth", "estratto", "esito", "confidence")
+        rows = []
         for field, row in fields.items():
             conf = row["confidence"]
             conf_str = f"{conf:.2f}" if isinstance(conf, (int, float)) else "N/A"
             extracted = "null" if row["extracted"] is None else str(row["extracted"])
-            self.stdout.write(
-                f"{field:<20} {str(row['truth']):>18} {extracted:>18} "
-                f"{row['verdict']:>8} {conf_str:>11}"
+            rows.append((field, str(row["truth"]), extracted, row["verdict"], conf_str))
+        widths = [
+            max(len(headers[i]), max((len(r[i]) for r in rows), default=0))
+            for i in range(len(headers))
+        ]
+
+        def fmt_row(cells):
+            return "  ".join(
+                cell.ljust(widths[i]) if i == 0 else cell.rjust(widths[i])
+                for i, cell in enumerate(cells)
             )
+
+        header_line = fmt_row(headers)
+        self.stdout.write(header_line)
+        self.stdout.write("-" * len(header_line))
+        for r in rows:
+            self.stdout.write(fmt_row(r))
 
         def fmt(v):
             return {True: "SÌ", False: "no", None: "n/c"}[v]

@@ -537,6 +537,49 @@ class OcrBenchGoldModeTest(TestCase):
         self.assertEqual(proposal["verdict"]["home_team_name"], "correct")
         self.assertEqual(proposal["verdict"]["away_team_name"], "wrong")
 
+    def test_gold_case_long_values_not_truncated_in_table(self):
+        """Nomi più lunghi della larghezza di colonna storica (18) non vanno mai troncati.
+
+        Regressione: la tabella usava una larghezza fissa di 18 caratteri.
+        Python non tronca mai una stringa più lunga del solo campo width (solo
+        precision lo fa), quindi la stampa era già completa — ma un valore più
+        largo della colonna sbandava l'allineamento delle colonne successive,
+        al punto da poter leggersi come troncato. Le colonne ora si
+        dimensionano sul contenuto: qui forziamo un nome ben oltre i 18
+        caratteri storici e verifichiamo che compaia integro in output.
+        """
+        long_paper_name = "BELLATOR FROSINONE MOLTO PIU LUNGO DI DICIOTTO CARATTERI"
+
+        def factory(model):
+            data = gold_truth_extraction(model)
+            data["match_info"]["home_team"] = long_paper_name
+            return data
+
+        case_id = self._write_case(
+            report_pk=self.report.pk,
+            extra={
+                "match": {
+                    "db_match_pk": None,
+                    "date": "2026-01-01",
+                    "home_team": {
+                        "db_team_name": "Casa DB",
+                        "name_on_paper": long_paper_name,
+                    },
+                    "away_team": {"db_team_name": "Ospiti DB", "name_on_paper": "OSPITI SUL FOGLIO"},
+                }
+            },
+        )
+        output = self._call_gold("--gold-case", case_id, factory=factory)
+        self.assertGreater(len(long_paper_name), 18)
+        self.assertIn(long_paper_name, output)
+        # ogni riga della tabella deve contenere il valore intero e non un
+        # prefisso di esso: un troncamento a 18 caratteri produrrebbe
+        # "BELLATOR FROSINONE" (spazio compreso, 18 char) senza il resto.
+        self.assertNotIn(long_paper_name[:18] + "\n", output)
+        _, proposal = self._proposal()
+        self.assertEqual(proposal["comparison"]["home_team_name"]["truth"], long_paper_name)
+        self.assertEqual(proposal["comparison"]["home_team_name"]["extracted"], long_paper_name)
+
     def test_gold_case_detects_home_away_inversion(self):
         """Valori giusti attribuiti alla squadra sbagliata: la classe di errore del match 2."""
         def factory(model):
