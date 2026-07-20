@@ -41,13 +41,14 @@ class OCRWorkflowTestCase(TestCase):
         url = f"/matches/{self.match.id}/upload-report/"
         response = self.client.post(url, {'file': pdf_file})
 
-        # Upload triggers OCR automatico → redirect a report_review
+        # Upload accoda l'OCR (Macro 22) e risponde subito → redirect a report_review
         report = MatchReport.objects.filter(match=self.match).first()
         self.assertIsNotNone(report)
         self.assertRedirects(response, reverse('report_review', kwargs={'report_id': report.id}))
 
-        # OCR automatico su PDF finto fallisce → NEEDS_REVIEW (comportamento corretto)
-        self.assertEqual(report.status, MatchReport.Status.NEEDS_REVIEW)
+        # Il referto e' in coda: l'elaborazione avviene fuori dal request cycle.
+        self.assertEqual(report.status, MatchReport.Status.QUEUED)
+        self.assertIsNotNone(report.ocr_queued_at)
         self.assertEqual(report.uploader, self.user)
 
         # TODO(bug): il check admin innesca KeyError in MatchReportAdminForm.__init__

@@ -1,0 +1,17 @@
+[Unit]
+Description=2salti backstop referti orfani ogni 15 minuti (coda OCR) - DEV
+
+[Timer]
+# Ogni quarto d'ora. La soglia di staleness del comando e' 15 minuti, quindi un
+# orfano viene recuperato entro 15-30 minuti dal momento in cui e' diventato
+# tale: accettabile per un backstop il cui caso normale e' "non fa nulla",
+# visto che il recupero rapido lo fa gia' la sweep di avvio del worker.
+OnCalendar=*:0/15
+# Se il box era spento all'orario previsto, recupera al boot invece di saltare.
+Persistent=true
+# Sfasa la partenza per non accavallarsi con gli altri timer sul minuto tondo.
+RandomizedDelaySec=60
+Unit=2salti-dev-recover-stale.service
+
+[Install]
+WantedBy=timers.target

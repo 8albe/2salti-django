@@ -1,5 +1,6 @@
 from django.db import models
 from django.contrib.auth import get_user_model
+from django.utils import timezone
 from core.models import Team, League
 
 User = get_user_model()
@@ -39,6 +40,20 @@ class Match(models.Model):
     def is_public(self):
         """A match is public if it has at least one PUBLISHED report."""
         return self.reports.filter(status='PUBLISHED').exists()
+
+    @property
+    def is_result_public(self):
+        """
+        Il risultato (finale e parziali) e' mostrabile in pubblico?
+
+        True se i dati sono verificati a mano OPPURE se esiste un referto
+        PUBLISHED. Unico punto di verita': `services.result_visibility`.
+        Piu' largo di `is_public`, che resta il gate degli EVENTI (tabellino):
+        un match verificato a mano ha un risultato certo ma non ha eventi
+        finche' un referto non viene pubblicato.
+        """
+        from .services.result_visibility import is_result_public
+        return is_result_public(self)
 
     @property
     def google_maps_url(self):
@@ -150,6 +165,7 @@ class MatchReport(models.Model):
     class Status(models.TextChoices):
         DRAFT = 'DRAFT', 'Bozza (Digitale)'
         UPLOADED = 'UPLOADED', 'Caricato (In attesa)'
+        QUEUED = 'QUEUED', 'In Coda OCR'
         PROCESSING = 'PROCESSING', 'In Elaborazione OCR'
         EXTRACTED = 'EXTRACTED', 'Dati Estratti (Da Revisionare)'
         VALIDATED = 'VALIDATED', 'Validato (Approvato Admin)'
@@ -189,6 +205,26 @@ class MatchReport(models.Model):
     
     # Deduplication
     file_hash = models.CharField(max_length=64, blank=True, db_index=True, help_text="SHA256 hash del file per evitare duplicati")
+
+    # Firma arbitro (canale digitale): nome e cognome digitati alla chiusura del
+    # referto. Sostituisce il PIN personale (decaduto nel modello no-account,
+    # Macro 14). Valorizzato solo al close del canale DIGITAL.
+    referee_signature = models.CharField(
+        max_length=200, blank=True,
+        help_text="Firma arbitro (nome e cognome) digitata alla chiusura del referto digitale"
+    )
+
+    # Coda OCR asincrona (Macro 22). Campi di lavorazione del worker: inerti
+    # per il canale DIGITAL, che non passa dalla coda.
+    ocr_attempts = models.PositiveSmallIntegerField(
+        default=0, help_text="Tentativi di elaborazione OCR (incrementato al claim del worker)"
+    )
+    ocr_queued_at = models.DateTimeField(null=True, blank=True, help_text="Istante di accodamento (ordinamento FIFO)")
+    ocr_next_attempt_at = models.DateTimeField(
+        null=True, blank=True, help_text="Non eleggibile al claim prima di questo istante (backoff retry)"
+    )
+    ocr_started_at = models.DateTimeField(null=True, blank=True, help_text="Istante del claim (base per lo stale detection)")
+    ocr_error = models.TextField(blank=True, help_text="Ultimo errore tecnico OCR (diagnostica worker)")
 
     # Review / Audit
     validation_notes = models.TextField(blank=True, help_text="Note di validazione (visibili se necessario)")
@@ -299,3 +335,71 @@ class MatchReportAuditLog(models.Model):
     def __str__(self):
         status_change = f" ({self.old_status} -> {self.new_status})" if self.old_status and self.new_status else ""
         return f"{self.created_at.strftime('%Y-%m-%d %H:%M')} - {self.action}{status_change} su {self.report}"
+
+
+class MatchJuryLink(models.Model):
+    """
+    Link monouso per l'accesso della giuria alla compilazione del referto
+    digitale di UNA partita, senza account (Macro 14).
+
+    "Monouso" = un ciclo di vita, non un singolo click: il link resta valido per
+    più sessioni/visite durante la compilazione e muore alla chiusura del
+    referto (CONSUMED). Stati e transizioni in docs/STATE_MACHINES.md.
+
+    Al più UN link ACTIVE per match è garantito a livello DB da un partial unique
+    index (SQLite supporta indici parziali), rinforzato applicativamente:
+    emettere un nuovo link revoca in transazione l'eventuale ACTIVE precedente.
+    """
+    EXPIRY_DAYS = 7
+
+    class Status(models.TextChoices):
+        ACTIVE = 'ACTIVE', 'Attivo'
+        CONSUMED = 'CONSUMED', 'Consumato (referto chiuso)'
+        REVOKED = 'REVOKED', 'Revocato'
+        EXPIRED = 'EXPIRED', 'Scaduto (backstop 7 giorni)'
+
+    match = models.ForeignKey(Match, on_delete=models.CASCADE, related_name='jury_links')
+    token = models.CharField(
+        max_length=64, unique=True, db_index=True,
+        help_text="Token URL-safe ad alta entropia (secrets, >=32 byte)"
+    )
+    status = models.CharField(max_length=10, choices=Status.choices, default=Status.ACTIVE, db_index=True)
+
+    created_by = models.ForeignKey(
+        User, on_delete=models.SET_NULL, null=True, blank=True, related_name='issued_jury_links',
+        help_text="Staff/admin che ha emesso il link (null se sistema)"
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    expires_at = models.DateTimeField(help_text="Backstop = created_at + EXPIRY_DAYS")
+    revoked_at = models.DateTimeField(null=True, blank=True)
+    consumed_at = models.DateTimeField(null=True, blank=True)
+
+    # Referto chiuso tramite questo link (valorizzato al consume).
+    report = models.ForeignKey(
+        MatchReport, on_delete=models.SET_NULL, null=True, blank=True, related_name='jury_links',
+        help_text="Referto chiuso dal link (valorizzato al consume)"
+    )
+
+    class Meta:
+        ordering = ['-created_at']
+        verbose_name = "Link Giuria Partita"
+        verbose_name_plural = "Link Giuria Partite"
+        constraints = [
+            models.UniqueConstraint(
+                fields=['match'],
+                condition=models.Q(status='ACTIVE'),
+                name='uniq_active_jury_link_per_match',
+            ),
+        ]
+
+    @property
+    def is_expired_by_time(self):
+        """Scadenza valutata a lettura: nessun cron in questo giro."""
+        return timezone.now() >= self.expires_at
+
+    def is_valid(self):
+        """ACTIVE e non ancora scaduto per tempo."""
+        return self.status == self.Status.ACTIVE and not self.is_expired_by_time
+
+    def __str__(self):
+        return f"JuryLink {self.match_id} [{self.get_status_display()}]"

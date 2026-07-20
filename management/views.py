@@ -597,14 +597,22 @@ def ops_cockpit(request):
     now = timezone.now()
     last_24h = now - timezone.timedelta(hours=24)
 
-    # I KPI richiesti basati sugli stati reali del modello MatchReport
-    # Status.EXTRACTED e Status.VALIDATED sono quelli pronti per la revisione/pubblicazione
-    # Status.UPLOADED e Status.PROCESSING sono quelli ancora in coda tecnica
+    # I KPI derivano dai bucket operativi di `matches.status_presentation`, che
+    # sono una partizione TOTALE degli stati: ogni referto e' contato in
+    # esattamente una metrica. Prima i bucket erano scritti a mano qui e DRAFT
+    # non compariva in nessuno, quindi un referto digitale lasciato in bozza era
+    # invisibile a tutto il cockpit.
+    from matches.status_presentation import BUCKETS
+
     stats = MatchReport.objects.aggregate(
-        pending_review=models.Count('id', filter=models.Q(status__in=[MatchReport.Status.EXTRACTED, MatchReport.Status.VALIDATED])),
-        in_flight=models.Count('id', filter=models.Q(status__in=[MatchReport.Status.UPLOADED, MatchReport.Status.PROCESSING])),
-        needs_review=models.Count('id', filter=models.Q(status=MatchReport.Status.NEEDS_REVIEW)),
-        failed=models.Count('id', filter=models.Q(status=MatchReport.Status.REJECTED)),
+        draft=models.Count('id', filter=models.Q(status__in=BUCKETS['draft'])),
+        pending_review=models.Count('id', filter=models.Q(status__in=BUCKETS['pending_review'])),
+        in_flight=models.Count('id', filter=models.Q(status__in=BUCKETS['in_flight'])),
+        needs_review=models.Count('id', filter=models.Q(status__in=BUCKETS['needs_review'])),
+        failed=models.Count('id', filter=models.Q(status__in=BUCKETS['failed'])),
+        done=models.Count('id', filter=models.Q(status__in=BUCKETS['done'])),
+        # `published_24h` NON e' un bucket ma una fetta temporale di `done`:
+        # sta fuori dalla partizione e non va sommata insieme agli altri.
         published_24h=models.Count('id', filter=models.Q(status=MatchReport.Status.PUBLISHED, published_at__gte=last_24h))
     )
 

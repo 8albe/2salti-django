@@ -1,6 +1,7 @@
 {% extends 'base.html' %}
 {% load static %}
 {% load core_extras %}
+{% load match_visibility %}
 
 {% block extra_head %}
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
@@ -152,7 +153,11 @@
                             </div>
                             <div class="flex items-center gap-4">
                                 <span class="text-lg font-black text-white uppercase">{{ match.home_team.name|truncatechars:15 }}</span>
+                                {% if match|result_visible_to:request.user %}
                                 <span class="text-xl font-display font-black text-blue-400">{{ match.home_score }}-{{ match.away_score }}</span>
+                                {% else %}
+                                <span class="text-xl font-display font-black text-slate-600" title="{% unverified_result_label %}">{% unverified_score_placeholder %}</span>
+                                {% endif %}
                                 <span class="text-lg font-black text-white uppercase">{{ match.away_team.name|truncatechars:15 }}</span>
                             </div>
                         </div>

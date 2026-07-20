@@ -1,0 +1,55 @@
+{
+  "case_id": "2026-04-18_sc-salerno_vs_nautilus-nuoto-roma",
+  "schema_version": "1.0",
+  "verified_by": "Alberto Galbiati",
+  "verified_at": "2026-07-19",
+  "verification_method": "collazione a mano del referto cartaceo originale",
+
+  "match": {
+    "db_match_pk": null,
+    "db_league_pk": null,
+    "db_league_name": null,
+    "db_lookup_note": "Verificato sul sistema vivo il 2026-07-19 (dev e prod, identici su questo punto): nessun Match per questa coppia/data, 'S.C. Salerno' assente sia da Team sia da Society. Conferma quanto gia' visto nel backup prod locale del 2026-07-04.",
+    "season": "2025/2026",
+    "date": "2026-04-18",
+    "competition_on_paper": "Serie B maschile",
+    "venue_on_paper": "Piscina Volturno",
+    "city_on_paper": null,
+    "home_team": {
+      "db_team_pk": null,
+      "db_team_name": null,
+      "name_on_paper": "S.C. Salerno"
+    },
+    "away_team": {
+      "db_team_pk": 3,
+      "db_team_name": "Nautilus N. Roma",
+      "name_on_paper": "Nautilus Nuoto Roma"
+    }
+  },
+
+  "truth": {
+    "scores": {
+      "final_score": "12-17",
+      "quarters": {
+        "1": [5, 5],
+        "2": [4, 6],
+        "3": [2, 4],
+        "4": [1, 2]
+      }
+    }
+  },
+
+  "not_verified": [
+    "roster casa e trasferta (nomi, numeri di maglia)",
+    "eventi (marcatori, minuti, esclusioni, cartellini)",
+    "ufficiali di gara (arbitro, segretario, cronometrista)",
+    "attribuzione dei gol ai singoli giocatori per periodo"
+  ],
+
+  "extractions": [],
+
+  "findings": [
+    "Somma parziali verificata: 5+4+2+1=12, 5+6+4+2=17, coerente col finale 12-17.",
+    "'S.C. Salerno' assente sia da Team sia da Society nel backup prod consultato (2026-07-04): un eventuale referto per questo match andrebbe orfano per assenza reale della squadra, non per fallimento del fuzzy matching (§8.6) — la squadra semplicemente non esiste ancora a DB."
+  ]
+}

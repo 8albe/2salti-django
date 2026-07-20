@@ -1,5 +1,7 @@
 {% extends 'base.html' %}
 {% load static %}
+{% load match_visibility %}
+{% load report_status %}
 
 {% block extra_head %}
 <!-- Font Awesome for icons -->
@@ -56,6 +58,7 @@
                 <!-- Score Center -->
                 <div class="flex flex-col items-center justify-center min-w-[120px] md:min-w-[200px]">
                     {% if match.is_finished %}
+                    {% if match|result_visible_to:request.user %}
                     <div class="text-6xl md:text-8xl font-display font-black text-white tracking-tighter flex items-center gap-2 md:gap-4">
                         <span class="text-glow">{{ match.home_score }}</span>
                         <span class="text-white/10 text-4xl md:text-6xl">-</span>
@@ -64,6 +67,25 @@
                     <div class="mt-4 px-4 py-1.5 rounded-full bg-green-500/10 border border-green-500/30 text-green-400 text-[10px] font-black uppercase tracking-[0.2em]">
                         Partita Conclusa
                     </div>
+                    {% if not match.is_result_public %}
+                    <div class="mt-2 px-3 py-1 rounded-full bg-amber-500/10 border border-amber-500/30 text-amber-400 text-[10px] font-black uppercase tracking-[0.15em]">
+                        Visibile solo allo staff — dato non verificato
+                    </div>
+                    {% endif %}
+                    {% else %}
+                    {# Principio del Dato Certo: risultato non verificato, non si mostra. #}
+                    <div class="text-4xl md:text-6xl font-display font-black text-slate-600 tracking-tighter flex items-center gap-2 md:gap-4">
+                        <span>{% unverified_score_placeholder %}</span>
+                        <span class="text-white/10">-</span>
+                        <span>{% unverified_score_placeholder %}</span>
+                    </div>
+                    <div class="mt-4 px-4 py-1.5 rounded-full bg-amber-500/10 border border-amber-500/30 text-amber-400 text-[10px] font-black uppercase tracking-[0.2em]">
+                        {% unverified_result_label %}
+                    </div>
+                    <p class="mt-3 max-w-xs text-center text-[11px] text-slate-500 leading-snug">
+                        La partita si è giocata, ma il risultato non è ancora stato verificato sul referto: finché non lo è, non lo pubblichiamo.
+                    </p>
+                    {% endif %}
                     {% else %}
                     <div class="text-4xl md:text-6xl font-display font-black text-slate-700 tracking-widest">
                         VS
@@ -94,10 +116,7 @@
             <div class="mt-12 pt-8 border-t border-white/5 flex flex-wrap justify-center gap-4">
                 {% for report in reports %}
                 <div class="flex items-center gap-3 px-4 py-2 rounded-xl bg-white/5 border border-white/10 text-xs">
-                    <span class="w-2 h-2 rounded-full 
-                        {% if report.status == 'PUBLISHED' %}bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.6)]
-                        {% elif report.status == 'UPLOADED' %}bg-amber-500 animate-pulse
-                        {% else %}bg-slate-500{% endif %}"></span>
+                    <span class="w-2 h-2 rounded-full {{ report.status|status_classes:'dot' }}"></span>
                     <span class="text-slate-400">Referto: <strong class="text-white">{{ report.get_status_display }}</strong></span>
                     {% if request.user.is_staff or request.user.is_superuser %}
                     <a href="{% url 'report_review' report.id %}" class="text-blue-400 font-bold hover:underline ml-2">Review →</a>
@@ -109,7 +128,7 @@
         </div>
     </section>
 
-    {% if match.is_finished %}
+    {% if match.is_finished and match|result_visible_to:request.user %}
     <!-- 2. SCORE BREAKDOWN: Timing Grid -->
     <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
         {% for q in qs_processed %}

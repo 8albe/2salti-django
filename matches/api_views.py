@@ -9,10 +9,16 @@ from core.models import League, Team
 from .models import Match, MatchEvent, MatchReport, AIQueryLog
 from accounts.models import User
 from .services.ai_services import AIStatsEngine
+from .services.result_visibility import is_result_public, result_public_q
 
 def _is_match_public(match):
-    """Internal helper to check if a match is safe for public API consumption."""
-    return match.is_finished and match.reports.filter(status=MatchReport.Status.PUBLISHED).exists()
+    """
+    Internal helper to check if a match is safe for public API consumption.
+
+    Delegates the "risultato verificato" part to the single gate in
+    `services.result_visibility` (BLUEPRINT cap. 14): niente criterio locale.
+    """
+    return match.is_finished and is_result_public(match)
 
 def api_league_standings(request, league_id):
     """Returns the standings for a league in JSON format"""
@@ -48,8 +54,8 @@ def api_league_matches(request, league_id):
     """Returns matches for a league in JSON format"""
     league = get_object_or_404(League, id=league_id)
     matches = league.matches.filter(
+        result_public_q(),
         is_finished=True,
-        reports__status=MatchReport.Status.PUBLISHED,
     ).distinct().select_related('home_team', 'away_team')
     
     data = []

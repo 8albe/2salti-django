@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% load report_status %}
 
 {% block content %}
 <div class="container mx-auto px-4 py-8">
@@ -19,9 +20,8 @@
 
     <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-12">
         {% for status, count in report_stats.items %}
-        <div class="bg-white p-6 rounded-lg shadow-sm border-l-4 
-            {% if status == 'PUBLISHED' %}border-green-500{% elif status == 'REJECTED' %}border-red-500{% elif status == 'UPLOADED' %}border-blue-500{% else %}border-yellow-500{% endif %}">
-            <h3 class="text-sm font-medium text-gray-500 uppercase">{{ status }}</h3>
+        <div class="bg-white p-6 rounded-lg shadow-sm border-l-4 {{ status|status_classes:'border' }}">
+            <h3 class="text-sm font-medium text-gray-500 uppercase">{{ status|status_label }}</h3>
             <p class="text-2xl font-bold">{{ count }}</p>
         </div>
         {% endfor %}
@@ -110,7 +110,7 @@
                     <tr>
                         <td class="px-4 py-3 text-sm text-gray-900">#{{ report.id }}</td>
                         <td class="px-4 py-3 text-sm text-gray-500">{{ report.match }}</td>
-                        <td class="px-4 py-3 text-sm text-gray-500 font-bold">{{ report.status }}</td>
+                        <td class="px-4 py-3 text-sm text-gray-500 font-bold">{{ report.get_status_display }}</td>
                         <td class="px-4 py-3 text-sm text-gray-500">{{ report.created_at|date:"d/m H:i" }}</td>
                         <td class="px-4 py-3 text-sm">
                             <a href="{% url 'admin:matches_matchreport_review' report.id %}" class="text-blue-600 hover:text-blue-900 font-medium">Review &rarr;</a>

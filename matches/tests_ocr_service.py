@@ -77,7 +77,7 @@ class OCRServiceTestCase(TestCase):
         self.assertEqual(self.report.raw_extracted_data["match_info"]["home_team"], "Pro Recco")
 
     def test_admin_action_ocr(self):
-        """Verifica che l'azione admin esegua correttamente l'OCR mock"""
+        """L'azione admin accoda il referto; l'OCR lo esegue poi il worker (Macro 22)."""
         admin_user = User.objects.create_superuser(username='superadmin', password='password', email='admin@test.com')
         self.client.force_login(admin_user)
         
@@ -93,9 +93,16 @@ class OCRServiceTestCase(TestCase):
         self.assertEqual(response.status_code, 200)
         
         self.report.refresh_from_db()
+        self.assertEqual(self.report.status, 'QUEUED')
+        self.assertContains(response, "Accodati: 1, Saltati: 0.")
+
+        # Il worker consuma la coda e porta il referto a EXTRACTED.
+        from django.core.management import call_command
+        call_command('ocr_worker', '--once', '--no-startup-sweep')
+
+        self.report.refresh_from_db()
         self.assertEqual(self.report.status, 'EXTRACTED')
         self.assertIsNotNone(self.report.raw_extracted_data)
-        self.assertContains(response, "Estraiti: 1, In Review: 0, Errori: 0.")
 
     def test_review_view_flow(self):
         """Verifica che la vista di revisione aggiorni i dati e lo stato a VALIDATED"""

@@ -78,11 +78,18 @@ def match_detail(request, match_id):
     max_q_events = match.events.aggregate(models.Max('quarter'))['quarter__max'] or 0
     max_q = max(default_q, max_q_data, max_q_events)
     
+    # Gate del risultato (BLUEPRINT cap. 1, Principio del Dato Certo): i parziali
+    # non finiscono nemmeno nel contesto se lo spettatore non puo' vederli.
+    # Il template ricontrolla comunque: qui e' difesa in profondita', non il gate.
+    from .services.result_visibility import can_see_result
+    result_visible = can_see_result(match, request.user)
+
     q_range = range(1, max_q + 1)
     qs_processed = []
-    for q in q_range:
-        score = match.quarter_scores.get(str(q), [0, 0])
-        qs_processed.append({'q': q, 'home': score[0], 'away': score[1]})
+    if result_visible:
+        for q in q_range:
+            score = match.quarter_scores.get(str(q), [0, 0])
+            qs_processed.append({'q': q, 'home': score[0], 'away': score[1]})
 
     from core.services.seo_service import SEOService
     from django.urls import reverse
@@ -153,17 +160,19 @@ def upload_report(request, match_id=None):
             report.status = 'UPLOADED'
             report.save()
             
-            # --- AUTO-OCR TRIGGER ---
+            # --- ACCODAMENTO OCR ASINCRONO (Macro 22) ---
+            # L'elaborazione la esegue il worker `ocr_worker`: qui si accoda e
+            # si risponde subito. Lo stato lo segue la review page in polling.
             from .services.ocr_service import OCRService
-            OCRService.process_and_update(report)
-            
+            OCRService.enqueue(report, user=request.user)
+
             if match:
                 match.has_report = True
                 match.save()
                 from management.utils import log_action
                 log_action(request.user, match.home_team.society, "REPORT_UPLOADED", target=report)
             
-            messages.success(request, "Referto caricato ed elaborato con successo.")
+            messages.success(request, "Referto caricato: elaborazione in corso.")
             return redirect('report_review', report_id=report.id)
     else:
         form = MatchReportUploadForm()
@@ -307,6 +316,18 @@ def sport_matches(request, sport_slug):
         'seo_title': f"Risultati e Calendario {sport.name}",
         'seo_description': f"Tutti i risultati e le prossime partite di {sport.name}. Calendario completo e tabellini su 2salti.",
     })
+
+
+# Stati "in transito" della pipeline OCR: non sono esiti di revisione, quindi
+# la form di review li presenta gia' normalizzati sull'esito atteso a fine
+# elaborazione. Lookup SEMPRE con default (`.get(status, status)`): ogni nuovo
+# stato del modello deve poter attraversare questa mappa senza schiantarla.
+REVIEW_STATUS_INITIAL = {
+    MatchReport.Status.QUEUED: MatchReport.Status.EXTRACTED,
+    MatchReport.Status.PROCESSING: MatchReport.Status.EXTRACTED,
+}
+
+
 @login_required
 @onboarding_required
 def report_review(request, report_id):
@@ -358,6 +379,16 @@ def report_review(request, report_id):
                 messages.error(request, msg)
             return redirect('report_review', report_id=report.pk)
         # -----------------------------------
+
+        # Senza partita collegata non c'e' niente su cui scrivere punteggi ed
+        # eventi: l'unica azione sensata e' link_match / create_match, gestite
+        # sopra. Meglio un messaggio che un AttributeError su `match`.
+        if not match:
+            messages.error(
+                request,
+                "Collega prima il referto a una partita: senza partita non è possibile salvare punteggi ed eventi."
+            )
+            return redirect('report_review', report_id=report.pk)
 
         form = MatchReportReviewForm(request.POST, home_roster=home_roster, away_roster=away_roster)
         if form.is_valid():
@@ -438,17 +469,22 @@ def report_review(request, report_id):
 
     else:
         # 1. Base initial data from Match
+        # `match` puo' essere None: referto caricato senza partita, oppure
+        # match discovery non ancora eseguita/fallita (Macro 22: dopo l'upload
+        # si atterra qui mentre il referto e' ancora QUEUED). In quel caso la
+        # pagina serve solo a collegare/creare la partita, quindi i punteggi
+        # partono a zero invece di far esplodere la view.
         initial_data = {
-            'home_score': match.home_score or 0,
-            'away_score': match.away_score or 0,
-            'is_finished': match.is_finished,
-            'report_status': report.status if report.status != 'PROCESSING' else 'EXTRACTED',
+            'home_score': (match.home_score if match else 0) or 0,
+            'away_score': (match.away_score if match else 0) or 0,
+            'is_finished': match.is_finished if match else False,
+            'report_status': REVIEW_STATUS_INITIAL.get(report.status, report.status),
             'validation_notes': report.validation_notes,
             'internal_notes': report.internal_notes,
         }
-        
+
         # 2. Quarter scores
-        qs = match.quarter_scores or {}
+        qs = (match.quarter_scores if match else None) or {}
         # If match has no scores but report has normalized_data, try to use converter
         if not qs and report.normalized_data:
             from .services.converters import MatchDataConverter

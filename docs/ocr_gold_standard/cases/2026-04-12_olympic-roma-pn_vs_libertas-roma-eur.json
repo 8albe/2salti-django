@@ -1,0 +1,57 @@
+{
+  "case_id": "2026-04-12_olympic-roma-pn_vs_libertas-roma-eur",
+  "schema_version": "1.0",
+  "verified_by": "Alberto Galbiati",
+  "verified_at": "2026-07-19",
+  "verification_method": "collazione a mano del referto cartaceo originale",
+
+  "match": {
+    "db_match_pk": 4,
+    "db_league_pk": 5,
+    "db_league_name": "Juniores M - U18A",
+    "db_lookup_note": "Verificato sul sistema vivo il 2026-07-19 (dev e prod identici a quella data per questo match). Match id=4, report id=11 (NEEDS_REVIEW, mai pubblicato). PRIMA della correzione, quarter_scores a DB = {'1':[5,0],'2':[5,0],'3':[5,0],'4':[5,1]} — stesso finale 20-1 di questa verita' cartacea ma tutti e 4 i parziali sbagliati (errore compensativo: la somma torna comunque al totale). CORRETTO SU DEV il 2026-07-19 (audit MATCH_SCORE_CORRECTED, before/after allegati; is_data_verified ora True). PROD ancora al valore sbagliato: correzione preparata ma non eseguita (fuori scope di questo giro, richiede intervento di Alberto). report.normalized_data del report 11 NON toccato: non ripubblicare il report 11 finche' non e' corretto separatamente, altrimenti publish_report() sovrascrive il Match dal normalized_data ancora sbagliato.",
+    "season": "2025/2026",
+    "date": "2026-04-12",
+    "competition_on_paper": "Camp. Juniores M",
+    "venue_on_paper": "Foro Italico",
+    "city_on_paper": "Roma",
+    "home_team": {
+      "db_team_pk": 7,
+      "db_team_name": "Olimpic Roma P.N.",
+      "name_on_paper": "Olympic Roma P.N."
+    },
+    "away_team": {
+      "db_team_pk": 8,
+      "db_team_name": "Libertas Roma Eur",
+      "name_on_paper": "Libertas Roma Eur"
+    }
+  },
+
+  "truth": {
+    "scores": {
+      "final_score": "20-1",
+      "quarters": {
+        "1": [5, 0],
+        "2": [4, 0],
+        "3": [5, 1],
+        "4": [6, 0]
+      }
+    }
+  },
+
+  "not_verified": [
+    "roster casa e trasferta (nomi, numeri di maglia)",
+    "eventi (marcatori, minuti, esclusioni, cartellini)",
+    "ufficiali di gara (arbitro, segretario, cronometrista)",
+    "attribuzione dei gol ai singoli giocatori per periodo"
+  ],
+
+  "extractions": [],
+
+  "findings": [
+    "Somma parziali verificata: 5+4+5+6=20, 0+0+1+0=1, coerente col finale 20-1.",
+    "Nome sul cartaceo 'Olympic Roma P.N.' vs nome a DB 'Olimpic Roma P.N.' (Team pk=7): stessa divergenza di pattern gia' osservata nel primo caso gold (Bellator Frusino / BELLATOR FROSINONE, §8.6) — rischio di mancato aggancio in discovery se il fuzzy matching non tollera questa variante.",
+    "Confermato sul sistema vivo: il Match a DB aveva lo stesso punteggio finale ma tutti e 4 i parziali sbagliati con somma comunque coerente al totale — errore compensativo, terzo caso su tre confrontabili con questo pattern (vedi syllabus §8.5). Corretto su dev il 2026-07-19, prod ancora da correggere.",
+    "Distribuzione DB pre-correzione (5-0/5-0/5-0/5-1) sospettosamente regolare: possibile firma di allucinazione, ipotesi da verificare su altri casi (syllabus §8.5)."
+  ]
+}

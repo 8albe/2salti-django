@@ -6,6 +6,7 @@ from django.templatetags.static import static as static_url
 from django.views.generic.base import RedirectView
 
 from matches.admin import op_admin_site
+from matches.api_views_jury import jury_link_landing
 
 
 class FaviconRedirectView(RedirectView):
@@ -26,6 +27,8 @@ class FaviconRedirectView(RedirectView):
 urlpatterns = [
     path('admin/', op_admin_site.urls),
     path('favicon.ico', FaviconRedirectView.as_view()),
+    # Landing pubblica del link giuria (Macro 14): risoluzione token, nessuna UI.
+    path('r/<str:token>/', jury_link_landing, name='jury_link_landing'),
     path('', include('core.urls')),
     path('accounts/', include('accounts.urls')),
     path('matches/', include('matches.urls')),

@@ -61,7 +61,7 @@ Il progetto genera valore differenziato in base al ruolo e al piano di abbonamen
 | ----------------------- | --------------- | --------------- | ------------- | ----------- |
 | Consultazione Bacheca   | Club Pro        | Tutti (Gratis)  | Web/App       | No          |
 | Notifiche Push Bacheca  | Club Pro        | Solo Premium    | Push Act.     | Si          |
-| Referto Digitale        | Giuria (Gratis) | Tutti (via API) | Offline-first | Si (Token)  |
+| Referto Digitale        | Giuria (Gratis) | Tutti (via API) | Offline-first | Si (Link monouso) |
 | Chatbot AI              | Premium         | Solo Premium    | Web/App       | Si (Hard)   |
 | Live Alerts (Referto)   | Premium         | Solo Premium    | Push Act.     | Si          |
 | Season Recap            | Premium         | Solo Premium    | Batch PDF     | Si          |
@@ -84,7 +84,7 @@ Mappa del prodotto: pagine pubbliche, superfici post-login, profili e strumenti 
 | Autenticato    | Bacheca (Atleti / Genitori) | Comunicazioni società gated: scrittura Club Pro, lettura tutti |
 | Autenticato    | Chatbot Panel               | Interfaccia AI per query e comandi operativi                   |
 | Profili        | Atleta / Coach / Arbitro    | Identità sportiva, storico e Season Recap (Premium)            |
-| Admin / Giuria | Form Referto Digitale       | Compilazione mobile, firma PIN, sync offline                   |
+| Admin / Giuria | Form Referto Digitale       | Compilazione mobile, firma nome+cognome, sync offline          |
 | Admin          | Cockpit Workflow            | Review OCR, validazione, audit log e publishing                |
 
 ## 4. Home page: architettura dettagliata
@@ -155,7 +155,7 @@ Scopo: Una pagina elenco, filtrabile e veloce da leggere.
 
 - Filtri per stagione, competizione, squadra, round, stato partita.
 
-- Lista match con data, squadre, risultato, luogo e link al dettaglio.
+- Lista match con data, squadre, risultato, luogo e link al dettaglio. Il **risultato compare solo se verificato** (gate del risultato pubblico, §14): per una partita disputata ma non ancora verificata la riga mostra la partita e un placeholder al posto del punteggio.
 
 - Gestione stato: programmata, in corso, disputata, pubblicata.
 
@@ -169,9 +169,9 @@ Scopo: E la pagina che deve dare credibilita all'intero sistema.
 
 ### Blocchi da prevedere:
 
-- Header con metadata: data, luogo, competizione, round, squadre e risultato finale.
+- Header con metadata: data, luogo, competizione, round, squadre e risultato finale. Il risultato finale e' soggetto al **gate del risultato pubblico** (§14): se i dati non sono verificati, al suo posto compare "Risultato da verificare" e la partita resta comunque pubblica con tutti gli altri metadata.
 
-- Tabellino principale con score per squadra e, se disponibile, breakdown per tempi.
+- Tabellino principale con score per squadra e, se disponibile, breakdown per tempi. Anche il breakdown per tempi e' sotto lo stesso gate: parziali non verificati non si mostrano (Principio del Dato Certo, §7.4.3) — sono anzi il campo che si e' rivelato meno affidabile nelle estrazioni OCR (SYLLABUS Macro 8 §8.5).
 
 - Eventi partita: gol, espulsioni, carte, presenza, note arbitri.
 
@@ -283,7 +283,7 @@ Prima della personalizzazione Premium, ogni utente riceve un setup di default ba
 | **Allenatore** | Roster, Registro presenze, Stats team | Gestione Team, Dati | Scrittura area team | Report partita post-match |
 | **Dirigente** | KPI Club, Richieste membership, Sponsor | Club Admin | Gestione Club | Nuove richieste |
 | **Arbitro** | Mie designazioni, Storico, Rimborsi | Archivio Arbitrale | Update match assigned | Nuove designazioni |
-| **Giuria (Cert)**| Match corrente (Form Referto) | Live Match Tool | Edit match token-spec | Nessuna |
+| **Giuria (Cert)**| Match corrente (Form Referto) | Live Match Tool | Edit match via link monouso per-partita | Nessuna |
 | **Admin** | Cockpit completo, System health | Super Admin Panel | Full access | Errori critici pipeline |
 
 La personalizzazione Premium permette di sovrascrivere questi default riordinando o nascondendo widget e cambiando il tema colore.
@@ -315,11 +315,15 @@ Esperienza differenziata tra Guest e Autenticato:
 
 Strumento dedicato alla giuria e agli arbitri per l'ingestione nativa del dato di partita. Sostituisce il cartaceo come fonte primaria.
 
-#### 7.4.1 Accesso e Certificazione (Giuria)
-- **Utilizzo**: Esclusivamente da smartphone. Gratis per la giuria.
-- **Token Match-Specific**: L'account giuria riceve un token legato a un singolo `match_id` + `user_id`, emesso dalla federazione/lega.
-- **Finestra di validità**: Attivo da 30 minuti prima del match; revoca automatica al fischio finale. Un account senza token attivo non può modificare alcun referto.
-- **Certificazione**: Richiede workflow di sicurezza (emissione token → validazione → scadenza → revoca manuale admin).
+#### 7.4.1 Accesso Giuria — link monouso per-partita (riscritto 2026-07-19)
+
+> **Vincolo federale (verificato con contatto diretto, 2026-07):** le designazioni delle giurie sono gestite dal **GUG, organo NAZIONALE**, e comunicate via mail attraverso il **portale federale**, che **non sarà reso accessibile a terzi** perché gestisce i dati personali dei tesserati FIN. Il modello precedente — token legato a `match_id`+`user_id` emesso dalla federazione/lega — presupponeva la FIN come autorità emittente e un'anagrafica tesserati non ottenibile: **irrealizzabile**, archiviato in FUTURE_IDEAS.md §1. Il modello attuale identifica la **partita, non la persona**.
+
+- **Utilizzo**: da smartphone via browser (nessuna app da installare, nessun account, nessuna registrazione). Gratis per la giuria; nessun dato personale della giuria raccolto.
+- **Link monouso per-partita**: la piattaforma genera un link legato alla sola partita; chi lo apre trova il referto già precompilato con squadre, data e luogo.
+- **Durata**: il link resta valido finché il referto non viene chiuso/firmato e muore alla chiusura. Backstop assoluto di sicurezza: scadenza comunque 7 giorni dopo la generazione, contro link vivi all'infinito su referti mai chiusi. Revoca manuale admin sempre disponibile.
+- **Sicurezza (v1)**: nessun secondo fattore — chi ha il link può compilare. Razionale: ogni attrito aggiunto uccide l'adozione con una giuria a bassa alfabetizzazione digitale; il rischio su una singola partita è basso e il danno peggiore (referto sbagliato) è già intercettato dal quality gate e dalla review admin. Un codice breve a 4-6 cifre resta **predisposto nel design ma spento**, da attivare solo se emergesse un abuso reale.
+- **Consegna del link**: **APERTA, da decidere con la FIN** — (a) QR code stampato/consegnato dalla società ospitante a bordo vasca, oppure (b) link incluso nella mail di designazione GUG. Prossimo canale: segreteria generale FIN.
 
 #### 7.4.2 Architettura Offline-First
 - Compilazione locale tramite Service Worker + IndexedDB.
@@ -327,9 +331,9 @@ Strumento dedicato alla giuria e agli arbitri per l'ingestione nativa del dato d
 - Le Live Alerts push partono solo quando la connessione è attiva; offline il referto resta valido ma muto verso gli abbonati.
 
 #### 7.4.3 Firma e Statistiche
-- **Firma Arbitro**: Inserimento PIN personale a fine gara. Il referto diventa immutabile; correzioni solo via admin audit log.
+- **Firma Arbitro** (deciso 2026-07-19, as-built): a fine gara l'arbitro **digita nome e cognome** nel campo firma del close (obbligatorio). Il PIN *personale* è decaduto: nel modello a link monouso (§7.4.1) non esiste un'identità registrata da cui derivarlo. La firma è persistita sul referto e nell'audit log con timestamp; il referto entra in `NEEDS_REVIEW` (mai auto-publish) e diventa immutabile fuori da `DRAFT` (correzioni solo via admin audit log). Il codice breve 4-6 cifre resta predisposto-ma-spento **come anti-abuso** (§7.4.1), non come firma.
 - **Livelli di Statistiche**: unico livello **Base** (gratis): Gol, cartellini, espulsioni, timeout, parziali, nomi squadre, luogo, orario. Il livello Avanzato è accantonato su feedback federale 2026-07 (quelle statistiche non vengono rilevate nemmeno in Serie A); idea conservata in FUTURE_IDEAS.md.
-- **Principio del Dato Certo**: Se un dato non è rilevato, il sistema mostra "non rilevato", mai valori inventati (coerente con il principio "Null invece di invenzione" del Cap. 1).
+- **Principio del Dato Certo**: Se un dato non è rilevato, il sistema mostra "non rilevato", mai valori inventati (coerente con il principio "Null invece di invenzione" del Cap. 1). Il principio non vale solo per il dato *mancante* ma anche per quello **non ancora verificato**: da qui il gate del risultato pubblico (§14), che sostituisce con un placeholder esplicito il punteggio di una partita i cui dati non sono stati validati.
 - **Form UX**: Mobile-first, validazioni inline (es. somma parziali == totale gol), più veloce del cartaceo. È lo strumento con cui proporre alla federazione il passaggio dal cartaceo al digitale: deve essere più rapido e meno error-prone della compilazione manuale.
 
 ### 7.5 Chatbot AI (L'impiegato virtuale)
@@ -519,7 +523,7 @@ Il dominio adotta la **stagione come asse** del tesseramento, non più le date l
 - **Activation_Codes**: codici società per membership sportiva.
 - **Sponsor_Assets**: sponsor caricati dalle società, con placement (pagina società, profili atleti).
 - **User_Preferences**: layout widget, tema colore, notifiche opt-in per ciascun utente Premium.
-- **Jury_Tokens**: token match-specific emessi per i giurati certificati, con scadenza e stato revoca.
+- **Match_Jury_Links** (sostituisce Jury_Tokens, 2026-07-19): link monouso per-partita per la compilazione del referto digitale da parte della giuria, senza account; legato al solo match, con stato (attivo/consumato/revocato) e scadenza backstop 7 giorni. Il modello Jury_Tokens a identità federata è archiviato in FUTURE_IDEAS.md §1.
 - **ChatMessage**: canale di chat informale per squadra (messaggistica diretta tra membri), complementare alla Bacheca (Post/Comment) che resta il canale strutturato.
 
 ### Principi di integrità
@@ -541,7 +545,7 @@ Sopra l'interfaccia, in mezzo il layer applicativo, sotto il motore OCR/AI e il 
 | POST /api/referti/process | Lancia OCR/AI sul job | stato elaborazione |
 | POST /api/referti/digital/start | Crea un referto digitale nativo (giuria) | id referto + draft iniziale |
 | PUT /api/referti/digital/{id} | Aggiorna il draft digitale (sync offline) | bozza salvata |
-| POST /api/referti/digital/{id}/close | Firma PIN arbitro e chiude il referto | stato workflow + immutabilità |
+| POST /api/referti/digital/{id}/close | Firma arbitro (nome+cognome, obbligatoria) e chiude il referto in NEEDS_REVIEW | stato workflow + immutabilità |
 | GET /api/referti/{id}/status | Stato workflow del referto | UPLOADED / EXTRACTED / ... |
 | GET /api/referti/{id}/results | JSON estratto e warning (livello Base) | payload per admin |
 | PUT /api/referti/{id}/validate | Correzione e approvazione admin | stato aggiornato |
@@ -551,7 +555,9 @@ Sopra l'interfaccia, in mezzo il layer applicativo, sotto il motore OCR/AI e il 
 | GET /api/referees/{id} | Profilo arbitro | designazioni + partite |
 | GET /api/teams/{id} | Scheda squadra | rosa, stats, ultime gare |
 | GET /api/ai/chatbot | Interfaccia Chatbot con function calling | bot_response + eventuali azioni |
-| POST /api/jury/token/issue | Emissione token giuria match-specific | token + finestra validità |
+| POST /api/matches/{id}/jury-link | Emissione link monouso per-partita (staff/admin, sostituisce jury/token/issue) | URL `/r/{token}` + scadenza (as-built: risposta neutra, **QR fuori scope** — non generato) |
+| POST /api/matches/{id}/jury-link/revoke | Revoca il link ACTIVE del match (staff/admin) | n. link revocati |
+| GET /r/{token} | Accesso pubblico giuria via link monouso (nessun login) | as-built: risoluzione JSON match/bozza (UI fuori scope); 410 se scaduto/revocato/consumato, 404 se inesistente |
 | GET/PUT /api/user/preferences | Layout widget e tema utente Premium | preferenze persistenti |
 
 ### Infrastruttura e operations
@@ -635,7 +641,7 @@ Il modello economico si basa su tre piani paralleli che sbloccano diverse profon
 - **Utente Premium**: paga per servizi avanzati personali (Alerts, Chatbot, Season Recap, personalizzazione).
 - **Società (Club Pro)**: paga per visibilità (Sponsor, pagina società) e comunicazione diretta (Bacheca push).
 - **Eccezione pilota (Zero9 Roma)**: la società pilota è **comped a vita** perché fa da cavia del sistema-società completo. Su Zero9 i ricavi vengono dagli sponsor/aziende. È l'**unica** eccezione al modello Club Pro: non lo ribalta.
-- **Giuria certificata**: utilizzo del Referto Digitale sempre gratuito, via token match-specific emesso dalla federazione/lega.
+- **Giuria**: utilizzo del Referto Digitale sempre gratuito, via link monouso per-partita generato dalla piattaforma (v. §7.4.1; il token federale è decaduto 2026-07-19).
 - **Fruizione contenuti**: la lettura della bacheca e la consultazione dati base restano gratis per tutti gli utenti iscritti alla società (anche Freemium). Le notifiche push sulla bacheca arrivano solo ai Premium.
 
 ### Funnel di attivazione
@@ -649,7 +655,7 @@ Il modello economico si basa su tre piani paralleli che sbloccano diverse profon
 
 ### Priorità di esecuzione
 
-1. **Nucleo affidabile del dato**: Referto Digitale (form mobile, offline, PIN), OCR fallback, validazione, database e profili sportivi pre-caricati.
+1. **Nucleo affidabile del dato**: Referto Digitale (form mobile, offline, firma nome+cognome), OCR fallback, validazione, database e profili sportivi pre-caricati.
 2. **Modulo account**: registrazione, verifica email a click, pagamento tre piani.
 3. **Claim e membership**: ricerca profilo, codici di attivazione, notifiche al club admin, approvazioni e revoche.
 4. **Area pubblica robusta e dashboard private** per ruoli verificati, con distinzione netta tra guest, Freemium, Premium e Club Pro.
@@ -662,19 +668,20 @@ Il modello economico si basa su tre piani paralleli che sbloccano diverse profon
 - **Widget Layout**: sistema a slot fissi riordinabili per dashboard utente e pagine club. Niente drag&drop libero in v1.
 - **Chatbot AI**: esclusiva Premium, con function calling e RBAC server-side obbligatorio.
 - **Bacheca mista**: scrittura gated Club Pro, lettura gratis per tutti gli iscritti, notifiche push solo Premium.
-- **Certificazione giuria**: token match-specific con finestra 30 minuti pre-match, revoca automatica al fischio finale, revoca manuale admin disponibile.
-- **Firma referto**: PIN arbitro rende il referto immutabile post-firma; correzioni successive solo via admin con audit log completo.
+- **Accesso giuria** (aggiornata 2026-07-19, sostituisce "Certificazione giuria"): link monouso per-partita, valido fino alla chiusura del referto con backstop 7 giorni; revoca manuale admin disponibile; nessun secondo fattore in v1 (codice breve 4-6 cifre predisposto ma spento). Il token match-specific federale è irrealizzabile per vincolo GUG/portale (v. §7.4.1).
+- **Firma referto** (aggiornata 2026-07-19): l'arbitro **digita nome e cognome** al close (il PIN personale è decaduto col modello no-account); il referto entra in NEEDS_REVIEW e diventa immutabile fuori da DRAFT; correzioni successive solo via admin con audit log completo (v. §7.4.3).
 - **Profili sportivi creati dal sistema**: gli utenti non creano da zero il proprio profilo sportivo, lo rivendicano.
 - **Verifica identità**: verifica leggera a click su email (l'utente clicca il link e parte l'iter). SPID/CIE e documento+selfie accantonati per eccesso di attrito.
 - **Accesso dati privati**: richiede SEMPRE due condizioni — email confermata + collegamento sportivo valido (membership approvata; per il genitore ai dati del figlio: certificazione society-vouching `CERTIFICATA`).
 - **Pallanuoto-only (prodotto), sport-generico (codice)**: la pallanuoto è lo sport del prodotto; visione, naming e copy sono pallanuoto. L'impianto tecnico resta sport-generico (modello `Sport` + FK sotto `Society`/`League`/`Season` intatti, navigator da auto-nascondere) — vedi §1 nota tecnica e FUTURE_IDEAS §2.
 - **Rollout a imbuto**: largo = risultati pubblici per tutti; sistema-società completo acceso solo per il pilota Zero9 (~1 anno), poi clonato per le nuove società. Vedi §1 "Strategia di rollout a imbuto".
+- **Gate del risultato pubblico** (ratificata 2026-07-19): la pagina pubblica **non mostra il risultato di una partita i cui dati non sono verificati**. Un risultato è mostrabile se `is_data_verified=True` **oppure** se esiste almeno un referto in stato `PUBLISHED` — due strade legittime alla verità (validazione umana diretta; workflow di pubblicazione del referto, lo stesso criterio già usato per le classifiche, così il gate pubblico non introduce un terzo concetto di "verificato"). Se non è mostrabile si nasconde **solo il risultato** (finale e parziali), sostituito da un placeholder esplicito; **la partita resta pubblica** con squadre, data, luogo e competizione. Il gate vale solo sul pubblico: staff e admin continuano a vedere il punteggio, perché vederlo è ciò che serve per verificarlo. È l'applicazione diretta di **"Null invece di invenzione"** (§1) e del **Principio del Dato Certo** (§7.4.3): un dato non certo si dichiara tale, non si mostra come se lo fosse. Motivazione empirica: al 2026-07-19 il 100% dei match a DB (4/4) proveniva da estrazioni OCR mai validate e **tutti e quattro** sono risultati sbagliati alla collazione sul cartaceo (SYLLABUS Macro 8 §8.5). Implementazione: gate unico in `matches/services/result_visibility.py`, consumato da template, API e AI Stats Engine.
 
 ---
 
 ## Punti da validare con il product owner
 
-- **[Federazione]** ✅ **RISOLTO (2026-06-02):** l'autorità emittente dei token giuria è la **federazione/lega** (NON il club). Conferma §7.4.1 e §14 (Baseline); vedi SYLLABUS Macro 14 §14.2.
+- **[Federazione]** ✅ **SUPERATO (2026-07-19; era "RISOLTO 2026-06-02" con issuer = federazione/lega):** il modello token federale è decaduto — le designazioni sono del GUG (organo nazionale) e il portale federale non sarà accessibile a terzi (dati personali tesserati FIN). L'accesso giuria è ora a **link monouso per-partita** emesso dalla piattaforma (v. §7.4.1); resta aperta solo la **consegna del link** (da definire con la FIN, segreteria generale). Vedi SYLLABUS Macro 14 §14.2.
 - **[Conflitti]** ✅ **RISOLTO (2026-06-02):** conflict resolution = single-writer lock per match (un solo device writer-attivo alla volta; NON last-write-wins, NON merge). Vedi SYLLABUS Macro 14 §14.3.
 - **[UX]** Opzione "sito esterno": Redirect diretto (Opzione A) vs Pagina teaser con badge (Opzione B).
 - **[Chatbot]** Function calling aperto (Opzione A) vs Lista chiusa whitelist comandi (Opzione B).

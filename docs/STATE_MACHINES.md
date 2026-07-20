@@ -3,15 +3,20 @@
 Questo documento descrive le macchine a stati implementate nel codice.
 Se il blueprint di prodotto o altri documenti dicono cose diverse, **questo file vince**.
 
-Ultimo aggiornamento: 2026-06-22
+Ultimo aggiornamento: 2026-07-19 (§1: recupero orfani in PROCESSING, requeue capped — Macro 22 giro 2)
 Generato leggendo:
 - `accounts/models.py`
+- `matches/api_views_digital.py`
+- `matches/api_views_jury.py`
+- `matches/services/jury_link_service.py`
 - `accounts/middleware.py`
 - `accounts/views.py`
 - `matches/models.py`
 - `matches/services/publishing_service.py`
 - `matches/services/integrity_service.py`
 - `matches/services/ocr_service.py`
+- `matches/services/ocr_queue.py`
+- `matches/management/commands/ocr_worker.py`
 - `matches/views.py`
 - `management/models.py`
 - `management/admin.py`
@@ -36,8 +41,9 @@ Generato leggendo:
 | Valore DB | Label | Descrizione breve | Iniziale? | Finale? |
 |---|---|---|---|---|
 | `DRAFT` | Bozza (Digitale) | Referto digitale nativo creato ma non ancora pronto | Sì (solo DIGITAL) | No |
-| `UPLOADED` | Caricato (In attesa) | File caricato, in coda per OCR | Sì (solo FILE) | No |
-| `PROCESSING` | In Elaborazione OCR | OCR provider in esecuzione | No | No |
+| `UPLOADED` | Caricato (In attesa) | File caricato, **non** ancora accodato: in attesa di una decisione | Sì (solo FILE) | No |
+| `QUEUED` | In Coda OCR | Accodato per il worker, non ancora preso in carico | No | No |
+| `PROCESSING` | In Elaborazione OCR | Claim fatto da un worker, OCR provider in esecuzione | No | No |
 | `EXTRACTED` | Dati Estratti (Da Revisionare) | OCR completato con successo e superato quality gate | No | No |
 | `VALIDATED` | Validato (Approvato Admin) | Approvato manualmente da un reviewer | No | No |
 | `PUBLISHED` | Pubblicato (Statistiche Aggiornate) | Report attivo: match aggiornato, standings ricalcolati | No | Sì (stabile) |
@@ -50,19 +56,56 @@ Generato leggendo:
 |---|---|---|---|---|
 | — | `UPLOADED` | `upload_report()` — caricamento file | `file_hash` calcolato, uploader loggato | `matches/views.py` |
 | — | `DRAFT` | `create_digital_report()` — referto digitale | `match.has_report = True` | `matches/views.py` |
-| `UPLOADED` | `PROCESSING` | `OCRService.process_and_update()` | Avvio OCR provider, salvataggio intermedio | `matches/services/ocr_service.py` |
-| `NEEDS_REVIEW` | `PROCESSING` | `OCRService.process_and_update()` — riprocessamento | Come sopra | `matches/services/ocr_service.py` |
-| `REJECTED` | `PROCESSING` | `OCRService.process_and_update()` — riprocessamento | Come sopra | `matches/services/ocr_service.py` |
-| `UPLOADED` | `REJECTED` | `OCRService.process_and_update()` | `validation_notes` con errore | `matches/services/ocr_service.py` r. 255 |
-| `PROCESSING` | `EXTRACTED` | `OCRService.process_and_update()` — OCR OK + quality gate OK | `normalized_data` popolato, `validation_notes` con gate results, audit log `OCR_PROCESSING_SUCCESS`, link a `match` | `matches/services/ocr_service.py` r. 366 |
-| `PROCESSING` | `NEEDS_REVIEW` | `OCRService.process_and_update()` — quality gate bloccante | `validation_notes` con gate results, `NotificationService.notify_report_needs_review()` | `matches/services/ocr_service.py` r. 361 |
-| `PROCESSING` | `NEEDS_REVIEW` | `OCRService.process_and_update()` — eccezione OCR | `validation_notes` con errore, notifica staff | `matches/services/ocr_service.py` r. 385 |
+| `UPLOADED` | `QUEUED` | `OCRService.enqueue()` — upload view e admin action | `ocr_queued_at` valorizzato, `MatchReportAuditLog` action=`enqueue` | `matches/services/ocr_service.py` |
+| `NEEDS_REVIEW` | `QUEUED` | `OCRService.enqueue()` — riprocessamento | Come sopra | `matches/services/ocr_service.py` |
+| `REJECTED` | `QUEUED` | `OCRService.enqueue()` — riprocessamento | Come sopra | `matches/services/ocr_service.py` |
+| `QUEUED` | `PROCESSING` | `OCRQueueService.claim()` — claim del worker | `ocr_started_at` valorizzato, `ocr_attempts` incrementato | `matches/services/ocr_queue.py` |
+| `PROCESSING` | `QUEUED` | `OCRQueueService.schedule_retry()` — errore tecnico del provider | `ocr_next_attempt_at` = now + backoff (60s, 120s), `ocr_error` salvato, audit action=`ocr_retry` | `matches/services/ocr_queue.py` |
+| `PROCESSING` | `QUEUED` | `OCRQueueService.requeue_stale()` — referto orfano recuperato, con tentativi residui. Innescata dalla sweep di avvio del worker (nessuna soglia) o dal backstop `recover_stale_reports` (soglia 15 min) | `ocr_started_at` azzerato, `ocr_next_attempt_at` = now (nessun backoff), `ocr_attempts` **invariato**, audit action=`ocr_stale_requeue` | `matches/services/ocr_queue.py` |
+| `PROCESSING` | `NEEDS_REVIEW` | `OCRQueueService.requeue_stale()` — referto orfano con tentativi **esauriti**: delega a `fail_permanently()` | audit action=`ocr_failed`, notifica staff | `matches/services/ocr_queue.py` |
+| `PROCESSING` | `NEEDS_REVIEW` | `OCRQueueService.fail_permanently()` — tentativi esauriti (3) | `validation_notes` con errore tecnico, audit action=`ocr_failed`, notifica staff | `matches/services/ocr_queue.py` |
+| `UPLOADED` | `REJECTED` | `OCRService.enqueue()` — canale FILE senza file | `validation_notes` con errore (fail veloce sincrono) | `matches/services/ocr_service.py` |
+| `PROCESSING` | `EXTRACTED` | `OCRService.process_claimed()` — OCR OK + quality gate OK | `normalized_data` popolato, `validation_notes` con gate results, audit log `OCR_PROCESSING_SUCCESS`, link a `match` | `matches/services/ocr_service.py` |
+| `PROCESSING` | `NEEDS_REVIEW` | `OCRService.process_claimed()` — quality gate bloccante (incluso il path no-match) | `validation_notes` con gate results, `NotificationService.notify_report_needs_review()`. **Nessun retry**: è un esito, non un errore | `matches/services/ocr_service.py` |
+| `PROCESSING` | `NEEDS_REVIEW` | `OCRService.process_and_update()` — eccezione OCR nel path **sincrono** (test, diagnostica) | `validation_notes` con errore, notifica staff | `matches/services/ocr_service.py` |
 | `EXTRACTED` | `VALIDATED` | `report_review()` — reviewer setta stato manualmente | `validated_by`, `validated_at` settati; `MatchReportAuditLog` action=`validate` | `matches/views.py` r. 316–321 |
 | `NEEDS_REVIEW` | `VALIDATED` | `report_review()` — reviewer override | Come sopra | `matches/views.py` |
 | `NEEDS_REVIEW` | `EXTRACTED` | `report_review()` — reviewer ri-qualifica | Come sopra senza `validated_by` | `matches/views.py` |
 | `VALIDATED` | `PUBLISHED` | `PublishingService.publish_report()` | Match aggiornato (punteggi, quarti, `is_finished=True`); MatchEvent ricreati; stats atleti aggiornate; standings rebuild sincrono; `MatchReportAuditLog` action=`publish`; `AuditLog` action=`PUBLISH_REPORT` | `matches/services/publishing_service.py` r. 139–142 |
 | `PUBLISHED` | `PUBLISHED` | `PublishingService.publish_report()` — ripubblicazione | Come sopra; `MatchReportAuditLog` action=`republish` | `matches/services/publishing_service.py` r. 58 |
 | `PUBLISHED` | `VALIDATED` | `PublishingService.publish_report()` — de-pubblicazione automatica | Scatta quando un *altro* report per lo stesso match viene pubblicato; `internal_notes` aggiornate; `MatchReportAuditLog` action=`depublish` | `matches/services/publishing_service.py` r. 123–137 |
+
+### Coda OCR asincrona (Macro 22, giro 1 — 2026-07-19)
+
+Dal 2026-07-19 l'OCR **non gira più nel request cycle**. I due entry point
+(upload view e admin action `process_ocr`) chiamano `OCRService.enqueue()`, che
+porta il referto in `QUEUED`; il worker `ocr_worker` (servizio systemd) fa
+polling ogni 3s, prende il referto con un claim atomico ed esegue
+`OCRService.process_claimed()`.
+
+- **Claim atomico:** `UPDATE ... WHERE pk=? AND status='QUEUED'`. Chi vede
+  rowcount 1 possiede il job. Nessuna transazione resta aperta durante la
+  chiamata al provider (~80s): su SQLite bloccherebbe ogni altro writer.
+- **`ocr_attempts` si incrementa al claim, non all'esito.** Un worker che muore
+  a metà job ha comunque consumato un tentativo: nessun referto può diventare
+  una poison pill che cicla all'infinito.
+- **Due classi di fallimento.** Di *merito* (quality gate, incluso il no-match)
+  → `NEEDS_REVIEW` senza retry. *Tecnico* (provider 5xx, timeout, rete) →
+  ritorno in `QUEUED` con backoff 60s/120s, fino a 3 tentativi, poi
+  `NEEDS_REVIEW` + notifica.
+- **Orfani in `PROCESSING`:** due inneschi, **una sola regola**. La sweep di
+  avvio del worker li riaccoda senza soglia temporale (girando un solo worker,
+  all'avvio ogni referto in `PROCESSING` è per definizione orfano); il backstop
+  periodico `recover_stale_reports` (timer ogni 15 min, giro 2) applica la
+  soglia `ocr_started_at` più vecchio di 15 minuti e copre il caso che la sweep
+  non vede — il worker fermo e basta, che quindi non si riavvia mai.
+  Entrambi passano da `OCRQueueService.requeue_stale()`: l'esito su un dato
+  referto non dipende da chi lo recupera.
+  Il recupero **non** incrementa `ocr_attempts` (si contano al claim) e non
+  applica backoff: l'orfano non ha fallito, gli è morto sotto il worker, quindi
+  `ocr_next_attempt_at = now`.
+- **`UPLOADED` non è uno stato di coda:** i referti creati da admin o da
+  `ingest_emails` restano lì finché qualcuno non li accoda esplicitamente.
 
 ### Guardrails
 
@@ -416,16 +459,59 @@ Nessuna transizione automatica rilevata — gestito manualmente dall'admin.
 
 ---
 
+## 12. MatchJuryLink (Link giuria monouso — Macro 14)
+
+**Model:** `matches.MatchJuryLink`
+**Field di stato:** `status` (CharField, `TextChoices`)
+**File modello:** [matches/models.py](matches/models.py) (in coda) — **Servizio:** [matches/services/jury_link_service.py](matches/services/jury_link_service.py)
+**Default:** `ACTIVE`
+**Migration:** `0018` (additiva: nuovo modello + partial unique index + `MatchReport.referee_signature`)
+
+> **Natura della macchina:** link monouso per l'accesso **no-account** della giuria alla compilazione del referto digitale di **una** partita. "Monouso" = un ciclo di vita, non un singolo click: il link resta valido per più sessioni/visite durante la compilazione e **muore alla chiusura del referto** (`CONSUMED`). Nessuna transizione di ritorno da alcuno stato terminale. Scadenza **valutata a lettura** (nessun cron in questo giro): un link `ACTIVE` oltre `expires_at` è degradato lazy a `EXPIRED` al primo `resolve`/landing.
+
+### Stati
+
+| Valore DB | Label | Descrizione | Iniziale? | Finale? |
+|---|---|---|---|---|
+| `ACTIVE` | Attivo | Link emesso e valido (finché non scade o si chiude il referto) | Sì | No |
+| `CONSUMED` | Consumato | Referto chiuso con successo tramite il ciclo di vita del link | No | Sì |
+| `REVOKED` | Revocato | Revocato da staff/admin, o auto-revocato dall'emissione di un nuovo link sullo stesso match | No | Sì |
+| `EXPIRED` | Scaduto | Backstop 7 giorni superato (degrado lazy a lettura) | No | Sì |
+
+### Transizioni
+
+| Da | A | Trigger | Side effects | File |
+|---|---|---|---|---|
+| — | `ACTIVE` | `JuryLinkService.issue(match, created_by)` | Revoca in transazione l'eventuale `ACTIVE` precedente; `token = secrets.token_urlsafe(32)`; `expires_at = now + 7gg` | [jury_link_service.py](matches/services/jury_link_service.py) `issue` |
+| `ACTIVE` | `CONSUMED` | Close riuscito del referto digitale (`api_digital_report_close`) | **Atomico** col `DRAFT→NEEDS_REVIEW` del referto; `consumed_at`, `report` valorizzati; solo su close riuscito | [api_views_digital.py](matches/api_views_digital.py) `close` → `JuryLinkService.consume` |
+| `ACTIVE` | `REVOKED` | `JuryLinkService.revoke(match)` (endpoint `.../jury-link/revoke/`) **oppure** nuova `issue` sullo stesso match | `revoked_at` valorizzato | [jury_link_service.py](matches/services/jury_link_service.py) `revoke` / `issue` |
+| `ACTIVE` | `EXPIRED` | Primo `resolve`/landing dopo `expires_at` (lazy, niente cron) | `status='EXPIRED'` persistito; trattato come invalido | [jury_link_service.py](matches/services/jury_link_service.py) `resolve` / [api_views_jury.py](matches/api_views_jury.py) `jury_link_landing` |
+
+### Guardrails
+
+- **Un solo `ACTIVE` per match:** garantito a livello DB da un partial unique index `UniqueConstraint(fields=['match'], condition=Q(status='ACTIVE'))` (SQLite supporta indici parziali), rinforzato applicativamente: `issue` revoca il precedente `ACTIVE` in `transaction.atomic()` prima di crearne uno nuovo.
+- **Consume solo su close riuscito:** un close respinto (guardia di stato non-DRAFT → 400; firma mancante → 400; schema invalido → 422) **non** consuma il link, che resta `ACTIVE`. Il consume è dentro l'`atomic` del close, contestuale al cambio stato del referto.
+- **Token morto non riapre:** un secondo close via lo stesso token dopo `CONSUMED` fallisce in autenticazione (403), prima della guardia di stato — il link non risolve più.
+- **Accesso via token ortogonale all'auth:** `resolve(token, match)` accetta il link solo se `ACTIVE`, non scaduto e appartenente a **quel** match. L'accesso autenticato esistente alle API digitali resta intatto; il token affianca l'anonimo, non lo sostituisce all'utente.
+- **Emissione = riga stessa come audit:** `MatchReportAuditLog.report` non è nullable e l'emissione precede il referto, quindi l'audit dell'emissione è la riga `MatchJuryLink` (`created_by` + `created_at`). Le azioni **via** link (start/update/close) sono loggate in `MatchReportAuditLog` con `user=None`.
+
+### Firma arbitro (collegata al close)
+
+Il close del canale digitale richiede ora un campo firma **nome+cognome** obbligatorio (≥2 token), persistito su `MatchReport.referee_signature` e in `MatchReportAuditLog.after`. Sostituisce il PIN personale (decaduto nel modello no-account). Il close finisce **sempre** in `NEEDS_REVIEW` (invariante di sicurezza: nessun auto-publish dal canale digitale). Vedi §1 e BLUEPRINT §7.4.3.
+
+---
+
 ## Funzionalità descritte nel Blueprint ma non implementate
 
 Le seguenti funzionalità sono descritte in `BLUEPRINT.md` ma **non hanno modelli o campo corrispondente nel codice**:
 
 | Funzionalità | Sezione Blueprint | Stato |
 |---|---|---|
-| **Jury token** — token match-specific con finestra 30 min, revoca automatica al fischio | §7.4.1 | Non implementato |
-| **Firma arbitro / PIN** — referto immutabile post-firma, correzioni solo via admin | §7.4.3 | Non implementato |
+| **Match_Jury_Links** — link monouso per-partita | §7.4.1 | ✅ **Fondamenta backend as-built (2026-07-19, dev)** — modello/service/endpoint/accesso-token/landing. Macchina in §12. UI/QR/offline-first fuori scope (giri futuri) |
+| **Firma arbitro** — nome+cognome al close, referto immutabile post-firma | §7.4.3 | ✅ **As-built (2026-07-19, dev)** — `MatchReport.referee_signature`, obbligatoria al close, in audit. PIN personale decaduto |
+| UI mobile compilazione referto / QR / offline-first (Service Worker + IndexedDB) | §7.4 | Non implementato (giri futuri Macro 14 + Macro 21) |
 
-**Verdetto:** sono funzionalità di roadmap futura, non implementazione attuale. Il Blueprint le include come obiettivi di progetto; non indicano un bug.
+**Verdetto:** le fondamenta backend del link giuria e la firma arbitro sono ora a codice su dev (v. §12); restano di roadmap futura la UI di compilazione, il QR e l'offline-first. Il Blueprint le include come obiettivi di progetto; non indicano un bug.
 
 ---
 
@@ -452,8 +538,8 @@ In ordine di priorità:
 5. **[BASSA] Documentare le transizioni di `AccountProfileLink` lato admin:**
    L'approvazione/rifiuto del claim avviene via Django admin senza servizio dedicato. Valutare se aggiungere un servizio esplicito con audit trail (come per `MembershipRequest`).
 
-6. **[BASSA] Decidere il futuro di Jury token e firma arbitro:**
-   Aggiornare il Blueprint §7.4.1 e §7.4.3 con una nota esplicita che segnala queste funzionalità come "non implementate — roadmap futura", per evitare che chi legge il blueprint si aspetti di trovare codice corrispondente.
+6. ~~**[BASSA] Decidere il futuro di firma arbitro:**~~
+   ~~Jury token~~ **CHIUSO il 19-lug-2026** — Blueprint §7.4.1 riscritto sul modello link monouso per-partita (`Match_Jury_Links`), ratificato in [syllabus/14](syllabus/14_referto_digitale_mobile.md) §14.2; il token federale 30-min è decaduto per vincolo GUG/portale, non emendabile (archiviato in FUTURE_IDEAS.md §1). **Firma arbitro DECISA e as-built (19-lug-2026):** nome+cognome digitati al close (obbligatorio), persistiti su `MatchReport.referee_signature` + audit; PIN personale decaduto; il codice breve 4-6 cifre resta anti-abuso spento. Blueprint §7.4.3 e syllabus/14 §14.4/§14.6-bis aggiornati; macchina del link in §12. **Fondamenta backend Macro 14 complete su dev;** UI/QR/offline-first fuori scope (giri futuri).
 
 ---
 

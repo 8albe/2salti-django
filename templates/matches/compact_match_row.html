@@ -1,3 +1,4 @@
+{% load match_visibility %}
 <div
     class="flex items-center justify-between px-3 py-2 bg-slate-800/30 hover:bg-slate-800/60 transition-colors relative group/row border-b border-white/5 last:border-0 h-12 font-sans text-sm rounded-lg mb-1">
 
@@ -20,8 +21,10 @@
 
     <!-- VS/SCORE (Center) -->
     <div class="mx-3 flex items-center justify-center w-12 text-center flex-shrink-0">
-        {% if match.is_public %}
+        {% if match|result_visible_to:request.user %}
         <span class="text-blue-400 font-mono text-base font-bold">{{ match.home_score }}-{{ match.away_score }}</span>
+        {% elif match.is_finished %}
+        <span class="text-amber-500/70 font-bold text-xs" title="{% unverified_result_label %}">{% unverified_score_placeholder %}</span>
         {% else %}
         <span class="text-slate-600 font-bold text-xs">VS</span>
         {% endif %}

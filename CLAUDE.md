@@ -24,11 +24,11 @@ Prima di iniziare qualunque task, identifica quale documento consultare.
 
 | Tipo di task | Documento autoritativo | Contiene |
 |---|---|---|
-| Macchine a stati di tutti i modelli | [[STATE_MACHINES.md]] | 10 state machine verificate sul codice con transizioni e side effects |
+| Macchine a stati di tutti i modelli | [[STATE_MACHINES.md]] | 11 state machine verificate sul codice con transizioni e side effects |
 | Mapping termini blueprint ↔ modelli Django | [[DOMAIN_GLOSSARY.md]] | 30+ entità, note tecniche su Match.is_public e onboarding_state |
 | Procedure operative infrastruttura | [[OPS_RUNBOOK.md]] | Deploy, trappole tecniche, protocollo protected file, sicurezza |
 | Capire il "perché" di una decisione di prodotto | [[BLUEPRINT.md]] | visione, UX, business model (italiano) |
-| Roadmap e priorità feature | [[SYLLABUS.md]] | 21 macro-obiettivi funzionali con dettaglio in [docs/syllabus/](docs/syllabus/) |
+| Roadmap e priorità feature | [[SYLLABUS.md]] | 22 macro-obiettivi funzionali con dettaglio in [docs/syllabus/](docs/syllabus/) |
 | Idee fuori scope / parcheggiate | [[FUTURE_IDEAS.md]] | feature eliminate o rinviate (Shop, Media Gallery, Venue, visione multi-sport) con motivo e cosa le riaprirebbe |
 | Regole, comandi, convenzioni di sviluppo | CLAUDE.md (questo file) | regole operative |
 
@@ -39,7 +39,7 @@ In caso di contraddizione tra documenti: `STATE_MACHINES.md > DOMAIN_GLOSSARY.md
 The following files require explicit confirmation before any change:
 
 - `config/settings.py` — even seemingly harmless variables can break production.
-- `gunicorn_config.py`, `2salti_nginx_config`, `*.service` — deployment configuration.
+- `deploy/gunicorn/**` (canonical gunicorn configs), `deploy/nginx/**` (canonical nginx configs), `*.service` — deployment configuration. The root `gunicorn_config.py` is gitignored; the tracked copies live in [deploy/gunicorn/](deploy/gunicorn/).
 - `accounts/middleware.py` — the onboarding state machine is fragile and coupled to wizard redirects.
 - `matches/services/standings_service.py` — ranking logic; any change risks corrupting historical standings.
 - Any migration already applied in production.
@@ -67,6 +67,8 @@ python manage.py shell
 python manage.py dbshell
 
 # Management commands
+python manage.py ocr_worker          # worker coda OCR (long-running, gira come service systemd)
+python manage.py ocr_worker --once   # consuma al più un referto e termina (diagnostica)
 python manage.py ops_check
 python manage.py check_pilot_alerts
 python manage.py send_pilot_report
@@ -97,7 +99,7 @@ python manage.py run_scheduler
 
 ### State machines
 
-Le 10 macchine a stati del progetto (MatchReport, User onboarding, RBAC, AccountProfileLink, MembershipRequest, Convocation, TrainingAttendance, PilotBug, PilotFeedback, ParentCertification) sono documentate in [docs/STATE_MACHINES.md](docs/STATE_MACHINES.md). Non duplicare qui.
+Le 11 macchine a stati del progetto (MatchReport, User onboarding, RBAC, AccountProfileLink, MembershipRequest, Convocation, TrainingAttendance, PilotBug, PilotFeedback, ParentCertification, MatchJuryLink) sono documentate in [docs/STATE_MACHINES.md](docs/STATE_MACHINES.md). Non duplicare qui.
 
 ### Domain model
 
@@ -133,14 +135,14 @@ ENVIRONMENT_NAME        # production
 
 ### Deployment
 
-- Gunicorn config: [gunicorn_config.py](gunicorn_config.py) — binds to `unix:/tmp/2salti.sock`
-- Nginx config: [2salti_nginx_config](2salti_nginx_config)
-- Systemd service files in project root: `2salti.service`, plus timers for ops checks, pilot reports, and scheduler
+- Gunicorn config: canonical copies versioned in [deploy/gunicorn/](deploy/gunicorn/) (`prod/` and `dev/`; sync procedure in its `README.md`, same pattern as `deploy/systemd/` — OPS_RUNBOOK §9). The active files live out of repo at `/opt/2salti-new/gunicorn_config.py` and `/opt/2salti-dev/gunicorn_config.py` (loaded via `--config`); the root `gunicorn_config.py` is gitignored and the two box configs diverge by design. Prod binds to `unix:/tmp/2salti.sock`, `timeout = 300` (provisional for synchronous OCR — Macro 22).
+- Nginx config: canonical copies versioned in [deploy/nginx/](deploy/nginx/) (`prod/` and `dev/`; sync procedure in its `README.md`, same pattern as `deploy/gunicorn/` — OPS_RUNBOOK §9). The active files live out of repo at `/etc/nginx/sites-available/2salti` and `/etc/nginx/sites-available/2salti-dev`, applied manually (`cp` + `nginx -t` + `systemctl reload nginx`).
+- Systemd units: the canonical copies are versioned in [deploy/systemd/](deploy/systemd/), split per box (`prod/`, `dev/`) like `deploy/gunicorn/` and `deploy/nginx/` — `prod/2salti.service` + drop-in, plus the OCR worker units `prod/2salti-ocrworker.service` and `dev/2salti-dev-ocrworker.service`. The project root contains **no** `*.service`/`*.timer` file: the patterns are gitignored repo-wide and re-admitted only under `deploy/systemd/**`. The active units live in `/etc/systemd/system/`, synced manually (OPS_RUNBOOK §9). The timers still on the box only (integrity monitor, ops check, pilot report, scheduler, dev autopull) are **not** versioned yet.
 - `2salti-monitor.timer` fires `OnCalendar=*-*-* 00,06,12,18:00:00` in UTC; it sends email only when `DataIntegrityService` detects standings discrepancies. Times are UTC, so perceived hours shift by ±1h across DST transitions (March/October).
 - Structured logging: gunicorn writes to `/var/log/2salti/error.log` (weekly rotation, 12 copies kept) and `/var/log/2salti/access.log` (daily rotation, 7 copies kept), configured via `/etc/logrotate.d/2salti`. The `gunicorn_config.py` is loaded explicitly via `--config` in the systemd unit; `journalctl -u 2salti.service` only carries unit lifecycle events, not application logs.
 - Static files collected to `STATIC_ROOT` = `BASE_DIR / 'staticfiles'` (resolves to `/opt/2salti-new/staticfiles/` in the production deploy), served by nginx via `/static/` alias.
 - Media uploads stored at `MEDIA_ROOT` = `BASE_DIR / 'media'` (resolves to `/opt/2salti-new/media/` in the production deploy), served by nginx via `/media/` alias.
-- **Deploy flow**: commit on `dev` in `/home/alberto/` → `git push origin dev` → on the VPS `cd /opt/2salti-new && git pull` → `sudo systemctl restart 2salti` (or `reload` for non-runtime changes) → verify with `curl -I https://2salti.com/`. Both `/home/alberto/` and `/opt/2salti-new/` have `origin` pointed directly at `github.com/8albe/2salti-django.git` (since 25-apr-2026); the deploy does **not** pull from the home repo.
+- **Deploy flow**: commit on `dev` in `/home/alberto/` → `git push origin dev` → on the VPS `cd /opt/2salti-new && git pull` → `sudo systemctl restart 2salti` (or `reload` for non-runtime changes) → `sudo systemctl restart 2salti-ocrworker` (the OCR worker also self-restarts on a HEAD change, but only when the queue is empty) → verify with `curl -I https://2salti.com/`. Both `/home/alberto/` and `/opt/2salti-new/` have `origin` pointed directly at `github.com/8albe/2salti-django.git` (since 25-apr-2026); the deploy does **not** pull from the home repo.
 - **Auto-migrate solo su dev.** Il dev box `/opt/2salti-dev/` **auto-migra** via `2salti-dev-autopull.service` (pull `--ff-only` → `migrate --noinput` → `collectstatic --noinput` → reload gunicorn; data-migration incluse; dettaglio in [docs/OPS_RUNBOOK.md](docs/OPS_RUNBOOK.md) §2.2). Prod `/opt/2salti-new/` resta **pull e `migrate` manuali**, gated dopo backup DB (Alberto). Dopo un pull che alza lo schema su prod, il DB resta indietro finché non si migra a mano — atteso, non un bug.
 
 ## Development Workflow

@@ -18,4 +18,4 @@ Pubblicazione su store solo in fase successiva, eventualmente via wrapper sulla 
 
 ---
 
-← [Macro precedente](20_venue_impianto.md)
+← [Macro precedente](20_venue_impianto.md) | → [Macro successiva](22_ocr_asincrono.md)

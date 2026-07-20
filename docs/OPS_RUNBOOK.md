@@ -30,6 +30,8 @@ sudo systemctl reload 2salti
 
 Se il pull tocca solo documentazione, test, fixture di dati o altri artefatti non letti dal runtime, il reload non serve e il deploy è allineato al momento in cui il pull termina. Nel dubbio, fare comunque il reload: il costo è minimo e il rischio di saltarlo è che una modifica di runtime non diventi attiva.
 
+**Dal 2026-07-19 (Macro 22) il runtime di prod non è più un solo processo.** Accanto a gunicorn gira il worker OCR (`2salti-ocrworker.service`), che esegue lo stesso codice del service web: un pull che tocca `matches/services/`, `matches/models.py` o le migration riguarda anche lui. Il worker si riavvia da solo quando si accorge che l'SHA di `HEAD` è cambiato, ma **solo a coda vuota** — se in quel momento sta elaborando un referto (~80s con Gemini) continua col codice vecchio finché non finisce, e se la coda non si svuota mai il restart non arriva mai. Su prod, dove il pull è manuale, il `sudo systemctl restart 2salti-ocrworker` esplicito accanto al reload di `2salti` è quindi la regola, non un'ottimizzazione: il SIGTERM concede `TimeoutStopSec=150` per chiudere il job in corso, quindi il restart è sicuro anche a coda piena. Un eventuale referto ucciso da un SIGKILL resta in `PROCESSING` e lo recupera il backstop (§10.19).
+
 L'introduzione di un meccanismo di allineamento automatico — post-commit hook nella home che ricordi il pull, cron che rilevi divergenze, o qualsiasi altra soluzione equivalente — vive nel backlog come side-quest aperta. Finché non è implementata, la disciplina manuale è l'unico meccanismo; se la nota di sessione del giorno include un commit significativo e non menziona il pull sul deploy, è probabile che il deploy stia già accumulando deriva.
 
 ### 2.1 Workflow standard di sessione
@@ -43,7 +45,7 @@ Tre workflow da seguire in modo disciplinato ogni sessione.
 3. Entro 2 minuti `dev.2salti.com` si aggiorna automaticamente (auto-pull attivo su `/opt/2salti-dev/`).
 4. Testa su `dev.2salti.com`.
 5. Quando OK: `git checkout master && git merge dev && git push origin master`.
-6. Sul VPS: `cd /opt/2salti-new && git pull origin master` + `sudo systemctl reload 2salti` (o `restart` se cambia `ExecStart` o variabili d'ambiente).
+6. Sul VPS: `cd /opt/2salti-new && git pull origin master` + `sudo systemctl reload 2salti` (o `restart` se cambia `ExecStart` o variabili d'ambiente) + `sudo systemctl restart 2salti-ocrworker` (dal 2026-07-19, Macro 22: il worker OCR è un secondo processo che gira lo stesso codice e va riavviato insieme al service).
 7. `2salti.com` aggiornato — verifica con `curl -I https://2salti.com/` dopo `sleep 3` (vedi §12.2).
 
 **B. Fine sessione — aggiornamento memoria**
@@ -138,6 +140,20 @@ Deploy reale dev→prod con lo stesso pattern di §2.4 (merge `--no-ff` `dev`→
 
 **Correzione — SSL `2salti.com`/`dev.2salti.com` VALIDO (non scaduto).** Il certificato è **valido**, rinnovato il **14-giu** (vedi §10.9, Let's Encrypt 2026-06-14 → 2026-09-12). La nota "SSL forse scaduto" rimasta in coda da Macro 16 è **stale**: era vera allo smoke post-Macro 16 ma chiusa il 14-giu. L'automazione di rinnovo ancora rotta riguarda i **domini di Damiano**, non quelli di Alberto (cron `certbot-2salti` scoped, §10.9).
 
+### 2.6 Deploy 2026-07-19 — `2276290` → `d7bf3cd` → `394e7fd` → `62f5a16` (filone OCR, migration distruttiva `0017`)
+
+Deploy reale dev→prod con lo stesso pattern di §2.4/§2.5 (merge `--no-ff` `dev`→`master` da home + push; pull ff su prod; `migrate` manuale gated dopo backup). Tre merge in giornata: **`d7bf3cd`** (filone OCR completo, 26 commit: Gemini provider unico, rimozione `OCRRawResponse` con `matches/0017`, fix crash no-match, guardia di stato su close referto digitale), **`394e7fd`** (timeout gunicorn 300s + config versionate in `deploy/gunicorn/`, vedi §3.16 e §9), **`62f5a16`** (fix `KeyError 'match'` nella changeform admin di `MatchReport`, `matches/forms.py` — `f408cab`). Prod portato da `2276290` a **`62f5a16`**.
+
+**Rituale eseguito per la `0017`** (distruttiva, `DeleteModel` → `DROP TABLE matches_ocrrawresponse`):
+
+1. **Backup DB fresco pre-apply**; gate di validità = `PRAGMA integrity_check` + dimensione plausibile, **non** byte-identità (learning §2.5); file `.sha256` con la **sola riga del backup**, una riga.
+2. **Verifica che `matches_ocrrawresponse` fosse vuota** su prod (mai scritta dal path vivo — la raw response vive in `MatchReport.raw_api_response`).
+3. **Dry-run della migration su copia dell'intero progetto in `/tmp`** — non basta puntare una env var a una copia del DB, perché il path del DB è hardcoded in `config/settings.py` (gotcha §3.15) — con SHA256 del DB prod reale verificato **invariato** prima/dopo il dry-run.
+4. **Restart del service PRIMA del `migrate`.** Il pull aveva già portato su disco il codice nuovo (che non referenzia più `OCRRawResponse`), ma i worker in RAM giravano ancora col codice vecchio che conosceva la tabella. Riavviare prima del `DROP` garantisce che nessun processo attivo referenzi la tabella al momento della cancellazione; l'ordine inverso (migrate → restart) lascia una finestra in cui il codice vecchio può toccare una tabella già droppata.
+5. `migrate` scoped sulla `0017`, poi smoke.
+
+**Smoke OCR reale su prod — esito.** Lo smoke con Gemini vivo ha fatto emergere in cascata i due timeout mancanti: prima il **timeout gunicorn 30s di default** (worker abortito a metà chiamata Gemini ~80s → 500 al client, referto appeso in `PROCESSING`), poi — alzato quello a 300s — il **`proxy_read_timeout` nginx 60s di default** (504 al browser mentre il backend completava comunque). Dettaglio e regola in §3.16. Dopo entrambi i fix, estrazione end-to-end **completata su prod** (report 16, `gemini-2.5-pro`); l'esito ha però evidenziato una **divergenza di estrazione ad alta confidence** sullo stesso match rispetto a un report storico — caso registrato nel syllabus Macro 8 come motivazione del gold standard. I referti rimasti appesi in `PROCESSING` sono stati sbloccati a mano (comando in §10.19; guardia automatica mancante = debito, parte della Macro 22).
+
 ## 3. Trappole tecniche note
 
 ### 3.1 `git rm --cached` + file dirty = pull abortito
@@ -194,6 +210,8 @@ Quando il file è ignored, l'output è del tipo `.gitignore:42:*.service	deploy/
 Il comando giusto per il check funzionale "questo file finirà nell'indice se faccio `git add`" è `git add --dry-run <file>`. Se il file appare nell'output, sarà aggiunto. Se non appare e l'exit code è zero, è ignored o non esiste — ma in questo caso il dubbio si risolve banalmente con `ls <file>`. Il `dry-run` ha il vantaggio di rispondere alla domanda operativa diretta, senza il livello di indirezione del "quale pattern".
 
 `check-ignore` resta utile esattamente per il suo caso d'uso nominale: dato un file che si sa ignored, capire quale pattern lo sta ignorando, per poi decidere se modificare il pattern o aggiungere un'eccezione mirata. Per qualsiasi altro uso, `dry-run` è più diretto e meno ambiguo.
+
+**Aggravante scoperta il 2026-07-19 (Macro 22).** Quando il file è coperto da un pattern di **negazione**, `check-ignore -v` stampa una riga (la regola matchata, con il `!` iniziale) **ed esce 0** — cioè si comporta esattamente come nel caso "ignored", pur trattandosi del caso opposto. Usare l'exit code come booleano lì produce la lettura sbagliata, e per giunta nella direzione pericolosa: sembra che il file non verrà versionato quando invece lo sarà, o si va a "correggere" un `.gitignore` che era già giusto. Per i file sotto `deploy/systemd/`, dove le negazioni esistono per disegno, il check affidabile è `git ls-files --others --exclude-standard <path>` (elenca gli untracked **non** ignorati) oppure `git status --porcelain --ignored`, che marca gli ignorati con `!!`.
 
 ### 3.4 Attributi su oggetti Django dopo `delete()`
 
@@ -270,7 +288,7 @@ Gunicorn cerca un file `gunicorn_config.py` nella working directory all'avvio e 
 
 Il rischio concreto è in due scenari: (a) `WorkingDirectory=` nel unit file viene cambiato e punta a una directory che contiene un `gunicorn_config.py` legacy o orfano — è esattamente l'incidente del 23 aprile 2026 risolto col problema #3, dove il config in repo era inerte ma stava per tornare attivo a un cambio di working dir; (b) il `gunicorn_config.py` nel repo viene rinominato o spostato e qualcuno ne ricrea uno in quella posizione per altri motivi.
 
-Cosa fare: tenere il `gunicorn_config.py` nel repo coerente con il config esplicito caricato via `--config`, oppure non averlo affatto in CWD del service. Verificare a freddo con `lsof -p <gunicorn_pid> | grep config` o leggendo l'output di `systemctl cat 2salti` per vedere `WorkingDirectory` e `ExecStart` insieme.
+Cosa fare: tenere il `gunicorn_config.py` nel repo coerente con il config esplicito caricato via `--config`, oppure non averlo affatto in CWD del service. Dal 2026-07-19 il file alla root del repo è **gitignorato** (nella home non esiste proprio) e le copie canoniche vivono in `deploy/gunicorn/{prod,dev}/` col pattern §9: sui box di deploy il file in CWD **è** quello caricato via `--config`, quindi lo scenario (b) resta l'unico rischio residuo. Verificare a freddo con `lsof -p <gunicorn_pid> | grep config` o leggendo l'output di `systemctl cat 2salti` per vedere `WorkingDirectory` e `ExecStart` insieme.
 
 ### 3.10 Tag Django con newline interno emesso come testo letterale
 
@@ -327,9 +345,37 @@ Dal 2026-07-09 l'OCR ha **un solo provider concreto: Google Gemini**, modello di
 
 > `OPENAI_API_KEY` resta in `.env`/`requirements.txt` ma **non** serve più all'OCR: la usa solo `AIStatsEngine` (chat stats NL→ORM, feature non-OCR). Non rimuoverla finché quella feature è viva.
 
+
 **Billing Gemini (prepagato).** L'account Google dietro la `GEMINI_API_KEY` è a **credito prepagato**: carta associata + credito ricaricato in anticipo, con **ricarica automatica** attiva per non esaurire il saldo durante l'ingestion. Attivazione/gestione del billing delegata al padre di Alberto. Se l'OCR reale inizia a fallire con errori di quota/autorizzazione lato Gemini, verificare **prima** il saldo prepagato e lo stato della ricarica automatica, poi la validità della chiave (rotazione via protocollo §8/§11, revoca lato Google prima della sostituzione). **Tetto di spesa (chiuso 2026-07-10):** su Google AI Studio è impostato un **Project Spend Cap ~$15/mese** — hard block reale denominato in dollari, con enforcement ~10 min di ritardo; failure mode = OCR in pausa fino al ciclo successivo. È distinto dal **tier cap** dell'account (~$250/mese Tier 1, indipendente). `AIStatsEngine` gira su OpenAI e **non** è coperto da questo tetto.
 
-**Deploy prod del filone OCR — attenzione: migration distruttiva.** Il delta `master..dev` del filone OCR include la migration **`matches/0017_delete_ocrrawresponse`** (`DeleteModel` → `DROP TABLE matches_ocrrawresponse`; il modello morto `OCRRawResponse` è stato rimosso, la raw response vive ora nel campo `MatchReport.raw_api_response`). A differenza del resto del filone (solo config/codice), questo deploy **non è a sola migration nulla**: prima del `migrate` su prod, **backup DB**, **verificare che `matches_ocrrawresponse` sia vuota** (in prod non è mai stata scritta dal path vivo), dry-run su copia scratch + hash SHA256, poi `migrate` eseguito a mano da Alberto.
+**Deploy prod del filone OCR — attenzione: migration distruttiva.** Il delta `master..dev` del filone OCR include la migration **`matches/0017_delete_ocrrawresponse`** (`DeleteModel` → `DROP TABLE matches_ocrrawresponse`; il modello morto `OCRRawResponse` è stato rimosso, la raw response vive ora nel campo `MatchReport.raw_api_response`). A differenza del resto del filone (solo config/codice), questo deploy **non è a sola migration nulla**: prima del `migrate` su prod, **backup DB**, **verificare che `matches_ocrrawresponse` sia vuota** (in prod non è mai stata scritta dal path vivo), dry-run su copia scratch + hash SHA256, poi `migrate` eseguito a mano da Alberto. **Eseguito il 2026-07-19** — sequenza completa, rituale e learning in **§2.6**.
+
+### 3.15 Dry-run di una migration: il path del DB è hardcoded, serve copiare l'intero progetto
+
+`config/settings.py` **non legge alcuna variabile d'ambiente per il path del DB**: `DATABASES['default']['NAME'] = BASE_DIR / 'db.sqlite3'` ([config/settings.py:76](../config/settings.py)), hardcoded su `BASE_DIR`. Quindi il dry-run di una migration **non si può fare puntando una env var a una copia del DB** — quell'env var non esiste. L'unico modo è copiare l'**intero progetto** in `/tmp` (tar escludendo `.venv`, `.git`, `media`, `staticfiles`), mettere la copia del DB dentro la copia del progetto, ed eseguire lì il `migrate` con il **python del venv del box** (su prod, il venv di `/opt/2salti-new/`): `BASE_DIR` della copia risolve sul DB della copia. Verificare **sempre** lo SHA256 del DB reale prima/dopo il dry-run per provare che non sia stato toccato. Inaugurato per la `0017` (deploy §2.6).
+
+### 3.16 OCR sincrono nel request cycle: servono DUE timeout (gunicorn E nginx)
+
+L'OCR gira **sincrono dentro il request cycle**: `OCRService.process_and_update(report)` è chiamato inline dalla upload view ([matches/views.py:158](../matches/views.py)) e dall'admin action `process_ocr` ([matches/admin.py:206](../matches/admin.py)), ~80s a referto con Gemini. Col `timeout` gunicorn di default (30s) il master abortisce il worker a metà chiamata: 500 al client e referto appeso in `PROCESSING` (§10.19). Il fix richiede **due timeout, non uno**: `timeout = 300` in `gunicorn_config.py` **e** `proxy_read_timeout 300s` nel blocco `location /` di nginx (default nginx: 60s). Alzare solo il primo sposta l'errore, non lo risolve: gunicorn completa, ma nginx chiude la connessione a 60s → **504 lato browser** mentre il backend finisce comunque il lavoro. Entrambi i 300s sono un **cerotto provvisorio**: cadono quando l'OCR esce dal request cycle (Macro 22, syllabus).
+
+### 3.17 Unit systemd che esegue Python: senza `PYTHONUNBUFFERED` il servizio è cieco in journald
+
+Un servizio Python lanciato da systemd senza `Environment=PYTHONUNBUFFERED=1` gira correttamente ma **non emette log applicativi in journald**: `journalctl -u <unit>` mostra solo le righe del ciclo di vita generate da systemd. Il sintomo si presta a essere letto come "il servizio non parte" o "il comando è rotto", mentre il processo sta lavorando regolarmente — e infatti lanciato a mano dal terminale stampa tutto.
+
+La causa è il buffering di `stdout`: Python usa un buffer a blocchi (~8KB) quando `stdout` non è un terminale, e sotto systemd non lo è mai. In un processo long-running che stampa poco — esattamente il caso di un worker di coda — il buffer non si riempie quasi mai, quindi l'output resta in memoria per un tempo indefinito invece di finire nel journal. Emerso il 2026-07-19 su `2salti-dev-ocrworker.service` (Macro 22, giro 1), la prima unit del progetto che esegue direttamente `manage.py` invece di gunicorn.
+
+Il dettaglio che rende la diagnosi ambigua è che **`stdout` e `stderr` si comportano in modo diverso**: `stderr` è line-buffered anche quando è rediretto, quindi arriva subito. Il risultato è un servizio che mostra gli errori ma non il normale funzionamento — il contrario di quello che ci si aspetta da un servizio "muto". Verificato empiricamente: con `stdout` rediretto su file, dopo un secondo il file di `stdout` è vuoto e quello di `stderr` contiene già la sua riga; con `PYTHONUNBUFFERED=1` entrambi sono popolati.
+
+La regola è quindi: **ogni unit *long-running* che esegue direttamente l'interprete Python porta `Environment=PYTHONUNBUFFERED=1` nella sezione `[Service]`**. La qualifica "long-running" non è decorativa e delimita il problema con precisione, evitando di spargere la variabile per superstizione:
+
+- **Servizi long-running** (il worker OCR): affetti. Il processo resta vivo per ore stampando poco, il buffer non si riempie mai, l'output non arriva mai.
+- **Unit oneshot da timer** (`monitor_integrity`, `ops_check`, `send_pilot_report`, `run_scheduler`): **non** affette in pratica. Python fa flush dei buffer alla terminazione del processo, quindi l'output arriva comunque nel journal — al più tutto insieme alla fine invece che progressivamente, il che per un comando che dura secondi è irrilevante.
+- **`2salti.service`** (prod, gunicorn): non affetto. Gunicorn scrive i propri log attraverso il logging configurato in `gunicorn_config.py` verso `/var/log/2salti/` (`errorlog`/`accesslog`), non su `stdout` (§3.9 e sezione 9), e il journal della unit porta per disegno solo gli eventi di ciclo di vita.
+- **`2salti-dev.service`** (dev, gunicorn, unit non versionata): caso di confine benigno. La config dev non imposta `errorlog`, quindi i log gunicorn vanno su `stderr` → journald, e `stderr` non soffre del problema. L'unica cosa che resterebbe bufferizzata è un eventuale `print()` nudo nel codice applicativo, che non è un pattern usato nel progetto (si logga via `logging`).
+
+La soluzione applicativa alternativa — chiamare `self.stdout.flush()` dopo ogni `write()` nel management command — è stata scartata: è una disciplina manuale da ripetere a ogni call site, che si dimentica alla prima modifica e non copre l'output che non passa dal codice del comando (traceback, messaggi interni di Django, librerie di terzi). La variabile d'ambiente risolve il problema alla radice per l'intero processo.
+
+**Nota collegata, non risolta da questa trappola.** Con `LOGGING` impostato a livello root `WARNING` ([config/settings.py](../config/settings.py)), tutte le `logger.info` del worker — claim di un referto, completamento con durata e stato finale — vengono **scartate prima di arrivare a qualunque handler**, quindi non compaiono in journald nemmeno con `PYTHONUNBUFFERED` attivo. Passano solo `WARNING` ed `ERROR`: retry, sweep degli orfani, fallimento definitivo. Alzare il livello (o dare al logger `matches` un livello dedicato `INFO`) è una modifica a `config/settings.py`, che è protected file: da valutare in un giro dedicato se si vuole la traccia operativa completa del worker nel journal.
 
 ## 4. Pulizia repo: history vs indice corrente
 
@@ -488,10 +534,71 @@ C'è una direzione di drift inversa che merita menzione esplicita perché è il 
 
 Il punto strutturale, simmetrico alla sezione 2, è che il versionamento del 25 aprile non ha eliminato la classe di problemi del drift — ha solo creato l'infrastruttura per gestirlo. Finché la sincronizzazione resta manuale, la disciplina operativa è l'unico meccanismo. Un eventuale meccanismo di allineamento automatico — file watcher su `/etc/systemd/system/2salti.service` che alerti su divergenza dalla copia in repo, o pre-commit hook che blocchi commit della unit se il sistema ha una copia diversa — vive nel backlog come side-quest aperta, accanto al meccanismo simmetrico per il drift home ↔ deploy.
 
+**Config gunicorn — stesso pattern dal 2026-07-19.** Le copie canoniche delle config gunicorn sono versionate in `deploy/gunicorn/prod/` e `deploy/gunicorn/dev/`, con un `README.md` di procedura che è la fonte di verità tecnica (come il README di `deploy/systemd/`). I file attivi vivono fuori repo (`/opt/2salti-new/gunicorn_config.py` e `/opt/2salti-dev/gunicorn_config.py`, caricati dalle unit via `--config`); il `gunicorn_config.py` alla root del repo è **gitignorato** e le due config **divergono volutamente** (socket, worker, logging) — mai copiare prod su dev o viceversa. Sync repo→`/opt` manuale: `cp` + `systemctl reload` (o `restart` se cambia `bind` o altri parametri letti solo all'avvio del master).
+
+**Split `deploy/systemd/{prod,dev}/` dal 2026-07-19 (Macro 22).** Con l'arrivo del worker OCR le unit versionate sono più d'una e vivono su box diversi, quindi `deploy/systemd/` è stato diviso per box come già `deploy/gunicorn/` e `deploy/nginx/`: `prod/2salti.service` + drop-in e `prod/2salti-ocrworker.service`, `dev/2salti-dev-ocrworker.service`. Le unit di prod e dev **divergono per disegno** (path, nomi) e non vanno mai copiate da un box all'altro.
+
+Nello stesso commit sono cambiate le negazioni in `.gitignore`. Il repo ignora `*.service` e `*.timer` ovunque e li riammetteva con `!deploy/systemd/*.service`: un pattern che **non matcha le sottodirectory**, quindi ogni unit dentro `prod/` o `dev/` sarebbe stata ignorata in silenzio — `git add` non protesta, il file semplicemente non entra. Ora la negazione è `!deploy/systemd/**/*.service` (idem per `*.timer`). Regola operativa: dopo aver aggiunto una unit nuova, verificare che compaia in `git ls-files --others --exclude-standard deploy/systemd/`. Attenzione a non usare `git check-ignore -v` come test booleano: stampa anche le regole di **negazione** ed esce comunque 0, quindi un file non ignorato sembra ignorato.
+
+Il worker OCR ha una particolarità rispetto a gunicorn: esce da solo (exit 0) quando si accorge che l'SHA di `HEAD` è cambiato, ma **solo a coda vuota**, mai a metà job; `Restart=always` lo rilancia col codice nuovo entro pochi secondi. Su dev questo evita di dover toccare l'autopull (che è fuori repo e richiederebbe una riga di sudoers in più); su prod, dove il pull è manuale, resta buona norma un `sudo systemctl restart 2salti-ocrworker` esplicito accanto al restart di `2salti`.
+
+**Unit del backstop orfani — aggiunte 2026-07-19 (Macro 22 giro 2).** Alle unit sopra si affiancano `prod/2salti-recover-stale.{service,timer}` e `dev/2salti-dev-recover-stale.{service,timer}`: un `Type=oneshot` che lancia `manage.py recover_stale_reports`, pilotato da un timer `OnCalendar=*:0/15` con `Persistent=true` e `RandomizedDelaySec=60` (lo sfasamento evita l'accavallamento con gli altri timer sul minuto tondo). Due differenze deliberate rispetto alla unit del worker, che non vanno "uniformate" per simmetria:
+
+- **Nessun `PYTHONUNBUFFERED=1`.** Serve al worker perché è long-running e senza flush resta cieco in journald per ore (§3.17); un oneshot che termina in un secondo svuota comunque i buffer all'uscita del processo.
+- **Nessun `Restart=`.** Il comando è idempotente e senza stato: se un giro fallisce, quello dopo rifà esattamente lo stesso lavoro 15 minuti dopo. Un restart automatico su un oneshot periodico aggiunge solo rumore.
+
+Il timer è un **backstop, non il meccanismo primario**: il recupero rapido lo fa la sweep di avvio del worker. Questo copre il caso che quella non vede — il worker fermo e basta, che quindi non si riavvia mai.
+
+**Config nginx — stesso pattern, chiuso il 2026-07-19.** Le copie canoniche vivono in `deploy/nginx/prod/2salti` e `deploy/nginx/dev/2salti-dev`, con `README.md` di procedura (stesso schema di `deploy/gunicorn/`). I file attivi vivono fuori repo in `/etc/nginx/sites-available/` (symlink in `sites-enabled/`); sync repo→sistema manuale via `sudo cp` + `nginx -t` + `systemctl reload nginx` — il `nginx -t` prima del reload non è opzionale, un errore di sintassi non deve arrivare a un reload che uccide il proxy. Le due config divergono volutamente (dev non ha `proxy_read_timeout` esteso). Debito §10.17 chiuso da questo versionamento.
+
 ## 10. Debiti aperti
 
 Registro vivo di problemi noti che richiedono follow-up. Non sono trappole (§3) né bug attivi: sono incoerenze scoperte ma non risolte, da affrontare in sessioni dedicate.
-> Le voci §10.1-10.16 sono CHIUSE e archiviate in Appendice A, che ne conserva razionale, commit e test. Nessuna voce aperta al momento.
+> Le voci §10.1-10.16 sono CHIUSE e archiviate in Appendice A, che ne conserva razionale, commit e test. Le voci §10.17-10.21 (aperte 2026-07-19, emerse dal deploy §2.6) sono APERTE.
+
+### §10.17 `2salti_nginx_config` fuori repo — CHIUSO 2026-07-19
+
+~~La config nginx attiva vive solo su sistema (`/etc/nginx/`)~~ **Risolto:** copie canoniche versionate in `deploy/nginx/prod/2salti` e `deploy/nginx/dev/2salti-dev` (dettaglio §9), verificato testualmente che `prod/2salti` contenga `proxy_read_timeout 300s` (§3.16) nella location `/`. Il debito residuo non è più "config assente dal repo" ma il rituale di allineamento manuale repo↔sistema, stesso tema di §9 per systemd e gunicorn: una modifica fatta direttamente su `/etc/nginx/sites-available/` non si sincronizza da sola in repo. Il vecchio pattern `2salti_nginx_config` citato in `.gitignore`/`CLAUDE.md` resta un riferimento storico a un file mai esistito in questa copia del repo.
+
+### §10.18 Pin di `requirements.txt` più vecchi dell'installato su prod (downgrade da pip install) — APERTO 2026-07-19
+
+Durante il deploy §2.6, `pip install -r requirements.txt` su prod ha fatto **downgrade** di pacchetti installati a mano più di recente: Django 5.0.3→5.0, openai 2.31→2.29, numpy 2.4.4→2.4.3, python-dotenv 1.2.2→1.2.1. I pin nel file sono più vecchi dello stato reale dei box. Da allineare in un giro dedicato: portare i pin allo stato corretto valutando in particolare i **fix di sicurezza Django** persi col rientro da 5.0.3 a 5.0 (i patch release 5.0.x sono in gran parte security/bugfix). Fino ad allora: **non** rilanciare `pip install -r requirements.txt` sui box se non serve.
+
+### §10.19 Nessuna guardia sui referti appesi in `PROCESSING` — CHIUSO 2026-07-19 (Macro 22 giro 2)
+
+~~Se il worker muore a metà OCR il referto resta in `PROCESSING` per sempre: nessun recovery automatico, e la review queue non lo ripropone.~~ **Risolto** su dev dal giro 2 con due inneschi che condividono una sola regola: la sweep di avvio del worker (nessuna soglia — girando un solo worker, all'avvio ogni referto in `PROCESSING` è per definizione orfano) e il comando `recover_stale_reports` su timer ogni 15 minuti, che copre il caso che la sweep non vede: il worker fermo e basta, che quindi non si riavvia mai. Entrambi passano da `OCRQueueService.requeue_stale()`, quindi l'esito su un dato referto non dipende da chi lo recupera.
+
+**La semantica implementata devia dallo sketch qui sopra, ed è la deviazione il punto.** Lo sketch prescriveva `PROCESSING` da più di N minuti → `NEEDS_REVIEW`, ed era scritto il mattino del 2026-07-19, quando non esistevano né worker né retry: mandare tutto in revisione umana era l'unica opzione disponibile. Col claim che incrementa `ocr_attempts` e il backoff introdotti nel giro 1, quella regola brucerebbe un referto perfettamente sano per un singolo restart sfortunato. La semantica ratificata è quindi il **requeue capped**:
+
+| Condizione | Azione |
+|---|---|
+| `PROCESSING`, `ocr_started_at` più vecchio di `--minutes` (default 15), `ocr_attempts < 3` | torna in `QUEUED`, audit `ocr_stale_requeue`, `ocr_next_attempt_at = now` (nessun backoff: non ha fallito, gli è morto sotto il worker) |
+| idem ma `ocr_attempts >= 3` | `NEEDS_REVIEW` + audit `ocr_failed` + notifica staff |
+
+Il cap a `MAX_ATTEMPTS` regge già la protezione contro le poison pill — un referto che uccide il worker ogni volta esaurisce i tentativi e si ferma — quindi il backstop può permettersi di riprovare invece di arrendersi al primo orfano.
+
+Diagnostica prima di agire: `python manage.py recover_stale_reports --dry-run` stampa cosa farebbe, distinguendo i due esiti, senza scrivere nulla. `--minutes` sposta la soglia. Lo sblocco manuale via `shell -c` usato il 2026-07-19 non serve più e **non va più usato**: scavalcava l'audit trail e non passava dalla notifica.
+
+Osservabilità agganciata nello stesso giro (§ `ops_check`): profondità della coda, referti in `PROCESSING` oltre soglia (RED — è il sintomo netto di worker morto), referti con tentativi esauriti. Serviva perché un worker fermo non ha sintomi propri: i referti smettono di avanzare e basta, senza errori né pagine rotte.
+
+Residuo: install ed enable del timer su **prod** restano da fare (giro 3, gated Alberto). Su prod la guardia non è quindi ancora attiva.
+
+### §10.20 Saturazione del pool worker con OCR sincrono — RISOLTO SU DEV 2026-07-19, aperto su prod
+
+~~Prod ha `workers = 3` e l'OCR gira sincrono nel request cycle (~80s a referto, §3.16): **3 upload OCR concorrenti bloccano l'intero pool** per ~80s ciascuno e il sito smette di rispondere a qualunque richiesta finché un worker non si libera.~~
+
+**La causa è rimossa nel codice** (Macro 22 giro 1): l'OCR non gira più nel request cycle. I due entry point — upload view e admin action `process_ocr` — accodano e rispondono subito; l'elaborazione avviene nel processo `ocr_worker`, fuori da gunicorn. Il pool **non è più saturabile dagli upload**: una richiesta di upload ora dura quanto una scrittura su DB, non ~80s, e nessun worker gunicorn resta occupato da una chiamata a Gemini.
+
+Due precisazioni che impediscono di leggere questa voce come chiusa:
+
+- **Su prod non è ancora vero.** Il codice è live solo su dev; il deploy su prod (migration gated dopo backup DB + install della unit worker) è il giro 3. Fino ad allora prod ha ancora l'OCR sincrono e questo debito è attivo esattamente come descritto sopra.
+- **I timeout 300s restano**, su entrambi i box. Gunicorn `timeout = 300` e nginx `proxy_read_timeout 300s` sono il cerotto che questa macro elimina, ma la rimozione è deliberatamente rinviata al **giro 4**, dopo un periodo di osservazione dell'asincrono su prod: toglierli prima significherebbe rimuovere la rete di sicurezza mentre si sta ancora verificando che il sostituto regga. Finché ci sono, un residuo di path sincrono (es. `process_and_update` usato in diagnostica) non causa un 500 immediato.
+
+La voce si chiude col giro 4, non prima.
+
+### §10.21 `MatchReport` registrato su due admin site — APERTO 2026-07-19 (minore)
+
+`MatchReport` è registrato sia su `op_admin_site` con `MatchReportAdmin` ([matches/admin.py:416](../matches/admin.py)) sia sul default admin site via `@admin.register(MatchReport)` su una sottoclasse `MatchReportAdminDefault` con `has_module_permission=False` ([matches/admin.py:418-420](../matches/admin.py); stesso pattern per `Match`). Doppiamente **inerte** a runtime — il default admin site non è nemmeno montato negli URL (`/admin/` punta a `op_admin_site`, [config/urls.py:27](../config/urls.py)) — ma confondente in lettura: due registrazioni dello stesso modello, di cui una nascosta e irraggiungibile. Da pulire in un giro cosmetico, non urgente.
 
 ## 11. Sicurezza operativa e frontiera reversibile
 
