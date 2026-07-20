@@ -74,6 +74,9 @@ DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.sqlite3',
         'NAME': BASE_DIR / 'db.sqlite3',
+        'OPTIONS': {
+            'timeout': 20,
+        },
     }
 }
 
@@ -167,6 +170,16 @@ LOGGING = {
         "django.request": {
             "handlers": ["console"],
             "level": "ERROR",
+            "propagate": False,
+        },
+        "matches.services.ocr_queue": {
+            "handlers": ["console"],
+            "level": "INFO",
+            "propagate": False,
+        },
+        "matches.management.commands.ocr_worker": {
+            "handlers": ["console"],
+            "level": "INFO",
             "propagate": False,
         },
     },
