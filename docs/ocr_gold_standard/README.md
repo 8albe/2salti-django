@@ -96,19 +96,49 @@ riportati da un umano che ha guardato l'originale cartaceo (`verified_by` +
 5. Se la correzione tocca dati a DB, registrala anche nell'audit log
    (`MATCH_SCORE_CORRECTED`) e cita qui il `db_match_pk`.
 
-## Uso previsto da `ocr_bench`
+## Uso da `ocr_bench` (harness di misura, dal 2026-07-20)
 
-Oggi `ocr_bench --report-id N` confronta l'estrazione con `normalized_data`
+`ocr_bench --report-id N` confronta l'estrazione con `normalized_data`
 post-review, cioè con **dati validati da un umano dentro il sistema**. È un
 proxy: se la review ha lasciato passare un errore, il bench misura l'aderenza
 all'errore.
 
-Il passo previsto è un `--gold-case <case_id>` che confronti l'estrazione con
-`truth` di questo dataset, che umano lo è per costruzione, e che riporti
-l'accuracy **solo sui campi presenti in `truth`** ignorando quelli in
-`not_verified`. Lo schema di `truth` ricalca già lo schema OCR v2
-(`scores.final_score`, `scores.quarters`) proprio per rendere il confronto una
-diff diretta e non una traduzione.
+La modalità gold confronta invece con la `truth` di questo dataset, che umana
+lo è per costruzione:
+
+```bash
+python manage.py ocr_bench --gold-case <case_id>          # un caso
+python manage.py ocr_bench --gold-all                     # tutti i casi
+python manage.py ocr_bench --gold-case <case_id> --image <path>  # caso senza report a DB
+```
+
+L'immagine si risolve dai `db_report_pk` del caso (top-level, poi
+`extractions[]`); i casi senza immagine risolvibile vengono saltati con avviso
+in `--gold-all`. Cosa misura, per campo e mai aggregato:
+
+- `final_score` spaccato in home e away separati; gli 8 valori dei quarti
+  separatamente;
+- nomi squadre contro **`name_on_paper`**, mai contro il nome a DB (la
+  divergenza foglio↔DB è un problema della discovery, non dell'OCR);
+- esito ternario `correct` / `wrong` / `null`: il null ("dichiaro di non saper
+  leggere") è conteggiato a parte, non come errore;
+- check esplicito di **inversione casa/trasferta** (valori giusti attribuiti
+  alla squadra sbagliata: la classe di errore del match 2, invisibile al
+  confronto campo-per-campo);
+- accanto a ogni verdetto, la confidence auto-dichiarata del provider (curva
+  di calibrazione);
+- **solo i campi presenti in `truth`** (più `name_on_paper` e la data del
+  blocco `match`, anch'essi verificati da umano): ciò che sta in
+  `not_verified` è ignorato per costruzione.
+
+Ogni run registra modello, versione del prompt (nome + hash), preprocessing
+on/off e timestamp: senza questi il bench non è ripetibile.
+
+**Le estrazioni del bench NON vengono mai scritte in `extractions[]`**
+(decisione D1, 2026-07-20): ogni estrazione produce un file di **proposta**
+nello schema delle voci `extractions[]`, salvato in `--out-dir` (default
+`ocr_bench_out/gold/`, gitignorata). Il riversamento nel caso resta un atto
+umano dopo review: un bug del bench non deve poter inquinare la verità.
 
 ## Perché esiste
 
