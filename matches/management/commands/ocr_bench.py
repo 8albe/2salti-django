@@ -34,6 +34,18 @@ extractions[] dei casi gold. La proposta NON viene mai scritta nel caso:
 il riversamento in extractions[] resta un atto umano dopo review (decisione
 D1: un bug del bench non deve poter inquinare la verità).
 
+Con --repeat N (richiede --gold-case/--gold-all) esegue N estrazioni
+indipendenti per caso/modello: l'estrazione non è deterministica (stesso
+modello, stesso referto, valori diversi fra chiamate — es. "BELLATOR
+FROSINONE" e "BELLATOR FROSINO" sullo stesso report, entrambi confidence
+1.0), quindi una singola chiamata è un campione, non "la" lettura del
+modello. Per ogni campo riporta i valori distinti con frequenza, se il
+campo è stabile (tutte le ripetizioni concordi) o instabile, e — se
+stabile — se è anche sbagliato: un errore riproducibile che nessuna
+ripetizione da sola smaschererebbe. Resta per-campo, mai un'unica
+percentuale aggregata sul caso. La proposta contiene tutte le N estrazioni
+in repeats[] (mai solo l'ultima) più l'aggregato in aggregate[].
+
 Nessuna scrittura sul DB: niente salvataggi di MatchReport,
 niente transizioni di stato.
 """
@@ -260,6 +272,83 @@ def compare_extraction_to_truth(case, data):
     return fields, inversion
 
 
+def aggregate_gold_repeats(per_repeat):
+    """Aggrega i confronti (fields) di N estrazioni indipendenti sullo stesso caso/modello.
+
+    L'estrazione OCR non è deterministica: due chiamate sullo stesso referto possono
+    produrre valori diversi sullo stesso campo, entrambi con confidence 1.0 (caso reale:
+    "BELLATOR FROSINONE" e "BELLATOR FROSINO" sullo stesso report). Una singola chiamata
+    misura un campione, non "la" lettura del modello. Questa funzione rende visibile la
+    varianza fra campioni invece di nasconderla dietro un'unica estrazione.
+
+    Ritorna (aggregated, summary):
+      aggregated: field -> {
+          truth, distinct: [(valore, conteggio), ...] per frequenza decrescente,
+          stability: 'stabile' (tutte le ripetizioni concordi) o 'instabile',
+          verdict: verdetto del valore maggioritario (o dell'unico valore se stabile),
+          stable_and_wrong: campo stabile ma sbagliato — il caso peggiore, un errore
+              riproducibile che nessuna ripetizione da sola smaschererebbe,
+          confidence_mean/min/max (None se il provider non ha dichiarato confidence).
+      }
+      summary: conteggio campi per bucket — stable_correct, stable_wrong, stable_null,
+          instabile. Le quattro categorie restano separate (mai collassate in una
+          percentuale unica): 'instabile' e 'stabile ma sbagliato' sono informazioni
+          diverse con implicazioni operative diverse (varianza da campionare di più vs
+          errore sistematico che il campionamento non risolve).
+    """
+    field_keys = per_repeat[0]["fields"].keys()
+    aggregated = {}
+    summary = {"stable_correct": 0, "stable_wrong": 0, "stable_null": 0, "instabile": 0}
+
+    for field in field_keys:
+        entries = [rep["fields"][field] for rep in per_repeat]
+        truth_v = entries[0]["truth"]
+
+        order = []
+        counts = {}
+        for e in entries:
+            key = repr(e["extracted"])
+            if key not in counts:
+                counts[key] = [e["extracted"], 0]
+                order.append(key)
+            counts[key][1] += 1
+        distinct = sorted((tuple(counts[k]) for k in order), key=lambda t: -t[1])
+        stable = len(distinct) == 1
+        majority_value = distinct[0][0]
+        majority_verdict = next(
+            e["verdict"] for e in entries if repr(e["extracted"]) == repr(majority_value)
+        )
+        confidences = [
+            e["confidence"] for e in entries if isinstance(e["confidence"], (int, float))
+        ]
+        conf_mean = sum(confidences) / len(confidences) if confidences else None
+        conf_min = min(confidences) if confidences else None
+        conf_max = max(confidences) if confidences else None
+        stable_and_wrong = stable and majority_verdict == "wrong"
+
+        aggregated[field] = {
+            "truth": truth_v,
+            "distinct": distinct,
+            "stability": "stabile" if stable else "instabile",
+            "verdict": majority_verdict,
+            "stable_and_wrong": stable_and_wrong,
+            "confidence_mean": conf_mean,
+            "confidence_min": conf_min,
+            "confidence_max": conf_max,
+        }
+
+        if not stable:
+            summary["instabile"] += 1
+        elif majority_verdict == "correct":
+            summary["stable_correct"] += 1
+        elif majority_verdict == "wrong":
+            summary["stable_wrong"] += 1
+        else:  # 'null': astensione dichiarata in tutte le ripetizioni
+            summary["stable_null"] += 1
+
+    return aggregated, summary
+
+
 def build_gold_proposal(case, data, provider_label, model, resolved_pk, image_path,
                         image_resolved_from, preprocess, fields, inversion, run_ts):
     """Costruisce la voce di proposta nello schema di extractions[] dei casi gold.
@@ -311,6 +400,92 @@ def build_gold_proposal(case, data, provider_label, model, resolved_pk, image_pa
         "notes": [
             "Proposta generata da ocr_bench --gold: riversare in extractions[] "
             "solo dopo review umana (decisione D1)."
+        ],
+    }
+
+
+def build_gold_proposal_repeated(case, per_repeat, provider_label, model, resolved_pk,
+                                 image_path, image_resolved_from, preprocess, aggregated,
+                                 summary, run_ts, repeat):
+    """Come build_gold_proposal, ma per N estrazioni indipendenti (--repeat).
+
+    Contiene TUTTE le estrazioni in repeats[] (non solo l'ultima) più l'aggregato
+    per campo. Schema diverso da una singola voce extractions[]: il riversamento
+    resta un atto umano (decisione D1) che deve scegliere quale/quante estrazioni
+    portare nel caso, non un'operazione automatica.
+    """
+    meta_first = (per_repeat[0]["data"].get("metadata") or {})
+    repeats_out = []
+    for i, entry in enumerate(per_repeat, start=1):
+        data = entry["data"]
+        meta = data.get("metadata") or {}
+        ext_info = data.get("match_info") or {}
+        ext_scores = data.get("scores") or {}
+        teams = data.get("teams") or {}
+        confidence = {"overall": meta.get("confidence")}
+        confidence.update(meta.get("confidence_fields") or {})
+        verdict = {f: v["verdict"] for f, v in entry["fields"].items()}
+        verdict.setdefault("roster", "unverified")
+        verdict.setdefault("events", "unverified")
+        repeats_out.append({
+            "run_index": i,
+            "extracted": {
+                "match_info": {k: ext_info.get(k) for k in ("home_team", "away_team", "date")},
+                "scores": {
+                    "final_score": ext_scores.get("final_score"),
+                    "quarters": ext_scores.get("quarters"),
+                },
+                "counts": {
+                    "events": len(data.get("events") or []),
+                    "home_roster": len((teams.get("home") or {}).get("players") or []),
+                    "away_roster": len((teams.get("away") or {}).get("players") or []),
+                },
+            },
+            "self_reported_confidence": confidence,
+            "verdict": verdict,
+            "inversion_check": entry["inversion"],
+            "comparison": entry["fields"],
+        })
+
+    aggregate_out = {
+        field: {
+            "truth": agg["truth"],
+            "distinct_values": [{"value": v, "count": c} for v, c in agg["distinct"]],
+            "stability": agg["stability"],
+            "verdict": agg["verdict"],
+            "stable_and_wrong": agg["stable_and_wrong"],
+            "confidence_mean": agg["confidence_mean"],
+            "confidence_min": agg["confidence_min"],
+            "confidence_max": agg["confidence_max"],
+        }
+        for field, agg in aggregated.items()
+    }
+
+    return {
+        "case_id": case.get("case_id"),
+        "provider": meta_first.get("provider") or provider_label,
+        "model": model,
+        "db_report_pk": resolved_pk,
+        "extracted_at": run_ts.date().isoformat(),
+        "bench_run": {
+            "provider_cli": provider_label,
+            "model": model,
+            "prompt_version": PROMPT_VERSION,
+            "preprocessing": preprocess,
+            "timestamp": run_ts.isoformat(),
+            "image": image_path,
+            "image_resolved_from": image_resolved_from,
+            "repeat": repeat,
+        },
+        "repeats": repeats_out,
+        "aggregate": aggregate_out,
+        "summary": summary,
+        "notes": [
+            "Proposta generata da ocr_bench --gold --repeat: misura la varianza fra N "
+            "chiamate indipendenti allo stesso modello sullo stesso referto. Riversare "
+            "in extractions[] solo dopo review umana (decisione D1); lo schema con "
+            "repeats[]/aggregate NON è compatibile con una singola voce extractions[] "
+            "e richiede una scelta umana su quale (o quante) estrazioni riversare.",
         ],
     }
 
@@ -374,7 +549,9 @@ class Command(BaseCommand):
         "Uso: ocr_bench --image <path> [--provider gemini] "
         "[--models gemini-2.5-pro,gemini-2.5-flash] [--report-id <id>] [--show] [--save-dir <path>] "
         "| ocr_bench --gold-case <case_id> [--image <path>] | ocr_bench --gold-all "
-        "(confronto con la truth dei casi gold; proposte in --out-dir, mai nei casi)"
+        "(confronto con la truth dei casi gold; proposte in --out-dir, mai nei casi) "
+        "| aggiungi --repeat N a --gold-case/--gold-all per misurare la varianza fra "
+        "N chiamate indipendenti allo stesso modello"
     )
 
     def add_arguments(self, parser):
@@ -451,12 +628,25 @@ class Command(BaseCommand):
             action="store_true",
             help="Bypassa ImagePreprocessor e invia l'immagine grezza (no auto-rotate, no downscale)",
         )
+        parser.add_argument(
+            "--repeat",
+            type=int,
+            default=1,
+            metavar="N",
+            help=(
+                "Esegue N estrazioni indipendenti per caso/modello, per misurare la "
+                "varianza fra chiamate ripetute allo stesso modello (l'estrazione non "
+                "è deterministica). Richiede --gold-case o --gold-all. Con N=1 "
+                "(default) il comportamento è invariato."
+            ),
+        )
 
     def handle(self, *args, **options):
         image_opt = options["image"]
         gold_case_id = options["gold_case"]
         gold_all = options["gold_all"]
         gold_mode = bool(gold_case_id or gold_all)
+        repeat = options["repeat"]
 
         if gold_case_id and gold_all:
             raise CommandError("--gold-case e --gold-all sono alternativi.")
@@ -474,6 +664,10 @@ class Command(BaseCommand):
             )
         if image_opt and not os.path.isfile(image_opt):
             raise CommandError(f"Immagine non trovata: {image_opt}")
+        if repeat < 1:
+            raise CommandError("--repeat deve essere >= 1.")
+        if repeat > 1 and not gold_mode:
+            raise CommandError("--repeat > 1 richiede --gold-case o --gold-all.")
 
         provider_name = options["provider"]
         model_setting, model_fallback = PROVIDER_MODEL_SETTINGS[provider_name]
@@ -587,6 +781,15 @@ class Command(BaseCommand):
                     continue
 
             self.stdout.write(f"\n=== Caso gold: {case_id} ===")
+
+            if repeat > 1:
+                self._process_gold_case_repeated(
+                    case, case_id, provider, provider_name, provider_label, models,
+                    image_path, resolved_pk, resolved_from, preprocess, dump_dir,
+                    out_dir, run_ts, repeat, options,
+                )
+                continue
+
             results = self._run_models(
                 provider, provider_name, models, image_path, preprocess, dump_dir
             )
@@ -807,3 +1010,114 @@ class Command(BaseCommand):
             f"{counts['null']} null su {len(fields)} confrontati "
             "(null = astensione dichiarata, conteggiata a parte)"
         )
+
+    def _process_gold_case_repeated(self, case, case_id, provider, provider_name,
+                                     provider_label, models, image_path, resolved_pk,
+                                     resolved_from, preprocess, dump_dir, out_dir, run_ts,
+                                     repeat, options):
+        """--repeat N: esegue N estrazioni indipendenti per modello e ne misura la varianza.
+
+        Ogni ripetizione è una chiamata reale indipendente (stesso modello, stessa
+        immagine): l'estrazione non è deterministica, quindi N chiamate possono
+        produrre N valori diversi sullo stesso campo. Aggrega e stampa la varianza
+        invece di trattare una singola chiamata come "la" lettura del modello.
+        """
+        data_lists = {model: [] for model in models}
+        for i in range(1, repeat + 1):
+            self.stdout.write(f"\n-- Ripetizione {i}/{repeat} --")
+            results = self._run_models(
+                provider, provider_name, models, image_path, preprocess, dump_dir
+            )
+            self._print_show_and_save(results, options, case_id=f"{case_id}__run{i}")
+            for model, data in results.items():
+                data_lists[model].append(data)
+
+        for model, data_list in data_lists.items():
+            if not data_list:
+                self.stdout.write(self.style.WARNING(
+                    f"\nModello '{model}': nessuna estrazione riuscita su {repeat} "
+                    "tentativi, saltato."
+                ))
+                continue
+
+            per_repeat = []
+            for data in data_list:
+                fields, inversion = compare_extraction_to_truth(case, data)
+                per_repeat.append({"data": data, "fields": fields, "inversion": inversion})
+
+            aggregated, summary = aggregate_gold_repeats(per_repeat)
+            self._print_gold_repeat_comparison(
+                case_id, model, aggregated, summary, len(data_list)
+            )
+
+            proposal = build_gold_proposal_repeated(
+                case, per_repeat, provider_label, model, resolved_pk, image_path,
+                resolved_from, preprocess, aggregated, summary, run_ts, len(data_list),
+            )
+            fname = (
+                f"{case_id}__{safe_model_slug(model)}_repeat{len(data_list)}_"
+                f"{run_ts.strftime('%Y%m%d_%H%M%S')}.json"
+            )
+            path = os.path.join(out_dir, fname)
+            with open(path, "w", encoding="utf-8") as f:
+                json.dump(proposal, f, indent=2, ensure_ascii=False)
+            self.stdout.write(
+                f"Proposta salvata: {path} "
+                "(riversamento in extractions[] manuale, dopo review umana)"
+            )
+
+    def _print_gold_repeat_comparison(self, case_id, model, aggregated, summary, repeat):
+        """Tabella per-campo aggregata su N ripetizioni: valori distinti, stabilità, confidence."""
+        self.stdout.write(
+            f"\n--- Confronto con truth (--repeat {repeat}): {case_id} — {model} ---"
+        )
+        headers = ("campo", "truth", f"valori (n={repeat})", "stabilita'", "esito", "confidence")
+        rows = []
+        for field, agg in aggregated.items():
+            values_str = ", ".join(
+                f"{'null' if v is None else v} x{c}" for v, c in agg["distinct"]
+            )
+            stability = agg["stability"]
+            if agg["stable_and_wrong"]:
+                stability += " — STABILE MA SBAGLIATO"
+            if agg["confidence_mean"] is None:
+                conf_str = "N/A"
+            elif agg["confidence_min"] == agg["confidence_max"]:
+                conf_str = f"{agg['confidence_mean']:.2f}"
+            else:
+                conf_str = (
+                    f"{agg['confidence_mean']:.2f} "
+                    f"[{agg['confidence_min']:.2f}-{agg['confidence_max']:.2f}]"
+                )
+            rows.append((
+                field, str(agg["truth"]), values_str, stability, agg["verdict"], conf_str
+            ))
+        widths = [
+            max(len(headers[i]), max((len(r[i]) for r in rows), default=0))
+            for i in range(len(headers))
+        ]
+
+        def fmt_row(cells):
+            return "  ".join(
+                cell.ljust(widths[i]) if i == 0 else cell.rjust(widths[i])
+                for i, cell in enumerate(cells)
+            )
+
+        header_line = fmt_row(headers)
+        self.stdout.write(header_line)
+        self.stdout.write("-" * len(header_line))
+        for r in rows:
+            self.stdout.write(fmt_row(r))
+
+        total = sum(summary.values())
+        self.stdout.write(
+            f"Riepilogo campi: {summary['stable_correct']} stabili-corretti, "
+            f"{summary['stable_wrong']} stabili-sbagliati, {summary['instabile']} instabili, "
+            f"{summary['stable_null']} stabili-null (astensione consistente) "
+            f"su {total} campi confrontati"
+        )
+        if summary["stable_wrong"]:
+            self.stdout.write(self.style.WARNING(
+                f"  ← {summary['stable_wrong']} campo/i STABILE MA SBAGLIATO: errore "
+                "riproducibile, nessuna ripetizione lo smaschererebbe."
+            ))

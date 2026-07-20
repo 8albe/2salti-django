@@ -676,3 +676,129 @@ class OcrBenchGoldModeTest(TestCase):
                 stdout=StringIO(),
             )
         self.assertIn("2026-01-01_esiste_vs_x", str(ctx.exception))
+
+    # --- --repeat N: N estrazioni indipendenti sullo stesso caso/modello ---
+    #
+    # L'estrazione non è deterministica (comportamento reale: due chiamate
+    # Gemini sullo stesso referto hanno prodotto "BELLATOR FROSINONE" e
+    # "BELLATOR FROSINO", entrambe confidence 1.0). I factory qui restituiscono
+    # valori DIVERSI a chiamate successive, a differenza dei test sopra dove
+    # ogni test fissa un'unica estrazione costante.
+
+    def test_repeat_requires_gold_mode(self):
+        """--repeat > 1 senza --gold-case/--gold-all è un errore esplicito."""
+        self._patch_provider()
+        with self.assertRaises(CommandError):
+            call_command(
+                "ocr_bench", "--image", self.loose_image, "--repeat", "2",
+                stdout=StringIO(),
+            )
+
+    def test_repeat_must_be_at_least_one(self):
+        with self.assertRaises(CommandError):
+            call_command(
+                "ocr_bench", "--gold-case", "qualunque", "--repeat", "0",
+                stdout=StringIO(),
+            )
+
+    def test_repeat_one_is_default_and_unchanged(self):
+        """--repeat 1 (o l'assenza del flag) produce la proposta a estrazione singola."""
+        case_id = self._write_case(report_pk=self.report.pk)
+        output = self._call_gold("--gold-case", case_id)
+        self.assertNotIn("Ripetizione", output)
+        _, proposal = self._proposal()
+        self.assertNotIn("repeats", proposal)
+        self.assertNotIn("aggregate", proposal)
+
+    def test_repeat_reports_stability_instability_and_confidence_range(self):
+        """Campo stabile-corretto, stabile-ma-sbagliato e instabile, tutti nello stesso run."""
+        calls = []
+
+        def factory(model):
+            data = gold_truth_extraction(model)
+            i = len(calls) + 1
+            calls.append(i)
+            # instabile: valore diverso a chiamate alterne
+            data["match_info"]["home_team"] = (
+                "CASA SUL FOGLIO" if i % 2 else "CASA SUL FOGLIO BIS"
+            )
+            # stabile ma sbagliato: sempre lo stesso valore, sempre diverso dalla truth
+            data["match_info"]["away_team"] = "NOME SBAGLIATO SEMPRE"
+            data["metadata"]["confidence_fields"]["away_team"] = 0.5 + i * 0.1
+            return data
+
+        case_id = self._write_case(report_pk=self.report.pk)
+        output = self._call_gold("--gold-case", case_id, "--repeat", "4", factory=factory)
+
+        self.assertIn("Ripetizione 1/4", output)
+        self.assertIn("Ripetizione 4/4", output)
+        self.assertIn("instabile", output)
+        self.assertIn("STABILE MA SBAGLIATO", output)
+
+        _, proposal = self._proposal()
+        self.assertEqual(proposal["bench_run"]["repeat"], 4)
+        self.assertEqual(len(proposal["repeats"]), 4)
+
+        home = proposal["aggregate"]["home_team_name"]
+        self.assertEqual(home["stability"], "instabile")
+        self.assertEqual(len(home["distinct_values"]), 2)
+        self.assertEqual(sum(v["count"] for v in home["distinct_values"]), 4)
+
+        away = proposal["aggregate"]["away_team_name"]
+        self.assertEqual(away["stability"], "stabile")
+        self.assertEqual(away["verdict"], "wrong")
+        self.assertTrue(away["stable_and_wrong"])
+        self.assertAlmostEqual(away["confidence_mean"], (0.6 + 0.7 + 0.8 + 0.9) / 4)
+        self.assertEqual(away["confidence_min"], 0.6)
+        self.assertEqual(away["confidence_max"], 0.9)
+
+        # date, final_score e gli 8 quarti restano invariati e corretti a ogni
+        # ripetizione: 11 campi stabili-corretti su 13 confrontati.
+        self.assertEqual(proposal["summary"], {
+            "stable_correct": 11,
+            "stable_wrong": 1,
+            "stable_null": 0,
+            "instabile": 1,
+        })
+
+    def test_repeat_proposal_keeps_every_extraction_not_just_the_last(self):
+        """repeats[] contiene tutte le N estrazioni, non solo l'ultima."""
+        calls = []
+
+        def factory(model):
+            data = gold_truth_extraction(model)
+            i = len(calls) + 1
+            calls.append(i)
+            data["scores"]["final_score"] = f"10-{7 + i}"  # 10-8, 10-9, 10-10: tutte diverse
+            return data
+
+        case_id = self._write_case(report_pk=self.report.pk)
+        self._call_gold("--gold-case", case_id, "--repeat", "3", factory=factory)
+        _, proposal = self._proposal()
+
+        self.assertEqual(len(proposal["repeats"]), 3)
+        away_scores = [
+            r["extracted"]["scores"]["final_score"] for r in proposal["repeats"]
+        ]
+        self.assertEqual(away_scores, ["10-8", "10-9", "10-10"])
+        self.assertEqual(proposal["aggregate"]["final_score_away"]["stability"], "instabile")
+
+    def test_repeat_all_calls_failing_skips_model_without_crashing(self):
+        """Se ogni ripetizione fallisce, il modello viene saltato (non un traceback)."""
+        patcher = patch("matches.management.commands.ocr_bench.GeminiVisionProvider")
+        mock_class = patcher.start()
+        self.addCleanup(patcher.stop)
+        mock_provider = MagicMock()
+        mock_class.return_value = mock_provider
+        mock_provider.extract_data.side_effect = RuntimeError("Gemini API Timeout")
+
+        case_id = self._write_case(report_pk=self.report.pk)
+        out = StringIO()
+        call_command(
+            "ocr_bench", "--gold-case", case_id, "--repeat", "3",
+            "--models", "gemini-2.5-pro",
+            "--cases-dir", self.cases_dir, "--out-dir", self.out_dir,
+            stdout=out,
+        )
+        self.assertIn("nessuna estrazione riuscita su 3 tentativi", out.getvalue())
+        self.assertEqual(os.listdir(self.out_dir), [])
