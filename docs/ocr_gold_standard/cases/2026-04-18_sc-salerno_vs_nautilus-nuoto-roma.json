@@ -3,18 +3,16 @@
   "db_report_pk": 15,
   "schema_version": "1.0",
   "verified_by": "Alberto Galbiati",
-  "verified_at": "2026-07-19",
+  "verified_at": "2026-07-20",
   "verification_method": "collazione a mano del referto cartaceo originale",
 
-  "pending_reverification": [
-    {
-      "flagged_at": "2026-07-20",
-      "field": "match.away_team.name_on_paper",
-      "current_value": "Nautilus Nuoto Roma",
-      "status": "DA RIVERIFICARE SUL CARTACEO — valore NON modificato",
-      "reason": "Stessa sessione di collazione del 2026-07-19 in cui e' stato introdotto l'errore poi corretto sul caso Bellator (vedi 'corrections' in 2026-04-11_bellator-frusino_vs_ss-lazio-nuoto.json). Sostiene lo stesso finding di divergenza foglio<->DB ('Nautilus Nuoto Roma' sul foglio vs 'Nautilus N. Roma' a DB, Team pk=3). Aggravante specifica: nella stessa sessione la STESSA squadra e' stata collazionata con due grafie diverse — 'Nautilus Roma' nel caso 2026-03-28_unime_vs_nautilus-roma e 'Nautilus Nuoto Roma' qui e nel caso 2026-04-25. O i fogli differiscono davvero, o almeno una delle due letture e' imprecisa: solo il cartaceo lo decide. Valore non modificato in attesa di riverifica di Alberto."
-    }
-  ],
+  "reverification": {
+    "reverified_at": "2026-07-20",
+    "reverified_by": "Alberto Galbiati",
+    "field": "match.away_team.name_on_paper",
+    "outcome": "CONFERMATO: 'Nautilus Nuoto Roma' — su questo foglio 'Nuoto' c'e'.",
+    "context": "Riverifica innescata dall'errore di collazione trovato sul caso Bellator (stessa sessione del 19/07). A differenza di Bellator, la prima lettura era corretta. La stessa societa' (Team pk=3, 'Nautilus N. Roma' a DB) compare con grafie diverse su fogli diversi: 'Nautilus Roma' nel caso 2026-03-28 (dove 'Nuoto' non c'e' sul foglio, confermato separatamente), 'Nautilus Nuoto Roma' qui e nel caso 2026-04-25. Non e' incoerenza del dataset: i referti sono compilati da segretari diversi, e i fogli differiscono davvero. Vedi syllabus §8.6."
+  },
 
   "match": {
     "db_match_pk": null,
@@ -61,6 +59,7 @@
 
   "findings": [
     "Somma parziali verificata: 5+4+2+1=12, 5+6+4+2=17, coerente col finale 12-17.",
-    "'S.C. Salerno' assente sia da Team sia da Society nel backup prod consultato (2026-07-04): un eventuale referto per questo match andrebbe orfano per assenza reale della squadra, non per fallimento del fuzzy matching (§8.6) — la squadra semplicemente non esiste ancora a DB."
+    "'S.C. Salerno' assente sia da Team sia da Society nel backup prod consultato (2026-07-04): un eventuale referto per questo match andrebbe orfano per assenza reale della squadra, non per fallimento del fuzzy matching (§8.6) — la squadra semplicemente non esiste ancora a DB.",
+    "'Nautilus Nuoto Roma' vs 'Nautilus N. Roma' a DB (Team pk=3): divergenza di grafia foglio<->DB CONFERMATA da riverifica il 2026-07-20 (vedi 'reverification'). E' uno dei casi fondativi della fase 3 (tabella alias)."
   ]
 }

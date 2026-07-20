@@ -46,13 +46,15 @@ merge.
 | `verified_by` / `verified_at` | **Chi** ha collazionato e **quando**. Senza questi il caso non è gold standard: è un'altra opinione. |
 | `verification_method` | Come è stata stabilita la verità (es. `referto cartaceo originale`). |
 | `match` | Aggancio al DB (`db_match_pk`, `db_league_pk`) e alle squadre, con **`name_on_paper`** accanto a `db_team_name`: la divergenza fra i due è essa stessa un dato (fallimento della discovery). |
+| `match.legibility` | *(opzionale)* Quanto è leggibile il cartaceo: `{score, assessed_by, assessed_at, notes}`. Vedi §"Leggibilità del foglio" sotto per la scala e il criterio. Senza questo campo non si assume nulla sulla leggibilità: niente default. |
 | `truth` | **Solo i campi effettivamente verificati da umano.** Ogni campo non collazionato sta in `not_verified` — mai inferito, mai copiato da un'estrazione. |
 | `not_verified` | Elenco esplicito di ciò che nessuno ha ancora controllato. Impedisce che un campo non verificato venga scambiato per verità. |
 | `extractions[]` | Una voce per estrazione, con `provider`, `model`, `db_report_pk`, quanto estratto, la confidence auto-dichiarata e il `verdict` campo per campo. **Può essere vuoto (`[]`)**: un caso è gold standard per la sola `truth` verificata, anche prima che qualunque provider lo abbia mai letto — le estrazioni si aggiungono quando il referto viene fatto girare nel bench. |
 | `findings` | Cosa insegna questo caso, in forma citabile dalla documentazione. |
 | `corrections[]` | *(opzionale)* Correzioni applicate alla `truth` **dopo** la prima collazione, con `field`, `before`, `after`, `corrected_at`/`corrected_by` e `reason`. Un caso gold non si riscrive in silenzio: la storia delle sue correzioni è parte del dato. Vedi §"Il metro misura anche chi lo ha costruito". |
-| `pending_reverification[]` | *(opzionale)* Campi **sospesi**: non modificati, ma segnalati come non affidabili in attesa che un umano torni sull'originale. Usato quando un errore accertato su un caso mette in dubbio i casi collazionati nella stessa sessione. |
-| `legibility_note` | *(opzionale, prosa)* Quanto è leggibile il cartaceo. Segnala i casi in cui un errore del provider non è confrontabile con un errore su un foglio pulito. Campo strutturato con scala: **proposto, non ancora implementato**. |
+| `pending_reverification[]` | *(opzionale)* Campi **sospesi**: non modificati, ma segnalati come non affidabili in attesa che un umano torni sull'originale. Usato quando un errore accertato su un caso mette in dubbio i casi collazionati nella stessa sessione. Una volta che la riverifica arriva, il blocco si rimuove e si sostituisce con `reverification` (conferma) o `corrections[]` (se anche questa lettura era sbagliata). |
+| `reverification` | *(opzionale)* Esito di una riverifica che **conferma** un valore già in `truth`/`match` dopo che era stato messo in dubbio: `{reverified_at, reverified_by, field, outcome, context}`. A differenza di `corrections[]`, qui il valore non cambia — si registra solo che è stato ricontrollato e regge. |
+| `corroboration` | *(opzionale)* Conferma (o tentativo di conferma) della `truth` da una **seconda zona indipendente** del foglio (es. storia cronometrica dei gol vs riquadro parziali). Tre stati: concorde (`method_note` lo dichiara, vedi `2025-12-06_pol-delta_vs_villa-york.json`), divergente (il caso non si chiude, si torna sul cartaceo — procedura 3b sotto), o **non ottenibile** (`status: "non ottenibile"` + `reason`, tipicamente per leggibilità: vedi `2026-04-11_bellator-frusino_vs_ss-lazio-nuoto.json`). Il terzo stato non è un caso chiuso senza corroborazione taciuta: è dichiarato esplicitamente. |
 
 `verdict` usa tre soli valori: `correct`, `wrong`, `unverified`.
 
@@ -117,7 +119,58 @@ raro). Quando un caso viene corretto, i casi collazionati nella **stessa
 sessione** che sostengono lo **stesso tipo di finding** vanno marcati
 `pending_reverification` — non corretti, non cancellati: sospesi finché un umano
 non li ha riguardati. È stato fatto per Olympic Roma P.N. e per le tre
-occorrenze di Nautilus.
+occorrenze di Nautilus, e la riverifica del 2026-07-20 ha dato esito **diverso
+caso per caso**: Olympic e Nautilus erano letture corrette fin dall'inizio (la
+divergenza di grafia foglio↔DB è reale — `reverification` nei casi), mentre nel
+frattempo la stessa riverifica ha trovato un **secondo** errore di collazione,
+indipendente dal primo, su un caso diverso (Triscelon Etna Sport, trascritto
+"Trisceloni" il 19/07 — `corrections` nel caso). La lezione non è "diffidare di
+un caso specifico": è che ogni lettura da quella sessione andava ricontrollata
+prima di fondarci sopra una direzione di lavoro, e il sospetto non garantiva da
+solo quali letture fossero sbagliate.
+
+## Leggibilità del foglio (2026-07-20)
+
+Un errore del provider su un referto compilato male e un errore sullo stesso
+campo su un foglio pulito non sono lo stesso segnale: confrontare provider su
+casi di difficoltà molto diversa senza saperlo confonde "il modello legge
+male" con "il foglio è illeggibile". Il campo `match.legibility` rende
+misurabile questa differenza:
+
+```json
+"legibility": {
+  "score": 2,
+  "assessed_by": "Alberto Galbiati",
+  "assessed_at": "2026-07-20",
+  "notes": "testo libero: cosa rende il foglio difficile"
+}
+```
+
+Scala a 4 livelli, ancorata a un'azione umana (non a un giudizio soggettivo di
+"pulito/sporco"):
+
+| `score` | Criterio |
+|---|---|
+| 4 — pulito | Un umano legge ogni campo al primo colpo, senza esitare. |
+| 3 — leggibile | Qualche campo richiede una seconda occhiata, nessuno richiede di dedurre. |
+| 2 — faticoso | Almeno un campo si legge solo **per contesto** (aritmetica dei parziali, conoscenza delle squadre). |
+| 1 — al limite | Almeno un campo resta **indecifrabile** anche dopo riverifica: due lettori potrebbero trascrivere valori diversi. |
+
+**Regola: un caso a `score` 1 o 2 richiede `corroboration` per essere chiuso.**
+Sotto il 3 la truth stessa è a rischio (è quanto successo sul caso Bellator,
+`score` 2), quindi non basta una lettura, per quanto attenta: serve una seconda
+fonte indipendente dentro il foglio (procedura 3b sotto). **Se la
+corroborazione non è ottenibile** — perché anche la seconda zona del foglio
+è illeggibile, non perché nessuno l'ha cercata — questo va dichiarato
+esplicitamente nel campo `corroboration` (`status: "non ottenibile"` +
+`reason`), non lasciato implicito. Un caso a `score` 1-2 senza `corroboration`
+e senza una dichiarazione esplicita di non ottenibilità è un caso aperto, non
+chiuso.
+
+Nessun default: un caso senza `match.legibility` non è "presunto leggibile",
+è semplicemente **non ancora valutato**. La valutazione richiede il cartaceo
+sotto gli occhi, come la collazione stessa — si popola con lo stesso rigore,
+non retroattivamente a memoria.
 
 ## Come aggiungere un caso
 
@@ -132,7 +185,11 @@ occorrenze di Nautilus.
    separatamente: se i cumulati della progressione coincidono con i parziali,
    la `truth` ha due fonti concordi e va registrata nel campo `corroboration`
    (vedi `2025-12-06_pol-delta_vs_villa-york.json`). Se divergono, il caso non
-   si chiude: si marca e si torna sul cartaceo.
+   si chiude: si marca e si torna sul cartaceo. Se il caso ha `match.legibility`
+   1 o 2, la corroborazione non è opzionale (vedi §"Leggibilità del foglio"); se
+   la seconda zona è a sua volta illeggibile, dichiaralo esplicitamente in
+   `corroboration` (`status: "non ottenibile"` + `reason`) invece di lasciare
+   il campo assente (vedi `2026-04-11_bellator-frusino_vs_ss-lazio-nuoto.json`).
 4. Per ogni estrazione già esistente a DB, incolla i valori reali da
    `MatchReport.normalized_data` (non a memoria) e compila `verdict`.
 5. Se la correzione tocca dati a DB, registrala anche nell'audit log

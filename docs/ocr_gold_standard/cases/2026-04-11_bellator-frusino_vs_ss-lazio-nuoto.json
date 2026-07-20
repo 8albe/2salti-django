@@ -4,7 +4,23 @@
   "verified_by": "Alberto Galbiati",
   "verified_at": "2026-07-20",
   "verification_method": "collazione a mano del referto cartaceo originale",
-  "legibility_note": "Il cartaceo di questo referto e' compilato molto male: anche un lettore umano fatica a decifrare sia i valori numerici sia i nomi delle squadre e dei giocatori. E' il contesto in cui e' nato l'errore di collazione registrato in 'corrections'. Va tenuto presente leggendo i risultati del bench su questo caso: un errore del provider qui non e' equivalente a un errore su un foglio pulito.",
+
+  "reverification": {
+    "reverified_at": "2026-07-20",
+    "reverified_by": "Alberto Galbiati",
+    "field": "truth.scores (riquadro 'Risultati parziali')",
+    "outcome": "CONFERMATO: 1-3, 0-5, 3-6, 0-5 — esattamente i valori gia' in truth.",
+    "context": "La truth dei parziali e' ora confermata da DUE letture umane indipendenti (19/07 e 20/07): e' piu' solida di ieri. Resta pero' NON certificata da corroborazione di zona indipendente del foglio — vedi 'corroboration' sotto, non ottenibile su questo referto. Doppia lettura concorde riduce il rischio di un singolo errore di trascrizione; corroborazione indipendente lo escluderebbe strutturalmente. Qui c'e' la prima, non la seconda."
+  },
+
+  "corroboration": {
+    "source": "storia cronometrica del referto (sequenza dei gol con il minuto)",
+    "why_independent": "e' una zona del foglio distinta dal riquadro dei parziali, compilata separatamente durante la gara: la sua concordanza (o discordanza) col riquadro parziali sarebbe una conferma indipendente, non una ricopiatura.",
+    "status": "non ottenibile",
+    "reason": "Le spaziature della storia cronometrica su questo referto la rendono illeggibile con affidabilita' (vedi match.legibility, score 2): i valori che se ne ricaverebbero non sarebbero attendibili. Non e' una corroborazione mancata per non averla cercata (README §3b) — e' un'impossibilita' dovuta alla leggibilita' del foglio, dichiarata esplicitamente invece di essere lasciata implicita.",
+    "assessed_at": "2026-07-20",
+    "assessed_by": "Alberto Galbiati"
+  },
 
   "corrections": [
     {
@@ -26,6 +42,12 @@
     "competition_on_paper": "ALLIEVI NAZIONALI",
     "venue_on_paper": "STADIO DEL NUOTO",
     "city_on_paper": "FROSINONE",
+    "legibility": {
+      "score": 2,
+      "assessed_by": "Alberto Galbiati",
+      "assessed_at": "2026-07-20",
+      "notes": "Compilazione difficile su valori e nomi. La storia cronometrica non e' utilizzabile come corroborazione per le spaziature (vedi 'corroboration')."
+    },
     "home_team": {
       "db_team_pk": 5,
       "db_team_name": "Bellator Frusino",
@@ -179,7 +201,7 @@
     "Il punteggio away (19) e' corretto in entrambe le estrazioni, quello home no in entrambe: l'errore non e' casuale sul singolo campo.",
     "DIAGNOSI RISCRITTA IL 2026-07-20 (la precedente non regge). Sul cartaceo la squadra di casa e' scritta 'BELLATOR FRUSINO', che coincide col nome a DB ('Bellator Frusino', Team pk=5). NON esiste alcuna divergenza di grafia foglio<->DB su questo caso: la diagnosi precedente si basava su un name_on_paper collazionato male il 2026-07-19. La causa reale del fallimento della discovery e' un ERRORE DI LETTURA OCR SUL NOME SQUADRA: entrambi i provider hanno estratto 'BELLATOR FROSINONE' (verificato a DB il 2026-07-20, report 10 e 16, dev e prod, sola lettura) da un foglio su cui il nome era scritto correttamente e in modo compatibile col DB. La discovery ha quindi fallito su un input gia' corrotto a monte, non su un fuzzy matching troppo stretto.",
     "Corollario: 'FRUSINO' e' la forma latina/arcaica di Frosinone, e la citta' 'FROSINONE' compare altrove sullo stesso foglio. Entrambi i modelli hanno normalizzato un nome proprio raro verso la forma comune piu' probabile — errore di prior linguistico, non di risoluzione dell'immagine. E' una classe di errore che il preprocessing non attenua e che la confidence auto-dichiarata non segnala (home_team = 1.0 in entrambe le estrazioni).",
-    "Impatto sulla direzione di lavoro: se la causa e' l'accuratezza OCR sui nomi propri e non il fuzzy matching, una tabella di alias squadra/societa' non risolverebbe questo caso — l'alias dovrebbe mappare un valore allucinato, non una grafia legittima alternativa. Vedi la nota sui due casi ancora da riverificare (Olympic Roma P.N., Nautilus Nuoto Roma) prima di considerare fondata la direzione 'alias'."
+    "DIAGNOSI FASE 3 CHIUSA IL 2026-07-20 (riverifica completata su tutti i casi coinvolti): esistono DUE problemi distinti sui nomi squadra, non uno. (a) Divergenza REALE di grafia foglio<->DB — confermata sui casi Olympic Roma P.N. (§8.6) e Nautilus (due grafie diverse su fogli diversi, entrambe confermate): questi sono i casi fondativi di una tabella di alias, che li risolverebbe. (b) Allucinazione OCR sul nome — questo caso: il foglio e il DB concordano gia' ('Bellator Frusino'), a sbagliare e' l'estrazione. Una tabella di alias non risolve (b): l'alias dovrebbe mappare un valore inventato dal modello, non una grafia legittima alternativa. Questo caso resta quindi fuori dai casi fondativi della fase 3 e va sotto il problema separato dell'accuratezza OCR sui nomi propri."
   ],
 
   "db_correction": {
