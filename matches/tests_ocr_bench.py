@@ -711,14 +711,14 @@ class OcrBenchGoldModeTest(TestCase):
         self.assertNotIn("aggregate", proposal)
 
     def test_repeat_reports_stability_instability_and_confidence_range(self):
-        """Campo stabile-corretto, stabile-ma-sbagliato e instabile, tutti nello stesso run."""
+        """Campo stabile-corretto, stabile-ma-sbagliato e ambiguo, tutti nello stesso run."""
         calls = []
 
         def factory(model):
             data = gold_truth_extraction(model)
             i = len(calls) + 1
             calls.append(i)
-            # instabile: valore diverso a chiamate alterne
+            # ambiguo: pareggio 2-2 fra un valore corretto e uno sbagliato
             data["match_info"]["home_team"] = (
                 "CASA SUL FOGLIO" if i % 2 else "CASA SUL FOGLIO BIS"
             )
@@ -733,7 +733,9 @@ class OcrBenchGoldModeTest(TestCase):
         self.assertIn("Ripetizione 1/4", output)
         self.assertIn("Ripetizione 4/4", output)
         self.assertIn("instabile", output)
+        self.assertIn("SENZA MAGGIORANZA", output)
         self.assertIn("STABILE MA SBAGLIATO", output)
+        self.assertIn("AMBIGUO", output)
 
         _, proposal = self._proposal()
         self.assertEqual(proposal["bench_run"]["repeat"], 4)
@@ -741,12 +743,19 @@ class OcrBenchGoldModeTest(TestCase):
 
         home = proposal["aggregate"]["home_team_name"]
         self.assertEqual(home["stability"], "instabile")
+        self.assertFalse(home["has_majority"])
+        self.assertEqual(home["verdict"], "ambiguo")
         self.assertEqual(len(home["distinct_values"]), 2)
         self.assertEqual(sum(v["count"] for v in home["distinct_values"]), 4)
+        tied = {t["value"]: t["verdict"] for t in home["tied_values"]}
+        self.assertEqual(tied, {"CASA SUL FOGLIO": "correct", "CASA SUL FOGLIO BIS": "wrong"})
+        self.assertIn(home["tie_break_hint"], tied)
 
         away = proposal["aggregate"]["away_team_name"]
         self.assertEqual(away["stability"], "stabile")
+        self.assertTrue(away["has_majority"])
         self.assertEqual(away["verdict"], "wrong")
+        self.assertIsNone(away["tied_values"])
         self.assertTrue(away["stable_and_wrong"])
         self.assertAlmostEqual(away["confidence_mean"], (0.6 + 0.7 + 0.8 + 0.9) / 4)
         self.assertEqual(away["confidence_min"], 0.6)
@@ -758,8 +767,99 @@ class OcrBenchGoldModeTest(TestCase):
             "stable_correct": 11,
             "stable_wrong": 1,
             "stable_null": 0,
-            "instabile": 1,
+            "instabile": 0,
+            "ambiguo": 1,
         })
+
+    def test_repeat_tie_between_correct_and_wrong_is_ambiguous_not_tie_broken(self):
+        """Pareggio 2-2 fra un valore corretto e uno sbagliato: esito 'ambiguo', non un
+        tie-break silenzioso per ordine di arrivo (il bug osservato sul caso Bellator:
+        FRUSINO x2 corretto / FROSINONE x2 sbagliato stampava "correct" solo perché
+        FRUSINO era arrivato per primo)."""
+        calls = []
+
+        def factory(model):
+            data = gold_truth_extraction(model)
+            i = len(calls) + 1
+            calls.append(i)
+            data["match_info"]["home_team"] = (
+                "CASA SUL FOGLIO" if i in (1, 2) else "CASA SBAGLIATA"
+            )
+            return data
+
+        case_id = self._write_case(report_pk=self.report.pk)
+        output = self._call_gold("--gold-case", case_id, "--repeat", "4", factory=factory)
+        self.assertIn("AMBIGUO", output)
+
+        _, proposal = self._proposal()
+        home = proposal["aggregate"]["home_team_name"]
+        self.assertEqual(home["verdict"], "ambiguo")
+        self.assertFalse(home["has_majority"])
+        self.assertEqual(home["stability"], "instabile")
+        tied = {t["value"]: t["verdict"] for t in home["tied_values"]}
+        self.assertEqual(tied, {"CASA SUL FOGLIO": "correct", "CASA SBAGLIATA": "wrong"})
+
+        self.assertEqual(proposal["summary"]["ambiguo"], 1)
+        self.assertEqual(proposal["summary"]["stable_correct"], 12)
+        self.assertEqual(proposal["summary"]["stable_wrong"], 0)
+        self.assertEqual(proposal["summary"]["instabile"], 0)
+
+    def test_repeat_tie_between_two_wrong_values_is_ambiguous(self):
+        """Pareggio 2-2 fra due valori entrambi sbagliati: resta 'ambiguo', mai promosso
+        a 'wrong' e mai a 'correct' — nessuno dei due coincide con la truth."""
+        calls = []
+
+        def factory(model):
+            data = gold_truth_extraction(model)
+            i = len(calls) + 1
+            calls.append(i)
+            data["match_info"]["away_team"] = (
+                "OSPITI SBAGLIATI A" if i in (1, 3) else "OSPITI SBAGLIATI B"
+            )
+            return data
+
+        case_id = self._write_case(report_pk=self.report.pk)
+        self._call_gold("--gold-case", case_id, "--repeat", "4", factory=factory)
+
+        _, proposal = self._proposal()
+        away = proposal["aggregate"]["away_team_name"]
+        self.assertEqual(away["verdict"], "ambiguo")
+        self.assertFalse(away["has_majority"])
+        tied_verdicts = {t["verdict"] for t in away["tied_values"]}
+        self.assertEqual(tied_verdicts, {"wrong"})
+
+        self.assertEqual(proposal["summary"]["ambiguo"], 1)
+        self.assertEqual(proposal["summary"]["stable_wrong"], 0)
+        self.assertEqual(proposal["summary"]["stable_correct"], 12)
+
+    def test_repeat_strict_majority_resolves_normally_not_ambiguous(self):
+        """3 chiamate su 4 concordi: la maggioranza stretta esiste (3 > 4/2), l'esito
+        resta correct/wrong come prima — comportamento invariato per i casi con una
+        vera maggioranza, solo il pareggio senza maggioranza diventa 'ambiguo'."""
+        calls = []
+
+        def factory(model):
+            data = gold_truth_extraction(model)
+            i = len(calls) + 1
+            calls.append(i)
+            data["match_info"]["home_team"] = "CASA SUL FOGLIO" if i != 4 else "CASA RARA"
+            return data
+
+        case_id = self._write_case(report_pk=self.report.pk)
+        output = self._call_gold("--gold-case", case_id, "--repeat", "4", factory=factory)
+        self.assertNotIn("AMBIGUO", output)
+        self.assertNotIn("SENZA MAGGIORANZA", output)
+
+        _, proposal = self._proposal()
+        home = proposal["aggregate"]["home_team_name"]
+        self.assertEqual(home["stability"], "instabile")
+        self.assertTrue(home["has_majority"])
+        self.assertEqual(home["verdict"], "correct")
+        self.assertIsNone(home["tied_values"])
+        self.assertIsNone(home["tie_break_hint"])
+
+        self.assertEqual(proposal["summary"]["instabile"], 1)
+        self.assertEqual(proposal["summary"]["ambiguo"], 0)
 
     def test_repeat_proposal_keeps_every_extraction_not_just_the_last(self):
         """repeats[] contiene tutte le N estrazioni, non solo l'ultima."""

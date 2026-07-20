@@ -42,9 +42,18 @@ FROSINONE" e "BELLATOR FROSINO" sullo stesso report, entrambi confidence
 modello. Per ogni campo riporta i valori distinti con frequenza, se il
 campo è stabile (tutte le ripetizioni concordi) o instabile, e — se
 stabile — se è anche sbagliato: un errore riproducibile che nessuna
-ripetizione da sola smaschererebbe. Resta per-campo, mai un'unica
-percentuale aggregata sul caso. La proposta contiene tutte le N estrazioni
-in repeats[] (mai solo l'ultima) più l'aggregato in aggregate[].
+ripetizione da sola smaschererebbe. Un campo instabile con una maggioranza
+stretta (un valore con conteggio > N/2) prende il verdetto di quel valore;
+un campo instabile SENZA maggioranza stretta (pareggio, es. 2-2 su 4
+chiamate) prende l'esito distinto 'ambiguo', mai risolto in correct/wrong
+da un tie-break silenzioso per ordine di arrivo — un tie-break del genere
+darebbe esiti diversi a seconda dell'ordine delle chiamate, quindi non è
+una misura (caso reale: "BELLATOR FRUSINO" x2 corretto, "BELLATOR
+FROSINONE" x2 sbagliato, pareggio). Resta per-campo, mai un'unica
+percentuale aggregata sul caso, e gli ambigui hanno un bucket proprio nel
+riepilogo, mai sommati ai corretti né agli sbagliati. La proposta contiene
+tutte le N estrazioni in repeats[] (mai solo l'ultima) più l'aggregato in
+aggregate[].
 
 Nessuna scrittura sul DB: niente salvataggi di MatchReport,
 niente transizioni di stato.
@@ -281,24 +290,53 @@ def aggregate_gold_repeats(per_repeat):
     misura un campione, non "la" lettura del modello. Questa funzione rende visibile la
     varianza fra campioni invece di nasconderla dietro un'unica estrazione.
 
+    Un campo instabile (non tutte le ripetizioni concordi) può comunque avere una
+    MAGGIORANZA STRETTA (un valore con conteggio > N/2): in quel caso il verdetto è
+    quello del valore maggioritario, esattamente come prima. Se invece nessun valore
+    supera N/2 (pareggio, es. 2-2 su 4 chiamate), NON esiste un modo non arbitrario di
+    scegliere un vincitore: assegnare il verdetto al valore comparso per primo nelle
+    chiamate sarebbe un tie-break silenzioso che dipende dall'ordine di arrivo, non dal
+    contenuto (bug osservato sul caso gold Bellator: "BELLATOR FRUSINO" x2 corretto,
+    "BELLATOR FROSINONE" x2 sbagliato, "BELLATOR FROSINO" x1 sbagliato — nessuna
+    maggioranza, eppure il tie-break per prima comparsa stampava "correct"). In questo
+    caso il verdetto è 'ambiguo': esplicito, mai risolto in correct/wrong, con il
+    dettaglio dei valori in pareggio e — solo come riferimento interno, mai come
+    verdetto — il valore che un tie-break per prima comparsa avrebbe scelto.
+
     Ritorna (aggregated, summary):
       aggregated: field -> {
           truth, distinct: [(valore, conteggio), ...] per frequenza decrescente,
           stability: 'stabile' (tutte le ripetizioni concordi) o 'instabile',
-          verdict: verdetto del valore maggioritario (o dell'unico valore se stabile),
+          has_majority: True se un valore ha conteggio > N/2 (sempre True se stabile),
+          verdict: 'correct'/'wrong'/'null' del valore maggioritario quando has_majority
+              è True; 'ambiguo' quando non esiste maggioranza stretta,
+          tied_values: None salvo quando verdict == 'ambiguo', nel qual caso è la lista
+              dei valori in pareggio al conteggio massimo con conteggio e verdetto
+              individuale ({'value', 'count', 'verdict'}) — l'informazione che serve a
+              chi legge per giudicare il pareggio da sé,
+          tie_break_hint: None salvo quando verdict == 'ambiguo', nel qual caso è il
+              valore che un tie-break per ordine di prima comparsa fra le ripetizioni
+              avrebbe scelto — SOLO riferimento interno, mai un verdetto, e va sempre
+              esposto etichettato come tale (mai stampato/salvato da solo),
           stable_and_wrong: campo stabile ma sbagliato — il caso peggiore, un errore
               riproducibile che nessuna ripetizione da sola smaschererebbe,
           confidence_mean/min/max (None se il provider non ha dichiarato confidence).
       }
       summary: conteggio campi per bucket — stable_correct, stable_wrong, stable_null,
-          instabile. Le quattro categorie restano separate (mai collassate in una
-          percentuale unica): 'instabile' e 'stabile ma sbagliato' sono informazioni
-          diverse con implicazioni operative diverse (varianza da campionare di più vs
-          errore sistematico che il campionamento non risolve).
+          instabile (non unanime ma con maggioranza stretta), ambiguo (non unanime e
+          senza maggioranza stretta). Le categorie restano separate (mai collassate in
+          un'unica percentuale): 'instabile', 'ambiguo' e 'stabile ma sbagliato' sono
+          informazioni diverse con implicazioni operative diverse (varianza da
+          campionare di più, esito non risolvibile senza review umana, errore
+          sistematico che il campionamento non risolve).
     """
     field_keys = per_repeat[0]["fields"].keys()
     aggregated = {}
-    summary = {"stable_correct": 0, "stable_wrong": 0, "stable_null": 0, "instabile": 0}
+    summary = {
+        "stable_correct": 0, "stable_wrong": 0, "stable_null": 0,
+        "instabile": 0, "ambiguo": 0,
+    }
+    n = len(per_repeat)
 
     for field in field_keys:
         entries = [rep["fields"][field] for rep in per_repeat]
@@ -312,36 +350,59 @@ def aggregate_gold_repeats(per_repeat):
                 counts[key] = [e["extracted"], 0]
                 order.append(key)
             counts[key][1] += 1
+        # sort() è stabile: a parità di conteggio l'ordine resta quello di prima
+        # comparsa in `order` — è la base del tie_break_hint sotto, mai del verdict.
         distinct = sorted((tuple(counts[k]) for k in order), key=lambda t: -t[1])
         stable = len(distinct) == 1
-        majority_value = distinct[0][0]
-        majority_verdict = next(
-            e["verdict"] for e in entries if repr(e["extracted"]) == repr(majority_value)
-        )
+        top_count = distinct[0][1]
+        has_majority = top_count > n / 2
+
+        def verdict_for(value):
+            return next(e["verdict"] for e in entries if repr(e["extracted"]) == repr(value))
+
         confidences = [
             e["confidence"] for e in entries if isinstance(e["confidence"], (int, float))
         ]
         conf_mean = sum(confidences) / len(confidences) if confidences else None
         conf_min = min(confidences) if confidences else None
         conf_max = max(confidences) if confidences else None
-        stable_and_wrong = stable and majority_verdict == "wrong"
+
+        if has_majority:
+            majority_value = distinct[0][0]
+            field_verdict = verdict_for(majority_value)
+            tied_values = None
+            tie_break_hint = None
+        else:
+            field_verdict = "ambiguo"
+            tied_values = [
+                {"value": v, "count": c, "verdict": verdict_for(v)}
+                for v, c in distinct if c == top_count
+            ]
+            tie_break_hint = tied_values[0]["value"]
+
+        stable_and_wrong = stable and field_verdict == "wrong"
 
         aggregated[field] = {
             "truth": truth_v,
             "distinct": distinct,
             "stability": "stabile" if stable else "instabile",
-            "verdict": majority_verdict,
+            "has_majority": has_majority,
+            "verdict": field_verdict,
+            "tied_values": tied_values,
+            "tie_break_hint": tie_break_hint,
             "stable_and_wrong": stable_and_wrong,
             "confidence_mean": conf_mean,
             "confidence_min": conf_min,
             "confidence_max": conf_max,
         }
 
-        if not stable:
+        if field_verdict == "ambiguo":
+            summary["ambiguo"] += 1
+        elif not stable:
             summary["instabile"] += 1
-        elif majority_verdict == "correct":
+        elif field_verdict == "correct":
             summary["stable_correct"] += 1
-        elif majority_verdict == "wrong":
+        elif field_verdict == "wrong":
             summary["stable_wrong"] += 1
         else:  # 'null': astensione dichiarata in tutte le ripetizioni
             summary["stable_null"] += 1
@@ -452,7 +513,10 @@ def build_gold_proposal_repeated(case, per_repeat, provider_label, model, resolv
             "truth": agg["truth"],
             "distinct_values": [{"value": v, "count": c} for v, c in agg["distinct"]],
             "stability": agg["stability"],
+            "has_majority": agg["has_majority"],
             "verdict": agg["verdict"],
+            "tied_values": agg["tied_values"],
+            "tie_break_hint": agg["tie_break_hint"],
             "stable_and_wrong": agg["stable_and_wrong"],
             "confidence_mean": agg["confidence_mean"],
             "confidence_min": agg["confidence_min"],
@@ -1080,6 +1144,8 @@ class Command(BaseCommand):
             stability = agg["stability"]
             if agg["stable_and_wrong"]:
                 stability += " — STABILE MA SBAGLIATO"
+            elif agg["verdict"] == "ambiguo":
+                stability += " — SENZA MAGGIORANZA"
             if agg["confidence_mean"] is None:
                 conf_str = "N/A"
             elif agg["confidence_min"] == agg["confidence_max"]:
@@ -1112,7 +1178,9 @@ class Command(BaseCommand):
         total = sum(summary.values())
         self.stdout.write(
             f"Riepilogo campi: {summary['stable_correct']} stabili-corretti, "
-            f"{summary['stable_wrong']} stabili-sbagliati, {summary['instabile']} instabili, "
+            f"{summary['stable_wrong']} stabili-sbagliati, "
+            f"{summary['instabile']} instabili-con-maggioranza, "
+            f"{summary['ambiguo']} ambigui-senza-maggioranza, "
             f"{summary['stable_null']} stabili-null (astensione consistente) "
             f"su {total} campi confrontati"
         )
@@ -1121,3 +1189,22 @@ class Command(BaseCommand):
                 f"  ← {summary['stable_wrong']} campo/i STABILE MA SBAGLIATO: errore "
                 "riproducibile, nessuna ripetizione lo smaschererebbe."
             ))
+        if summary["ambiguo"]:
+            self.stdout.write(self.style.WARNING(
+                f"  ← {summary['ambiguo']} campo/i AMBIGUO/I (pareggio, nessun valore "
+                f"supera {repeat}/2 chiamate): esito NON risolvibile automaticamente, "
+                "richiede review umana. Dettaglio pareggi:"
+            ))
+            for field, agg in aggregated.items():
+                if agg["verdict"] != "ambiguo":
+                    continue
+                parts = ", ".join(
+                    f"{'null' if tv['value'] is None else tv['value']!r} "
+                    f"x{tv['count']} ({tv['verdict']})"
+                    for tv in agg["tied_values"]
+                )
+                self.stdout.write(self.style.WARNING(
+                    f"      {field}: pareggio fra {parts} — tie-break per prima "
+                    f"comparsa (SOLO riferimento interno, MAI un verdetto): "
+                    f"{agg['tie_break_hint']!r}"
+                ))
