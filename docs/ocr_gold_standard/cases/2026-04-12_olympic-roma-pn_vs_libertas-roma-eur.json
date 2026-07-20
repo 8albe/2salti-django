@@ -6,6 +6,16 @@
   "verified_at": "2026-07-19",
   "verification_method": "collazione a mano del referto cartaceo originale",
 
+  "pending_reverification": [
+    {
+      "flagged_at": "2026-07-20",
+      "field": "match.home_team.name_on_paper",
+      "current_value": "Olympic Roma P.N.",
+      "status": "DA RIVERIFICARE SUL CARTACEO — valore NON modificato",
+      "reason": "Il 2026-07-20 la presunta divergenza di grafia foglio<->DB del caso Bellator si e' rivelata un errore di collazione umana del 2026-07-19 (vedi 'corrections' in 2026-04-11_bellator-frusino_vs_ss-lazio-nuoto.json). Questo name_on_paper proviene dalla stessa sessione di collazione, dallo stesso collazionatore, nella stessa giornata, e sostiene lo stesso tipo di finding (Olympic sul foglio vs 'Olimpic Roma P.N.' a DB, Team pk=7). Finche' Alberto non lo riverifica sull'originale, la divergenza va trattata come non stabilita. Se anche questa fosse un errore di collazione, la direzione 'tabella di alias' (syllabus §8.6) resterebbe senza casi fondativi e il problema reale sarebbe l'accuratezza OCR sui nomi propri."
+    }
+  ],
+
   "match": {
     "db_match_pk": 4,
     "db_league_pk": 5,

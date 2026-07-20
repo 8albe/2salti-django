@@ -50,6 +50,9 @@ merge.
 | `not_verified` | Elenco esplicito di ciò che nessuno ha ancora controllato. Impedisce che un campo non verificato venga scambiato per verità. |
 | `extractions[]` | Una voce per estrazione, con `provider`, `model`, `db_report_pk`, quanto estratto, la confidence auto-dichiarata e il `verdict` campo per campo. **Può essere vuoto (`[]`)**: un caso è gold standard per la sola `truth` verificata, anche prima che qualunque provider lo abbia mai letto — le estrazioni si aggiungono quando il referto viene fatto girare nel bench. |
 | `findings` | Cosa insegna questo caso, in forma citabile dalla documentazione. |
+| `corrections[]` | *(opzionale)* Correzioni applicate alla `truth` **dopo** la prima collazione, con `field`, `before`, `after`, `corrected_at`/`corrected_by` e `reason`. Un caso gold non si riscrive in silenzio: la storia delle sue correzioni è parte del dato. Vedi §"Il metro misura anche chi lo ha costruito". |
+| `pending_reverification[]` | *(opzionale)* Campi **sospesi**: non modificati, ma segnalati come non affidabili in attesa che un umano torni sull'originale. Usato quando un errore accertato su un caso mette in dubbio i casi collazionati nella stessa sessione. |
+| `legibility_note` | *(opzionale, prosa)* Quanto è leggibile il cartaceo. Segnala i casi in cui un errore del provider non è confrontabile con un errore su un foglio pulito. Campo strutturato con scala: **proposto, non ancora implementato**. |
 
 `verdict` usa tre soli valori: `correct`, `wrong`, `unverified`.
 
@@ -76,6 +79,45 @@ sistema che legge un documento denso può essere internamente coerente e
 comunque falso. Il campo `truth` di questo dataset accetta **solo** valori
 riportati da un umano che ha guardato l'originale cartaceo (`verified_by` +
 `verification_method`); nessuna eccezione per "il modello sembrava sicuro".
+
+## Il metro misura anche chi lo ha costruito (2026-07-20)
+
+La regola sopra resta valida, ma da sola non basta: **anche la collazione umana
+sbaglia**, e il primo errore che questo dataset ha prodotto non è venuto da un
+modello.
+
+Cos'è successo. Il caso fondativo 11/04/2026 registrava
+`name_on_paper = "BELLATOR FROSINONE"` accanto al nome a DB `Bellator Frusino`,
+e da lì si era dedotto un finding di discovery: divergenza di grafia foglio↔DB,
+con direzione di lavoro conseguente (tabella di alias, §8.6 del syllabus). Il
+bench ha esposto la discrepanza, Alberto è tornato sul cartaceo, e sul foglio
+c'era scritto **`BELLATOR FRUSINO`** — cioè esattamente il nome a DB. La
+divergenza non esisteva: era un errore di collazione umana introdotto il
+2026-07-19. La diagnosi corretta è opposta: l'OCR ha letto male un nome scritto
+bene, e la discovery ha fallito su un input già corrotto a monte.
+
+Da cui due regole operative:
+
+1. **Una discrepanza bench↔truth non è automaticamente un errore del modello.**
+   È un disaccordo fra due letture, e finché non si torna sull'originale non si
+   sa quale delle due è sbagliata. Attribuirla al provider per default significa
+   usare la `truth` come assioma invece che come misura — e una `truth` non
+   riverificata è un'opinione con più autorità delle altre, non una verità.
+2. **Il metro va ricontrollato quando lo strumento lo contraddice.** Un
+   disaccordo persistente su un campo è un segnale che punta in entrambe le
+   direzioni. Se la riverifica corregge la `truth`, la correzione si registra
+   nel caso (campo `corrections`: valore prima/dopo, data, motivo) e i `verdict`
+   delle estrazioni già presenti si riclassificano di conseguenza — nel caso
+   Bellator, `home_team_name` è passato da `correct` a `wrong` per entrambi i
+   provider.
+
+Corollario sui casi vicini: un errore di collazione raramente è isolato, perché
+nasce dalle condizioni di una sessione (foglio illeggibile, fretta, un nome
+raro). Quando un caso viene corretto, i casi collazionati nella **stessa
+sessione** che sostengono lo **stesso tipo di finding** vanno marcati
+`pending_reverification` — non corretti, non cancellati: sospesi finché un umano
+non li ha riguardati. È stato fatto per Olympic Roma P.N. e per le tre
+occorrenze di Nautilus.
 
 ## Come aggiungere un caso
 

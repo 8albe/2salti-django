@@ -2,8 +2,20 @@
   "case_id": "2026-04-11_bellator-frusino_vs_ss-lazio-nuoto",
   "schema_version": "1.0",
   "verified_by": "Alberto Galbiati",
-  "verified_at": "2026-07-19",
+  "verified_at": "2026-07-20",
   "verification_method": "collazione a mano del referto cartaceo originale",
+  "legibility_note": "Il cartaceo di questo referto e' compilato molto male: anche un lettore umano fatica a decifrare sia i valori numerici sia i nomi delle squadre e dei giocatori. E' il contesto in cui e' nato l'errore di collazione registrato in 'corrections'. Va tenuto presente leggendo i risultati del bench su questo caso: un errore del provider qui non e' equivalente a un errore su un foglio pulito.",
+
+  "corrections": [
+    {
+      "corrected_at": "2026-07-20",
+      "corrected_by": "Alberto Galbiati",
+      "field": "match.home_team.name_on_paper",
+      "before": "BELLATOR FROSINONE",
+      "after": "BELLATOR FRUSINO",
+      "reason": "Valore corretto il 2026-07-20 su riverifica del cartaceo originale, dopo che il bench ha esposto la discrepanza fra truth ed estrazioni. Il valore precedente era un errore di collazione umana introdotto il 2026-07-19, NON una divergenza reale foglio<->DB: sul foglio c'e' scritto 'BELLATOR FRUSINO', che coincide col nome a DB (Team pk=5, 'Bellator Frusino'). Conseguenza: il finding di discovery di questo caso e' stato riscritto, e i verdict 'home_team_name' delle due estrazioni passano da 'correct' a 'wrong'."
+    }
+  ],
 
   "match": {
     "db_match_pk": 3,
@@ -17,7 +29,7 @@
     "home_team": {
       "db_team_pk": 5,
       "db_team_name": "Bellator Frusino",
-      "name_on_paper": "BELLATOR FROSINONE"
+      "name_on_paper": "BELLATOR FRUSINO"
     },
     "away_team": {
       "db_team_pk": 6,
@@ -88,7 +100,7 @@
         "quarter_2": "correct",
         "quarter_3": "wrong",
         "quarter_4": "wrong",
-        "home_team_name": "correct",
+        "home_team_name": "wrong",
         "away_team_name": "correct",
         "date": "correct",
         "roster": "unverified",
@@ -97,7 +109,9 @@
       "notes": [
         "Punteggio casa 5 invece di 4.",
         "Errori sui parziali compensativi: 1+0+3+1 = 5 e 3+5+5+6 = 19, quindi la somma torna al totale dichiarato e il controllo strutturale passa.",
-        "confidence_fields.final_score = 1.0 su un valore errato."
+        "confidence_fields.final_score = 1.0 su un valore errato.",
+        "home_team_name riclassificato da 'correct' a 'wrong' il 2026-07-20: il foglio riporta 'BELLATOR FRUSINO', l'estrazione 'BELLATOR FROSINONE'. Errore di lettura del nome squadra, dichiarato con confidence_fields.home_team = 1.0.",
+        "normalized_data riletto a DB il 2026-07-20 (dev e prod, sola lettura): home_team = 'BELLATOR FROSINONE' in entrambi. Su prod i parziali 3 e 4 del report 16 risultano [1,5] e [3,6] invece di [3,5] e [1,6]: divergenza dev<->prod sul normalized_data dello stesso report, non ancora spiegata."
       ]
     },
     {
@@ -142,13 +156,14 @@
         "quarter_2": "wrong",
         "quarter_3": "wrong",
         "quarter_4": "wrong",
-        "home_team_name": "correct",
+        "home_team_name": "wrong",
         "away_team_name": "correct",
         "date": "correct",
         "roster": "unverified",
         "events": "unverified"
       },
       "notes": [
+        "home_team_name riclassificato da 'correct' a 'wrong' il 2026-07-20: il foglio riporta 'BELLATOR FRUSINO', l'estrazione 'BELLATOR FROSINONE'. Stesso errore di lettura del provider Gemini, con confidence_fields.home_team = 1.0.",
         "Punteggio casa 11 invece di 4: tutti e quattro i parziali sbagliati.",
         "Errori compensativi anche qui: 2+4+2+3 = 11 e 2+5+4+8 = 19.",
         "confidence_fields.final_score = 1.0 e quarters = 0.9 con 4 parziali su 4 errati.",
@@ -162,7 +177,9 @@
     "Entrambi hanno dichiarato confidence 1.0 sul punteggio finale errato: la confidence auto-dichiarata non e' solo non calibrata, e' attivamente fuorviante.",
     "In entrambe le estrazioni gli errori sui parziali si compensano e la somma torna al totale: il controllo 'somma parziali == punteggio finale' (BLUEPRINT §9) passa su dati falsi. Verifica la coerenza interna, non la verita'.",
     "Il punteggio away (19) e' corretto in entrambe le estrazioni, quello home no in entrambe: l'errore non e' casuale sul singolo campo.",
-    "La squadra di casa e' 'BELLATOR FROSINONE' sul cartaceo ma 'Bellator Frusino' a DB: la discovery non riconosce la squadra e genera un referto orfano anche se la squadra esiste."
+    "DIAGNOSI RISCRITTA IL 2026-07-20 (la precedente non regge). Sul cartaceo la squadra di casa e' scritta 'BELLATOR FRUSINO', che coincide col nome a DB ('Bellator Frusino', Team pk=5). NON esiste alcuna divergenza di grafia foglio<->DB su questo caso: la diagnosi precedente si basava su un name_on_paper collazionato male il 2026-07-19. La causa reale del fallimento della discovery e' un ERRORE DI LETTURA OCR SUL NOME SQUADRA: entrambi i provider hanno estratto 'BELLATOR FROSINONE' (verificato a DB il 2026-07-20, report 10 e 16, dev e prod, sola lettura) da un foglio su cui il nome era scritto correttamente e in modo compatibile col DB. La discovery ha quindi fallito su un input gia' corrotto a monte, non su un fuzzy matching troppo stretto.",
+    "Corollario: 'FRUSINO' e' la forma latina/arcaica di Frosinone, e la citta' 'FROSINONE' compare altrove sullo stesso foglio. Entrambi i modelli hanno normalizzato un nome proprio raro verso la forma comune piu' probabile — errore di prior linguistico, non di risoluzione dell'immagine. E' una classe di errore che il preprocessing non attenua e che la confidence auto-dichiarata non segnala (home_team = 1.0 in entrambe le estrazioni).",
+    "Impatto sulla direzione di lavoro: se la causa e' l'accuratezza OCR sui nomi propri e non il fuzzy matching, una tabella di alias squadra/societa' non risolverebbe questo caso — l'alias dovrebbe mappare un valore allucinato, non una grafia legittima alternativa. Vedi la nota sui due casi ancora da riverificare (Olympic Roma P.N., Nautilus Nuoto Roma) prima di considerare fondata la direzione 'alias'."
   ],
 
   "db_correction": {
