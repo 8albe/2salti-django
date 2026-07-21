@@ -1,6 +1,6 @@
 ## 22. OCR asincrono — coda DB-backed con worker systemd
 
-Stato: 🔄 In corso (direzione decisa 2026-07-19; **giri 1 e 2 completati su dev il 2026-07-19**; **giro 3 — deploy prod — completato il 2026-07-20**: l'asincrono è in produzione. Restano il **collaudo end-to-end su prod**, mai eseguito, e la rimozione dei timeout 300s — giro 4)
+Stato: 🔄 In corso (direzione decisa 2026-07-19; **giri 1 e 2 completati su dev il 2026-07-19**; **giro 3 — deploy prod — completato il 2026-07-20**: l'asincrono è in produzione; **collaudo end-to-end su prod eseguito e VERDE il 2026-07-21**. Resta **solo il giro 4**: rimozione dei timeout 300s. La macro **non è chiusa** finché quel cerotto non cade — vedi "Valutazione di chiusura")
 
 Togliere l'elaborazione OCR dal request cycle. Fino al 2026-07-19 `OCRService.process_and_update()` girava **sincrono** dentro la richiesta HTTP (upload view + admin action `process_ocr`), ~80s a referto con Gemini: worker gunicorn bloccato per tutta la durata, pool saturabile con 3 upload concorrenti (OPS_RUNBOOK §10.20), timeout gunicorn+nginx alzati a 300s come **cerotto provvisorio** (OPS_RUNBOOK §3.16).
 
@@ -84,6 +84,29 @@ Deploy in **finestra unica** insieme al gate del risultato pubblico e alla corre
 
 **Quello che il giro 3 NON dimostra.** Il worker su prod **non ha ancora elaborato un solo referto reale**: la coda era vuota per tutta la finestra e nessun upload è stato fatto. Quindi l'asincrono su prod è verificato come *processo che parte, si ferma e si riavvia correttamente*, non come *pipeline che porta un referto da upload a estrazione*. È la ragione per cui questa macro **non è chiusa**: il primo upload reale su prod è il collaudo mancante, e il candidato naturale è il referto 15 (orfano in `UPLOADED`, mai accodato — OPS_RUNBOOK §10.23).
 
+### Collaudo end-to-end su prod (2026-07-21, VERDE)
+
+Il pezzo che il giro 3 dichiarava mancante. Procedura, tabella degli assert e razionale della scelta dell'oggetto in **OPS_RUNBOOK §2.8**; qui la sostanza.
+
+**Oggetto:** il report 15, orfano in `UPLOADED` dal 2026-04-19 (§10.23), scelto perché non collegato ad alcun match — accodarlo non poteva sovrascrivere dati corretti. Prod invariato: HEAD `36296a5`, nessun deploy, nessuna migration.
+
+**Esito: tutti gli assert passati** (00:29 UTC). Sequenza osservata nel journal, pulita e nell'ordine atteso: claim → chiamata Gemini (74.46s) → discovery fallita → quality gate → `NEEDS_REVIEW` → notifica. Stato finale `NEEDS_REVIEW` **orfano**, nessun aggancio spurio, `Match` e `LeagueStanding` invariate (valori gold dei 4 match riconfermati), audit di enqueue registrato (`MatchReportAuditLog` pk=14).
+
+**Il risultato che conta di più non è "ha estratto", è "non ha agganciato".** Su un referto le cui squadre non esistono a DB la pipeline è arrivata a uno stato finale corretto e conservativo, senza collegarsi alla partita sbagliata. È esattamente il comportamento per cui la discovery restituisce `None` invece di indovinare.
+
+**Confine netto con Macro 8.** Il collaudo verifica la *pipeline*, non l'*accuratezza*. L'estrazione di merito su questo foglio è **sbagliata** (nomi allucinati, data errata, finale invertito, parziali compensativi) ed è registrata come dato Macro 8 in [syllabus §8.10](8_ocr_affidabilita.md). Un'estrazione sbagliata non è un fallimento del worker: è la ragione per cui il referto è finito in `NEEDS_REVIEW` e non altrove.
+
+**Decisione sul report 15 (Alberto, 2026-07-21):** resta in `NEEDS_REVIEW` come orfano documentato, nessuna azione a DB. Diventerà risolvibile solo se e quando le società lette sul foglio entreranno a sistema.
+
+### Valutazione di chiusura (2026-07-21)
+
+Verificata contro l'"Ambito" e l'"Uscita" di questa scheda:
+
+- I sette punti di ambito operativi sono soddisfatti e il **collaudo end-to-end è ora spuntato**.
+- **Non soddisfatto: la rimozione dei timeout 300s** (giro 4), che è sia l'ultima voce di ambito sia la condizione dichiarata nella sezione "Uscita" ("a lavoro finito, rimuovere i timeout a 300s: sono il cerotto che questa macro elimina") e la condizione di chiusura di OPS_RUNBOOK §10.20.
+
+**Verdetto: Macro 22 NON chiudibile oggi.** Manca un criterio esplicito su due — non è una formalità: finché i 300s restano, la macro non ha ancora rimosso ciò per cui era nata. Resta 🔄, con un solo giro davanti.
+
 ### Ambito
 
 - [x] Enqueue al posto della chiamata sincrona nei **due** entry point: upload view e admin action `process_ocr`
@@ -93,8 +116,8 @@ Deploy in **finestra unica** insieme al gate del risultato pubblico e alla corre
 - [x] UX upload: risposta immediata + stato in polling
 - [x] Guardia `recover_stale_reports` + timer systemd, e aggancio a `ops_check` (profondità coda, referti stale) — **giro 2**, chiude OPS_RUNBOOK §10.19 (residuo dell'install su prod chiuso col giro 3)
 - [x] Deploy su prod: migration gated dopo backup DB, install unit worker **e unit del backstop**, `OPTIONS timeout` + logging in `config/settings.py` — **giro 3, 2026-07-20** (OPS_RUNBOOK §2.7)
-- [ ] **Collaudo end-to-end su prod**: un referto reale che attraversi upload → `QUEUED` → claim → estrazione. Mai eseguito: alla chiusura del giro 3 la coda era vuota
-- [ ] Rimozione dei timeout 300s — **giro 4**, dopo un periodo di osservazione su prod
+- [x] **Collaudo end-to-end su prod**: un referto reale che attraversi upload → `QUEUED` → claim → estrazione — **eseguito e VERDE il 2026-07-21** sul report 15 (OPS_RUNBOOK §2.8)
+- [ ] Rimozione dei timeout 300s — **giro 4**, dopo un periodo di osservazione su prod — **unico criterio residuo, la macro resta aperta per questo**
 
 ### Dipendenze ops
 

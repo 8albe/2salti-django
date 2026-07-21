@@ -181,7 +181,7 @@ Due cose lo rendono interessante oltre al censimento in sé:
 
 Anomalia minore rilevata nello stesso censimento: `in_review_at` è valorizzato (2026-04-19) pur essendo lo stato `UPLOADED` — residuo di una transizione passata, incoerente con lo stato attuale.
 
-**Non toccato**: non accodato, non collegato, non eliminato. La decisione è di prodotto; registrato anche in OPS_RUNBOOK §10.23 perché non se ne perda traccia.
+~~**Non toccato**: non accodato, non collegato, non eliminato.~~ **Superato il 2026-07-21**: il report 15 è stato accodato su prod come oggetto del collaudo end-to-end del worker (OPS_RUNBOOK §2.8) ed è ora in `NEEDS_REVIEW`, orfano. L'esito di merito dell'estrazione è in **§8.10**; la decisione di prodotto (resta orfano documentato, nessuna azione a DB) è registrata lì e in OPS_RUNBOOK §10.23, ora chiusa.
 
 ### 8.9 Baseline Gemini sul dataset gold (2026-07-20)
 
@@ -220,6 +220,41 @@ Totali `--repeat` sui 78 campi: **54 stabili-corretti (69%), 2 stabili-SBAGLIATI
 5. **La data è il campo più fragile dopo i nomi**: sbagliata, instabile o ambigua su 3 casi su 6 — Triscelon stabile-sbagliata (28 vs 25, 5×5), Salerno mai corretta in 5 run (tre valori diversi, due anni diversi), Unime 2006 in 1 run su 5 — e il provider non dichiara una confidence dedicata per la data.
 6. **Inversione casa/trasferta: rara ma riprodotta** — 1 estrazione su 36 (un run del `--repeat` Salerno, 17-12), sempre e solo sul foglio ruotato. Il check dedicato dell'harness l'ha rilevata; su tutti gli altri fogli non è mai scattato.
 7. Nessun run fallito per errore API: 36/36 chiamate a buon fine, nessun caso non-benchato.
+
+### 8.10 Estrazione del report 15 su prod (2026-07-21): il primo dato di accuratezza raccolto in produzione
+
+Il 2026-07-21 il report 15 è stato accodato su prod come oggetto del **collaudo end-to-end del worker OCR** (Macro 22, OPS_RUNBOOK §2.8). Il collaudo è **verde** — è la pipeline a essere stata verificata. Quello che segue è il dato *di merito*, che appartiene a Macro 8 e che è **negativo**.
+
+Il foglio è il cartaceo del caso gold `2026-04-18_sc-salerno_vs_nautilus-nuoto-roma` — lo stesso "caso limite ruotato 90°" della baseline §8.9. Questa però è la **prima estrazione di questo foglio fatta dalla pipeline reale in produzione**, non dall'harness di bench: stesso modello (`gemini-2.5-pro`), stesso preprocessing, percorso applicativo completo.
+
+| Campo | Estratto (prod, report 15) | Truth (cartaceo) | Esito |
+|---|---|---|---|
+| `home_team` | `S.C. Tuscolano` | S.C. Salerno | **allucinazione** |
+| `away_team` | `Virtus Nuoto Roma` | Nautilus Nuoto Roma | **allucinazione** |
+| `date` | 2026-06-18 | 2026-04-18 | **sbagliata** (mese) |
+| `final_score` | 17-12 | 12-17 | **invertito** |
+| Q1 | 5-5 | 5-5 | corretto |
+| Q2 | 4-6 | 4-6 | corretto |
+| Q3 | 7-1 | 2-4 | **allucinato** |
+| Q4 | 1-0 | 1-2 | **allucinato** |
+
+**(a) L'errore compensativo si ripresenta, e qui è ancora più istruttivo.** I parziali estratti sommano `5+4+7+1 = 17` e `5+6+1+0 = 12`: tornano **esattamente al finale estratto**, cioè al finale *invertito*. Il controllo "somma parziali == finale" passa, come sempre. Ma c'è un dettaglio in più rispetto ai casi di §8.5(b): Q1 e Q2 sono corretti *nei valori e nell'attribuzione*, mentre Q3 e Q4 sono inventati per far quadrare i totali con l'inversione. Cioè il modello non ha invertito il foglio in modo uniforme — ha letto correttamente la parte alta della griglia e ha poi **riconciliato all'indietro** la parte bassa verso un totale sbagliato. È la firma di una ricostruzione, non di una lettura.
+
+**(b) I due nomi confermano la classe "allucinazione plausibile" (§8.6(b), §8.9 lettura 4).** `S.C. Tuscolano` e `Virtus Nuoto Roma` sono nomi di società di pallanuoto romana perfettamente verosimili, e nessuno dei due è una grafia alternativa di quello vero: non sono mappabili da una tabella di alias, per definizione. `S.C. Tuscolano` compare peraltro già nell'elenco delle cinque allucinazioni diverse prodotte dal `--repeat 5` su questo stesso foglio (§8.9): la pipeline di produzione ha pescato dalla stessa distribuzione dell'harness di bench.
+
+Conseguenza operativa positiva: **la discovery non ha agganciato nulla** e il referto è finito orfano in `NEEDS_REVIEW`. Su un'estrazione sbagliata così, un fuzzy matching più permissivo sarebbe stato un danno, non un miglioramento — è il vincolo di disegno che la fetta sul passaggio a `difflib` deve rispettare.
+
+**(c) Chiarimento sulla chiave `confidence` — il `{}` del PASSO 7 era un artefatto dello script, non un dato.** La checklist di collaudo leggeva `normalized_data['confidence_fields']` alla **radice** del payload, dove quella chiave non esiste, e mostrava quindi `{}`. Nel payload reale la confidence sta sotto `metadata`, coerentemente con lo schema v2. Valori effettivi del report 15:
+
+- `metadata.confidence` = **0.95**
+- `metadata.confidence_fields` = `home_team` **1.0**, `away_team` **1.0**, `final_score` **1.0**, `quarters` **1.0**, `home_roster` 0.98, `away_roster` 0.98, `events` 0.9, `officials` 0.95
+- (esistono anche `officials.confidence` = 0.95 e `teams.{home,away}.confidence` = 0.98)
+
+**Il dato corretto è peggiore del `{}`.** Il modello ha dichiarato **1.0** su tutti e quattro i campi che ha sbagliato: entrambi i nomi allucinati, il finale invertito e la griglia dei parziali. Non è confidence bassa ignorata: è confidence **massima su valori inventati**, in produzione, sul percorso reale. È la conferma su un caso non costruito di §8.5(c) e della lettura 1 di §8.9 — e la motivazione diretta della neutralizzazione dei gate su `confidence`/`confidence_fields` (§8.11): quei gate non sono mai scattati perché **non possono** scattare, gli errori vivono tutti fra 0.90 e 1.00.
+
+**Nessun riversamento nel caso gold.** Questa estrazione **non** è stata scritta in `extractions[]` del caso: vale la decisione D1 di §8.2 — il riversamento nel dataset è un atto umano dopo review, mai automatico. I valori qui sopra sono registrati come finding, non come misura del dataset.
+
+**Report 15 — decisione presa (Alberto, 2026-07-21):** resta in `NEEDS_REVIEW` come orfano documentato, nessuna azione a DB. Le due società lette sul foglio non esistono a sistema (e quelle vere, `S.C. Salerno` e `Nautilus Nuoto Roma`, sono rispettivamente assente e presente — §8.2): il referto diventerà risolvibile solo se e quando le anagrafiche mancanti entreranno a DB. Registrato anche in OPS_RUNBOOK §10.23, che si chiude con questa decisione.
 
 ---
 

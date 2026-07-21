@@ -176,6 +176,31 @@ Deploy consolidato **in finestra unica**, con lo stesso pattern di §2.5/§2.6 (
 
 **Quasi-incidente: il PASSO 3d saltato per copia-incolla.** La correzione del match 4 è stata **omessa** passando da un blocco all'altro della checklist. `rebuild_standings --verify` e `check_data_integrity` sono passati **puliti sul dato ancora sbagliato**, perché i parziali vecchi del match 4 (`5-0 / 5-0 / 5-0 / 5-1`) sommavano comunque a 20-1. L'errore è stato intercettato **solo** dall'asserzione finale contro i valori collazionati a mano (PASSO 6 della checklist di correzione). È la conferma dal vivo — su un caso non costruito, in condizioni reali — del finding del 2026-07-19: il controllo "somma parziali == finale" ha tasso di rilevazione **nullo** su questa classe di errore (SYLLABUS Macro 8 §8.5(b) e §8.5(d)). La lezione operativa generale è in §6.5.
 
+### 2.8 Collaudo end-to-end del worker OCR su prod — 2026-07-21 (report 15), VERDE
+
+Primo referto reale portato da `UPLOADED` a esito finale dall'asincrono **su produzione**. Chiude il pezzo mancante del giro 3 (§2.7: "il worker su prod non ha ancora elaborato un solo referto reale"). Prod invariato quanto a codice: HEAD `36296a5`, nessun deploy, nessuna migration.
+
+**Oggetto e razionale della scelta.** Il candidato è il report 15 (§10.23): orfano in `UPLOADED`, `match=None`, `normalized_data` vuoto, file su disco. Accodarlo non poteva sovrascrivere dati corretti, perché non è collegato ad alcun match — è l'unico referto a DB con questa proprietà.
+
+**Procedura.** Checklist a blocchi in `scratch/collaudo_report15_20260720.sh` (untracked, stesso pattern di §2.7: si esegue **un passo alla volta leggendo l'output**, `PASSO 3` è un `journalctl -f` in un secondo terminale). Sette passi: preliminari read-only, enqueue, osservazione del journal, verifica di stato, verifica di non-regressione su match/classifiche, audit, confronto di merito con la truth gold.
+
+**Esito: tutti gli assert passati.** Eseguito il 2026-07-21 alle 00:29 UTC.
+
+| Verifica | Esito |
+|---|---|
+| Claim del worker, chiamata Gemini, ritorno | OK — 74.46s |
+| Discovery | fallita (atteso: le due squadre estratte non esistono a DB) |
+| Quality gate | attraversato |
+| Stato finale | `NEEDS_REVIEW`, **orfano** (`match=None`) — come atteso |
+| Aggancio spurio a un match esistente | nessuno |
+| `Match` e `LeagueStanding` | invariati; valori gold dei 4 match riconfermati |
+| Audit | enqueue registrato, `MatchReportAuditLog` pk=14 |
+| Journal | pulito: claim → Gemini → discovery fallita → gate → `NEEDS_REVIEW` → notifica |
+
+**Cosa dimostra e cosa non dimostra.** Dimostra la pipeline Macro 22 end-to-end su prod: accodamento, claim atomico, chiamata al provider reale, gate, transizione di stato, audit, notifica, e — non meno importante — che un referto **non risolvibile** finisce dove deve finire invece di agganciarsi alla partita sbagliata. Non dimostra nulla sull'**accuratezza** dell'estrazione: quella è materia di Macro 8 ed è registrata a parte (syllabus §8.10), con esito negativo su questo foglio.
+
+**Residuo di Macro 22 dopo questo collaudo:** solo il giro 4 (rimozione dei timeout 300s gunicorn + nginx, §10.20). La macro **non è chiusa**.
+
 ## 3. Trappole tecniche note
 
 ### 3.1 `git rm --cached` + file dirty = pull abortito
@@ -602,7 +627,7 @@ Il timer è un **backstop, non il meccanismo primario**: il recupero rapido lo f
 ## 10. Debiti aperti
 
 Registro vivo di problemi noti che richiedono follow-up. Non sono trappole (§3) né bug attivi: sono incoerenze scoperte ma non risolte, da affrontare in sessioni dedicate.
-> Le voci §10.1-10.16 sono CHIUSE e archiviate in Appendice A, che ne conserva razionale, commit e test. Delle voci aperte il 2026-07-19 dal deploy §2.6, **§10.17 e §10.19 sono CHIUSE** (la seconda col deploy §2.7) e restano aperte **§10.18, §10.20** (solo per il giro 4) **e §10.21**. Il deploy §2.7 ha aggiunto **§10.22 e §10.23**.
+> Le voci §10.1-10.16 sono CHIUSE e archiviate in Appendice A, che ne conserva razionale, commit e test. Delle voci aperte il 2026-07-19 dal deploy §2.6, **§10.17 e §10.19 sono CHIUSE** (la seconda col deploy §2.7) e restano aperte **§10.18, §10.20** (solo per il giro 4) **e §10.21**. Il deploy §2.7 ha aggiunto **§10.22 e §10.23**; **§10.23 è CHIUSA** col collaudo §2.8 del 2026-07-21.
 
 ### §10.17 `2salti_nginx_config` fuori repo — CHIUSO 2026-07-19
 
@@ -656,7 +681,7 @@ Il rischio è che `publish_report()` ([matches/services/publishing_service.py](.
 
 Mitigazione oggi in essere, tutta non-tecnica: (a) questa voce e la nota gemella in SYLLABUS Macro 8 §8.5; (b) il fatto che dal 2026-07-20 **nessuno dei cinque è più in `EXTRACTED`** — sono tutti in `NEEDS_REVIEW`, quindi più lontani di un click dalla pubblicazione, ma non protetti. La direzione da valutare in un giro dedicato è un flag esplicito sul report (`normalized_data_is_stale` o equivalente) che `publish_report()` controlli e rifiuti, invece di affidarsi alla memoria di chi guarda la coda.
 
-### §10.23 Report 15 orfano in `UPLOADED`, mai accodato — APERTO 2026-07-20 (da decidere)
+### §10.23 Report 15 orfano in `UPLOADED`, mai accodato — DECISO E CHIUSO 2026-07-21
 
 Censito su prod il 2026-07-20, **non presente** nel censimento del 2026-07-19 (che copriva 7, 8, 10, 11, 16). Stato verificato a DB, in sola lettura:
 
@@ -673,7 +698,13 @@ Censito su prod il 2026-07-20, **non presente** nel censimento del 2026-07-19 (c
 
 Anomalia minore rilevata nello stesso censimento: `in_review_at` è valorizzato (2026-04-19) pur essendo lo stato `UPLOADED` — residuo di una transizione passata, non coerente con lo stato attuale.
 
-**Non toccato per disegno**: non accodato, non collegato a un match, non eliminato. È materiale di lavoro del filone OCR (potenziale caso gold aggiuntivo, o candidato di prova per il primo collaudo end-to-end del worker su prod — vedi §10.20). La decisione su cosa farne è di prodotto: censito qui perché non se ne perda traccia.
+~~**Non toccato per disegno**: non accodato, non collegato a un match, non eliminato.~~
+
+**Esito 2026-07-21.** Il report 15 è stato usato come oggetto del **collaudo end-to-end del worker OCR su prod** (§2.8): accodato deliberatamente, elaborato dal worker, finito in `NEEDS_REVIEW` **orfano** — la discovery non l'ha agganciato a nulla, correttamente, perché le due squadre estratte non esistono a DB.
+
+**Decisione presa (Alberto, 2026-07-21): resta in `NEEDS_REVIEW` come orfano documentato.** Nessuna azione a DB. Le squadre lette sul foglio non hanno anagrafica a sistema, quindi non c'è nulla a cui collegarlo: il referto diventerà risolvibile solo se e quando quelle società entreranno a DB. Non è più un punto cieco della strumentazione — è ora in uno stato finale, visibile in review e nel cockpit come ogni altro `NEEDS_REVIEW`.
+
+Resta aperta l'osservazione generale che l'ha originato: **uno stato `UPLOADED` non accodato non è coperto da alcun segnale** di `ops_check`. Nessun referto è oggi in quella condizione, ma nulla impedisce che ne ricompaiano; se accadrà, il segnale va aggiunto.
 
 ## 11. Sicurezza operativa e frontiera reversibile
 

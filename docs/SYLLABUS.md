@@ -80,5 +80,5 @@ Punto d'ingresso operativo del progetto. Per la visione di prodotto vedi [BLUEPR
 → [Dettaglio](syllabus/21_app_multipiattaforma.md)
 
 ## 22. OCR asincrono — coda DB-backed con worker systemd 🔄
-→ [Dettaglio](syllabus/22_ocr_asincrono.md) — in produzione dal 2026-07-20 (giri 1-3); restano il collaudo end-to-end su prod e il giro 4 (rimozione dei timeout 300s)
+→ [Dettaglio](syllabus/22_ocr_asincrono.md) — in produzione dal 2026-07-20 (giri 1-3), collaudo end-to-end su prod VERDE il 2026-07-21; resta **solo** il giro 4 (rimozione dei timeout 300s), unico criterio che tiene la macro aperta
 
