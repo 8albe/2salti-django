@@ -202,11 +202,10 @@ class OCRSchemaValidator:
         if not match_info.get("date"):
             warnings.append("Data partita mancante nel referto.")
 
-        # 9. Low confidence warning
+        # 9. Confidence — NESSUN WARNING (neutralizzato 2026-07-21, fetta A1)
+        # Vedi la nota estesa in ocr_quality_gate.py: la confidence auto-dichiarata
+        # non e' calibrata, gli errori osservati stanno tutti fra 0.90 e 1.00.
         meta = data.get("metadata", {})
-        confidence = meta.get("confidence", 1.0)
-        if isinstance(confidence, (int, float)) and confidence < 0.6:
-            warnings.append(f"Confidenza estrazione bassa: {confidence:.0%}")
 
         # 10. Surface extraction_warnings from provider
         extraction_warnings = meta.get("extraction_warnings", [])
@@ -214,24 +213,14 @@ class OCRSchemaValidator:
             for w in extraction_warnings:
                 warnings.append(f"[OCR] {w}")
 
-        # 11. Officials confidence (v2 — soft warning solo se la sezione esiste)
+        # 11. Officials — il controllo strutturale resta, quello su confidence no (A1)
         officials = data.get("officials")
         if officials is not None and isinstance(officials, dict):
-            off_conf = officials.get("confidence")
-            if isinstance(off_conf, (int, float)) and off_conf < 0.5:
-                warnings.append(f"Confidenza arbitri bassa: {off_conf:.0%} — verificare manualmente.")
             referees = officials.get("referees", [])
             if isinstance(referees, list) and len(referees) == 0:
                 warnings.append("Sezione officials presente ma nessun arbitro estratto.")
 
-        # 12. Team-level confidence (v2 — soft warning)
-        teams_data = data.get("teams", {})
-        for side in ["home", "away"]:
-            t = teams_data.get(side, {})
-            if isinstance(t, dict):
-                t_conf = t.get("confidence")
-                if isinstance(t_conf, (int, float)) and t_conf < 0.5:
-                    warnings.append(f"Confidenza roster {side.upper()} bassa: {t_conf:.0%}")
+        # 12. Team-level confidence — NESSUN WARNING (neutralizzato 2026-07-21, A1)
 
         return len(warnings) == 0, warnings
 
@@ -266,11 +255,8 @@ class OCRSchemaValidator:
             except Exception:
                 blockers.append("Punteggio finale non parsabile.")
 
-        # Very low confidence
+        # Confidence: nessun blocker (neutralizzato 2026-07-21, fetta A1)
         meta = data.get("metadata", {})
-        confidence = meta.get("confidence", 1.0)
-        if isinstance(confidence, (int, float)) and confidence < 0.3:
-            blockers.append(f"Confidenza estremamente bassa: {confidence:.0%}")
 
         # Both team names missing
         match_info = data.get("match_info", {})
@@ -285,10 +271,7 @@ class OCRSchemaValidator:
             blockers.append("Entrambi i roster sono vuoti.")
 
         # --- WARNINGS ---
-
-        # Low (but not critically low) confidence
-        if isinstance(confidence, (int, float)) and 0.3 <= confidence < 0.6:
-            warnings.append(f"Confidenza bassa: {confidence:.0%}")
+        # (nessun warning su confidence: neutralizzato 2026-07-21, fetta A1)
 
         # --- BLOCKERS (Coherence) ---
         _, coherence_warnings = OCRSchemaValidator.validate_coherence(data)

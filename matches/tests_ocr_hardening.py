@@ -75,12 +75,29 @@ class OCRHardeningTest(TestCase):
         self.assertFalse(is_valid)
         self.assertTrue(any("Incoerenza punteggio" in b for b in blockers))
 
-    def test_low_field_confidence_fails(self):
-        """Low confidence in header fields should block."""
+    def test_low_field_confidence_does_not_block(self):
+        """A1 (2026-07-21): `confidence_fields` non e' piu' un criterio di gating.
+
+        Prima: < 0.5 su un campo di intestazione era blocker, < 0.8 era info.
+        Rimossi — la confidence per campo non correla con la correttezza
+        (syllabus §8.5(c), §8.9, §8.10).
+        """
         self.valid_data["metadata"]["confidence_fields"]["final_score"] = 0.4
+        self.valid_data["metadata"]["confidence_fields"]["home_team"] = 0.1
+        is_valid, blockers, warnings, info = OCRQualityGate.evaluate(self.valid_data, context=self.context)
+        self.assertTrue(is_valid)
+        self.assertEqual(blockers, [])
+        self.assertFalse(any("affidabilit" in msg.lower() for msg in warnings + info))
+
+    def test_perfect_field_confidence_does_not_bypass_structural_checks(self):
+        """Confidence 1.0 ovunque non deve rendere valido un payload incoerente."""
+        self.valid_data["metadata"]["confidence_fields"] = {
+            k: 1.0 for k in self.valid_data["metadata"]["confidence_fields"]
+        }
+        self.valid_data["scores"]["quarters"]["1"] = [10, 10]
         is_valid, blockers, warnings, _ = OCRQualityGate.evaluate(self.valid_data, context=self.context)
         self.assertFalse(is_valid)
-        self.assertTrue(any("Bassa affidabilità nel campo intestazione" in b for b in blockers))
+        self.assertTrue(any("Incoerenza punteggio" in b for b in blockers))
 
     def test_event_total_exceeds_final_fails(self):
         """Too many goals in events vs final score should block."""

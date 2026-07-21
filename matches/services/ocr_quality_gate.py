@@ -152,23 +152,24 @@ class OCRQualityGate:
                 if val in garbage_terms:
                     blockers.append(f"Valore placeholder inaccettabile trovato per {side}: '{match_info.get(side)}'")
 
-        # 7. Confidence Gates
-        metadata = data.get("metadata", {})
-        if isinstance(metadata, dict):
-            confidence = metadata.get("confidence", 1.0)
-            if isinstance(confidence, (int, float)) and confidence < 0.3:
-                blockers.append(f"Affidabilità OCR troppo bassa ({confidence*100:.0f}%).")
-            elif isinstance(confidence, (int, float)) and confidence < 0.6:
-                warnings.append(f"Affidabilità OCR marginale ({confidence*100:.0f}%).")
-            
-            # Per-field confidence (Hardened check)
-            conf_fields = metadata.get("confidence_fields", {})
-            header_fields = ["home_team", "away_team", "final_score"]
-            for field in header_fields:
-                f_conf = conf_fields.get(field)
-                if isinstance(f_conf, (int, float)) and f_conf < 0.5:
-                    blockers.append(f"Bassa affidabilità nel campo intestazione '{field}' ({f_conf*100:.0f}%).")
-                elif isinstance(f_conf, (int, float)) and f_conf < 0.8:
-                    info.append(f"Affidabilità accettabile ma non perfetta in '{field}' ({f_conf*100:.0f}%).")
+        # 7. Confidence — NESSUN GATE (neutralizzato 2026-07-21, fetta A1)
+        #
+        # Fino al 2026-07-21 qui vivevano quattro decisioni automatiche basate sulla
+        # confidence auto-dichiarata dal provider: blocker sotto 0.3 globale, warning
+        # sotto 0.6 globale, blocker sotto 0.5 e info sotto 0.8 sui campi di
+        # intestazione (`metadata.confidence_fields`).
+        #
+        # Sono state rimosse perché la misura che le giustificava le smentisce:
+        # sul dataset gold e sulla prima estrazione reale in produzione (report 15)
+        # TUTTI gli errori osservati — nomi allucinati, finale invertito, parziali
+        # inventati, date sbagliate — stanno fra 0.90 e 1.00, spesso esattamente a
+        # 1.00. Nessuna di queste soglie e' mai scattata, e nessuna POTREBBE
+        # scattare: la confidence del provider non e' calibrata e non correla con
+        # la correttezza. Un gate che non puo' attivarsi non protegge — comunica
+        # solo una falsa garanzia a chi legge la review.
+        # Dettaglio e dati in docs/syllabus/8_ocr_affidabilita.md §8.5(c), §8.9 e §8.10.
+        #
+        # La confidence NON viene rimossa dai dati: resta in `normalized_data` e
+        # resta visibile in review come dato grezzo, etichettata "non calibrata".
 
         return len(blockers) == 0, blockers, warnings, info
