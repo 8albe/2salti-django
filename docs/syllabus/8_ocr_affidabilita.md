@@ -83,7 +83,7 @@ Il punto capitale è che **le due direzioni non sono simmetriche**, e trattarle 
 | **D3** | **Difetto con estrazione incompleta**: eventi-gol totali < finale | solo **evidenza** informativa | nessun blocco |
 | **D4** | Hardening del prompt v2: il `quarter` di ogni evento va derivato dalla **sezione** della storia cronometrica, mai dal minuto e mai distribuito per far tornare i parziali. `null` resta ammesso e preferibile all'invenzione; il campo **non** diventa obbligatorio | — | — |
 | **D5** | Correzione di framing in §8.11 (vedi lì) | — | — |
-| **D6** | Tripla semantica: al gate il per-periodo **sostituisce** la variante aggregata (la domina); al publish **si affianca** all'uguaglianza stretta gol-eventi/finale, che resta un requisito a sé | — | — |
+| **D6** | Tripla semantica: al gate il per-periodo sostituisce la variante aggregata **solo dove la domina davvero** — tutti i parziali leggibili e nessun gol privo di periodo, valutato **per squadra**; altrimenti l'aggregato resta attivo. Al publish **si affianca** all'uguaglianza stretta gol-eventi/finale, che resta un requisito a sé. *Perché condizionata e non secca: con la sostituzione secca un referto con gol senza periodo avrebbe perso anche la copertura aggregata, riducendo la difesa invece di aumentarla.* | — | — |
 
 Due precisazioni che il codice rende esplicite e che sarebbe facile perdere:
 
