@@ -201,6 +201,31 @@ Primo referto reale portato da `UPLOADED` a esito finale dall'asincrono **su pro
 
 **Residuo di Macro 22 dopo questo collaudo:** solo il giro 4 (rimozione dei timeout 300s gunicorn + nginx, §10.20). La macro **non è chiusa**.
 
+### 2.9 Deploy 2026-07-21 — `36296a5` → `2ad3436` (filone OCR post-collaudo: quality gate A1, seam B1, `TeamAlias` C1, discovery difflib)
+
+Deploy reale dev→prod con lo stesso pattern di §2.5/§2.6/§2.7 (merge `--no-ff` `dev`→`master` da home + push; pull su prod; `migrate` manuale gated dopo backup). Prod portato da `36296a5` a **`2ad3436`** (20 commit oltre il merge). **Unica migration nel delta: `core/0026_teamalias`, additiva** (`CreateModel`, tabella `core_teamalias` creata vuota).
+
+**La premessa iniziale era falsa: nessuna migration distruttiva in questo giro.** La session note di partenza dava la distruttiva `matches/0017` (`DROP TABLE matches_ocrrawresponse`) come parte di questo deploy. È **stale**: la `0017` era già applicata su prod dal **2026-07-19** (§2.6). Le tre evidenze usate per stabilirlo, tutte read-only: (a) `git merge-base` e `git diff --name-only master..dev -- '*/migrations/*'` in home, che restituisce la sola `core/migrations/0026_teamalias.py`; (b) `showmigrations matches` sul DB prod, che dà `[X] 0017_delete_ocrrawresponse`; (c) la voce §2.6 di questo runbook, che registra il rituale con cui la `0017` fu applicata. È lo stesso schema del gotcha §2.4: **la narrativa di sessione non è la topologia** — si verifica a git e a DB, non si deduce dal racconto.
+
+**La scoperta è stata codificata nel gate, non solo raccontata.** Il BLOCCO 1 della checklist non si limita a documentare che la `0017` è già applicata: **asserisce** che lo sia, con `exit 1` se `showmigrations` non la desse `[X]` (messaggio: "contraddice OPS §2.6: fermarsi e rivalutare"). Se la premessa stale fosse stata invece quella vera, il giro si sarebbe fermato al primo blocco anziché procedere su un'assunzione. Stesso trattamento per le altre precondizioni: HEAD attesi di home e prod, tree puliti, `core` fermo a `0025`, `0026` assente, `core_teamalias` inesistente, `Team` pk 3 e 7 coi nomi attesi dallo script alias.
+
+**Sequenza eseguita** (checklist a blocchi in `scratch/deploy_prod_filone_ocr_20260721.sh`, untracked: **un blocco alla volta leggendo l'output**, stesso pattern di §2.7 e §2.8 — l'intestazione del file lo dice esplicitamente):
+
+1. **Gate e recon read-only** (sopra): tutte le precondizioni asserite, `exit 1` alla prima che non regge.
+2. **Backup DB prod** in `/var/tmp/db.sqlite3.filone-ocr-20260721`, gate = `PRAGMA integrity_check` + dimensione plausibile, `.sha256` con la **sola riga del backup** (learning §2.5).
+3. **Merge `--no-ff` `dev`→`master` + push** da home (`dev`/`master` divergenti by design, merge-base `144a458`), con asserzione di **tree-equality** `git diff master dev` vuoto dopo il merge.
+4. **Pull su prod** — codice nuovo su disco, schema ancora vecchio: stato **atteso**, non un bug (CLAUDE.md).
+5. **Dry-run della `0026` su copia dell'intero progetto** in `/var/tmp` (il path del DB è hardcoded, gotcha §3.15), con DB copiato dal backup del punto 2 e SHA256 del DB prod reale verificato **invariato** prima/dopo.
+6. **`restart 2salti` PRIMA del `migrate`**, poi `migrate core 0026`, `collectstatic`, `restart 2salti-ocrworker` — rituale §2.6 punto 4 nella variante additiva di §2.7 punto 5: qui la finestra scomoda è **codice nuovo su schema vecchio**, quindi i comandi in sequenza immediata, senza pause.
+7. **Smoke.**
+8. **Post-deploy: alias fondativi.**
+
+**Esito: verde.** Smoke a 4 URL (`/`, `/matches/1/`, `/matches/2/`, `/accounts/login/`) tutti **200**; `showmigrations core` dà `[X] 0026_teamalias`; `2salti` e `2salti-ocrworker` entrambi `active`; nel journal il worker dichiara la riga `Avvio (… revision=2ad3436e…)`, cioè il **nuovo** SHA — la stessa conferma dal vivo già usata in §2.7. `ops_check --mode morning` **GREEN** (`Findings: 1`, non contraddittorio: §3.18 — ma non leggibile, vedi §10.25).
+
+**Post-deploy — i 3 alias fondativi.** Creati su prod con lo script idempotente `scratch/alias_fondativi_20260721.py` (`get_or_create` sulla colonna normalizzata, con assert di autoprotezione sui nomi di `Team` pk 3 e 7), poi **verificati funzionalmente** — non solo contati — richiamando `resolve_team_entity()` su ciascuna grafia: `Olympic Roma P.N.` → `Team` 7, `Nautilus Roma` → `Team` 3, `Nautilus Nuoto Roma` → `Team` 3. `TeamAlias.objects.count() == 3`. Questo chiude la divergenza dev/prod sulla discovery aperta dalla fetta C1: prod ha ora tabella alias e comportamento di risoluzione allineati a dev.
+
+**Divergenza riaperta lo stesso giorno, su un altro asse.** Il merge D1 delle anagrafiche Lazio è **solo su `dev`** (`4daca63`) e **non è propagato su prod**: oggi `SS Lazio Nuoto` risolve **sugli Allievi su prod** e **sulla Serie C su dev**. È il prossimo giro, separato da questo; fino ad allora la discovery dei nomi Lazio dà esiti diversi nei due ambienti — da tenere presente leggendo qualunque referto di quelle squadre.
+
 ## 3. Trappole tecniche note
 
 ### 3.1 `git rm --cached` + file dirty = pull abortito
@@ -627,7 +652,7 @@ Il timer è un **backstop, non il meccanismo primario**: il recupero rapido lo f
 ## 10. Debiti aperti
 
 Registro vivo di problemi noti che richiedono follow-up. Non sono trappole (§3) né bug attivi: sono incoerenze scoperte ma non risolte, da affrontare in sessioni dedicate.
-> Le voci §10.1-10.16 sono CHIUSE e archiviate in Appendice A, che ne conserva razionale, commit e test. Delle voci aperte il 2026-07-19 dal deploy §2.6, **§10.17 e §10.19 sono CHIUSE** (la seconda col deploy §2.7) e restano aperte **§10.18, §10.20** (solo per il giro 4) **e §10.21**. Il deploy §2.7 ha aggiunto **§10.22 e §10.23**; **§10.23 è CHIUSA** col collaudo §2.8 del 2026-07-21.
+> Le voci §10.1-10.16 sono CHIUSE e archiviate in Appendice A, che ne conserva razionale, commit e test. Delle voci aperte il 2026-07-19 dal deploy §2.6, **§10.17 e §10.19 sono CHIUSE** (la seconda col deploy §2.7) e restano aperte **§10.18, §10.20** (solo per il giro 4) **e §10.21**. Il deploy §2.7 ha aggiunto **§10.22 e §10.23**; **§10.23 è CHIUSA** col collaudo §2.8 del 2026-07-21. Il deploy §2.9 del 2026-07-21 ha aggiunto **§10.25 e §10.26**, entrambe aperte.
 
 ### §10.17 `2salti_nginx_config` fuori repo — CHIUSO 2026-07-19
 
@@ -709,6 +734,14 @@ Resta aperta l'osservazione generale che l'ha originato: **uno stato `UPLOADED` 
 ### §10.24 Naming dei `Team` incoerente con la convenzione dichiarata — APERTO 2026-07-21 (cosmetico)
 
 `Team.name` dichiara nell'`help_text` la convenzione "Society + tipo lega", ma solo alcune squadre la rispettano (il merge D1 di syllabus §8.7 ha lasciato `S.S. Lazio Nuoto Allievi` accanto a `S.S. Lazio Nuoto`, che dovrebbe essere `… Serie C`): l'asimmetria è **preesistente e generale su tutte e 13 le squadre**, quindi va sanata in un giro cosmetico dedicato su tutte o su nessuna — mai su una sola, perché ogni rinomina sposta i punteggi della discovery (§8.6).
+
+### §10.25 `ops_check` conta i findings ma non li stampa — APERTO 2026-07-21
+
+Nello smoke del deploy §2.9 il comando ha riportato `GREEN, Findings: 1` senza alcun modo, a CLI, di sapere **quale** finding fosse (nemmeno con `--verbosity 2`: non esiste il ramo, §3.18); un segnale che non si può leggere non è un segnale, e finché resta così l'unica via è il JSON in `logs/ops/`.
+
+### §10.26 Backup vecchi in accumulo in `/var/tmp`, uno da 0 byte — APERTO 2026-07-21
+
+`/var/tmp` conserva backup DB di giri passati mai ripuliti, fra cui `db.sqlite3.match3-correction-20260719` di **0 byte** — un backup che non contiene nulla e su cui nessun rollback può contare; il gate `PRAGMA integrity_check` + dimensione plausibile del rituale attuale (§2.5) esiste proprio per non produrne altri, ma non ripulisce quelli già a terra.
 
 ## 11. Sicurezza operativa e frontiera reversibile
 
