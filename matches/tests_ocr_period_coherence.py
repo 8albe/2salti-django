@@ -12,7 +12,9 @@ nome, nessun dato personale.
 
 from django.test import SimpleTestCase
 
+from matches.services.ocr_quality_gate import OCRQualityGate
 from matches.services.schema import (
+    PERIOD_BLOCKER_PREFIX,
     OCRSchemaValidator,
     PERIOD_DEFICIT,
     PERIOD_EXCESS,
@@ -200,6 +202,17 @@ class PeriodCheckSemanticsTest(SimpleTestCase):
             self.assertFalse(r["applicable"])
             self.assertIsNotNone(r["not_applicable_reason"])
 
+    def test_periodi_in_forma_non_confrontabile_sono_dichiarati(self):
+        payload = build_payload(
+            "3-3",
+            {"1": [3, 3], "2": "illeggibile"},
+            {"1": (3, 3)},
+        )
+        r = OCRSchemaValidator.check_goal_events_per_period(payload)
+        self.assertEqual(r["counts"]["periods_not_applicable"], 1)
+        self.assertEqual(r["rows"][1]["outcome"], PERIOD_NOT_APPLICABLE)
+        self.assertIsNotNone(r["rows"][1]["not_applicable_reason"])
+
     def test_tabella_riporta_conteggi_e_direzione_per_ogni_periodo(self):
         r = OCRSchemaValidator.check_goal_events_per_period(REPORT_8)
         self.assertEqual([row["quarter"] for row in r["rows"]], ["1", "2", "3", "4"])
@@ -209,3 +222,91 @@ class PeriodCheckSemanticsTest(SimpleTestCase):
         self.assertEqual(row2["home_outcome"], PERIOD_OK)
         self.assertEqual(row2["away_outcome"], PERIOD_DEFICIT)
         self.assertEqual(row2["outcome"], PERIOD_DEFICIT)
+
+
+def wrap(payload, home="Pro Recco", away="AN Brescia"):
+    """Completa un payload di periodo fino a farlo passare per referto estratto.
+
+    Serve ai test dei due call site: gate e publish readiness guardano anche
+    squadre, roster e riconciliazione, che al check per-periodo non interessano.
+    """
+    roster = [{"number": i, "name": f"Giocatore {i}"} for i in range(1, 14)]
+    return {
+        "metadata": {"confidence": 0.95, "confidence_fields": {}, "extraction_warnings": []},
+        "match_info": {"home_team": home, "away_team": away, "date": "2026-01-15"},
+        "scores": payload["scores"],
+        "teams": {"home": {"name": home, "players": roster},
+                  "away": {"name": away, "players": roster}},
+        "events": payload["events"],
+    }
+
+
+class PeriodCheckAtGateTest(SimpleTestCase):
+    """Consumo in `OCRQualityGate.evaluate` — severita' D1/D2/D3 al gate."""
+
+    def test_eccesso_declassa_il_referto_a_needs_review(self):
+        """D1: l'eccesso e' impossibile per costruzione, quindi blocca il gate."""
+        is_valid, blockers, warnings, info = OCRQualityGate.evaluate(wrap(REPORT_7))
+        self.assertFalse(is_valid)
+        self.assertTrue(any(PERIOD_BLOCKER_PREFIX in b for b in blockers))
+
+    def test_difetto_con_estrazione_incompleta_e_sola_evidenza(self):
+        """D3: mancata rilevazione non e' errore — niente blocco, niente warning."""
+        for payload in (REPORT_8, REPORT_10, REPORT_11):
+            with self.subTest(payload=payload["scores"]["final_score"]):
+                is_valid, blockers, warnings, info = OCRQualityGate.evaluate(wrap(payload))
+                self.assertFalse(any(PERIOD_BLOCKER_PREFIX in b for b in blockers))
+                self.assertFalse(any(PERIOD_BLOCKER_PREFIX in w for w in warnings))
+                self.assertTrue(any("Evidenza per-periodo" in i for i in info))
+
+    def test_distribuzione_sbagliata_avvisa_ma_non_declassa(self):
+        """D2: warning al gate, non blocco. Il blocco arriva al publish."""
+        payload = build_payload(
+            "12-12",
+            {"1": [3, 3], "2": [3, 3], "3": [3, 3], "4": [3, 3]},
+            {"1": (3, 4), "2": (3, 2), "3": (3, 3), "4": (3, 3)},
+        )
+        is_valid, blockers, warnings, info = OCRQualityGate.evaluate(wrap(payload))
+        self.assertTrue(any(PERIOD_BLOCKER_PREFIX in w for w in warnings))
+
+    def test_referto_16_passa_il_gate_pur_avendo_parziali_falsi(self):
+        """Il gate non puo' vedere la falsita' dei parziali: e' il limite, §8.11."""
+        is_valid, blockers, warnings, info = OCRQualityGate.evaluate(wrap(REPORT_16))
+        self.assertFalse(any(PERIOD_BLOCKER_PREFIX in b for b in blockers))
+
+
+class PeriodCheckAtPublishTest(SimpleTestCase):
+    """Consumo in `validate_coherence` / `assess_publish_readiness`."""
+
+    def test_eccesso_blocca_il_publish(self):
+        safe, blockers, warnings = OCRSchemaValidator.assess_publish_readiness(wrap(REPORT_7))
+        self.assertFalse(safe)
+        self.assertTrue(any(PERIOD_BLOCKER_PREFIX in b for b in blockers))
+
+    def test_distribuzione_sbagliata_blocca_il_publish(self):
+        payload = build_payload(
+            "12-12",
+            {"1": [3, 3], "2": [3, 3], "3": [3, 3], "4": [3, 3]},
+            {"1": (3, 4), "2": (3, 2), "3": (3, 3), "4": (3, 3)},
+        )
+        safe, blockers, warnings = OCRSchemaValidator.assess_publish_readiness(wrap(payload))
+        self.assertFalse(safe)
+        self.assertTrue(any(PERIOD_BLOCKER_PREFIX in b for b in blockers))
+
+    def test_difetto_con_estrazione_incompleta_non_blocca_mai(self):
+        """D3 non deve produrre blocchi al publish nemmeno qui.
+
+        Questi referti restano non pubblicabili per l'incoerenza AGGREGATA
+        (gol estratti != finale), che e' un requisito a se': cio' che si blinda
+        qui e' che nessun blocco arrivi dalla direzione "difetto per-periodo".
+        """
+        for payload in (REPORT_8, REPORT_10, REPORT_11):
+            with self.subTest(payload=payload["scores"]["final_score"]):
+                safe, blockers, warnings = OCRSchemaValidator.assess_publish_readiness(wrap(payload))
+                self.assertFalse(any(PERIOD_BLOCKER_PREFIX in b for b in blockers))
+
+    def test_l_aggregato_resta_al_publish_accanto_al_per_periodo(self):
+        """D6: al publish l'uguaglianza stretta gol-eventi/finale non e' sostituita."""
+        safe, blockers, warnings = OCRSchemaValidator.assess_publish_readiness(wrap(REPORT_11))
+        self.assertFalse(safe)
+        self.assertTrue(any("Incoerenza eventi" in b for b in blockers))

@@ -129,20 +129,54 @@ class OCRQualityGate:
                     )
 
         # 5. Events contradict score totals
+        #
+        # D6 (2026-07-21): qui il confronto PER PERIODO sostituisce quello
+        # aggregato, perche' e' strettamente piu' informativo — con tutti i
+        # parziali leggibili e tutti i gol dotati di periodo, un eccesso sul
+        # totale implica un eccesso su almeno un periodo, mentre il contrario non
+        # vale: una squadra puo' avere il totale giusto e un periodo in eccesso.
+        # La sostituzione vale solo dove il per-periodo domina davvero. Se un
+        # parziale e' illeggibile, o se qualche gol e' privo di periodo, i gol
+        # possono "nascondersi" e il per-periodo non copre piu' l'aggregato: in
+        # quel caso il controllo aggregato resta al suo posto, per quella squadra.
         events = data.get("events", [])
         if not isinstance(events, list):
             blockers.append("La sezione 'events' deve essere una lista.")
         elif home_total is not None and away_total is not None:
             from ..event_types import SCORE_EVENT_CODES
+            from .schema import OCRSchemaValidator
+
             goals_home = sum(1 for e in events if isinstance(e, dict) and e.get("type") in SCORE_EVENT_CODES and e.get("team") == "home")
             goals_away = sum(1 for e in events if isinstance(e, dict) and e.get("type") in SCORE_EVENT_CODES and e.get("team") == "away")
 
-            
+            period_check = OCRSchemaValidator.check_goal_events_per_period(data)
+            all_periods_readable = (
+                period_check["applicable"]
+                and period_check["counts"]["periods_not_applicable"] == 0
+            )
+
+            # D1: piu' eventi-gol del parziale e' impossibile per costruzione.
+            blockers.extend(period_check["messages"]["excess"])
+            # D2: totale di squadra giusto ma distribuito male fra i periodi.
+            # Non declassa da solo il referto: e' un avviso al revisore, il blocco
+            # scatta al publish.
+            warnings.extend(period_check["messages"]["distribution"])
+            # D3: difetto con estrazione incompleta, e ogni motivo per cui il
+            # confronto non e' stato eseguibile. Evidenza, mai giudizio.
+            info.extend(period_check["messages"]["evidence"])
+
             # Contradiction: we have MORE goals extracted than the final score says
-            if goals_home > home_total:
-                blockers.append(f"Incoerenza eventi: trovati {goals_home} gol CASA, ma il finale indica {home_total}.")
-            if goals_away > away_total:
-                blockers.append(f"Incoerenza eventi: trovati {goals_away} gol OSPITE, ma il finale indica {away_total}.")
+            for side, goals, total, label in (
+                ("home", goals_home, home_total, "CASA"),
+                ("away", goals_away, away_total, "OSPITE"),
+            ):
+                covered_by_period = (
+                    all_periods_readable and period_check["unassigned_goals"][side] == 0
+                )
+                if goals > total and not covered_by_period:
+                    blockers.append(
+                        f"Incoerenza eventi: trovati {goals} gol {label}, ma il finale indica {total}."
+                    )
 
         # 6. Garbage/placeholder values catching
         garbage_terms = ["unknown", "da inserire", "tbd", "n/a", "null", "none"]

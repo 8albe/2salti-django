@@ -80,16 +80,21 @@ class VerifiedProjectionGuardrailTest(TestCase):
 
         I gol devono essere tanti quanti il punteggio finale, altrimenti scatta
         prima il blocker di coerenza ("Incoerenza eventi") e il guardrail sotto
-        test non verrebbe nemmeno raggiunto.
+        test non verrebbe nemmeno raggiunto. Dal 2026-07-21 devono anche essere
+        distribuiti sui periodi secondo i parziali (§8.5(b)-1), altrimenti scatta
+        prima il blocker di coerenza per-periodo.
         """
         home_goals, away_goals = (int(p) for p in final_score.split("-"))
-        events = [
-            {"type": "GOAL", "team": "home", "player": "Giocatore Casa", "minute": 1, "quarter": 1}
-            for _ in range(home_goals)
-        ] + [
-            {"type": "GOAL", "team": "away", "player": "Giocatore Ospite", "minute": 2, "quarter": 1}
-            for _ in range(away_goals)
-        ]
+        events = []
+        for q, (q_home, q_away) in quarters.items():
+            events += [
+                {"type": "GOAL", "team": "home", "player": "Giocatore Casa", "minute": 1, "quarter": int(q)}
+            ] * q_home
+            events += [
+                {"type": "GOAL", "team": "away", "player": "Giocatore Ospite", "minute": 2, "quarter": int(q)}
+            ] * q_away
+        assert sum(1 for e in events if e["team"] == "home") == home_goals
+        assert sum(1 for e in events if e["team"] == "away") == away_goals
         return {
             "metadata": {"confidence": 0.95},
             "match_info": {"home_team": "Home G", "away_team": "Away G"},

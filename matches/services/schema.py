@@ -433,6 +433,19 @@ class OCRSchemaValidator:
             if goal_count_a != away_total:
                 warnings.append(f"Incoerenza eventi: {goal_count_a} gol estratti per OSPITE != {away_total} punteggio finale")
 
+        # 4-bis. Coerenza gol-eventi vs parziale, periodo per periodo (§8.5(b)-1).
+        # Qui il per-periodo si AFFIANCA all'aggregato del punto 4, non lo
+        # sostituisce: al publish l'uguaglianza stretta fra gol estratti e
+        # punteggio finale resta un requisito a se' (D6).
+        # Passano solo le due direzioni "pesanti" (eccesso, e difetto con
+        # estrazione dichiarata completa): `assess_publish_readiness` le promuove
+        # a blocker. L'evidenza informativa NON entra qui — vive nella tabella
+        # per-periodo mostrata in review, dove il revisore la legge come dato e
+        # non come problema.
+        period_check = OCRSchemaValidator.check_goal_events_per_period(data)
+        warnings.extend(period_check["messages"]["excess"])
+        warnings.extend(period_check["messages"]["distribution"])
+
         # 5. Unicità numeri giocatori
         teams = data.get("teams", {})
         for t_side in ["home", "away"]:
@@ -540,7 +553,9 @@ class OCRSchemaValidator:
 
         # --- BLOCKERS (Coherence) ---
         _, coherence_warnings = OCRSchemaValidator.validate_coherence(data)
-        critical_keywords = ["Incoerenza punteggio", "Incoerenza eventi"]
+        # `PERIOD_BLOCKER_PREFIX` copre le due direzioni ratificate come blocco al
+        # publish: eccesso per-periodo (D1) e difetto con estrazione completa (D2).
+        critical_keywords = ["Incoerenza punteggio", "Incoerenza eventi", PERIOD_BLOCKER_PREFIX]
         
         # Filtriamo i warnings di validate_coherence: se sono critici diventano blockers
         for cw in coherence_warnings:

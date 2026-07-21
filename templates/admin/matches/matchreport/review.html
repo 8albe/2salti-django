@@ -572,6 +572,65 @@
                         {% endif %}
                     </div>
 
+                    <!-- 1a. Coerenza interna per periodo — EVIDENZA, non verifica di verità.
+                         Confronta gli eventi-gol estratti con il parziale dello stesso periodo.
+                         Nessun segnale verde e nessun "✓": una tabella tutta pari NON significa
+                         che i numeri siano giusti, significa solo che il referto estratto non si
+                         contraddice da solo. Il referto 16 è internamente coerente su parziali
+                         falsi. Vedi docs/syllabus/8_ocr_affidabilita.md §8.5(b)-1 e §8.11. -->
+                    <div class="review-card" style="border-left: 4px solid #94a3b8;">
+                        <h3><span>📐</span> Coerenza interna per periodo</h3>
+                        <div style="font-size: 12px; color: #475569; margin-bottom: 12px;">
+                            Eventi-gol estratti dalla cronologia, confrontati con il parziale dello
+                            stesso periodo. <strong>È una misura di coerenza interna del referto
+                            estratto, non una verifica dei numeri</strong>: un referto può essere
+                            coerente con sé stesso e comunque riportare parziali sbagliati. Solo il
+                            cartaceo originale dice come è finita.
+                        </div>
+                        {% if period_check.rows %}
+                        <table style="width: 100%; font-size: 13px; border-collapse: collapse;">
+                            <thead>
+                                <tr style="color: #64748b; font-size: 12px;">
+                                    <th style="text-align: left; padding: 6px 10px;">Periodo</th>
+                                    <th style="text-align: left; padding: 6px 10px;">Parziale casa</th>
+                                    <th style="text-align: left; padding: 6px 10px;">Gol-eventi casa</th>
+                                    <th style="text-align: left; padding: 6px 10px;">Parziale ospite</th>
+                                    <th style="text-align: left; padding: 6px 10px;">Gol-eventi ospite</th>
+                                    <th style="text-align: left; padding: 6px 10px;">Esito</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for row in period_check.rows %}
+                                <tr style="border-top: 1px solid #f1f5f9;">
+                                    <td style="padding: 8px 10px; font-weight: 600;">{{ row.quarter }}</td>
+                                    <td style="padding: 8px 10px;">{{ row.home_partial|default_if_none:"—" }}</td>
+                                    <td style="padding: 8px 10px;">{{ row.home_goals }}</td>
+                                    <td style="padding: 8px 10px;">{{ row.away_partial|default_if_none:"—" }}</td>
+                                    <td style="padding: 8px 10px;">{{ row.away_goals }}</td>
+                                    <td style="padding: 8px 10px; color: #475569;">
+                                        {% if row.outcome == 'excess' %}🔴 più gol del parziale
+                                        {% elif row.outcome == 'deficit' %}🟠 meno gol del parziale
+                                        {% elif row.outcome == 'not_applicable' %}⚪ non confrontabile{% if row.not_applicable_reason %} — {{ row.not_applicable_reason }}{% endif %}
+                                        {% else %}pari{% endif %}
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                        {% endif %}
+                        {% if period_check.messages.evidence %}
+                        <ul class="problem-list" style="margin-top: 12px;">
+                            {% for m in period_check.messages.evidence %}<li style="color: #475569;">{{ m }}</li>{% endfor %}
+                        </ul>
+                        {% endif %}
+                        {% if period_check.unassigned_goals.home or period_check.unassigned_goals.away %}
+                        <div style="font-size: 12px; color: #475569; margin-top: 10px;">
+                            Gol senza periodo: {{ period_check.unassigned_goals.home }} casa,
+                            {{ period_check.unassigned_goals.away }} ospite. Non entrano in nessuna riga.
+                        </div>
+                        {% endif %}
+                    </div>
+
                     <!-- 1b. Entity Bootstrap -->
                     {% if bootstrap.has_issues %}
                     <div class="review-card" style="border-left: 4px solid {% if bootstrap.blocked %}#dc2626{% else %}#d97706{% endif %};">
