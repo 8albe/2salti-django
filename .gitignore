@@ -136,3 +136,11 @@ predict_home.py
 /ocr_bench_out/
 /referto_test*.jpeg
 /referto_test*.jpg
+
+# scratch/ ignorata per intero (2026-07-21).
+# Motivo forte: la cartella contiene checklist e script one-off con comandi
+# verso PRODUZIONE (merge societa', deploy, correzioni dati). Non devono poter
+# entrare in git per distrazione — un `git add` troppo largo basterebbe.
+# I 7 file storici gia' versionati sono usciti con `git rm --cached` nello
+# stesso commit e restano su disco.
+scratch/
