@@ -2,6 +2,7 @@ import logging
 from typing import Tuple
 from matches.models import MatchReport, MatchEvent
 from .converters import MatchDataConverter
+from .data_verification_service import set_data_verified
 from .schema import OCRSchemaValidator
 from .standings_service import StandingsService
 from django.db import transaction
@@ -9,6 +10,119 @@ from django.utils import timezone
 from management.models import AuditLog
 
 logger = logging.getLogger(__name__)
+
+# --- Guardrail "dato verificato" (prerequisito 1, 2026-07-21) ----------------
+#
+# `Match` e' una PROIEZIONE del referto (opzione A, ratificata il 2026-07-21):
+# l'unico scrittore legittimo dei punteggi e' `publish_report`. Esiste pero' una
+# popolazione di Match i cui punteggi sono stati verificati a mano contro il
+# referto cartaceo (`is_data_verified=True`, scritto dal seam
+# `data_verification_service.set_data_verified`) mentre il `normalized_data` del
+# referto collegato e' ancora quello sbagliato dell'estrazione OCR.
+#
+# Su quei match una pubblicazione produce due danni, e il secondo e' il peggiore:
+#   1. sovrascrive i valori corretti con quelli sbagliati del referto;
+#   2. lascia `is_data_verified=True`, quindi il dato sbagliato resta
+#      pubblicamente visibile *come verificato da un umano* — un'affermazione
+#      che nessuno ha piu' fatto.
+#
+# Il guardrail blocca solo le pubblicazioni DISTRUTTIVE: se i valori proiettati
+# coincidono con quelli gia' sul Match non c'e' nulla da difendere e il publish
+# passa senza attriti.
+
+#: Azione scritta in `MatchReportAuditLog` quando un publish forzato sovrascrive
+#: i dati di un Match verificato a mano.
+FORCED_OVERWRITE_AUDIT_ACTION = 'publish_force_verified_override'
+
+
+def _as_int(value):
+    """Forma intera confrontabile, o ``None`` se il valore non e' un numero.
+
+    Serve a non trattare come divergenza una differenza di sola
+    rappresentazione (``"6"`` contro ``6``): la proiezione riscriverebbe la
+    forma, non il significato, e bloccare su questo sarebbe un falso positivo.
+    """
+    try:
+        return int(str(value).strip())
+    except (TypeError, ValueError):
+        return None
+
+
+def _normalize_quarters(quarters):
+    """Parziali in forma confrontabile: chiavi stringa, valori coppie di int."""
+    if not isinstance(quarters, dict):
+        return {}
+    normalized = {}
+    for key, value in quarters.items():
+        if isinstance(value, (list, tuple)) and len(value) == 2:
+            normalized[str(key)] = (_as_int(value[0]), _as_int(value[1]))
+        else:
+            # Forma inattesa: confrontata com'e', mai silenziata.
+            normalized[str(key)] = value
+    return normalized
+
+
+def detect_verified_projection_conflict(match, match_params):
+    """Divergenza fra i dati verificati a mano sul Match e quelli da proiettare.
+
+    Args:
+        match: il ``Match`` bersaglio della proiezione (puo' essere ``None``).
+        match_params: output di ``MatchDataConverter.get_match_scores``.
+
+    Returns:
+        dict | None: ``None`` se non c'e' conflitto — perche' il match non
+        esiste, perche' non e' verificato, o perche' i valori coincidono.
+        Altrimenti un dict con i campi divergenti e i valori prima/dopo, pronto
+        per l'audit.
+    """
+    if match is None or not getattr(match, 'is_data_verified', False):
+        return None
+
+    diverging = []
+
+    current_final = (_as_int(match.home_score), _as_int(match.away_score))
+    projected_final = (_as_int(match_params.get('home_score')),
+                       _as_int(match_params.get('away_score')))
+    if current_final != projected_final:
+        diverging.append('final_score')
+
+    current_quarters = _normalize_quarters(match.quarter_scores)
+    projected_quarters = _normalize_quarters(match_params.get('quarter_scores'))
+    if current_quarters != projected_quarters:
+        diverging.append('quarter_scores')
+
+    if not diverging:
+        return None
+
+    return {
+        'diverging_fields': diverging,
+        'before': {
+            'home_score': match.home_score,
+            'away_score': match.away_score,
+            'quarter_scores': match.quarter_scores,
+            'is_data_verified': True,
+        },
+        'after': {
+            'home_score': match_params.get('home_score'),
+            'away_score': match_params.get('away_score'),
+            'quarter_scores': match_params.get('quarter_scores'),
+            'is_data_verified': False,
+        },
+    }
+
+
+def _conflict_summary(conflict):
+    """Sintesi leggibile della divergenza, per messaggi e log."""
+    before, after = conflict['before'], conflict['after']
+    parts = []
+    if 'final_score' in conflict['diverging_fields']:
+        parts.append(
+            f"finale {before['home_score']}-{before['away_score']} "
+            f"-> {after['home_score']}-{after['away_score']}"
+        )
+    if 'quarter_scores' in conflict['diverging_fields']:
+        parts.append(f"parziali {before['quarter_scores']} -> {after['quarter_scores']}")
+    return "; ".join(parts)
 
 class PublishingService:
     """
@@ -46,6 +160,37 @@ class PublishingService:
 
         match = report.match
 
+        # --- GUARDRAIL DATO VERIFICATO ---
+        # Valutato anche quando `assess_publish_readiness` dice safe: quello
+        # giudica la qualita' del referto, questo difende un dato gia' verificato
+        # da un umano. Sono due domande diverse e nessuna implica l'altra.
+        match_params = MatchDataConverter.get_match_scores(data)
+        conflict = detect_verified_projection_conflict(match, match_params)
+
+        if conflict:
+            summary = _conflict_summary(conflict)
+            if not force:
+                logger.warning(
+                    f"Referto {report.id} BLOCCATO: proiezione distruttiva su match "
+                    f"{match.id} con dato verificato ({summary})."
+                )
+                return False, (
+                    "Pubblicazione bloccata: il risultato di questa partita e' stato "
+                    f"verificato a mano e i dati del referto divergono ({summary}). "
+                    "Pubblicare sovrascriverebbe un dato verificato. Per procedere serve "
+                    "una pubblicazione forzata con motivazione esplicita."
+                )
+            if not reason or not str(reason).strip():
+                logger.warning(
+                    f"Referto {report.id} force RIFIUTATO: reason mancante su match "
+                    f"{match.id} con dato verificato ({summary})."
+                )
+                return False, (
+                    "Pubblicazione forzata rifiutata: su una partita con dato verificato "
+                    "la motivazione e' obbligatoria e non puo' essere vuota — sovrascrivere "
+                    "una verifica umana senza dire perche' non e' ricostruibile a posteriori."
+                )
+
         # Stato di partenza catturato per audit post-rollback (vedi guardrail Zero Events)
         original_status = report.status
         _abort_triggered = False
@@ -64,12 +209,32 @@ class PublishingService:
                 is_republish = report.status == MatchReport.Status.PUBLISHED
 
                 # 1. Aggiornamento Match (Punteggi e Quarti) via Converter
-                match_params = MatchDataConverter.get_match_scores(data)
+                # `match_params` e' gia' stato calcolato sopra per il guardrail:
+                # `get_match_scores` e' puro su `data`, che qui non e' cambiato.
                 match.home_score = match_params["home_score"]
                 match.away_score = match_params["away_score"]
                 match.quarter_scores = match_params["quarter_scores"]
                 match.is_finished = True
                 match.save(update_fields=['home_score', 'away_score', 'quarter_scores', 'is_finished'])
+
+                # 1-bis. Ritiro della verifica umana dopo una sovrascrittura forzata.
+                # I valori appena scritti NON sono piu' quelli che un umano ha
+                # collazionato sul cartaceo, quindi `is_data_verified=True` sarebbe
+                # un'affermazione falsa. Si ritira via seam (mai scrittura diretta).
+                # Il risultato NON sparisce dal pubblico: `result_visibility` lo
+                # rende pubblico anche per la presenza di un referto PUBLISHED, che
+                # questo publish sta creando. Cambia la *pretesa*, non la visibilita':
+                # da "verificato da un umano" a "pubblicato dal workflow referto".
+                if conflict:
+                    set_data_verified(
+                        match, False, user,
+                        reason=(
+                            f"Ritirata automaticamente: pubblicazione forzata del referto "
+                            f"{report.id} ha sovrascritto dati verificati a mano "
+                            f"({_conflict_summary(conflict)}). "
+                            f"Motivazione dell'operatore: {str(reason).strip()}"
+                        ),
+                    )
 
                 # 2. Creazione MatchEvent via Converter + Reconciliation
                 # Recupero atleti precedentemente coinvolti per ricalcolo post-cancellazione (Hardening Sync)
@@ -192,6 +357,25 @@ class PublishingService:
                         }
                     )
 
+                    # 3.6 Audit dedicato della sovrascrittura di un dato verificato.
+                    # Riga separata da quella di publish: qui interessano i valori
+                    # prima/dopo e il perche', non il conteggio degli eventi.
+                    if conflict:
+                        MatchReportAuditLog.objects.create(
+                            report=report,
+                            user=user,
+                            action=FORCED_OVERWRITE_AUDIT_ACTION,
+                            old_status='VALIDATED',
+                            new_status='PUBLISHED',
+                            reason=str(reason).strip(),
+                            before=conflict['before'],
+                            after={
+                                **conflict['after'],
+                                'diverging_fields': conflict['diverging_fields'],
+                                'match_id': match.id,
+                            },
+                        )
+
                     # 4. Ricalcolo Immediato Classifiche (sincrono, transazionale)
                     # Sostituisce il vecchio flag 'needs_rebuild' (differito) che non
                     # veniva mai consumato automaticamente, causando [MISSING_RECORD]
@@ -228,6 +412,12 @@ class PublishingService:
                     if force and not safe:
                         action_str = f"FORZATO ({action_str})"
                     msg = f"{action_str}: Match aggiornato, {deleted_events_count} vecchi eventi cancellati, creati {created_events_count} eventi statistici."
+                    if conflict:
+                        msg += (
+                            " ATTENZIONE: sovrascritti dati verificati a mano; "
+                            "il flag 'dato verificato' e' stato ritirato e la partita "
+                            "va riverificata sul referto cartaceo."
+                        )
                     if warnings:
                         msg += f" Avvisi: {len(warnings)}."
                     logger.info(f"Referto {report.id} {audit_action} con successo. {msg}")
