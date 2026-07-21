@@ -226,6 +226,14 @@ Deploy reale dev→prod con lo stesso pattern di §2.5/§2.6/§2.7 (merge `--no-
 
 **Divergenza riaperta lo stesso giorno, su un altro asse.** Il merge D1 delle anagrafiche Lazio è **solo su `dev`** (`4daca63`) e **non è propagato su prod**: oggi `SS Lazio Nuoto` risolve **sugli Allievi su prod** e **sulla Serie C su dev**. È il prossimo giro, separato da questo; fino ad allora la discovery dei nomi Lazio dà esiti diversi nei due ambienti — da tenere presente leggendo qualunque referto di quelle squadre.
 
+**Divergenza chiusa il 2026-07-21**: il merge D1 è ora propagato anche su prod (§2.10). `SS Lazio Nuoto` risolve allo stesso modo in entrambi gli ambienti.
+
+### 2.10 Merge D1 anagrafiche Lazio — propagato su prod 2026-07-21 (sola scrittura dati, nessun deploy)
+
+Delta: **nessun codice**, sola scrittura dati — HEAD prod invariato a `2ad3436`. Eseguito con lo stesso corpo `scratch/d1_merge_lazio_core.py` già usato su dev (§8.7 del syllabus), checklist a blocchi in `scratch/d1_merge_lazio_prod_20260721.sh`. Backup pre-merge `/var/tmp/db.sqlite3.d1-lazio-prod-20260721`, sha256 `ec35019c884552a1ec1a2294b045d8d122388d120ef10bb83b7fc961d2d158d1`. Asserzione finale: **11 controlli verdi** contro costanti fissate prima dell'esecuzione. Esito verificato anche via browser: rinomina visibile, nessun duplicato, URL invariati, navigazione OK.
+
+**Nota di recon collegata, non un effetto del merge.** La verifica browser ha rilevato la classifica della lega 4 interamente a zero nonostante il match 3 sia concluso e verificato; recon dedicato (sola lettura, confronto col backup pre-merge) ha stabilito che lo zero è **preesistente** — identico prima e dopo il merge, generale a tutte le leghe di prod, atteso perché nessun referto è in stato `PUBLISHED` — già documentato in syllabus §8.5 e BLUEPRINT (falsi positivi strutturali del monitor integrità).
+
 ## 3. Trappole tecniche note
 
 ### 3.1 `git rm --cached` + file dirty = pull abortito
@@ -742,6 +750,10 @@ Nello smoke del deploy §2.9 il comando ha riportato `GREEN, Findings: 1` senza 
 ### §10.26 Backup vecchi in accumulo in `/var/tmp`, uno da 0 byte — APERTO 2026-07-21
 
 `/var/tmp` conserva backup DB di giri passati mai ripuliti, fra cui `db.sqlite3.match3-correction-20260719` di **0 byte** — un backup che non contiene nulla e su cui nessun rollback può contare; il gate `PRAGMA integrity_check` + dimensione plausibile del rituale attuale (§2.5) esiste proprio per non produrne altri, ma non ripulisce quelli già a terra.
+
+### §10.27 Coerenza referto 10 / match 3 su prod a un epsilon di floating point dalla soglia — APERTO 2026-07-21
+
+Il punteggio `team_similarity()` fra il nome squadra del referto 10 (`S.S. LAZIO NUOTO`, away) e `Team` 6 (`S.S. Lazio Nuoto Allievi`) vale, bit per bit, `0.80000000000000004441` — lo stesso double di `TEAM_FUZZY_THRESHOLD = 0.80` (`matches/services/ocr_service.py`): l'uguaglianza non è un margine, è un pareggio esatto sulla rappresentazione IEEE 754. Qualunque modifica a `TEAM_FUZZY_THRESHOLD`, `normalize_team_name` o `team_similarity` può spostare quel punteggio sotto soglia senza che nulla lo segnali, orfanizzando il referto 10 rispetto a quella squadra.
 
 ## 11. Sicurezza operativa e frontiera reversibile
 
