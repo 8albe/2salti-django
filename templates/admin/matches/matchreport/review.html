@@ -920,7 +920,7 @@
 
                             <div>
                                 <h4 style="margin-bottom: 12px; font-size: 13px; color: #64748b;">Metadati OCR</h4>
-                                <span class="status-badge {% if confidence > 0.8 %}status-ok{% else %}status-warn{% endif %}">Confidenza: {{ confidence_percent }}%</span>
+                                <span class="status-badge" title="Valore auto-dichiarato dal provider OCR. Non e' calibrato: sui casi verificati gli errori stanno tutti fra il 90% e il 100%. Non usarlo come criterio di fiducia.">Confidenza dichiarata: {{ confidence_percent }}% — <strong>non calibrata</strong></span>
                             </div>
                         </div>
                     </details>
@@ -964,7 +964,10 @@
     
     // Comparison Data
     const rawExtractedData = {{ original.raw_extracted_data|safe }};
-    const confidenceFields = {{ confidence_fields|safe }};
+    // `confidenceFields` rimossa il 2026-07-21 (fetta A1) insieme agli highlight che
+    // la usavano. Nota: la variabile di contesto `confidence_fields` non e' MAI stata
+    // popolata dalla view, quindi questa riga renderizzava `const confidenceFields = ;`
+    // — SyntaxError che uccideva l'intero blocco script della review page.
 
     window.previewZoomLevel = 1;
     function zoomPreview(delta) {
@@ -1165,25 +1168,12 @@
     }
 
     function applyUncertaintyHighlights() {
-        // 1. Confidence Highlights
-        for (const [field, conf] of Object.entries(confidenceFields)) {
-            let inputId = null;
-            if (field === 'home_score') inputId = 'input-home-final';
-            else if (field === 'away_score') inputId = 'input-away-final';
-            else if (field.startsWith('home_q')) inputId = 'input-home-q' + field.replace('home_q', '');
-            else if (field.startsWith('away_q')) inputId = 'input-away-q' + field.replace('away_q', '');
-            
-            const el = document.getElementById(inputId);
-            if (el && conf < 0.7) {
-                el.classList.add('field-uncertain');
-                if (!el.parentNode.querySelector('.uncertain-hint')) {
-                    const hint = document.createElement('div');
-                    hint.className = 'ocr-value-hint uncertain-hint';
-                    hint.innerHTML = `<span class="ocr-label" style="background:#fef3c7;color:#92400e;">Low Conf</span> ${Math.round(conf*100)}%`;
-                    el.parentNode.appendChild(hint);
-                }
-            }
-        }
+        // 1. Confidence Highlights — RIMOSSI il 2026-07-21 (fetta A1).
+        //    Evidenziavano i campi con confidence < 0.7: una soglia che sui dati
+        //    reali non si attiva mai (tutti gli errori osservati stanno fra 0.90 e
+        //    1.00), quindi l'assenza di evidenziazione veniva letta come "campo
+        //    affidabile" proprio sui campi sbagliati. La confidence resta visibile
+        //    come dato grezzo nei metadati OCR, etichettata "non calibrata".
 
         // 2. Difference Highlights (vs Raw OCR)
         try {

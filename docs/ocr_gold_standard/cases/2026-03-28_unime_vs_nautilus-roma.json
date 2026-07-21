@@ -1,9 +1,18 @@
 {
   "case_id": "2026-03-28_unime_vs_nautilus-roma",
+  "db_report_pk": 8,
   "schema_version": "1.0",
   "verified_by": "Alberto Galbiati",
-  "verified_at": "2026-07-19",
+  "verified_at": "2026-07-20",
   "verification_method": "collazione a mano del referto cartaceo originale",
+
+  "reverification": {
+    "reverified_at": "2026-07-20",
+    "reverified_by": "Alberto Galbiati",
+    "field": "match.away_team.name_on_paper",
+    "outcome": "CONFERMATO: 'Nautilus Roma' — su questo foglio la parola 'Nuoto' non c'e' proprio.",
+    "context": "Riverifica innescata dall'errore di collazione trovato sul caso Bellator (stessa sessione del 19/07). A differenza di Bellator, la prima lettura era corretta. La stessa societa' (Team pk=3, 'Nautilus N. Roma' a DB) compare con grafie diverse su fogli diversi: 'Nautilus Roma' qui, 'Nautilus Nuoto Roma' nei casi 2026-04-18 e 2026-04-25 (confermato separatamente). Non e' incoerenza del dataset: i referti sono compilati da segretari diversi, e i fogli differiscono davvero. Vedi syllabus §8.6."
+  },
 
   "match": {
     "db_match_pk": 2,
@@ -15,6 +24,12 @@
     "competition_on_paper": "Serie B",
     "venue_on_paper": null,
     "city_on_paper": null,
+    "legibility": {
+      "score": 2,
+      "assessed_by": "Alberto Galbiati",
+      "assessed_at": "2026-07-20",
+      "notes": "Faticoso: almeno un campo si legge solo per contesto."
+    },
     "home_team": {
       "db_team_pk": 4,
       "db_team_name": "Unime",
@@ -52,6 +67,7 @@
   "findings": [
     "Somma parziali verificata: 4+3+3+2=12, 2+1+4+3=10, coerente col finale 12-10.",
     "Confermato sul sistema vivo: casa/trasferta erano invertiti a DB, con conseguenza diretta sul vincitore registrato (falsava anche i punti classifica, sebbene qui senza impatto reale perche' nessun report e' mai stato PUBLISHED per questo match). E' una classe di errore distinta dai parziali compensativi: nessun controllo aritmetico la rileva, perche' i numeri sono tutti presenti e coerenti — cambia solo a chi sono attribuiti (vedi syllabus §8.5, 'inversione casa/trasferta').",
-    "Corretto su dev il 2026-07-19 scambiando le FK home_team/away_team insieme a punteggio e parziali nella stessa transazione; prod ancora da correggere."
+    "Corretto su dev il 2026-07-19 scambiando le FK home_team/away_team insieme a punteggio e parziali nella stessa transazione; prod ancora da correggere.",
+    "'Nautilus Roma' vs 'Nautilus N. Roma' a DB (Team pk=3): divergenza di grafia foglio<->DB CONFERMATA da riverifica il 2026-07-20 (vedi 'reverification'). E' uno dei casi fondativi della fase 3 (tabella alias)."
   ]
 }

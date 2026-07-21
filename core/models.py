@@ -1,3 +1,4 @@
+from django.conf import settings
 from django.db import models
 from django.utils.text import slugify
 from django.contrib.auth import get_user_model
@@ -435,3 +436,94 @@ class Sponsor(models.Model):
 
     def __str__(self):
         return f"{self.name} ({self.society.name} — {self.season.label})"
+
+
+class TeamAlias(models.Model):
+    """Grafia alternativa, legittima, con cui una squadra compare sui referti cartacei.
+
+    Perché esiste (2026-07-21, fetta C1). I referti sono compilati a mano da
+    segretari diversi, e la stessa società compare con grafie diverse su fogli
+    diversi: ``Olympic Roma P.N.`` sul foglio contro ``Olimpic Roma P.N.`` a DB,
+    ``Nautilus Roma`` su un referto e ``Nautilus Nuoto Roma`` su un altro. Sono
+    **grafie vere**, riverificate sul cartaceo, non errori del modello: la
+    discovery fallisce su di esse pur esistendo la squadra a sistema
+    (``docs/syllabus/8_ocr_affidabilita.md`` §8.6(a)).
+
+    Cosa questo modello NON copre, per disegno: le **allucinazioni** dell'OCR
+    (``BELLATOR FROSINONE`` per Bellator Frusino, ``S.C. Tuscolano`` per
+    S.C. Salerno). Non c'è nulla da mappare in anticipo su un valore inventato
+    dal modello, e mapparlo a posteriori significherebbe insegnare al sistema a
+    fidarsi di un'allucinazione. Quello è un problema di accuratezza OCR, non di
+    discovery — §8.6(b).
+
+    **Popolamento solo umano.** Nessun percorso automatico scrive qui: né l'OCR,
+    né la discovery, né il bench. Un alias è un'affermazione — "questa grafia è
+    davvero questa squadra" — e nasce da una verifica sul cartaceo, come i casi
+    del dataset gold.
+    """
+
+    class Origin(models.TextChoices):
+        REFERTO = 'REFERTO', 'Grafia vista su un referto cartaceo'
+        ANAGRAFICA = 'ANAGRAFICA', 'Grafia di fonte anagrafica/ufficiale'
+        ALTRO = 'ALTRO', 'Altra origine (specificare nella nota)'
+
+    team = models.ForeignKey(
+        Team, on_delete=models.CASCADE, related_name='aliases',
+        help_text="Squadra a cui la grafia si riferisce.",
+    )
+    alias = models.CharField(
+        max_length=200,
+        help_text="La grafia così com'è scritta sulla fonte (maiuscole e punteggiatura incluse).",
+    )
+    alias_normalized = models.CharField(
+        max_length=200, unique=True, db_index=True, editable=False,
+        help_text="Forma normalizzata dell'alias: garantisce l'unicità case-insensitive "
+                  "ed è la chiave con cui la discovery cerca.",
+    )
+    origin = models.CharField(
+        max_length=20, choices=Origin.choices, default=Origin.REFERTO,
+        help_text="Da dove viene questa grafia.",
+    )
+    note = models.TextField(
+        blank=True,
+        help_text="Su quale foglio/fonte è stata vista, e ogni altro dettaglio utile a riverificarla.",
+    )
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='team_aliases_created',
+        help_text="Chi ha inserito l'alias. Vuoto per gli inserimenti di sistema.",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['team__name', 'alias']
+        verbose_name = "Alias squadra"
+        verbose_name_plural = "🔤 Alias squadra"
+
+    def __str__(self):
+        return f"{self.alias} → {self.team.name}"
+
+    @staticmethod
+    def normalize(value):
+        """Normalizzazione dell'alias — la stessa usata dalla discovery.
+
+        Delegata a ``matches.services.ocr_service.normalize_team_name`` di
+        proposito: se le due divergessero, un alias inserito a mano smetterebbe
+        di essere trovato dalla ricerca che dovrebbe servirlo.
+        """
+        from matches.services.ocr_service import normalize_team_name
+        return normalize_team_name(value or "")
+
+    def clean(self):
+        from django.core.exceptions import ValidationError
+        if not (self.alias or "").strip():
+            raise ValidationError({'alias': "L'alias non può essere vuoto."})
+        if not self.normalize(self.alias):
+            raise ValidationError(
+                {'alias': "L'alias si normalizza in una stringa vuota: non sarebbe mai cercabile."}
+            )
+
+    def save(self, *args, **kwargs):
+        self.alias = (self.alias or "").strip()
+        self.alias_normalized = self.normalize(self.alias)
+        super().save(*args, **kwargs)

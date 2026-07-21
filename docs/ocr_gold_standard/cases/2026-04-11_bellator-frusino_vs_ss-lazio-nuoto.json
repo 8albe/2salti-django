@@ -2,8 +2,44 @@
   "case_id": "2026-04-11_bellator-frusino_vs_ss-lazio-nuoto",
   "schema_version": "1.0",
   "verified_by": "Alberto Galbiati",
-  "verified_at": "2026-07-19",
+  "verified_at": "2026-07-20",
   "verification_method": "collazione a mano del referto cartaceo originale",
+
+  "reverification": {
+    "reverified_at": "2026-07-20",
+    "reverified_by": "Alberto Galbiati",
+    "field": "truth.scores (riquadro 'Risultati parziali')",
+    "outcome": "CONFERMATO: 1-3, 0-5, 3-6, 0-5 — esattamente i valori gia' in truth.",
+    "context": "La truth dei parziali e' ora confermata da DUE letture umane indipendenti (19/07 e 20/07): e' piu' solida di ieri. Resta pero' NON certificata da corroborazione di zona indipendente del foglio — vedi 'corroboration' sotto, non ottenibile su questo referto. Doppia lettura concorde riduce il rischio di un singolo errore di trascrizione; corroborazione indipendente lo escluderebbe strutturalmente. Qui c'e' la prima, non la seconda."
+  },
+
+  "corroboration": {
+    "source": "storia cronometrica del referto (sequenza dei gol con il minuto)",
+    "why_independent": "e' una zona del foglio distinta dal riquadro dei parziali, compilata separatamente durante la gara: la sua concordanza (o discordanza) col riquadro parziali sarebbe una conferma indipendente, non una ricopiatura.",
+    "status": "non ottenibile",
+    "reason": "Le spaziature della storia cronometrica su questo referto la rendono illeggibile con affidabilita' (vedi match.legibility, score 1 dal 2026-07-20, prima 2): i valori che se ne ricaverebbero non sarebbero attendibili. Non e' una corroborazione mancata per non averla cercata (README §3b) — e' un'impossibilita' dovuta alla leggibilita' del foglio, dichiarata esplicitamente invece di essere lasciata implicita.",
+    "assessed_at": "2026-07-20",
+    "assessed_by": "Alberto Galbiati"
+  },
+
+  "corrections": [
+    {
+      "corrected_at": "2026-07-20",
+      "corrected_by": "Alberto Galbiati",
+      "field": "match.home_team.name_on_paper",
+      "before": "BELLATOR FROSINONE",
+      "after": "BELLATOR FRUSINO",
+      "reason": "Valore corretto il 2026-07-20 su riverifica del cartaceo originale, dopo che il bench ha esposto la discrepanza fra truth ed estrazioni. Il valore precedente era un errore di collazione umana introdotto il 2026-07-19, NON una divergenza reale foglio<->DB: sul foglio c'e' scritto 'BELLATOR FRUSINO', che coincide col nome a DB (Team pk=5, 'Bellator Frusino'). Conseguenza: il finding di discovery di questo caso e' stato riscritto, e i verdict 'home_team_name' delle due estrazioni passano da 'correct' a 'wrong'."
+    },
+    {
+      "corrected_at": "2026-07-20",
+      "corrected_by": "Alberto Galbiati",
+      "field": "match.legibility.score",
+      "before": 2,
+      "after": 1,
+      "reason": "Rivalutazione al ribasso, NON un nuovo elemento visto sul foglio: dopo aver valutato la leggibilita' degli altri cinque cartacei del dataset nella stessa sessione, Alberto ha ricalibrato il punteggio di questo foglio per confronto diretto. Con piu' termini di paragone disponibili, questo referto resta 'al limite' (score 1: almeno un campo indecifrabile anche dopo riverifica) e non solo 'faticoso' (score 2): la storia cronometrica non e' leggibile con affidabilita' per le spaziature (vedi 'corroboration'). Non si tocca alcun valore in 'truth': la rivalutazione riguarda solo la leggibilita' del foglio, non i dati letti."
+    }
+  ],
 
   "match": {
     "db_match_pk": 3,
@@ -14,10 +50,16 @@
     "competition_on_paper": "ALLIEVI NAZIONALI",
     "venue_on_paper": "STADIO DEL NUOTO",
     "city_on_paper": "FROSINONE",
+    "legibility": {
+      "score": 1,
+      "assessed_by": "Alberto Galbiati",
+      "assessed_at": "2026-07-20",
+      "notes": "Compilazione difficile su valori e nomi. La storia cronometrica non e' utilizzabile come corroborazione per le spaziature (vedi 'corroboration'). Score rivalutato da 2 a 1 lo stesso 2026-07-20 dopo il confronto con gli altri cinque cartacei del dataset (vedi 'corrections')."
+    },
     "home_team": {
       "db_team_pk": 5,
       "db_team_name": "Bellator Frusino",
-      "name_on_paper": "BELLATOR FROSINONE"
+      "name_on_paper": "BELLATOR FRUSINO"
     },
     "away_team": {
       "db_team_pk": 6,
@@ -88,7 +130,7 @@
         "quarter_2": "correct",
         "quarter_3": "wrong",
         "quarter_4": "wrong",
-        "home_team_name": "correct",
+        "home_team_name": "wrong",
         "away_team_name": "correct",
         "date": "correct",
         "roster": "unverified",
@@ -97,7 +139,9 @@
       "notes": [
         "Punteggio casa 5 invece di 4.",
         "Errori sui parziali compensativi: 1+0+3+1 = 5 e 3+5+5+6 = 19, quindi la somma torna al totale dichiarato e il controllo strutturale passa.",
-        "confidence_fields.final_score = 1.0 su un valore errato."
+        "confidence_fields.final_score = 1.0 su un valore errato.",
+        "home_team_name riclassificato da 'correct' a 'wrong' il 2026-07-20: il foglio riporta 'BELLATOR FRUSINO', l'estrazione 'BELLATOR FROSINONE'. Errore di lettura del nome squadra, dichiarato con confidence_fields.home_team = 1.0.",
+        "normalized_data riletto a DB il 2026-07-20 (dev e prod, sola lettura): home_team = 'BELLATOR FROSINONE' in entrambi. Su prod i parziali 3 e 4 del report 16 risultano [1,5] e [3,6] invece di [3,5] e [1,6]: divergenza dev<->prod sul normalized_data dello stesso report, non ancora spiegata."
       ]
     },
     {
@@ -142,13 +186,14 @@
         "quarter_2": "wrong",
         "quarter_3": "wrong",
         "quarter_4": "wrong",
-        "home_team_name": "correct",
+        "home_team_name": "wrong",
         "away_team_name": "correct",
         "date": "correct",
         "roster": "unverified",
         "events": "unverified"
       },
       "notes": [
+        "home_team_name riclassificato da 'correct' a 'wrong' il 2026-07-20: il foglio riporta 'BELLATOR FRUSINO', l'estrazione 'BELLATOR FROSINONE'. Stesso errore di lettura del provider Gemini, con confidence_fields.home_team = 1.0.",
         "Punteggio casa 11 invece di 4: tutti e quattro i parziali sbagliati.",
         "Errori compensativi anche qui: 2+4+2+3 = 11 e 2+5+4+8 = 19.",
         "confidence_fields.final_score = 1.0 e quarters = 0.9 con 4 parziali su 4 errati.",
@@ -162,7 +207,11 @@
     "Entrambi hanno dichiarato confidence 1.0 sul punteggio finale errato: la confidence auto-dichiarata non e' solo non calibrata, e' attivamente fuorviante.",
     "In entrambe le estrazioni gli errori sui parziali si compensano e la somma torna al totale: il controllo 'somma parziali == punteggio finale' (BLUEPRINT §9) passa su dati falsi. Verifica la coerenza interna, non la verita'.",
     "Il punteggio away (19) e' corretto in entrambe le estrazioni, quello home no in entrambe: l'errore non e' casuale sul singolo campo.",
-    "La squadra di casa e' 'BELLATOR FROSINONE' sul cartaceo ma 'Bellator Frusino' a DB: la discovery non riconosce la squadra e genera un referto orfano anche se la squadra esiste."
+    "DIAGNOSI RISCRITTA IL 2026-07-20 (la precedente non regge). Sul cartaceo la squadra di casa e' scritta 'BELLATOR FRUSINO', che coincide col nome a DB ('Bellator Frusino', Team pk=5). NON esiste alcuna divergenza di grafia foglio<->DB su questo caso: la diagnosi precedente si basava su un name_on_paper collazionato male il 2026-07-19. La causa reale del fallimento della discovery e' un ERRORE DI LETTURA OCR SUL NOME SQUADRA: entrambi i provider hanno estratto 'BELLATOR FROSINONE' (verificato a DB il 2026-07-20, report 10 e 16, dev e prod, sola lettura) da un foglio su cui il nome era scritto correttamente e in modo compatibile col DB. La discovery ha quindi fallito su un input gia' corrotto a monte, non su un fuzzy matching troppo stretto.",
+    "Corollario: 'FRUSINO' e' la forma latina/arcaica di Frosinone, e la citta' 'FROSINONE' compare altrove sullo stesso foglio. Entrambi i modelli hanno normalizzato un nome proprio raro verso la forma comune piu' probabile — errore di prior linguistico, non di risoluzione dell'immagine. E' una classe di errore che il preprocessing non attenua e che la confidence auto-dichiarata non segnala (home_team = 1.0 in entrambe le estrazioni).",
+    "DIAGNOSI FASE 3 CHIUSA IL 2026-07-20 (riverifica completata su tutti i casi coinvolti): esistono DUE problemi distinti sui nomi squadra, non uno. (a) Divergenza REALE di grafia foglio<->DB — confermata sui casi Olympic Roma P.N. (§8.6) e Nautilus (due grafie diverse su fogli diversi, entrambe confermate): questi sono i casi fondativi di una tabella di alias, che li risolverebbe. (b) Allucinazione OCR sul nome — questo caso: il foglio e il DB concordano gia' ('Bellator Frusino'), a sbagliare e' l'estrazione. Una tabella di alias non risolve (b): l'alias dovrebbe mappare un valore inventato dal modello, non una grafia legittima alternativa. Questo caso resta quindi fuori dai casi fondativi della fase 3 e va sotto il problema separato dell'accuratezza OCR sui nomi propri.",
+    "DEBITO DICHIARATO (2026-07-20), non risolto in questo giro: con la rivalutazione di 'match.legibility.score' da 2 a 1 (vedi 'corrections'), questo caso ricade sotto la regola del README (§'Leggibilita' del foglio'): score 1-2 richiede 'corroboration' per potersi considerare chiuso. Qui la corroborazione e' dichiarata esplicitamente 'non ottenibile' (vedi 'corroboration'), quindi il caso e' FORMALMENTE NON CHIUDIBILE secondo la regola del dataset, pur avendo due letture umane indipendenti e concordi sui parziali (19/07 e 20/07, vedi 'reverification'). Questo confligge con lo stato di produzione: il match 3 e' marcato is_data_verified=True su prod e mostra pubblicamente 4-19 (syllabus §8.5(d) e (h)) sulla base di questa stessa collazione. Non si propone di cambiare il dato pubblico: la doppia lettura umana concorde resta il grado di evidenza piu' alto disponibile per questo foglio. La tensione fra regola del dataset gold e stato di produzione va tenuta visibile, non sciolta qui — dettaglio in syllabus §8.5(i).",
+    "Per confronto (2026-07-20): la maggioranza su 5 chiamate Gemini indipendenti su questo foglio produce parziali casa 1/0/2/2 (somma 5) contro la truth 1/0/3/0 (somma 4) — il modello legge la colonna dei parziali casa in modo sistematicamente diverso dall'umano, un'ulteriore conferma indiretta che il foglio e' al limite anche per un lettore automatico ripetuto, non solo per la prima collazione umana."
   ],
 
   "db_correction": {

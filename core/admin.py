@@ -1,5 +1,5 @@
 from django.contrib import admin, messages
-from .models import Sport, Society, Team, League, LeagueStanding, Season, Sponsor
+from .models import Sport, Society, Team, League, LeagueStanding, Season, Sponsor, TeamAlias
 
 @admin.register(LeagueStanding)
 class LeagueStandingAdmin(admin.ModelAdmin):
@@ -79,6 +79,21 @@ class TeamAdmin(admin.ModelAdmin):
     list_filter = ('society', 'league')
     search_fields = ('name', 'society__name')
     readonly_fields = ('slug',)
+
+@admin.register(TeamAlias)
+class TeamAliasAdmin(admin.ModelAdmin):
+    """Popolamento SOLO umano: nessun percorso automatico scrive qui (C1)."""
+    list_display = ('alias', 'team', 'origin', 'created_by', 'created_at')
+    list_filter = ('origin', 'team__society')
+    search_fields = ('alias', 'alias_normalized', 'team__name', 'team__society__name')
+    readonly_fields = ('alias_normalized', 'created_at')
+    autocomplete_fields = ('team',)
+
+    def save_model(self, request, obj, form, change):
+        if not change and obj.created_by_id is None:
+            obj.created_by = request.user
+        super().save_model(request, obj, form, change)
+
 
 @admin.register(League)
 class LeagueAdmin(admin.ModelAdmin):

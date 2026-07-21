@@ -1,6 +1,6 @@
 # SYLLABUS — Roadmap operativa 2salti
 
-Aggiornato: 2026-07-19
+Aggiornato: 2026-07-20
 
 Punto d'ingresso operativo del progetto. Per la visione di prodotto vedi [BLUEPRINT.md](BLUEPRINT.md).
 
@@ -79,6 +79,6 @@ Punto d'ingresso operativo del progetto. Per la visione di prodotto vedi [BLUEPR
 ## 21. App multipiattaforma (PWA-first) ⏳
 → [Dettaglio](syllabus/21_app_multipiattaforma.md)
 
-## 22. OCR asincrono — coda DB-backed con worker systemd ⏳
-→ [Dettaglio](syllabus/22_ocr_asincrono.md)
+## 22. OCR asincrono — coda DB-backed con worker systemd 🔄
+→ [Dettaglio](syllabus/22_ocr_asincrono.md) — in produzione dal 2026-07-20 (giri 1-3), collaudo end-to-end su prod VERDE il 2026-07-21; resta **solo** il giro 4 (rimozione dei timeout 300s), unico criterio che tiene la macro aperta
 

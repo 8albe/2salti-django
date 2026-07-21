@@ -1,9 +1,18 @@
 {
   "case_id": "2026-04-12_olympic-roma-pn_vs_libertas-roma-eur",
+  "db_report_pk": 11,
   "schema_version": "1.0",
   "verified_by": "Alberto Galbiati",
-  "verified_at": "2026-07-19",
+  "verified_at": "2026-07-20",
   "verification_method": "collazione a mano del referto cartaceo originale",
+
+  "reverification": {
+    "reverified_at": "2026-07-20",
+    "reverified_by": "Alberto Galbiati",
+    "field": "match.home_team.name_on_paper",
+    "outcome": "CONFERMATO: 'Olympic Roma P.N.' (con la Y), invariato rispetto alla prima collazione del 2026-07-19.",
+    "context": "Riverifica innescata dall'errore di collazione trovato sul caso Bellator (stessa sessione del 19/07, vedi 'corrections' in 2026-04-11_bellator-frusino_vs_ss-lazio-nuoto.json). A differenza di Bellator, qui la prima lettura era corretta: la divergenza di grafia foglio<->DB ('Olympic' sul foglio vs 'Olimpic' a DB, Team pk=7) e' REALE, non un artefatto di collazione. Vedi syllabus §8.6 per la diagnosi aggiornata (fase 3 'tabella alias' ripristinata su questo caso)."
+  },
 
   "match": {
     "db_match_pk": 4,
@@ -15,6 +24,12 @@
     "competition_on_paper": "Camp. Juniores M",
     "venue_on_paper": "Foro Italico",
     "city_on_paper": "Roma",
+    "legibility": {
+      "score": 3,
+      "assessed_by": "Alberto Galbiati",
+      "assessed_at": "2026-07-20",
+      "notes": "Leggibile: qualche campo richiede una seconda occhiata, nessuno richiede di dedurre dal contesto."
+    },
     "home_team": {
       "db_team_pk": 7,
       "db_team_name": "Olimpic Roma P.N.",
@@ -50,7 +65,7 @@
 
   "findings": [
     "Somma parziali verificata: 5+4+5+6=20, 0+0+1+0=1, coerente col finale 20-1.",
-    "Nome sul cartaceo 'Olympic Roma P.N.' vs nome a DB 'Olimpic Roma P.N.' (Team pk=7): stessa divergenza di pattern gia' osservata nel primo caso gold (Bellator Frusino / BELLATOR FROSINONE, §8.6) — rischio di mancato aggancio in discovery se il fuzzy matching non tollera questa variante.",
+    "Nome sul cartaceo 'Olympic Roma P.N.' vs nome a DB 'Olimpic Roma P.N.' (Team pk=7): divergenza di grafia foglio<->DB CONFERMATA da riverifica il 2026-07-20 (vedi 'reverification') — rischio di mancato aggancio in discovery se il fuzzy matching non tollera questa variante. Diverso dal caso Bellator (§8.6): li' il foglio e il DB coincidevano e a sbagliare era stato l'OCR; qui il foglio diverge davvero dal DB. E' uno dei casi fondativi della fase 3 (tabella alias).",
     "Confermato sul sistema vivo: il Match a DB aveva lo stesso punteggio finale ma tutti e 4 i parziali sbagliati con somma comunque coerente al totale — errore compensativo, terzo caso su tre confrontabili con questo pattern (vedi syllabus §8.5). Corretto su dev il 2026-07-19, prod ancora da correggere.",
     "Distribuzione DB pre-correzione (5-0/5-0/5-0/5-1) sospettosamente regolare: possibile firma di allucinazione, ipotesi da verificare su altri casi (syllabus §8.5)."
   ]

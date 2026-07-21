@@ -15,8 +15,9 @@ Miglioramento accuracy, preprocessing, gestione errori, dataset test, qualità d
 
 ### 8.2 Affidabilità da migliorare
 
-- [x] **Dataset gold standard — struttura creata il 2026-07-19** in [docs/ocr_gold_standard/](../ocr_gold_standard/) (un file JSON per referto verificato in `cases/`, schema e procedura nel `README.md`). Prima riga: il match 3 dell'11/04/2026. Resta da fare l'aggancio `ocr_bench --gold-case`.
-  - **Aggiornamento 2026-07-19: dataset a 5 casi.** Aggiunti 4 referti collazionati a mano (punteggio e parziali soltanto; roster/eventi/ufficiali in `not_verified`), tutti stagione 2025/2026: Olympic Roma P.N. vs Libertas Roma Eur (12/04, 20-1), Unime vs Nautilus Roma (28/03, 12-10), Nautilus Nuoto Roma vs Trisceloni Etna Sport (25/04, 20-12), S.C. Salerno vs Nautilus Nuoto Roma (18/04, 12-17). Nessuna estrazione OCR associata (`extractions: []`): pronti per il bench, non ancora fatti girare. Verifica DB soggetti nuovi: 'Trisceloni Etna Sport' e 'S.C. Salerno' **assenti** sia da Team sia da Society (confermato sul sistema vivo) — un loro referto andrebbe orfano per assenza reale, non per fallimento fuzzy matching (§8.6). 'Olympic Roma P.N.' presente ma con divergenza di grafia a DB ('Olimpic Roma P.N.', stesso pattern del caso Bellator/Frosinone in §8.6).
+- [x] **Dataset gold standard — struttura creata il 2026-07-19** in [docs/ocr_gold_standard/](../ocr_gold_standard/) (un file JSON per referto verificato in `cases/`, schema e procedura nel `README.md`). Prima riga: il match 3 dell'11/04/2026. Aggancio `ocr_bench --gold-case` fatto (vedi aggiornamento 2026-07-20 sotto).
+  - **Aggiornamento 2026-07-20: harness di misura sul gold standard costruito** (`ocr_bench --gold-case <case_id>` / `--gold-all`, dettaglio d'uso nel [README del dataset](../ocr_gold_standard/README.md) §"Uso da ocr_bench"). Confronto per campo e mai aggregato con esito ternario correct/wrong/null (null conteggiato a parte), check esplicito di inversione casa/trasferta, nomi contro `name_on_paper`, confidence auto-dichiarata accostata a ogni verdetto, metadati di run (modello, hash del prompt, preprocessing, timestamp). **Decisione D1**: il bench produce file di *proposta* in `ocr_bench_out/gold/` (gitignorata), mai scritti in `extractions[]` — il riversamento nel dataset resta un atto umano dopo review. Read-only su DB e pipeline; provider mockato nei test (`tests_ocr_bench.py`). **Run di baseline contro Gemini eseguito il 2026-07-20** (finestra costi aperta da Alberto): risultati in §8.9. Vincolo operativo (chiuso il 2026-07-20): il sync media prod→dev delle cinque famiglie `reale_0X` è stato eseguito da Alberto — su dev ora ci sono tutte le immagini, byte-identiche a prod; il caso Triscelon 25/04 (senza report a DB, grafia corretta dal 2026-07-20, era "Trisceloni") richiede comunque `--image` esplicito.
+  - **Aggiornamento 2026-07-19: dataset a 5 casi.** Aggiunti 4 referti collazionati a mano (punteggio e parziali soltanto; roster/eventi/ufficiali in `not_verified`), tutti stagione 2025/2026: Olympic Roma P.N. vs Libertas Roma Eur (12/04, 20-1), Unime vs Nautilus Roma (28/03, 12-10), Nautilus Nuoto Roma vs Triscelon Etna Sport (25/04, 20-12 — squadra ospite "Triscelon", corretto dal 2026-07-20, era trascritta "Trisceloni"), S.C. Salerno vs Nautilus Nuoto Roma (18/04, 12-17). Nessuna estrazione OCR associata (`extractions: []`): pronti per il bench, non ancora fatti girare. Verifica DB soggetti nuovi: 'Triscelon Etna Sport' e 'S.C. Salerno' **assenti** sia da Team sia da Society (confermato sul sistema vivo) — un loro referto andrebbe orfano per assenza reale, non per fallimento fuzzy matching (§8.6). 'Olympic Roma P.N.' presente ma con divergenza di grafia a DB ('Olimpic Roma P.N.') — **riverificata e CONFERMATA reale il 2026-07-20** (§8.6): non era l'errore di collazione temuto dopo il caso Bellator.
   - **Aggiornamento 2026-07-19 (secondo giro, stesso giorno): censimento + correzione su dev.** Censimento read-only su dev e prod (identici): 4 Match totali, 4 `is_finished`, 4 con punteggio valorizzato, **0 con un report mai `PUBLISHED`** — l'intera popolazione match è a rischio, non solo i 3 casi noti (dettaglio §8.5(d)). 0 `LeagueStanding` non a zero: nessun dato errato ha ancora raggiunto la classifica, perché `StandingsService` filtra su `reports__status='PUBLISHED'`. Confermate sul sistema vivo le due discrepanze: match Olympic/Libertas (id 4) con parziali sbagliati a DB nonostante il finale giusto; match Unime/Nautilus (id 2) con casa/trasferta invertiti a DB (nuova classe di errore, §8.5(e)). **Corrette su dev** (transazione + audit `MATCH_SCORE_CORRECTED`, `is_data_verified=True`, `rebuild_standings --verify` + `check_data_integrity` puliti su entrambe le leghe). **Prod non toccato**, correzione preparata non eseguita. `normalized_data` dei report 8, 10, 11, 16 non toccato: non pubblicarli finché non corretto separatamente (nota operativa in §8.5).
   - **Aggiornamento 2026-07-19 (terzo giro, stesso giorno): dataset a 6 casi, popolazione match chiusa al 100% di errore.** Verificato a mano il quarto e ultimo referto cartaceo disponibile (match 1, Pol. Delta vs Villa York, 06/12/2025, lega 2, report 7): finale 15-9 corretto a DB, **tutti e quattro i parziali sbagliati** (veri 6-2 / 1-2 / 3-4 / 5-1), verità corroborata dalla storia cronometrica del referto (§8.5(f)). Con questo **tutti e 4 i match a DB risultano sbagliati: 4/4** e il controllo "somma parziali == finale" li attraversa tutti — **0% di rilevazione su 100% di errore** (§8.5(d)). Corretto su dev con lo stesso rigore (transazione + audit, `is_data_verified=True`, rebuild lega 2 + `check_data_integrity` puliti); backfill anche di `has_report`, incoerente per una causa applicativa registrata e **non** corretta (§8.5(g)). **Prod non toccato**: sequenza consolidata delle 4 correzioni preparata a parte.
   - Caso motivante: lo stesso match (Bellator Frusino vs SS. Lazio Nuoto, 11/04/2026) ha **due estrazioni divergenti sul punteggio finale** — report 10 (`gpt-4o`): 11-19; report 16 (`gemini-2.5-pro`): 5-19. La verità umana, collazionata sul cartaceo il 2026-07-19, è **4-19**: sbagliano **entrambe**. Il gold standard serve a **due scopi distinti**: (1) misurare l'accuratezza per campo; (2) verificare la calibrazione della confidence per tarare la soglia del quality gate.
@@ -79,20 +80,26 @@ Con la verifica del quarto e ultimo referto cartaceo disponibile (match 1, Pol. 
 
 | Match | Finale a DB | Parziali a DB | Somma torna? | Corretto? |
 |---|---|---|---|---|
-| 1 — Pol. Delta/Villa York | giusto (15-9) | tutti e 4 sbagliati (vero 6-2/1-2/3-4/5-1) | 5+4+3+3=15, 2+2+1+4=9 ✓ | dev sì, prod no |
-| 2 — Unime/Nautilus | giusto nei due totali, **squadre invertite** | tutti e 4 sbagliati | 3+2+4+3=12, 2+3+3+2=10 ✓ | dev sì, prod no |
-| 3 — Bellator/Lazio | sbagliato (11-19, vero 4-19) | tutti e 4 sbagliati | 2+4+2+3=11, 2+5+4+8=19 ✓ | dev sì, prod no |
-| 4 — Olympic/Libertas | giusto (20-1) | tutti e 4 sbagliati | 5+5+5+5=20, 0+0+0+1=1 ✓ | dev sì, prod no |
+| 1 — Pol. Delta/Villa York | giusto (15-9) | tutti e 4 sbagliati (vero 6-2/1-2/3-4/5-1) | 5+4+3+3=15, 2+2+1+4=9 ✓ | dev 19-07, **prod 20-07** |
+| 2 — Unime/Nautilus | giusto nei due totali, **squadre invertite** | tutti e 4 sbagliati | 3+2+4+3=12, 2+3+3+2=10 ✓ | dev 19-07, **prod 20-07** |
+| 3 — Bellator/Lazio | sbagliato (11-19, vero 4-19) | tutti e 4 sbagliati | 2+4+2+3=11, 2+5+4+8=19 ✓ | dev 19-07, **prod 20-07** |
+| 4 — Olympic/Libertas | giusto (20-1) | tutti e 4 sbagliati | 5+5+5+5=20, 0+0+0+1=1 ✓ | dev 19-07, **prod 20-07** |
+
+Tutti e quattro sono stati corretti **anche su prod il 2026-07-20** (OPS_RUNBOOK §2.7), con audit `MATCH_SCORE_CORRECTED` per match e `is_data_verified=True`, quindi il risultato è di nuovo pubblico attraverso il gate (h).
 
 **La statistica che conta: il controllo strutturale "somma parziali == finale" ha un tasso di rilevazione dello 0% su una popolazione con tasso di errore del 100%.** Quattro match sbagliati, zero segnalati. Non è un controllo debole da tarare meglio: su questa classe di errore è **inutile per costruzione**, perché il modello deriva parziali e totale dalla stessa lettura (o ricostruisce i parziali a partire dal totale). Un controllo che non può fallire non può nemmeno rilevare — vedi (b) per le alternative indipendenti.
 
 Il campione resta piccolo (4 casi), ma non è più un campione: è la popolazione intera.
 
+**Conferma dal vivo del limite, su un caso non costruito (2026-07-20).** Durante la correzione dei quattro match su prod (OPS_RUNBOOK §2.7) il blocco del **match 4 è stato saltato** per un errore di copia-incolla. `rebuild_standings --verify` e `check_data_integrity` sono passati **puliti sul dato ancora sbagliato**, perché i parziali vecchi (`5-0 / 5-0 / 5-0 / 5-1`) sommavano comunque a 20-1. L'omissione è stata intercettata **solo** dall'asserzione finale contro i valori collazionati a mano sul cartaceo.
+
+Il valore di questo episodio è che non è una dimostrazione costruita: è il finding (b)/(d) che si manifesta spontaneamente, in condizioni operative reali, su un errore di *procedura* invece che di *estrazione*. La stessa proprietà — coerenza interna che regge mentre la verità è sbagliata — protegge un OCR che allucina e un blocco di checklist mai eseguito. Se ne ricava anche una regola operativa generale, registrata in OPS_RUNBOOK §6.5: in una procedura manuale a blocchi la rete non sono i controlli di coerenza, ma l'asserzione finale contro valori esterni noti in anticipo.
+
 **Corollario (ipotesi con n=4, non legge): il totale è il campo più affidabile, i parziali il meno affidabile.** Il punteggio finale è corretto in 3 casi su 4 (match 1, 2, 4 — nel match 2 i due totali sono giusti, solo attribuiti alla squadra sbagliata), mentre i parziali sono sbagliati in 4 su 4. Se regge su più casi, ha una conseguenza operativa concreta: la review umana va concentrata sui parziali, e i parziali non andrebbero trattati come dato pubblicabile senza collazione. Da riverificare a ogni nuovo caso gold prima di trasformarla in una regola.
 
 **(e) Nuova classe di errore: INVERSIONE CASA/TRASFERTA (match 2, 2026-07-19).**
 
-Il match Unime vs Nautilus Roma (28/03/2026) aveva a DB **le squadre scambiate**: `home_team=Nautilus (12)`, `away_team=Unime (10)`, mentre il cartaceo dice il contrario — ospitante Unime, vincitore 12-10. I due punteggi totali (12 e 10) erano entrambi presenti e corretti, solo attribuiti alla squadra sbagliata. **Nessun controllo aritmetico può rilevare questa classe di errore**: la somma dei parziali torna, il totale torna, tutti i numeri sono quelli giusti — cambia solo *a chi* sono assegnati. La conseguenza pratica è che falsa il vincitore e quindi, se il referto venisse pubblicato, i punti in classifica (3 punti alla squadra sbagliata). Corretto su dev il 2026-07-19 scambiando le FK `home_team`/`away_team` insieme a punteggio e parziali nella stessa transazione (recon preventivo: zero `MatchEvent` e zero `Convocation` collegati a quel match, quindi nessun effetto collaterale su altre tabelle); prod ancora da correggere.
+Il match Unime vs Nautilus Roma (28/03/2026) aveva a DB **le squadre scambiate**: `home_team=Nautilus (12)`, `away_team=Unime (10)`, mentre il cartaceo dice il contrario — ospitante Unime, vincitore 12-10. I due punteggi totali (12 e 10) erano entrambi presenti e corretti, solo attribuiti alla squadra sbagliata. **Nessun controllo aritmetico può rilevare questa classe di errore**: la somma dei parziali torna, il totale torna, tutti i numeri sono quelli giusti — cambia solo *a chi* sono assegnati. La conseguenza pratica è che falsa il vincitore e quindi, se il referto venisse pubblicato, i punti in classifica (3 punti alla squadra sbagliata). Corretto su dev il 2026-07-19 scambiando le FK `home_team`/`away_team` insieme a punteggio e parziali nella stessa transazione (recon preventivo: zero `MatchEvent` e zero `Convocation` collegati a quel match, quindi nessun effetto collaterale su altre tabelle); **stessa correzione applicata su prod il 2026-07-20**, con verifica browser che la pagina pubblica mostri Unime come squadra di casa.
 
 **Ipotesi da verificare, non conclusione:** il pattern dei parziali sbagliati sul match 4 (`5-0 / 5-0 / 5-0 / 5-1` a DB) ha una regolarità sospetta — tre quarti identici e il quarto che assorbe il resto — che potrebbe essere una firma di allucinazione (il modello "inventa" una distribuzione plausibile invece di leggere davvero la griglia) piuttosto che un errore di lettura genuino. Da tenere d'occhio sui prossimi casi gold, non abbastanza dati per concludere su un solo campione.
 
@@ -117,15 +124,62 @@ I finding (a)-(g) dicono cosa non funziona; questa è la prima contromisura che 
 
 Il censimento dei punti di esposizione è stato fatto in modo esaustivo prima dell'implementazione (lezione dallo stato `QUEUED`: 7 punti rotti su 14 perché nessuno li aveva enumerati) e il test `TemplateScoreExposureAuditTest` in `matches/tests_result_visibility.py` **deriva** la lista dai template invece di elencarla a mano: un nuovo template che stampa un punteggio senza gate fa fallire la suite da solo.
 
-**Nota operativa: non pubblicare i report 7, 8, 10, 11, 16.** Questi cinque report hanno `normalized_data` con punteggio e/o attribuzione casa/trasferta sbagliati, non ancora corretti (giro separato, fuori scope Macro 8 attuale). La correzione applicata finora ha toccato solo il `Match`, non il report. Se uno di questi report venisse pubblicato o ripubblicato, `publish_report()` (`matches/services/publishing_service.py`) sovrascriverebbe `Match.home_score`/`away_score`/`quarter_scores` (e, per match 2, ricreerebbe gli eventi con l'attribuzione squadra ancora sbagliata) leggendo dal `normalized_data` non corretto — vanificando silenziosamente la correzione appena fatta.
+**Nota operativa: non pubblicare i report 7, 8, 10, 11, 16.** Questi cinque report hanno `normalized_data` con punteggio e/o attribuzione casa/trasferta sbagliati, non ancora corretti (giro separato, fuori scope Macro 8 attuale). La correzione applicata finora — su dev il 2026-07-19 e su prod il 2026-07-20 — ha toccato solo il `Match`, non il report.
 
-### 8.6 Finding di discovery: nome sul cartaceo ≠ nome a DB
+> **Aggiornamento 2026-07-20.** Su prod tutti e cinque sono ora in `NEEDS_REVIEW`: il report 16, che era in `EXTRACTED` (cioè a un click dalla pubblicazione), è stato **demosso a `NEEDS_REVIEW` con audit** all'inizio della finestra di deploy, prima di ogni altra operazione, proprio per togliere di mezzo il rischio durante il lavoro. Il `normalized_data` non è stato toccato: la demozione allontana il pericolo, non lo rimuove. Non esiste tuttora **alcun guardrail a codice** che impedisca la pubblicazione — la protezione è documentale, registrata come debito in OPS_RUNBOOK §10.22. Se uno di questi report venisse pubblicato o ripubblicato, `publish_report()` (`matches/services/publishing_service.py`) sovrascriverebbe `Match.home_score`/`away_score`/`quarter_scores` (e, per match 2, ricreerebbe gli eventi con l'attribuzione squadra ancora sbagliata) leggendo dal `normalized_data` non corretto — vanificando silenziosamente la correzione appena fatta.
 
-L'OCR legge `BELLATOR FROSINONE` (com'è scritto sul referto cartaceo), mentre a DB la squadra è registrata come **`Bellator Frusino`** (Team pk=5). Il fuzzy matching di `match_discovery` non le riconcilia: il referto 16 è finito orfano (`match=None`) e in `NEEDS_REVIEW` con "Impossibile risolvere una o entrambe le squadre", **pur esistendo la squadra a DB**.
+**(i) Debito dichiarato: il caso Bellator è sotto la soglia di chiusura del dataset gold, ma il match resta pubblico su prod (2026-07-20).**
 
-È un problema di **Macro 8 (discovery/riconciliazione), non di Macro 22**: l'asincrono si è limitato a renderlo visibile al primo upload reale. Genera orfani sistematici, non occasionali, perché la divergenza è stabile nel tempo — ogni referto di quella squadra fallirà allo stesso modo finché il matching non gestisce gli alias.
+Lo stesso 2026-07-20 Alberto ha rivalutato `match.legibility.score` del caso Bellator da 2 a 1, dopo aver visto per confronto tutti gli altri cinque cartacei del dataset (correzione tracciata in `corrections[]` del caso gold, non un nuovo elemento letto sul foglio). Con score 1 il caso ricade sotto la regola del README del dataset (`docs/ocr_gold_standard/README.md` §"Leggibilità del foglio"): uno score 1 o 2 richiede `corroboration` per potersi considerare chiuso. Su questo referto la corroborazione — la storia cronometrica, seconda zona indipendente del foglio — è dichiarata esplicitamente **non ottenibile**, per le stesse ragioni di leggibilità (spaziature indecifrabili anche dopo riverifica). Il caso è quindi, secondo la regola interna del dataset, **formalmente non chiudibile**, pur avendo due letture umane indipendenti e concordi sui parziali (19/07 e 20/07 — vedi `reverification` nel caso gold).
 
-Direzione da valutare (nessuna implementazione in questo giro): tabella di alias per squadra/società, alimentata proprio dai casi di discovery fallita, invece di alzare la tolleranza del fuzzy matching — che sui nomi di società brevi produrrebbe falsi positivi.
+Questo confligge con lo stato di produzione, e la tensione va **registrata, non sciolta qui**: il match 3 è marcato `is_data_verified=True` su prod e mostra pubblicamente 4-19 (finding (d) e (h) sopra) sulla base di questa stessa collazione. **Non si propone di cambiare il dato pubblico**: la doppia lettura umana concorde resta il grado di evidenza più alto disponibile per questo foglio, superiore a qualunque estrazione OCR — sarebbe un errore scambiare "il dataset gold non può chiudere questo caso" per "il dato pubblico è in dubbio". I due criteri misurano cose diverse: il criterio del dataset gold è il rigore della misura stessa (può un umano fidarsi di questa lettura come metro per giudicare i provider OCR?), il criterio di pubblicazione è il miglior dato disponibile per il prodotto (`is_data_verified=True`, §8.5(h)). Possono legittimamente restare divergenti — ma la divergenza deve restare visibile, non implicita.
+
+Per confronto, sullo stesso foglio la maggioranza su 5 chiamate Gemini indipendenti sui parziali casa produce `1/0/2/2` (somma 5) contro la truth `1/0/3/0` (somma 4): il modello legge quella colonna in modo sistematicamente diverso dall'umano — un'ulteriore conferma indiretta che il foglio è al limite anche per un lettore automatico ripetuto, non solo per la prima collazione umana. Rilettura (2026-07-20): quel run è stato eseguito **prima** del fix del tie-break (`2f22b9d`); su `home_team_name` non c'era maggioranza stretta (FRUSINO ×2, FROSINONE ×2, FROSINO ×1), quindi con la regola corretta l'esito è **`ambiguo`**, non il `correct` stampato allora per tie-break silenzioso di prima comparsa.
+
+### 8.6 Finding di discovery: due problemi distinti sui nomi squadra
+
+> **Diagnosi chiusa il 2026-07-20** dopo la riverifica sul cartaceo di tutti i casi coinvolti (Bellator, Olympic, le due occorrenze Nautilus). Fino al giro precedente questo paragrafo era stato riscritto per un errore di collazione umana sul caso Bellator (dettaglio in fondo) e la direzione "tabella di alias" era stata sospesa in attesa di riverifica. La riverifica è arrivata: **esistono due problemi diversi, e vanno tenuti separati.**
+
+**(a) Divergenza REALE di grafia foglio↔DB.** Confermata su due casi:
+
+- `Olympic Roma P.N.` sul foglio (con la Y) vs `Olimpic Roma P.N.` a DB (Team pk=7). Riverificato da Alberto il 2026-07-20: invariato rispetto alla prima lettura.
+- La stessa società (`Nautilus N. Roma` a DB, Team pk=3) compare con grafie diverse su fogli diversi, perché i referti sono compilati da segretari diversi: `Nautilus Roma` sul referto del 28/03 (dove la parola "Nuoto" non c'è proprio), `Nautilus Nuoto Roma` sui referti del 18/04 e del 25/04 (dove "Nuoto" c'è). Entrambe le grafie riverificate e confermate il 2026-07-20 — non era un'incoerenza del dataset, i fogli differiscono davvero.
+
+Questi sono i casi **fondativi di una tabella di alias squadra/società**: un alias che mappa `Olimpic` ↔ `Olympic` o le varianti di `Nautilus N. Roma` risolverebbe la discovery su questi referti, perché la variante sul foglio è una grafia legittima, non un valore inventato.
+
+**(b) Allucinazione OCR sul nome.** Caso Bellator (11/04): sul referto cartaceo c'è scritto **`BELLATOR FRUSINO`**, che coincide con il nome a DB (`Bellator Frusino`, Team pk=5) — riverificato una seconda volta il 2026-07-20, nessuna divergenza foglio↔DB. Entrambi i provider hanno però estratto **`BELLATOR FROSINONE`** (verificato in sola lettura su `normalized_data` di dev e prod: report 16 `gemini-2.5-pro`, report 10 `gpt-4o`), entrambi con `confidence_fields.home_team = 1.0`. Il referto 16 è finito orfano (`match=None`, `NEEDS_REVIEW`, "Impossibile risolvere una o entrambe le squadre") **pur esistendo la squadra a DB con il nome giusto**. `FRUSINO` è la forma latina di Frosinone e la parola `FROSINONE` compare altrove sullo stesso foglio (campo città): entrambi i modelli hanno normalizzato un nome proprio raro verso la forma comune più probabile — errore di prior linguistico, che il preprocessing non attenua e che la confidence auto-dichiarata non segnala. Aggravante di contesto: quel cartaceo è compilato molto male, al limite della leggibilità anche per un umano su valori e nomi (`match.legibility.score = 1` nel caso gold, rivalutato da 2 il 2026-07-20 — vedi §8.5(i)) — è la condizione in cui era nato anche l'errore di collazione umana del 19/07, poi corretto.
+
+**Una tabella di alias NON risolve (b).** L'alias dovrebbe mappare un valore allucinato dal modello, non una grafia legittima alternativa: su Bellator non ci sarebbe nulla da mappare in anticipo. Il caso resta quindi **fuori dai casi fondativi della fase 3** e va sotto il problema separato dell'accuratezza OCR sui nomi propri, non della discovery.
+
+Entrambi restano problemi di **Macro 8, non di Macro 22**: l'asincrono si è limitato a renderli visibili al primo upload reale. Entrambi sono sistematici, non occasionali: (a) si ripete a ogni referto della stessa società compilato dallo stesso segretario con la stessa grafia; (b) si ripete a ogni referto della stessa squadra, perché l'errore di prior linguistico non dipende dal singolo scan.
+
+**Corollario sulla collazione stessa.** La riverifica di questo giro ha anche trovato un **secondo** errore di collazione, indipendente dal primo: nel caso del 25/04 la squadra ospite si chiama "Triscelon", non "Trisceloni" come trascritto il 19/07 (`case_id` e file rinominati, dettaglio nel caso gold). Due errori di collazione su sei casi, in due giorni diversi di riverifica, confermano che la regola del README ("il metro misura anche chi lo ha costruito") non è cautela teorica: la collazione umana su questi referti va sempre trattata come rivedibile, non come assioma.
+
+#### Implementazione: tabella alias (C1) e discovery a `difflib` — 2026-07-21
+
+I due problemi separati da questa diagnosi hanno ricevuto due fette **separate**, con test propri, deliberatamente non fuse in una.
+
+**C1 — `core.TeamAlias`.** FK a `Team`, `alias` come scritto sulla fonte, `alias_normalized` derivata in `save()` e **unique**: da lì l'unicità case-insensitive e, gratis, l'unicità cross-team (lo stesso alias non può puntare a due squadre — sarebbe ambiguo per costruzione). Più origine, nota, autore e timestamp, perché fra sei mesi la domanda sarà "chi l'ha detto, e su quale foglio". La normalizzazione **delega** a `normalize_team_name`, la stessa della discovery: se le due divergessero, un alias inserito a mano smetterebbe di essere trovato dalla ricerca che dovrebbe servirlo. `resolve_team_entity` consulta gli alias in exact match **prima** del fuzzy — l'alias è l'unica fonte certa in quella funzione, il fuzzy indovina.
+
+**Popolamento solo umano, e un test che lo tiene fermo.** Nessun percorso automatico scrive alias: non l'OCR, non la discovery, non il bench. Una guardia anti-ruggine scandisce il codice applicativo e fallisce se un modulo non-admin inizia a creare `TeamAlias`. La ragione è (b): mappare un'allucinazione significherebbe insegnare al sistema a fidarsene.
+
+**Fetta separata — discovery da fuzzy posizionale a `difflib`.** `simple_similarity` confrontava i caratteri **alla stessa posizione**: una singola inserzione all'inizio disallineava tutto il resto. È il motivo per cui `Nautilus Roma` contro `Nautilus N. Roma` valeva **0.562** — sotto ogni soglia utile — pur essendo la stessa squadra. `SequenceMatcher` lavora su sottosequenze comuni:
+
+| Nome estratto | Squadra a DB | posizionale | difflib |
+|---|---|---|---|
+| `Nautilus Roma` | Nautilus N. Roma | 0.562 | **0.897** |
+| `Nautilus Nuoto Roma` | Nautilus N. Roma | 0.579 | **0.857** |
+| `LIBERTAS ROMA EUR P.N` | Libertas Roma Eur | 0.810 | 0.895 |
+| `Olympic Roma P.N.` | Olimpic Roma P.N. | 0.941 | 0.941 |
+
+**Soglia: resta 0.80** — la fetta cambia la metrica, non la soglia, così l'effetto è isolato e attribuibile. Il valore è comunque misurato: sulla popolazione reale i veri positivi stanno fra 0.857 e 0.941, il falso positivo più alto è **0.606** (`Virtus Nuoto Roma` contro Nautilus N. Roma). La soglia cade in mezzo a una banda vuota larga 0.25. **Non allineata allo 0.6 del quality gate, deliberatamente**: le due soglie proteggono da rischi opposti. Il gate confronta il nome con una partita *già scelta da un umano*, e lì un falso negativo blocca un referto sano; la discovery invece *sceglie* la partita, e un falso positivo ne sovrascrive il punteggio. A 0.6 aggancerebbe proprio `Virtus Nuoto Roma` a Nautilus — l'allucinazione del report 15 che il collaudo su prod ha visto **non** agganciare (§8.10).
+
+**Due fatti emersi scrivendo i test, che correggono ipotesi precedenti.**
+
+1. **Il fuzzy posizionale risolveva già `Olympic` → Olimpic (0.941) e anche l'allucinazione `BELLATOR FROSINONE` → Bellator Frusino (0.833).** L'orfanità del report 16 non veniva quindi dal nome di casa, come si poteva leggere in (b): veniva quasi certamente dal lato **Lazio**, dove il duplicato anagrafico di §8.7 produce due punteggi pari e la funzione risponde `None` per ambiguità. Il valore dell'alias non è allora "rendere possibile l'impossibile" ma **rendere deterministico ciò che dipendeva da una soglia**: con l'alias la risoluzione non è più esposta a un cambio di soglia, all'arrivo di una squadra dal nome simile o al passaggio a un altro algoritmo.
+2. **`difflib` rende risolvibile il duplicato Lazio, ma per uno scarto di 0.03** (`0.846` contro `0.815`). Cioè su un referto Lazio la discovery ora *risponde*, e la risposta è decisa da rumore fra due anagrafiche che sono la stessa società reale. Non è un aggancio spurio verso una squadra estranea — è l'ambiguità di §8.7 che si manifesta — e la cura è il merge (D1), non una soglia più alta: a qualunque soglia le due sono indistinguibili. Il fatto è fissato in un test che dopo D1 andrà riscritto.
+
+`simple_similarity` **resta in uso sulla riconciliazione atleti**, non toccata da questa fetta: i nomi di persona hanno una fenomenologia diversa (iniziali puntate, cognomi composti) e cambiare metrica anche lì va misurato a parte. Debito dichiarato, non dimenticanza.
 
 ### 8.7 Duplicato anagrafico Lazio (registrato, non riconciliato)
 
@@ -139,6 +193,142 @@ Presente **sia su dev sia su prod**, identico:
 Due `Society` distinte per quella che è verosimilmente la stessa società reale, con due grafie diverse (`SS.` vs `S.S.`). Le due squadre sono in **leghe diverse**, quindi la coesistenza non è di per sé un errore di dati — una società può avere più squadre in campionati diversi. L'anomalia è a livello di **Society**: sono due anagrafiche per lo stesso ente.
 
 Conseguenze pratiche: la discovery può agganciare la squadra sbagliata su un referto ambiguo, e qualunque aggregato per società (statistiche, profili, sponsor, entitlement) conta due entità dove ce n'è una. **Nessuna riconciliazione effettuata** — richiede una decisione di prodotto su quale anagrafica sopravvive e una data migration con merge delle FK.
+
+**Aggiornamento 2026-07-21 — il problema si è aggravato con `difflib`, e la migrazione è preparata ma non eseguita.**
+
+Col fuzzy posizionale un nome Lazio non raggiungeva la soglia e il referto restava orfano: sbagliato, ma *silenzioso e innocuo*. Con `difflib` (§8.6) la discovery **risponde**, scegliendo fra le due anagrafiche per uno scarto di **0.03** (`SS Lazio Nuoto` → `ss. lazio nuoto` 0.846 contro `s.s. lazio nuoto` 0.815). Il rischio descritto qui sopra in astratto è diventato concreto: la scelta è decisa da rumore. Non si cura alzando la soglia — a qualunque soglia le due grafie sono indistinguibili — si cura togliendo il duplicato.
+
+**Recon (dev, sola lettura, 2026-07-21), che decide anche il verso del merge:**
+
+| | Society 6 `SS. Lazio Nuoto` | Society 12 `S.S. Lazio Nuoto` |
+|---|---|---|
+| Slug | `SS_Lazio_Nuoto` | `ss-lazio-nuoto` (forma canonica) |
+| `core.Team` | 1 (Team 6, lega 4 U16A) | 1 (Team 12, lega 6 B/C) |
+| `management.Membership` | **0** | **14** |
+| Altre FK entranti | nessuna | — |
+
+**Merge 6 → 12: sopravvive la 12.** Non è arbitrario: è l'anagrafica viva (14 tesseramenti contro 0) e ha lo slug canonico. Spostare 14 tesseramenti per salvare uno slug è il verso sbagliato. Il fatto che sulla 6 non punti nient'altro che il suo Team è ciò che rende la `DELETE` innocua — e va **riverificato sull'ambiente bersaglio**, non dato per buono da questa tabella.
+
+**Stato: PREPARATO, NON ESEGUITO — né su dev né su prod.** Checklist a blocchi in `scratch/d1_merge_societa_lazio_20260721.sh` (untracked, si esegue un blocco alla volta) più il corpo della migrazione in `scratch/d1_merge_lazio_core.py`, **lo stesso codice** usato sia dal dry-run su copia scratch sia dall'esecuzione vera: il dry-run deve provare ciò che poi gira davvero, non una sua parafrasi. Cinque blocchi: gate sui parametri, recon sul posto, dry-run su copia con verifica dello SHA256 del DB reale, esecuzione in transazione unica con audit, asserzione finale contro valori noti in anticipo (OPS_RUNBOOK §6.5).
+
+**Gate bloccante: la grafia ufficiale del nome.** Il nome finale della società superstite è un **parametro non compilato** (`__DA_CONFERMARE__`) e il BLOCCO 1 si rifiuta di proseguire finché resta tale. Le due grafie in gioco sono `SS. Lazio Nuoto` e `S.S. Lazio Nuoto`, ma quella giusta può essere una terza: va confermata da Alberto sulla fonte reale (federazione / sito della società), non dedotta dal DB — è esattamente il tipo di verità che il DB non contiene.
+
+La grafia perdente non viene buttata: diventa un `TeamAlias` di origine `ANAGRAFICA` sulla squadra ri-puntata, così i referti già compilati con quella grafia continuano a risolvere.
+
+**Non è una data migration versionata, deliberatamente**: è una correzione anagrafica una-tantum su due pk specifici, non una regola che deve valere per ogni installazione. Come migration verrebbe ri-eseguita su ogni ambiente nuovo cercando pk che lì non esistono.
+
+### 8.8 Report 15: orfano in `UPLOADED`, mai elaborato (censito 2026-07-20)
+
+Emerso guardando la lista referti in admin durante il deploy §2.7 e verificato a DB in sola lettura. **Non era nel censimento del 2026-07-19**, che copriva i cinque report collegati ai quattro match (7, 8, 10, 11, 16).
+
+Stato reale su prod: `status=UPLOADED`, `match=None` — è l'**unico referto orfano** a DB — con file allegato presente (`source_channel=FILE`), `normalized_data` **vuoto**, `ocr_attempts=0` e `ocr_queued_at`/`ocr_started_at` a `None`. Creato il 2026-04-19. In breve: **caricato e mai elaborato**, non un'estrazione andata male.
+
+Due cose lo rendono interessante oltre al censimento in sé:
+
+1. **Non partirà da solo.** `UPLOADED` non è `QUEUED`, e l'accodamento è esplicito per disegno (Macro 22). Nessun processo lo raccoglierà: né il worker, che consuma `QUEUED`, né il backstop `recover_stale_reports`, che guarda `PROCESSING`. Non compare nemmeno in nessuno dei tre segnali di coda di `ops_check`. È un **punto cieco della strumentazione**, non un malfunzionamento — ma è il tipo di dato che resta fermo per mesi senza che nulla lo dica, come infatti è successo per tre mesi.
+2. **È il candidato naturale per il collaudo end-to-end mancante** dell'asincrono su prod (Macro 22 §As-built giro 3): un file reale, già a sistema, non collegato a nessun match, quindi accodarlo non rischia di sovrascrivere dati corretti. Se poi il referto risultasse collazionabile sul cartaceo, diventerebbe anche il settimo caso gold.
+
+Anomalia minore rilevata nello stesso censimento: `in_review_at` è valorizzato (2026-04-19) pur essendo lo stato `UPLOADED` — residuo di una transizione passata, incoerente con lo stato attuale.
+
+~~**Non toccato**: non accodato, non collegato, non eliminato.~~ **Superato il 2026-07-21**: il report 15 è stato accodato su prod come oggetto del collaudo end-to-end del worker (OPS_RUNBOOK §2.8) ed è ora in `NEEDS_REVIEW`, orfano. L'esito di merito dell'estrazione è in **§8.10**; la decisione di prodotto (resta orfano documentato, nessuna azione a DB) è registrata lì e in OPS_RUNBOOK §10.23, ora chiusa.
+
+### 8.9 Baseline Gemini sul dataset gold (2026-07-20)
+
+Primo run di baseline completo: `gemini-2.5-pro`, prompt `OCR_SYSTEM_PROMPT_V2@sha256:31f3335733e2`, preprocessing on, eseguito su dev il 2026-07-20 (chiamate reali autorizzate da Alberto). Due misure: un passaggio singolo su tutti e 6 i casi (`--gold-all` + Triscelon via `--image`) e la varianza su 5 chiamate indipendenti per caso (`--repeat 5`, tie-break corretto `2f22b9d`: esito `ambiguo` senza maggioranza stretta). Proposte JSON in `ocr_bench_out/gold/` su dev, mai riversate nei casi (D1).
+
+**Passaggio singolo — 67 correct / 11 wrong / 0 null su 78 campi confrontati (86%), nessuna inversione casa/trasferta rilevata:**
+
+| Caso (legibility) | correct | wrong | null | Campi sbagliati (estratto vs truth, confidence) |
+|---|---|---|---|---|
+| Pol. Delta (3) | 13/13 | 0 | 0 | — |
+| Unime (2) | 13/13 | 0 | 0 | — |
+| Bellator (1) | 8/13 | 5 | 0 | finale casa 5 vs 4 (0.99); Q2/Q3/Q4 casa (0.99); `BELLATOR FROSINONE` vs FRUSINO (0.98) |
+| Olympic (3) | 11/13 | 2 | 0 | Q3 away 0 vs 1, Q4 away 1 vs 0 (0.99) — scambio fra quarti, somme invariate |
+| Salerno (2, ruotato 90°) | 10/13 | 3 | 0 | `S.C. SACCENGO` vs S.C. Salerno (0.90); `VIRTUS NUOTO ROMA` vs Nautilus Nuoto Roma (0.90); data 2026-05-28 vs 2026-04-18 |
+| Triscelon (2) | 12/13 | 1 | 0 | data 2026-04-28 vs 2026-04-25 |
+
+**Varianza su 5 chiamate indipendenti (`--repeat 5`) — per campo: stabile-corretto / stabile-sbagliato / instabile / ambiguo:**
+
+| Caso | stab-corr | stab-SBAGLIATO | instabile | ambiguo | Note |
+|---|---|---|---|---|---|
+| Pol. Delta | 13 | 0 | 0 | 0 | perfettamente stabile e corretto |
+| Unime | 12 | 0 | 1 | 0 | instabile solo la data (2026-03-28 ×4, 2006-03-28 ×1; maggioranza corretta) |
+| Bellator | 6 | **1** | 6 | 0 | `final_score_home` **5×5 vs truth 4, confidence 1.00**: errore stabile riprodotto. `home_team_name` FROSINONE×3/FROSINO×1/FRUSINO×1 (maggioranza wrong; stamattina era 2-2-1 → `ambiguo`). Parziali casa maggioritari 1/0/2/2 → somma 5 = totale sbagliato: errore compensativo riprodotto |
+| Olympic | 10 | 0 | 3 | 0 | instabili Q3 away (0×3, 1×2 — maggioranza wrong), Q4 away (1×3, 0×2 — maggioranza wrong) e `away_team_name` (LIBERTAS ROMA EUR P.N×3 e varianti — maggioranza wrong per suffisso aggiunto), tutti a confidence 1.00 |
+| Salerno | 2 | 0 | 6 | 5 | il caso limite del dataset: stabili-corretti solo Q1 home/away. Nomi = 5 allucinazioni diverse in 5 chiamate per lato (`CONI`×2, `S.C. TUSCOLANO`, `Asd Tus Novara Nuoto Roma`, `S.C. Spresiano`; away tutte diverse, inclusa `Invictus Nuoto Roma`) → `ambiguo`. Data mai corretta in 5 run (2024-05-18×2, 2026-05-28×2, 2022-05-28×1) → `ambiguo`. Finale casa 12×3/11×1/17×1. **1 inversione casa/trasferta su 5 run.** Confidence media ~0.94 ovunque |
+| Triscelon | 11 | **1** | 0 | 1 | data **stabile-sbagliata 5×5** (2026-04-28 vs truth 2026-04-25): secondo errore stabile del dataset. `away_team_name` in pareggio vero 2-2 (`TRIS CELON ETNA SPORT` correct vs `TRISKELION ETNA SPORT` wrong, conf 0.998) → esito `ambiguo` — il tie-break corretto (`2f22b9d`) al lavoro |
+
+Totali `--repeat` sui 78 campi: **54 stabili-corretti (69%), 2 stabili-SBAGLIATI, 16 instabili, 6 ambigui.**
+
+**Letture della baseline** (fatti misurati, non conclusioni definitive — campione: 6 fogli, 1+5 chiamate ciascuno):
+
+1. **La confidence auto-dichiarata resta non informativa nei casi che contano**: tutti gli errori del passaggio singolo stanno fra 0.90 e 0.99 — le due allucinazioni sui nomi di Salerno a 0.90, l'errore stabile di Bellator a 0.99-1.00. Nel `--repeat`, i campi instabili, sbagliati o ambigui hanno `confidence_mean` fra 0.94 (Salerno, incluse 5 allucinazioni diverse dello stesso nome) e 1.00 (Bellator, Olympic). Nessuna soglia su questo segnale separerebbe il giusto dallo sbagliato su questi dati.
+2. **L'errore stabile esiste e ora sono due**: Bellator `final_score_home` = 5 in 5 chiamate su 5 (truth 4, confidence 1.00), coi parziali casa maggioritari (1/0/2/2) che sommano ancora al totale sbagliato — errore compensativo sistematico, non rumore di run; e Triscelon `date` = 2026-04-28 in 5 su 5 (truth 2026-04-25). Nessuna ripetizione li smaschera: è la classe di errore che solo una verità esterna rileva.
+3. **La leggibilità/qualità del foglio domina l'esito**: Delta e Unime perfetti e stabili; Olympic e Triscelon quasi; Bellator (legibility 1) 8/13 con 7 campi instabili; Salerno (ruotato 90°) è il caso limite — il singolo passaggio odierno leggeva 10/13 coi punteggi perfetti, ma il `--repeat` mostra che era **fortuna del run**: 11 campi su 13 instabili o ambigui, contro i 6/13 del 19/07 sullo stesso foglio. Un passaggio singolo su un foglio degradato non è una misura: è un'estrazione dalla distribuzione.
+4. **La classe di errore dei nomi è l'allucinazione plausibile, non il typo**: `S.C. SACCENGO`, `VIRTUS NUOTO ROMA` (Salerno), `BELLATOR FROSINONE` (prior linguistico, di nuovo), `LIBERTAS ROMA EUR P.N` (suffisso inventato). Nessuna è una grafia legittima alternativa: confermano la separazione della diagnosi §8.6 (alias per divergenze reali, accuratezza OCR per le allucinazioni).
+5. **La data è il campo più fragile dopo i nomi**: sbagliata, instabile o ambigua su 3 casi su 6 — Triscelon stabile-sbagliata (28 vs 25, 5×5), Salerno mai corretta in 5 run (tre valori diversi, due anni diversi), Unime 2006 in 1 run su 5 — e il provider non dichiara una confidence dedicata per la data.
+6. **Inversione casa/trasferta: rara ma riprodotta** — 1 estrazione su 36 (un run del `--repeat` Salerno, 17-12), sempre e solo sul foglio ruotato. Il check dedicato dell'harness l'ha rilevata; su tutti gli altri fogli non è mai scattato.
+7. Nessun run fallito per errore API: 36/36 chiamate a buon fine, nessun caso non-benchato.
+
+### 8.10 Estrazione del report 15 su prod (2026-07-21): il primo dato di accuratezza raccolto in produzione
+
+Il 2026-07-21 il report 15 è stato accodato su prod come oggetto del **collaudo end-to-end del worker OCR** (Macro 22, OPS_RUNBOOK §2.8). Il collaudo è **verde** — è la pipeline a essere stata verificata. Quello che segue è il dato *di merito*, che appartiene a Macro 8 e che è **negativo**.
+
+Il foglio è il cartaceo del caso gold `2026-04-18_sc-salerno_vs_nautilus-nuoto-roma` — lo stesso "caso limite ruotato 90°" della baseline §8.9. Questa però è la **prima estrazione di questo foglio fatta dalla pipeline reale in produzione**, non dall'harness di bench: stesso modello (`gemini-2.5-pro`), stesso preprocessing, percorso applicativo completo.
+
+| Campo | Estratto (prod, report 15) | Truth (cartaceo) | Esito |
+|---|---|---|---|
+| `home_team` | `S.C. Tuscolano` | S.C. Salerno | **allucinazione** |
+| `away_team` | `Virtus Nuoto Roma` | Nautilus Nuoto Roma | **allucinazione** |
+| `date` | 2026-06-18 | 2026-04-18 | **sbagliata** (mese) |
+| `final_score` | 17-12 | 12-17 | **invertito** |
+| Q1 | 5-5 | 5-5 | corretto |
+| Q2 | 4-6 | 4-6 | corretto |
+| Q3 | 7-1 | 2-4 | **allucinato** |
+| Q4 | 1-0 | 1-2 | **allucinato** |
+
+**(a) L'errore compensativo si ripresenta, e qui è ancora più istruttivo.** I parziali estratti sommano `5+4+7+1 = 17` e `5+6+1+0 = 12`: tornano **esattamente al finale estratto**, cioè al finale *invertito*. Il controllo "somma parziali == finale" passa, come sempre. Ma c'è un dettaglio in più rispetto ai casi di §8.5(b): Q1 e Q2 sono corretti *nei valori e nell'attribuzione*, mentre Q3 e Q4 sono inventati per far quadrare i totali con l'inversione. Cioè il modello non ha invertito il foglio in modo uniforme — ha letto correttamente la parte alta della griglia e ha poi **riconciliato all'indietro** la parte bassa verso un totale sbagliato. È la firma di una ricostruzione, non di una lettura.
+
+**(b) I due nomi confermano la classe "allucinazione plausibile" (§8.6(b), §8.9 lettura 4).** `S.C. Tuscolano` e `Virtus Nuoto Roma` sono nomi di società di pallanuoto romana perfettamente verosimili, e nessuno dei due è una grafia alternativa di quello vero: non sono mappabili da una tabella di alias, per definizione. `S.C. Tuscolano` compare peraltro già nell'elenco delle cinque allucinazioni diverse prodotte dal `--repeat 5` su questo stesso foglio (§8.9): la pipeline di produzione ha pescato dalla stessa distribuzione dell'harness di bench.
+
+Conseguenza operativa positiva: **la discovery non ha agganciato nulla** e il referto è finito orfano in `NEEDS_REVIEW`. Su un'estrazione sbagliata così, un fuzzy matching più permissivo sarebbe stato un danno, non un miglioramento — è il vincolo di disegno che la fetta sul passaggio a `difflib` deve rispettare.
+
+**(c) Chiarimento sulla chiave `confidence` — il `{}` del PASSO 7 era un artefatto dello script, non un dato.** La checklist di collaudo leggeva `normalized_data['confidence_fields']` alla **radice** del payload, dove quella chiave non esiste, e mostrava quindi `{}`. Nel payload reale la confidence sta sotto `metadata`, coerentemente con lo schema v2. Valori effettivi del report 15:
+
+- `metadata.confidence` = **0.95**
+- `metadata.confidence_fields` = `home_team` **1.0**, `away_team` **1.0**, `final_score` **1.0**, `quarters` **1.0**, `home_roster` 0.98, `away_roster` 0.98, `events` 0.9, `officials` 0.95
+- (esistono anche `officials.confidence` = 0.95 e `teams.{home,away}.confidence` = 0.98)
+
+**Il dato corretto è peggiore del `{}`.** Il modello ha dichiarato **1.0** su tutti e quattro i campi che ha sbagliato: entrambi i nomi allucinati, il finale invertito e la griglia dei parziali. Non è confidence bassa ignorata: è confidence **massima su valori inventati**, in produzione, sul percorso reale. È la conferma su un caso non costruito di §8.5(c) e della lettura 1 di §8.9 — e la motivazione diretta della neutralizzazione dei gate su `confidence`/`confidence_fields` (§8.11): quei gate non sono mai scattati perché **non possono** scattare, gli errori vivono tutti fra 0.90 e 1.00.
+
+**Nessun riversamento nel caso gold.** Questa estrazione **non** è stata scritta in `extractions[]` del caso: vale la decisione D1 di §8.2 — il riversamento nel dataset è un atto umano dopo review, mai automatico. I valori qui sopra sono registrati come finding, non come misura del dataset.
+
+**Report 15 — decisione presa (Alberto, 2026-07-21):** resta in `NEEDS_REVIEW` come orfano documentato, nessuna azione a DB. Le due società lette sul foglio non esistono a sistema (e quelle vere, `S.C. Salerno` e `Nautilus Nuoto Roma`, sono rispettivamente assente e presente — §8.2): il referto diventerà risolvibile solo se e quando le anagrafiche mancanti entreranno a DB. Registrato anche in OPS_RUNBOOK §10.23, che si chiude con questa decisione.
+
+### 8.11 Fetta A1 — neutralizzazione dei gate sulla confidence (2026-07-21)
+
+Prima contromisura del giro post-collaudo. **Non aggiunge un controllo: ne toglie quattro**, perché quattro controlli inerti sono peggio di zero — comunicano una garanzia che non esiste.
+
+**Cosa è stato rimosso.**
+
+| Dove | Decisione rimossa |
+|---|---|
+| `ocr_quality_gate.evaluate` | blocker se `metadata.confidence < 0.3`; warning se `< 0.6` |
+| `ocr_quality_gate.evaluate` | blocker se `confidence_fields[home_team/away_team/final_score] < 0.5`; info se `< 0.8` |
+| `schema.validate_coherence` | warning su confidence globale `< 0.6`, su `officials.confidence < 0.5`, su `teams.<side>.confidence < 0.5` |
+| `schema.assess_publish_readiness` | blocker se `confidence < 0.3`; warning se `0.3 ≤ confidence < 0.6` |
+
+**Motivazione, in una riga: gli errori vivono dove le soglie non arrivano.** Sui 78 campi della baseline §8.9 e sull'estrazione reale in produzione §8.10, ogni singolo errore osservato ha confidence fra **0.90 e 1.00** — le due allucinazioni di nome del report 15 a 1.00, l'errore stabile di Bellator a 0.99-1.00, le allucinazioni di Salerno a 0.90. Le soglie più alte in gioco erano 0.6 e 0.8. **Nessuno di questi gate è mai scattato in esercizio, e nessuno potrebbe scattare**: non è una taratura da correggere, è un segnale che non contiene l'informazione richiesta.
+
+**Cosa resta, deliberatamente.**
+
+- **Tutti i controlli strutturali**: sezioni obbligatorie, nomi squadra presenti e diversi fra loro, match col contesto della partita selezionata, formato del punteggio, somma dei quarti, eventi che non eccedono i totali, valori placeholder. Sono i controlli che *possono* fallire, e che infatti falliscono.
+- **Il contratto di schema** che vuole `metadata.confidence` numerica: è forma del payload, non giudizio sul valore. Rimuoverlo avrebbe cambiato il contratto con il provider senza guadagno.
+- **La confidence nei dati e sotto gli occhi del revisore**: resta in `normalized_data`, resta stampata in review — ma etichettata **"non calibrata"**, con il razionale nel tooltip. È un dato grezzo di provenienza, non un semaforo.
+
+**Rimossi anche gli highlight in review** sui campi con confidence `< 0.7`: stessa patologia, forma più insidiosa. Su questi dati non si accendevano mai, quindi il revisore leggeva l'assenza di evidenziazione come "campo affidabile" **proprio sui campi sbagliati** — un gate inerte che si trasforma in disinformazione attiva. Nel rimuoverli è emerso che la variabile di contesto `confidence_fields` non era **mai** stata popolata dalla view: la riga `const confidenceFields = {{ confidence_fields|safe }}` renderizzava `const confidenceFields = ;`, un `SyntaxError` che uccideva l'intero blocco script della review page. Bug latente, trovato togliendo codice morto.
+
+**Cosa questa fetta NON fa.** Non sostituisce il segnale rimosso. Il controllo indipendente indicato in §8.5(b)-1 — conteggio degli eventi-gol per periodo contro il parziale di quel periodo, che legge una zona diversa del foglio — resta da costruire, ed è la direzione giusta perché non condivide la fonte con ciò che verifica. Fino ad allora vale §8.5(b)-2: **solo la review umana discrimina**, e nessun verde del gate va letto come "dato attendibile".
 
 ---
 

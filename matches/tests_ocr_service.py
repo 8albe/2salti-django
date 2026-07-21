@@ -288,13 +288,19 @@ class SemanticValidationTestCase(TestCase):
         date_warnings = [w for w in warnings if "Data" in w]
         self.assertTrue(len(date_warnings) > 0)
 
-    def test_low_confidence_warning(self):
-        """Confidenza bassa viene segnalata."""
+    def test_low_confidence_no_longer_warns(self):
+        """A1 (2026-07-21): validate_coherence non emette piu' warning su confidence.
+
+        Valeva per la confidence globale, per `officials.confidence` e per la
+        confidence per-roster. Tutte rimosse: non correlano con la correttezza.
+        """
         data = self._make_valid_data()
         data["metadata"]["confidence"] = 0.3
+        data.setdefault("officials", {})["confidence"] = 0.1
+        data["teams"]["home"]["confidence"] = 0.1
+        data["teams"]["away"]["confidence"] = 0.1
         ok, warnings = OCRSchemaValidator.validate_coherence(data)
-        conf_warnings = [w for w in warnings if "Confidenza" in w]
-        self.assertTrue(len(conf_warnings) > 0)
+        self.assertFalse(any("Confidenza" in w for w in warnings))
 
     def test_extraction_warnings_surfaced(self):
         """Warnings dell'engine OCR vengono esposti nella validazione."""
@@ -374,13 +380,13 @@ class PublishReadinessTestCase(TestCase):
         self.assertFalse(safe)
         self.assertTrue(any("roster" in b.lower() for b in blockers))
 
-    def test_very_low_confidence_blocks_publish(self):
-        """Confidenza < 0.3 blocca la pubblicazione."""
+    def test_very_low_confidence_does_not_block_publish(self):
+        """A1 (2026-07-21): la confidence non blocca piu' la pubblicazione."""
         data = self._make_publishable_data()
         data["metadata"]["confidence"] = 0.1
         safe, blockers, warnings = OCRSchemaValidator.assess_publish_readiness(data)
-        self.assertFalse(safe)
-        self.assertTrue(any("Confidenza" in b for b in blockers))
+        self.assertTrue(safe)
+        self.assertFalse(any("Confidenza" in b for b in blockers))
 
     def test_missing_team_names_blocks_publish(self):
         """Nomi squadre entrambi mancanti bloccano la pubblicazione."""
@@ -391,13 +397,23 @@ class PublishReadinessTestCase(TestCase):
         self.assertFalse(safe)
         self.assertTrue(any("squadre" in b.lower() for b in blockers))
 
-    def test_low_confidence_generates_warning_not_blocker(self):
-        """Confidenza bassa (0.3-0.6) genera warning, non blocker."""
+    def test_low_confidence_generates_neither_warning_nor_blocker(self):
+        """A1 (2026-07-21): nemmeno warning — la confidence non decide piu' nulla."""
         data = self._make_publishable_data()
         data["metadata"]["confidence"] = 0.45
         safe, blockers, warnings = OCRSchemaValidator.assess_publish_readiness(data)
         self.assertTrue(safe)
-        self.assertTrue(any("Confidenza" in w for w in warnings))
+        self.assertFalse(any("Confidenza" in w for w in warnings))
+        self.assertFalse(any("Confidenza" in b for b in blockers))
+
+    def test_max_confidence_does_not_bypass_publish_blockers(self):
+        """Confidence 1.0 non salva un payload che i controlli strutturali bocciano."""
+        data = self._make_publishable_data()
+        data["metadata"]["confidence"] = 1.0
+        data["scores"]["final_score"] = None
+        safe, blockers, warnings = OCRSchemaValidator.assess_publish_readiness(data)
+        self.assertFalse(safe)
+        self.assertTrue(any("Punteggio finale" in b for b in blockers))
 
     def test_empty_data_blocks_publish(self):
         """Dati vuoti bloccano la pubblicazione."""
@@ -786,8 +802,8 @@ class SchemaV2ExtensionTestCase(TestCase):
         ref_warnings = [w for w in warnings if "nessun arbitro" in w.lower()]
         self.assertTrue(len(ref_warnings) > 0)
 
-    def test_officials_low_confidence_generates_warning(self):
-        """officials.confidence < 0.5 genera warning in validate_coherence."""
+    def test_officials_low_confidence_no_longer_warns(self):
+        """A1 (2026-07-21): officials.confidence non genera piu' warning."""
         data = self._make_v1_payload()
         data["officials"] = {
             "confidence": 0.3,
@@ -796,7 +812,7 @@ class SchemaV2ExtensionTestCase(TestCase):
         }
         ok, warnings = OCRSchemaValidator.validate_coherence(data)
         conf_warnings = [w for w in warnings if "arbitri" in w.lower() and "bassa" in w.lower()]
-        self.assertTrue(len(conf_warnings) > 0)
+        self.assertEqual(conf_warnings, [])
 
     # --- Coach ---
 
@@ -854,13 +870,17 @@ class SchemaV2ExtensionTestCase(TestCase):
         self.assertFalse(ok)
         self.assertIn("confidence", msg)
 
-    def test_low_team_confidence_generates_warning(self):
-        """teams.home.confidence < 0.5 genera warning in validate_coherence."""
+    def test_low_team_confidence_no_longer_warns(self):
+        """A1 (2026-07-21): teams.<side>.confidence non genera piu' warning.
+
+        Il campo resta accettato dallo schema (validate) come dato grezzo:
+        cambia solo il fatto che non decide piu' nulla.
+        """
         data = self._make_v1_payload()
         data["teams"]["home"]["confidence"] = 0.3
         ok, warnings = OCRSchemaValidator.validate_coherence(data)
         conf_warnings = [w for w in warnings if "roster" in w.lower() and "bassa" in w.lower()]
-        self.assertTrue(len(conf_warnings) > 0)
+        self.assertEqual(conf_warnings, [])
 
     # --- Extended event types ---
 

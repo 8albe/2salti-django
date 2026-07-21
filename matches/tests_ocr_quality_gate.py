@@ -96,11 +96,41 @@ class OCRQualityGateTest(TestCase):
         self.assertFalse(is_valid)
         self.assertTrue(any("inaccettabile" in b for b in blockers))
 
-    def test_low_confidence(self):
+    def test_low_confidence_does_not_block(self):
+        """A1 (2026-07-21): la confidence globale non e' piu' un criterio di gating.
+
+        Storicamente confidence < 0.3 era un blocker e < 0.6 un warning. Rimossi:
+        sui dati reali gli errori stanno tutti fra 0.90 e 1.00, quindi le soglie
+        non sono mai scattate ne' potrebbero scattare.
+        """
+        for value in (0.0, 0.15, 0.45):
+            with self.subTest(confidence=value):
+                self.valid_data["metadata"]["confidence"] = value
+                is_valid, blockers, warnings, info = OCRQualityGate.evaluate(self.valid_data)
+                self.assertTrue(is_valid)
+                self.assertEqual(blockers, [])
+                self.assertFalse(any("affidabilit" in w.lower() for w in warnings))
+
+    def test_confidence_stays_in_the_payload(self):
+        """La confidence non viene rimossa dai dati: smette solo di decidere."""
         self.valid_data["metadata"]["confidence"] = 0.15
+        OCRQualityGate.evaluate(self.valid_data)
+        self.assertEqual(self.valid_data["metadata"]["confidence"], 0.15)
+
+    def test_max_confidence_does_not_rescue_broken_data(self):
+        """Simmetrico: confidence 1.0 non salva un payload strutturalmente rotto.
+
+        E' il caso reale del report 15 su prod (syllabus §8.10): confidence 1.0
+        su valori inventati. I blocker devono restare quelli strutturali.
+        """
+        self.valid_data["metadata"]["confidence"] = 1.0
+        self.valid_data["metadata"]["confidence_fields"] = {
+            "home_team": 1.0, "away_team": 1.0, "final_score": 1.0,
+        }
+        self.valid_data["scores"]["final_score"] = "non-un-punteggio"
         is_valid, blockers, warnings, _ = OCRQualityGate.evaluate(self.valid_data)
         self.assertFalse(is_valid)
-        self.assertTrue(any("troppo bassa" in b for b in blockers))
+        self.assertTrue(any("Punteggio finale" in b for b in blockers))
 
     def test_none_data_returns_four_tuple(self):
         ok, blockers, warnings, info = OCRQualityGate.evaluate(None)
