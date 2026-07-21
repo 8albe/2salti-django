@@ -177,11 +177,11 @@ I due problemi separati da questa diagnosi hanno ricevuto due fette **separate**
 **Due fatti emersi scrivendo i test, che correggono ipotesi precedenti.**
 
 1. **Il fuzzy posizionale risolveva già `Olympic` → Olimpic (0.941) e anche l'allucinazione `BELLATOR FROSINONE` → Bellator Frusino (0.833).** L'orfanità del report 16 non veniva quindi dal nome di casa, come si poteva leggere in (b): veniva quasi certamente dal lato **Lazio**, dove il duplicato anagrafico di §8.7 produce due punteggi pari e la funzione risponde `None` per ambiguità. Il valore dell'alias non è allora "rendere possibile l'impossibile" ma **rendere deterministico ciò che dipendeva da una soglia**: con l'alias la risoluzione non è più esposta a un cambio di soglia, all'arrivo di una squadra dal nome simile o al passaggio a un altro algoritmo.
-2. **`difflib` rende risolvibile il duplicato Lazio, ma per uno scarto di 0.03** (`0.846` contro `0.815`). Cioè su un referto Lazio la discovery ora *risponde*, e la risposta è decisa da rumore fra due anagrafiche che sono la stessa società reale. Non è un aggancio spurio verso una squadra estranea — è l'ambiguità di §8.7 che si manifesta — e la cura è il merge (D1), non una soglia più alta: a qualunque soglia le due sono indistinguibili. Il fatto è fissato in un test che dopo D1 andrà riscritto.
+2. **`difflib` rende risolvibile il duplicato Lazio, ma per uno scarto di 0.03** (`0.846` contro `0.815`). Cioè su un referto Lazio la discovery ora *risponde*, e la risposta è decisa da rumore fra due anagrafiche che sono la stessa società reale. Non è un aggancio spurio verso una squadra estranea — è l'ambiguità di §8.7 che si manifesta — e la cura è il merge (D1), non una soglia più alta: a qualunque soglia le due sono indistinguibili. Il fatto era fissato in un test, riscritto dopo l'esecuzione di D1 su dev (§8.7).
 
 `simple_similarity` **resta in uso sulla riconciliazione atleti**, non toccata da questa fetta: i nomi di persona hanno una fenomenologia diversa (iniziali puntate, cognomi composti) e cambiare metrica anche lì va misurato a parte. Debito dichiarato, non dimenticanza.
 
-### 8.7 Duplicato anagrafico Lazio (registrato, non riconciliato)
+### 8.7 Duplicato anagrafico Lazio — merge ESEGUITO SU DEV il 2026-07-21 (prod: da fare)
 
 Presente **sia su dev sia su prod**, identico:
 
@@ -209,11 +209,26 @@ Col fuzzy posizionale un nome Lazio non raggiungeva la soglia e il referto resta
 
 **Merge 6 → 12: sopravvive la 12.** Non è arbitrario: è l'anagrafica viva (14 tesseramenti contro 0) e ha lo slug canonico. Spostare 14 tesseramenti per salvare uno slug è il verso sbagliato. Il fatto che sulla 6 non punti nient'altro che il suo Team è ciò che rende la `DELETE` innocua — e va **riverificato sull'ambiente bersaglio**, non dato per buono da questa tabella.
 
-**Stato: PREPARATO, NON ESEGUITO — né su dev né su prod.** Checklist a blocchi in `scratch/d1_merge_societa_lazio_20260721.sh` (untracked, si esegue un blocco alla volta) più il corpo della migrazione in `scratch/d1_merge_lazio_core.py`, **lo stesso codice** usato sia dal dry-run su copia scratch sia dall'esecuzione vera: il dry-run deve provare ciò che poi gira davvero, non una sua parafrasi. Cinque blocchi: gate sui parametri, recon sul posto, dry-run su copia con verifica dello SHA256 del DB reale, esecuzione in transazione unica con audit, asserzione finale contro valori noti in anticipo (OPS_RUNBOOK §6.5).
+**Stato: ESEGUITO SU DEV il 2026-07-21, non ancora su prod.** Checklist a blocchi in `scratch/d1_merge_societa_lazio_20260721.sh` (untracked, si esegue un blocco alla volta) più il corpo della migrazione in `scratch/d1_merge_lazio_core.py`, **lo stesso codice** usato sia dal dry-run su copia scratch sia dall'esecuzione vera: il dry-run deve provare ciò che poi gira davvero, non una sua parafrasi. Cinque blocchi: gate sui parametri, recon sul posto, dry-run su copia con verifica dello SHA256 del DB reale, esecuzione in transazione unica con audit, asserzione finale contro valori noti in anticipo (OPS_RUNBOOK §6.5).
 
-**Gate bloccante: la grafia ufficiale del nome.** Il nome finale della società superstite è un **parametro non compilato** (`__DA_CONFERMARE__`) e il BLOCCO 1 si rifiuta di proseguire finché resta tale. Le due grafie in gioco sono `SS. Lazio Nuoto` e `S.S. Lazio Nuoto`, ma quella giusta può essere una terza: va confermata da Alberto sulla fonte reale (federazione / sito della società), non dedotta dal DB — è esattamente il tipo di verità che il DB non contiene.
+**Gate bloccante (sciolto il 2026-07-21): la grafia ufficiale del nome.** Il nome della società superstite era un **parametro non compilato** (`__DA_CONFERMARE__`) e il BLOCCO 1 si rifiutava di proseguire finché restava tale — verificato in entrambe le direzioni prima dell'esecuzione. Alberto ha confermato sulla fonte reale la grafia **`S.S. Lazio Nuoto`**, che coincide con quella già presente sulla Society 12: il passo di rinomina del core è quindi risultato un no-op, atteso e non un errore.
 
 La grafia perdente non viene buttata: diventa un `TeamAlias` di origine `ANAGRAFICA` sulla squadra ri-puntata, così i referti già compilati con quella grafia continuano a risolvere.
+
+**Esito su dev.** Society 6 eliminata (cascata vuota, come previsto dal recon); Team 6 ri-puntato sulla Society 12 e rinominato `S.S. Lazio Nuoto Allievi`; `TeamAlias` `SS. Lazio Nuoto` (origine `ANAGRAFICA`) → Team 6. Asserzione finale verde contro costanti fissate **prima** dell'esecuzione (§6.5 di OPS_RUNBOOK), inclusi gli invarianti che il merge non doveva toccare: 14 `Membership` sulla società superstite, 13 `Team` totali, i 3 alias fondativi C1 intatti. Suite `core matches management`: 670 OK, 2 skipped.
+
+**Effetto misurato sulla discovery, e cosa NON è.** Sulla grafia `SS Lazio Nuoto`:
+
+| | Allievi | Serie C | Scarto | Vincitore |
+|---|---|---|---|---|
+| Prima del merge | **0.8462** | 0.8148 | 0.0314 | Team 6 (Allievi) |
+| Dopo il merge | 0.6286 | **0.8148** | 0.1862 | Team 12 (Serie C) |
+
+Da distinguere due cose che è facile confondere. La prima è l'**irrobustimento**: lo scarto passa da rumore a segnale, e la risposta smette di dipendere da un punto e mezzo di differenza. La seconda è che **il vincitore cambia**: la stessa grafia che prima andava agli Allievi ora va alla Serie C. È l'effetto voluto — la scelta di prima era un accidente, non un giudizio — ma resta un cambiamento di **semantica**, non solo di robustezza, e va ricordato come tale quando si rileggeranno referti storici.
+
+**L'alias pinna la grafia perdente sugli Allievi.** `SS. Lazio Nuoto` risolve ora su Team 6 per alias; su un referto di **serie C** con quella grafia risolverebbe quindi sulla squadra sbagliata. **Non è una regressione**: prima del merge quella grafia andava già al Team 6, per exact match sul nome. La differenza è di natura, non di esito — prima era un accidente dell'anagrafica duplicata, ora è un'**affermazione umana** registrata e riverificabile. Entrambi i fatti sono fissati in `matches/tests_team_similarity.py`, che il merge ha reso necessario riscrivere: `REAL_TEAMS` era hardcoded, quindi il test dell'ambiguità sarebbe rimasto **verde affermando un fatto ormai falso** — la stessa classe del quasi-incidente del PASSO 3d (OPS_RUNBOOK §2.7).
+
+**Debito aperto (cosmetico, generale — non solo Lazio):** il merge lascia il Team 6 col suffisso di categoria (`S.S. Lazio Nuoto Allievi`) e il Team 12 senza (`S.S. Lazio Nuoto`, non `… Serie C`), mentre l'`help_text` del campo dichiara la convenzione "Society + tipo lega"; l'asimmetria è **preesistente e diffusa su tutte e 13 le squadre**, quindi va sanata in un giro dedicato su tutte o su nessuna, mai su una sola.
 
 **Non è una data migration versionata, deliberatamente**: è una correzione anagrafica una-tantum su due pk specifici, non una regola che deve valere per ogni installazione. Come migration verrebbe ri-eseguita su ogni ambiente nuovo cercando pk che lì non esistono.
 
