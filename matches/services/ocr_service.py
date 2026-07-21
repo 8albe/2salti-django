@@ -1,3 +1,4 @@
+import difflib
 import json
 import logging
 import time
@@ -26,6 +27,15 @@ def normalize_name(name: str) -> str:
     return name
 
 def simple_similarity(a: str, b: str) -> float:
+    """Similarità POSIZIONALE — confronta i caratteri alla stessa posizione.
+
+    Non più usata per i nomi squadra dal 2026-07-21: là è subentrata
+    `team_similarity` (difflib), perché una singola inserzione disallinea tutto
+    il confronto. Resta in uso sul percorso di riconciliazione ATLETI
+    (`fuzzy_match`), non toccato da questa fetta: cambiare la metrica anche lì
+    va misurato sui nomi delle persone, che hanno una fenomenologia diversa
+    (iniziali puntate, cognomi composti) e meritano una fetta propria.
+    """
     if not a or not b:
         return 0
     matches = sum(1 for x, y in zip(a, b) if x == y)
@@ -152,6 +162,50 @@ def normalize_team_name(name: str) -> str:
             
     return name.strip()
 
+#: Soglia del fuzzy sui nomi squadra nella discovery.
+#:
+#: Resta 0.80, lo stesso valore del confronto posizionale che `team_similarity`
+#: sostituisce: la fetta cambia la METRICA, non la soglia, così l'effetto è
+#: isolato e attribuibile.
+#:
+#: Il valore è misurato, non ereditato. Sulle 13 squadre a DB e sui nomi
+#: realmente estratti dai referti (dataset gold + report 15):
+#:   - veri positivi   0.857 – 0.941  (`Nautilus Nuoto Roma`→Nautilus N. Roma
+#:                                     0.857, `Nautilus Roma` 0.897,
+#:                                     `LIBERTAS ROMA EUR P.N` 0.895,
+#:                                     `Olympic Roma P.N.` 0.941)
+#:   - falsi positivi  ≤ 0.606        (il massimo è `Virtus Nuoto Roma` contro
+#:                                     Nautilus N. Roma)
+#: La soglia cade nel mezzo di un intervallo vuoto largo 0.25.
+#:
+#: Perché NON allinearla allo 0.6 del quality gate: le due soglie proteggono da
+#: rischi opposti. Il gate confronta il nome estratto con la squadra di una
+#: partita GIÀ scelta da un umano — lì un falso negativo blocca un referto sano.
+#: La discovery invece SCEGLIE la partita: un falso positivo aggancia il referto
+#: alla partita sbagliata e ne sovrascrive il punteggio. A 0.6 la discovery
+#: aggancerebbe `Virtus Nuoto Roma` (0.606) a Nautilus — esattamente
+#: l'allucinazione del report 15 che il collaudo su prod ha visto NON agganciare.
+TEAM_FUZZY_THRESHOLD = 0.80
+
+
+def team_similarity(a: str, b: str) -> float:
+    """Similarità fra due nomi squadra già normalizzati, via `difflib`.
+
+    Sostituisce (2026-07-21) il confronto posizionale di `simple_similarity`,
+    che confrontava i caratteri **alla stessa posizione**: una sola inserzione
+    all'inizio disallineava tutto il resto e faceva crollare il punteggio anche
+    fra stringhe quasi identiche. È il motivo per cui `Nautilus Roma` contro
+    `Nautilus N. Roma` valeva 0.562 — sotto ogni soglia utile — pur essendo la
+    stessa squadra: le due grafie differiscono per l'inserzione di `N. `.
+
+    `SequenceMatcher` lavora su sottosequenze comuni, quindi shift e inserzioni
+    non lo disallineano. Sulle stesse due stringhe dà 0.897.
+    """
+    if not a or not b:
+        return 0.0
+    return difflib.SequenceMatcher(None, a, b).ratio()
+
+
 def resolve_team_alias(normalized_input: str, queryset):
     """Cerca l'input normalizzato fra le grafie alternative registrate a mano.
 
@@ -214,11 +268,11 @@ def resolve_team_entity(name: str, queryset):
     best = None
     best_score = 0
     fuzzy_matches = []
-    
-    threshold = 0.8
+
+    threshold = TEAM_FUZZY_THRESHOLD
     for obj in queryset:
         target_name = getattr(obj, 'name', '')
-        score = simple_similarity(normalized_input, normalize_team_name(target_name))
+        score = team_similarity(normalized_input, normalize_team_name(target_name))
         if score > best_score:
             best_score = score
             best = obj
