@@ -282,7 +282,11 @@ def sport_matches(request, sport_slug):
         selected_season = current_season
 
     # Gestione Data (sotto-filtro invariato rispetto alla versione precedente).
-    today = timezone.now().date()
+    # `localdate()` e non `now().date()`: il filtro `match_date__date` sotto opera
+    # in Europe/Rome, quindi "oggi" va calcolato in Europe/Rome. Con `now().date()`
+    # (UTC) fra le 00:00 e le 02:00 di Roma il default cadeva sul giorno UTC (ieri)
+    # e le partite odierne sparivano dalla lista (bug OPS_RUNBOOK §10.29).
+    today = timezone.localdate()
     date_str = request.GET.get('date')
     if date_str:
         try:
