@@ -70,6 +70,38 @@ Cosa serve, in alternativa o in aggiunta:
 1. un **controllo indipendente**, che usi una seconda fonte dentro il referto: il conteggio degli eventi-gol per periodo deve tornare col parziale di quel periodo. È indipendente perché legge un'altra zona del foglio (la lista marcatori, non la griglia dei parziali);
 2. in mancanza, accettare esplicitamente che **solo la review umana discrimina** e non lasciare che il gate strutturale verde venga letto come "dato attendibile".
 
+#### §8.5(b)-1 — IMPLEMENTATO (2026-07-21)
+
+Il controllo del punto 1 esiste: `OCRSchemaValidator.check_goal_events_per_period` in `matches/services/schema.py`, funzione pura sul solo `normalized_data`. **Non legge `MatchEvent`**: alla proiezione a DB il periodo mancante viene forzato a 1 (`quarter or 1` in `publishing_service.py`), quindi un gol senza periodo diventa indistinguibile da un gol del primo tempo e il confronto darebbe un risultato inventato.
+
+Il punto capitale è che **le due direzioni non sono simmetriche**, e trattarle allo stesso modo avrebbe reso il check inservibile: un eccesso è impossibile per costruzione, un difetto è la normale conseguenza di una cronologia letta solo in parte. Le decisioni ratificate da Alberto:
+
+| | Caso | Al gate post-estrazione | Al publish |
+|---|---|---|---|
+| **D1** | **Eccesso**: più eventi-gol del parziale di quel periodo | **blocker** → `NEEDS_REVIEW` | **blocker** |
+| **D2** | **Difetto con estrazione dichiaratamente completa**: la somma degli eventi-gol della squadra torna col suo finale, ma la distribuzione fra i periodi no | warning, **non declassa da solo** | **blocker** |
+| **D3** | **Difetto con estrazione incompleta**: eventi-gol totali < finale | solo **evidenza** informativa | nessun blocco |
+| **D4** | Hardening del prompt v2: il `quarter` di ogni evento va derivato dalla **sezione** della storia cronometrica, mai dal minuto e mai distribuito per far tornare i parziali. `null` resta ammesso e preferibile all'invenzione; il campo **non** diventa obbligatorio | — | — |
+| **D5** | Correzione di framing in §8.11 (vedi lì) | — | — |
+| **D6** | Tripla semantica: al gate il per-periodo **sostituisce** la variante aggregata (la domina); al publish **si affianca** all'uguaglianza stretta gol-eventi/finale, che resta un requisito a sé | — | — |
+
+Due precisazioni che il codice rende esplicite e che sarebbe facile perdere:
+
+- **La sostituzione D6 vale solo dove il per-periodo domina davvero.** Con tutti i parziali leggibili e ogni gol dotato di periodo, un eccesso sul totale implica un eccesso su almeno un periodo. Se però un parziale è illeggibile o qualche gol è privo di periodo, i gol possono "nascondersi" e la copertura non è più totale: in quel caso il controllo aggregato resta al suo posto per la squadra interessata. C'è un test di contro-prova.
+- **Il difetto non è valutabile per una squadra che ha gol senza periodo**, e questo viene **dichiarato**, non taciuto: il check ha un esito esplicito `not_applicable` — per riga e complessivo — con il motivo. Un check che tace si legge come "tutto a posto", che è la falsa garanzia rimossa dalla fetta A1 (§8.11).
+
+**Misure sui cinque referti reali di dev**, che sono anche le fixture statiche dei test (`matches/tests_ocr_period_coherence.py`; copie PII-free, non lette dal DB a runtime perché la riparazione dei `normalized_data` è il giro successivo):
+
+| Referto | Esito per-periodo | Direzione |
+|---|---|---|
+| 7 | 4 periodi su 4 in eccesso | **D1** — 23 eventi-gol casa contro un finale di 15 |
+| 8 | 2 periodi su 4 in difetto | D3 — casa completa e ben distribuita, ospite 8 gol su 10 |
+| 10 | 3 periodi su 4 in difetto | D3 — entrambe le squadre incomplete |
+| 11 | 4 periodi su 4 in difetto | D3 — 12 eventi-gol estratti su 21 |
+| 16 | 4 periodi su 4 coerenti | **nessuno** — su parziali falsi (vedi §8.11) |
+
+**In review** la tabella per-periodo è **evidenza per il revisore, etichettata coerenza interna e mai verifica di verità**: nessun highlight verde, nessun segno di conferma. Una tabella tutta pari non dice che i numeri sono giusti — il referto 16 lo dimostra — e un segnale positivo sarebbe esattamente la falsa garanzia che A1 ha rimosso.
+
 **(c) Confidence 1.0 su valore errato: fuorviante, non solo scalibrata.**
 
 Entrambi i provider hanno dichiarato `confidence_fields.final_score = 1.0` sul punteggio **sbagliato**. `gpt-4o` ha inoltre dichiarato `quarters = 0.9` con quattro parziali su quattro errati. Non è rumore di calibrazione: è un segnale che punta nella direzione opposta alla realtà. Qualunque soglia sul quality gate che si fidi di `confidence_fields` promuoverebbe questi due referti a `EXTRACTED` con la massima fiducia. **La confidence auto-dichiarata non è utilizzabile come criterio di gating** finché il gold standard non dimostra il contrario su un campione ampio.
@@ -349,7 +381,11 @@ Prima contromisura del giro post-collaudo. **Non aggiunge un controllo: ne togli
 
 **Rimossi anche gli highlight in review** sui campi con confidence `< 0.7`: stessa patologia, forma più insidiosa. Su questi dati non si accendevano mai, quindi il revisore leggeva l'assenza di evidenziazione come "campo affidabile" **proprio sui campi sbagliati** — un gate inerte che si trasforma in disinformazione attiva. Nel rimuoverli è emerso che la variabile di contesto `confidence_fields` non era **mai** stata popolata dalla view: la riga `const confidenceFields = {{ confidence_fields|safe }}` renderizzava `const confidenceFields = ;`, un `SyntaxError` che uccideva l'intero blocco script della review page. Bug latente, trovato togliendo codice morto.
 
-**Cosa questa fetta NON fa.** Non sostituisce il segnale rimosso. Il controllo indipendente indicato in §8.5(b)-1 — conteggio degli eventi-gol per periodo contro il parziale di quel periodo, che legge una zona diversa del foglio — resta da costruire, ed è la direzione giusta perché non condivide la fonte con ciò che verifica. Fino ad allora vale §8.5(b)-2: **solo la review umana discrimina**, e nessun verde del gate va letto come "dato attendibile".
+**Cosa questa fetta NON fa.** Non sostituisce il segnale rimosso. Il controllo indipendente indicato in §8.5(b)-1 — conteggio degli eventi-gol per periodo contro il parziale di quel periodo — è stato **implementato il 2026-07-21** (dettaglio e decisioni D1-D6 in §8.5(b)-1). Vale comunque §8.5(b)-2: **solo la review umana discrimina**, e nessun verde del gate va letto come "dato attendibile".
+
+**Correzione di framing (D5, 2026-07-21): l'indipendenza fra griglia e cronologia esiste sul foglio, ma non nell'estrazione.** §8.5(b)-1 e §8.5(f) qualificavano il conteggio per periodo come controllo *indipendente* perché legge una zona diversa del referto cartaceo. Sul foglio è vero, ed è ciò che ha permesso la corroborazione umana del match 1 (§8.5(f)). **Nell'estrazione OCR non lo è**: il referto 16, misurato il 2026-07-21, ha eventi per periodo perfettamente coerenti con parziali che sono falsi — un unico atto di lettura ha prodotto entrambe le zone, e le ha rese concordi tra loro e discordi dal foglio. L'indipendenza è una proprietà della *fonte*, non del *lettore*, e un lettore unico la annulla.
+
+Conseguenza operativa, che è il motivo per cui questa correzione va scritta e non solo capita: il check per-periodo **non è la seconda opinione** che la §8.5(b) sperava. Misura la coerenza interna dell'estratto e nulla di più. Vale in una sola direzione — quando **fallisce**, ha trovato un errore certo (D1) o quasi certo (D2); quando **passa**, non ha detto nulla sulla verità dei numeri. Per questo il check è cablato come blocco solo sui fallimenti e la tabella in review non ha alcun segnale di conferma. La corroborazione vera resta quella di §8.5(f): due letture di zone diverse fatte da **lettori diversi**, cioè in pratica la collazione umana sul cartaceo.
 
 ---
 
