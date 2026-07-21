@@ -152,12 +152,51 @@ def normalize_team_name(name: str) -> str:
             
     return name.strip()
 
+def resolve_team_alias(normalized_input: str, queryset):
+    """Cerca l'input normalizzato fra le grafie alternative registrate a mano.
+
+    Exact match sulla forma normalizzata dell'alias — nessun fuzzy: un alias è
+    un'affermazione umana verificata sul cartaceo, o corrisponde o non
+    corrisponde. Il risultato è filtrato sul `queryset` ricevuto, così un
+    chiamante che restringe l'insieme delle squadre non se lo vede aggirare.
+    """
+    if not normalized_input:
+        return None
+    from core.models import TeamAlias
+    alias = (
+        TeamAlias.objects
+        .filter(alias_normalized=normalized_input)
+        .select_related('team')
+        .first()
+    )
+    if alias is None:
+        return None
+    # `alias_normalized` è unique: se c'è, è uno solo — nessuna ambiguità possibile.
+    if queryset is None:
+        return alias.team
+    # I chiamanti passano sia un QuerySet sia una lista (es. `[match.home_team]`
+    # nella verifica di coerenza col match già collegato): regge entrambi.
+    if hasattr(queryset, 'filter'):
+        in_scope = queryset.filter(pk=alias.team_id).exists()
+    else:
+        in_scope = any(getattr(obj, 'pk', None) == alias.team_id for obj in queryset)
+    return alias.team if in_scope else None
+
+
 def resolve_team_entity(name: str, queryset):
     if not name:
         return None
-        
+
     normalized_input = normalize_team_name(name)
-    
+
+    # 0. Alias registrati a mano (C1, 2026-07-21) — PRIMA del fuzzy.
+    # Coprono le divergenze di grafia reali foglio↔DB (syllabus §8.6(a)). Vengono
+    # prima perché sono l'unica fonte certa qui dentro: il fuzzy indovina, l'alias
+    # è stato verificato da un umano sul cartaceo.
+    alias_team = resolve_team_alias(normalized_input, queryset)
+    if alias_team is not None:
+        return alias_team
+
     matches = []
     # 1. Exact match on normalized team names
     for obj in queryset:
