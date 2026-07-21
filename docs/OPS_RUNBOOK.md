@@ -755,6 +755,14 @@ Nello smoke del deploy §2.9 il comando ha riportato `GREEN, Findings: 1` senza 
 
 Il punteggio `team_similarity()` fra il nome squadra del referto 10 (`S.S. LAZIO NUOTO`, away) e `Team` 6 (`S.S. Lazio Nuoto Allievi`) vale, bit per bit, `0.80000000000000004441` — lo stesso double di `TEAM_FUZZY_THRESHOLD = 0.80` (`matches/services/ocr_service.py`): l'uguaglianza non è un margine, è un pareggio esatto sulla rappresentazione IEEE 754. Qualunque modifica a `TEAM_FUZZY_THRESHOLD`, `normalize_team_name` o `team_similarity` può spostare quel punteggio sotto soglia senza che nulla lo segnali, orfanizzando il referto 10 rispetto a quella squadra.
 
+### §10.28 PII storica in `scratch/seed_pilot_data.py` — APERTO 2026-07-21 (severità bassa, nessuna bonifica decisa)
+
+Il file contiene nomi e cognomi di atleti **reali** hardcoded nel sorgente, scrapati da 1x2pallanuoto.it, ed è in git dal 2026-04-17 (commit `8f47d34`). De-trackato il 2026-07-21 (`121d210`, con `scratch/` ignorata per intero): è fuori dall'albero versionato e dai commit futuri, ma **resta nella storia** di git e resta raggiungibile a chiunque abbia il repo.
+
+Valutazione fatta e registrata: repo privato, dati limitati a nome+cognome già pubblicati su una fonte pubblica sportiva. **Severità bassa, nessuna bonifica della storia decisa.**
+
+Condizione di riapertura esplicita: se il repo diventasse pubblico, oppure se emergessero altri file storici con PII più estesa (date di nascita, email, contatti), il debito va rivalutato e la bonifica via `git filter-repo` torna sul tavolo — col costo noto della riscrittura di **tutti** gli hash e del re-clone obbligato di ogni copia (`/opt/2salti-new`, `/opt/2salti-dev`, `/home/alberto`).
+
 ## 11. Sicurezza operativa e frontiera reversibile
 
 Questa sezione codifica le regole di sicurezza operativa emerse dalle sessioni di aprile-maggio 2026, e in particolare consolidate dopo l'incidente del 4 maggio 2026 in cui una password sudo in chiaro è stata trovata nella history pubblica del repo (`install_service.sh`, commit `473c296` del 15 marzo 2026). La regola madre è che le operazioni con effetti permanenti, distruttivi o privilegiati passano per Alberto e mai per l'agente, e che i segreti non transitano mai in contesti condivisi.
