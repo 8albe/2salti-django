@@ -231,9 +231,14 @@ class SportMatchesSeasonSelectorTest(TestCase):
         self.assertIn(self.match_new.id, ids_today)
         self.assertNotIn(match_future.id, ids_today)
         # ?date=<giorno futuro>: vede solo la partita futura (stessa stagione).
+        # La data del parametro va calcolata in Europe/Rome (`localtime`), coerente
+        # col filtro `match_date__date` della view che opera in Europe/Rome: con
+        # `other_day.date()` (data UTC del datetime aware) fra le 00:00 e le 02:00
+        # di Roma il parametro cadeva sul giorno UTC sbagliato (bug lato-test,
+        # OPS_RUNBOOK §10.29 sibling B).
         resp_future = self.client.get(
             reverse("sport_matches", args=[self.sport.slug]),
-            {"date": other_day.date().strftime("%Y-%m-%d")})
+            {"date": timezone.localtime(other_day).date().strftime("%Y-%m-%d")})
         ids_future = {m.id for m in resp_future.context["matches"]}
         self.assertIn(match_future.id, ids_future)
         self.assertNotIn(self.match_new.id, ids_future)
