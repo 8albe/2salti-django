@@ -256,6 +256,31 @@ Conseguenza operativa positiva: **la discovery non ha agganciato nulla** e il re
 
 **Report 15 — decisione presa (Alberto, 2026-07-21):** resta in `NEEDS_REVIEW` come orfano documentato, nessuna azione a DB. Le due società lette sul foglio non esistono a sistema (e quelle vere, `S.C. Salerno` e `Nautilus Nuoto Roma`, sono rispettivamente assente e presente — §8.2): il referto diventerà risolvibile solo se e quando le anagrafiche mancanti entreranno a DB. Registrato anche in OPS_RUNBOOK §10.23, che si chiude con questa decisione.
 
+### 8.11 Fetta A1 — neutralizzazione dei gate sulla confidence (2026-07-21)
+
+Prima contromisura del giro post-collaudo. **Non aggiunge un controllo: ne toglie quattro**, perché quattro controlli inerti sono peggio di zero — comunicano una garanzia che non esiste.
+
+**Cosa è stato rimosso.**
+
+| Dove | Decisione rimossa |
+|---|---|
+| `ocr_quality_gate.evaluate` | blocker se `metadata.confidence < 0.3`; warning se `< 0.6` |
+| `ocr_quality_gate.evaluate` | blocker se `confidence_fields[home_team/away_team/final_score] < 0.5`; info se `< 0.8` |
+| `schema.validate_coherence` | warning su confidence globale `< 0.6`, su `officials.confidence < 0.5`, su `teams.<side>.confidence < 0.5` |
+| `schema.assess_publish_readiness` | blocker se `confidence < 0.3`; warning se `0.3 ≤ confidence < 0.6` |
+
+**Motivazione, in una riga: gli errori vivono dove le soglie non arrivano.** Sui 78 campi della baseline §8.9 e sull'estrazione reale in produzione §8.10, ogni singolo errore osservato ha confidence fra **0.90 e 1.00** — le due allucinazioni di nome del report 15 a 1.00, l'errore stabile di Bellator a 0.99-1.00, le allucinazioni di Salerno a 0.90. Le soglie più alte in gioco erano 0.6 e 0.8. **Nessuno di questi gate è mai scattato in esercizio, e nessuno potrebbe scattare**: non è una taratura da correggere, è un segnale che non contiene l'informazione richiesta.
+
+**Cosa resta, deliberatamente.**
+
+- **Tutti i controlli strutturali**: sezioni obbligatorie, nomi squadra presenti e diversi fra loro, match col contesto della partita selezionata, formato del punteggio, somma dei quarti, eventi che non eccedono i totali, valori placeholder. Sono i controlli che *possono* fallire, e che infatti falliscono.
+- **Il contratto di schema** che vuole `metadata.confidence` numerica: è forma del payload, non giudizio sul valore. Rimuoverlo avrebbe cambiato il contratto con il provider senza guadagno.
+- **La confidence nei dati e sotto gli occhi del revisore**: resta in `normalized_data`, resta stampata in review — ma etichettata **"non calibrata"**, con il razionale nel tooltip. È un dato grezzo di provenienza, non un semaforo.
+
+**Rimossi anche gli highlight in review** sui campi con confidence `< 0.7`: stessa patologia, forma più insidiosa. Su questi dati non si accendevano mai, quindi il revisore leggeva l'assenza di evidenziazione come "campo affidabile" **proprio sui campi sbagliati** — un gate inerte che si trasforma in disinformazione attiva. Nel rimuoverli è emerso che la variabile di contesto `confidence_fields` non era **mai** stata popolata dalla view: la riga `const confidenceFields = {{ confidence_fields|safe }}` renderizzava `const confidenceFields = ;`, un `SyntaxError` che uccideva l'intero blocco script della review page. Bug latente, trovato togliendo codice morto.
+
+**Cosa questa fetta NON fa.** Non sostituisce il segnale rimosso. Il controllo indipendente indicato in §8.5(b)-1 — conteggio degli eventi-gol per periodo contro il parziale di quel periodo, che legge una zona diversa del foglio — resta da costruire, ed è la direzione giusta perché non condivide la fonte con ciò che verifica. Fino ad allora vale §8.5(b)-2: **solo la review umana discrimina**, e nessun verde del gate va letto come "dato attendibile".
+
 ---
 
 ← [Macro precedente](7_profilo_fan.md) | → [Macro successiva](9_sistema_sponsor.md)
