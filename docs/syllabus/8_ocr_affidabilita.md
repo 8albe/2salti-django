@@ -155,6 +155,32 @@ Entrambi restano problemi di **Macro 8, non di Macro 22**: l'asincrono si è lim
 
 **Corollario sulla collazione stessa.** La riverifica di questo giro ha anche trovato un **secondo** errore di collazione, indipendente dal primo: nel caso del 25/04 la squadra ospite si chiama "Triscelon", non "Trisceloni" come trascritto il 19/07 (`case_id` e file rinominati, dettaglio nel caso gold). Due errori di collazione su sei casi, in due giorni diversi di riverifica, confermano che la regola del README ("il metro misura anche chi lo ha costruito") non è cautela teorica: la collazione umana su questi referti va sempre trattata come rivedibile, non come assioma.
 
+#### Implementazione: tabella alias (C1) e discovery a `difflib` — 2026-07-21
+
+I due problemi separati da questa diagnosi hanno ricevuto due fette **separate**, con test propri, deliberatamente non fuse in una.
+
+**C1 — `core.TeamAlias`.** FK a `Team`, `alias` come scritto sulla fonte, `alias_normalized` derivata in `save()` e **unique**: da lì l'unicità case-insensitive e, gratis, l'unicità cross-team (lo stesso alias non può puntare a due squadre — sarebbe ambiguo per costruzione). Più origine, nota, autore e timestamp, perché fra sei mesi la domanda sarà "chi l'ha detto, e su quale foglio". La normalizzazione **delega** a `normalize_team_name`, la stessa della discovery: se le due divergessero, un alias inserito a mano smetterebbe di essere trovato dalla ricerca che dovrebbe servirlo. `resolve_team_entity` consulta gli alias in exact match **prima** del fuzzy — l'alias è l'unica fonte certa in quella funzione, il fuzzy indovina.
+
+**Popolamento solo umano, e un test che lo tiene fermo.** Nessun percorso automatico scrive alias: non l'OCR, non la discovery, non il bench. Una guardia anti-ruggine scandisce il codice applicativo e fallisce se un modulo non-admin inizia a creare `TeamAlias`. La ragione è (b): mappare un'allucinazione significherebbe insegnare al sistema a fidarsene.
+
+**Fetta separata — discovery da fuzzy posizionale a `difflib`.** `simple_similarity` confrontava i caratteri **alla stessa posizione**: una singola inserzione all'inizio disallineava tutto il resto. È il motivo per cui `Nautilus Roma` contro `Nautilus N. Roma` valeva **0.562** — sotto ogni soglia utile — pur essendo la stessa squadra. `SequenceMatcher` lavora su sottosequenze comuni:
+
+| Nome estratto | Squadra a DB | posizionale | difflib |
+|---|---|---|---|
+| `Nautilus Roma` | Nautilus N. Roma | 0.562 | **0.897** |
+| `Nautilus Nuoto Roma` | Nautilus N. Roma | 0.579 | **0.857** |
+| `LIBERTAS ROMA EUR P.N` | Libertas Roma Eur | 0.810 | 0.895 |
+| `Olympic Roma P.N.` | Olimpic Roma P.N. | 0.941 | 0.941 |
+
+**Soglia: resta 0.80** — la fetta cambia la metrica, non la soglia, così l'effetto è isolato e attribuibile. Il valore è comunque misurato: sulla popolazione reale i veri positivi stanno fra 0.857 e 0.941, il falso positivo più alto è **0.606** (`Virtus Nuoto Roma` contro Nautilus N. Roma). La soglia cade in mezzo a una banda vuota larga 0.25. **Non allineata allo 0.6 del quality gate, deliberatamente**: le due soglie proteggono da rischi opposti. Il gate confronta il nome con una partita *già scelta da un umano*, e lì un falso negativo blocca un referto sano; la discovery invece *sceglie* la partita, e un falso positivo ne sovrascrive il punteggio. A 0.6 aggancerebbe proprio `Virtus Nuoto Roma` a Nautilus — l'allucinazione del report 15 che il collaudo su prod ha visto **non** agganciare (§8.10).
+
+**Due fatti emersi scrivendo i test, che correggono ipotesi precedenti.**
+
+1. **Il fuzzy posizionale risolveva già `Olympic` → Olimpic (0.941) e anche l'allucinazione `BELLATOR FROSINONE` → Bellator Frusino (0.833).** L'orfanità del report 16 non veniva quindi dal nome di casa, come si poteva leggere in (b): veniva quasi certamente dal lato **Lazio**, dove il duplicato anagrafico di §8.7 produce due punteggi pari e la funzione risponde `None` per ambiguità. Il valore dell'alias non è allora "rendere possibile l'impossibile" ma **rendere deterministico ciò che dipendeva da una soglia**: con l'alias la risoluzione non è più esposta a un cambio di soglia, all'arrivo di una squadra dal nome simile o al passaggio a un altro algoritmo.
+2. **`difflib` rende risolvibile il duplicato Lazio, ma per uno scarto di 0.03** (`0.846` contro `0.815`). Cioè su un referto Lazio la discovery ora *risponde*, e la risposta è decisa da rumore fra due anagrafiche che sono la stessa società reale. Non è un aggancio spurio verso una squadra estranea — è l'ambiguità di §8.7 che si manifesta — e la cura è il merge (D1), non una soglia più alta: a qualunque soglia le due sono indistinguibili. Il fatto è fissato in un test che dopo D1 andrà riscritto.
+
+`simple_similarity` **resta in uso sulla riconciliazione atleti**, non toccata da questa fetta: i nomi di persona hanno una fenomenologia diversa (iniziali puntate, cognomi composti) e cambiare metrica anche lì va misurato a parte. Debito dichiarato, non dimenticanza.
+
 ### 8.7 Duplicato anagrafico Lazio (registrato, non riconciliato)
 
 Presente **sia su dev sia su prod**, identico:
@@ -167,6 +193,29 @@ Presente **sia su dev sia su prod**, identico:
 Due `Society` distinte per quella che è verosimilmente la stessa società reale, con due grafie diverse (`SS.` vs `S.S.`). Le due squadre sono in **leghe diverse**, quindi la coesistenza non è di per sé un errore di dati — una società può avere più squadre in campionati diversi. L'anomalia è a livello di **Society**: sono due anagrafiche per lo stesso ente.
 
 Conseguenze pratiche: la discovery può agganciare la squadra sbagliata su un referto ambiguo, e qualunque aggregato per società (statistiche, profili, sponsor, entitlement) conta due entità dove ce n'è una. **Nessuna riconciliazione effettuata** — richiede una decisione di prodotto su quale anagrafica sopravvive e una data migration con merge delle FK.
+
+**Aggiornamento 2026-07-21 — il problema si è aggravato con `difflib`, e la migrazione è preparata ma non eseguita.**
+
+Col fuzzy posizionale un nome Lazio non raggiungeva la soglia e il referto restava orfano: sbagliato, ma *silenzioso e innocuo*. Con `difflib` (§8.6) la discovery **risponde**, scegliendo fra le due anagrafiche per uno scarto di **0.03** (`SS Lazio Nuoto` → `ss. lazio nuoto` 0.846 contro `s.s. lazio nuoto` 0.815). Il rischio descritto qui sopra in astratto è diventato concreto: la scelta è decisa da rumore. Non si cura alzando la soglia — a qualunque soglia le due grafie sono indistinguibili — si cura togliendo il duplicato.
+
+**Recon (dev, sola lettura, 2026-07-21), che decide anche il verso del merge:**
+
+| | Society 6 `SS. Lazio Nuoto` | Society 12 `S.S. Lazio Nuoto` |
+|---|---|---|
+| Slug | `SS_Lazio_Nuoto` | `ss-lazio-nuoto` (forma canonica) |
+| `core.Team` | 1 (Team 6, lega 4 U16A) | 1 (Team 12, lega 6 B/C) |
+| `management.Membership` | **0** | **14** |
+| Altre FK entranti | nessuna | — |
+
+**Merge 6 → 12: sopravvive la 12.** Non è arbitrario: è l'anagrafica viva (14 tesseramenti contro 0) e ha lo slug canonico. Spostare 14 tesseramenti per salvare uno slug è il verso sbagliato. Il fatto che sulla 6 non punti nient'altro che il suo Team è ciò che rende la `DELETE` innocua — e va **riverificato sull'ambiente bersaglio**, non dato per buono da questa tabella.
+
+**Stato: PREPARATO, NON ESEGUITO — né su dev né su prod.** Checklist a blocchi in `scratch/d1_merge_societa_lazio_20260721.sh` (untracked, si esegue un blocco alla volta) più il corpo della migrazione in `scratch/d1_merge_lazio_core.py`, **lo stesso codice** usato sia dal dry-run su copia scratch sia dall'esecuzione vera: il dry-run deve provare ciò che poi gira davvero, non una sua parafrasi. Cinque blocchi: gate sui parametri, recon sul posto, dry-run su copia con verifica dello SHA256 del DB reale, esecuzione in transazione unica con audit, asserzione finale contro valori noti in anticipo (OPS_RUNBOOK §6.5).
+
+**Gate bloccante: la grafia ufficiale del nome.** Il nome finale della società superstite è un **parametro non compilato** (`__DA_CONFERMARE__`) e il BLOCCO 1 si rifiuta di proseguire finché resta tale. Le due grafie in gioco sono `SS. Lazio Nuoto` e `S.S. Lazio Nuoto`, ma quella giusta può essere una terza: va confermata da Alberto sulla fonte reale (federazione / sito della società), non dedotta dal DB — è esattamente il tipo di verità che il DB non contiene.
+
+La grafia perdente non viene buttata: diventa un `TeamAlias` di origine `ANAGRAFICA` sulla squadra ri-puntata, così i referti già compilati con quella grafia continuano a risolvere.
+
+**Non è una data migration versionata, deliberatamente**: è una correzione anagrafica una-tantum su due pk specifici, non una regola che deve valere per ogni installazione. Come migration verrebbe ri-eseguita su ogni ambiente nuovo cercando pk che lì non esistono.
 
 ### 8.8 Report 15: orfano in `UPLOADED`, mai elaborato (censito 2026-07-20)
 
