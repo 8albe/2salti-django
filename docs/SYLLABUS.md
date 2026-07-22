@@ -82,3 +82,10 @@ Punto d'ingresso operativo del progetto. Per la visione di prodotto vedi [BLUEPR
 ## 22. OCR asincrono — coda DB-backed con worker systemd 🔄
 → [Dettaglio](syllabus/22_ocr_asincrono.md) — in produzione dal 2026-07-20 (giri 1-3), collaudo end-to-end su prod VERDE il 2026-07-21; resta **solo** il giro 4 (rimozione dei timeout 300s), unico criterio che tiene la macro aperta
 
+---
+
+## Registri fissi (fuori numerazione macro)
+
+- **Debiti tecnici** → [DEBITI.md](DEBITI.md) — registro vivo dei soli debiti aperti (numerazione storica §10.x di OPS_RUNBOOK); archivio dei chiusi in [DEBITI_CHIUSI.md](DEBITI_CHIUSI.md)
+- **Idee fuori scope / parcheggiate** → [FUTURE_IDEAS.md](FUTURE_IDEAS.md)
+

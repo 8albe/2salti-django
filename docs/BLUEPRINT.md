@@ -384,7 +384,7 @@ Flusso: il genitore dichiara il figlio; il sito notifica la società; la societ�
 - Il sistema **non archivia** prove d'identità: il match nome+email è fatto da un umano della società sul proprio gestionale; 2salti inoltra e registra l'esito.
 - Macchina **ortogonale** all'onboarding (STATE_MACHINES.md §2): il genitore resta `role='fan'` e raggiunge `COMPLETED` con sola email+setup; la certificazione è un gate **aggiuntivo** sull'accesso ai dati del figlio, non uno step di `onboarding_state`.
 - `RIFIUTATA`/`SCADUTA` sono finali: l'accesso non si attiva; serve una nuova richiesta.
-- **Email società sempre valorizzata (implementato e verificato su `dev`).** La notifica di vouching parte verso `_society_recipients` (`management/services/certification_service.py`); perché non sia mai vuota per una società personificata, il setup di rifinitura post-approvazione del presidente (§7.2, SYLLABUS Macro 18) **richiede obbligatoriamente** l'email di contatto della società. Chiude by-design il debito OPS_RUNBOOK §10.11.
+- **Email società sempre valorizzata (implementato e verificato su `dev`).** La notifica di vouching parte verso `_society_recipients` (`management/services/certification_service.py`); perché non sia mai vuota per una società personificata, il setup di rifinitura post-approvazione del presidente (§7.2, SYLLABUS Macro 18) **richiede obbligatoriamente** l'email di contatto della società. Chiude by-design il debito DEBITI_CHIUSI.md §10.11.
 
 ## 8. Dashboard admin e workflow editoriale
 

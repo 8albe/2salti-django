@@ -2,7 +2,7 @@
 
 Stato: 🔄 In corso (direzione decisa 2026-07-19; **giri 1 e 2 completati su dev il 2026-07-19**; **giro 3 — deploy prod — completato il 2026-07-20**: l'asincrono è in produzione; **collaudo end-to-end su prod eseguito e VERDE il 2026-07-21**. Resta **solo il giro 4**: rimozione dei timeout 300s. La macro **non è chiusa** finché quel cerotto non cade — vedi "Valutazione di chiusura")
 
-Togliere l'elaborazione OCR dal request cycle. Fino al 2026-07-19 `OCRService.process_and_update()` girava **sincrono** dentro la richiesta HTTP (upload view + admin action `process_ocr`), ~80s a referto con Gemini: worker gunicorn bloccato per tutta la durata, pool saturabile con 3 upload concorrenti (OPS_RUNBOOK §10.20), timeout gunicorn+nginx alzati a 300s come **cerotto provvisorio** (OPS_RUNBOOK §3.16).
+Togliere l'elaborazione OCR dal request cycle. Fino al 2026-07-19 `OCRService.process_and_update()` girava **sincrono** dentro la richiesta HTTP (upload view + admin action `process_ocr`), ~80s a referto con Gemini: worker gunicorn bloccato per tutta la durata, pool saturabile con 3 upload concorrenti (DEBITI.md §10.20), timeout gunicorn+nginx alzati a 300s come **cerotto provvisorio** (OPS_RUNBOOK §3.16).
 
 ### Decisione architetturale (2026-07-19)
 
@@ -48,7 +48,7 @@ Regressione: `matches/tests_review_page_states.py`, 8 test che esercitano la rev
 
 Chiude la guardia sugli orfani, aggancia l'osservabilità e sana un buco di metodo.
 
-**Backstop `recover_stale_reports`.** Comando (`--minutes`, default 15; `--dry-run`) + unit `Type=oneshot` e timer `OnCalendar=*:0/15` in `deploy/systemd/{prod,dev}/`. La semantica ratificata è il **requeue capped**, non il `NEEDS_REVIEW` diretto dello sketch di OPS_RUNBOOK §10.19: sotto il cap il referto torna in `QUEUED` con audit `ocr_stale_requeue` e ripartenza immediata (nessun backoff — non ha fallito, gli è morto sotto il worker); a tentativi esauriti va in `NEEDS_REVIEW` + notifica. Lo sketch era stato scritto quando non esistevano né worker né retry; col cap a `MAX_ATTEMPTS` che già protegge dalle poison pill, arrendersi al primo orfano brucerebbe referti sani. Il comando **delega** a `OCRQueueService.requeue_stale()`, lo stesso metodo della sweep di avvio del worker: una regola, due inneschi, e un test che verifica proprio la condivisione del code path.
+**Backstop `recover_stale_reports`.** Comando (`--minutes`, default 15; `--dry-run`) + unit `Type=oneshot` e timer `OnCalendar=*:0/15` in `deploy/systemd/{prod,dev}/`. La semantica ratificata è il **requeue capped**, non il `NEEDS_REVIEW` diretto dello sketch di DEBITI_CHIUSI.md §10.19: sotto il cap il referto torna in `QUEUED` con audit `ocr_stale_requeue` e ripartenza immediata (nessun backoff — non ha fallito, gli è morto sotto il worker); a tentativi esauriti va in `NEEDS_REVIEW` + notifica. Lo sketch era stato scritto quando non esistevano né worker né retry; col cap a `MAX_ATTEMPTS` che già protegge dalle poison pill, arrendersi al primo orfano brucerebbe referti sani. Il comando **delega** a `OCRQueueService.requeue_stale()`, lo stesso metodo della sweep di avvio del worker: una regola, due inneschi, e un test che verifica proprio la condivisione del code path.
 
 **Osservabilità in `ops_check`.** Tre segnali: profondità della coda (`QUEUED > 10` → YELLOW), referti in `PROCESSING` oltre soglia (→ **RED**, è il sintomo netto di worker morto), referti con tentativi esauriti (→ YELLOW). Motivazione: un worker fermo non ha sintomi propri — i referti smettono di avanzare e basta, senza errori, senza mail, senza pagine rotte.
 
@@ -78,11 +78,11 @@ Test: 43 nuovi (`tests_status_coverage.py`, `tests_recover_stale_command.py`). S
 
 Deploy in **finestra unica** insieme al gate del risultato pubblico e alla correzione dei 4 match (sequenza completa e razionale in OPS_RUNBOOK §2.7). Prod da `62f5a16` a `36296a5`; migration `0018` e `0019` applicate, entrambe additive.
 
-- **Unit installate ed enabled su prod**: `2salti-ocrworker.service` più `2salti-recover-stale.service` e `.timer`. Si abilita il **timer**, non il service oneshot del backstop. Chiude il residuo di OPS_RUNBOOK §10.19: la guardia sugli orfani è ora attiva su entrambi i box.
+- **Unit installate ed enabled su prod**: `2salti-ocrworker.service` più `2salti-recover-stale.service` e `.timer`. Si abilita il **timer**, non il service oneshot del backstop. Chiude il residuo di DEBITI_CHIUSI.md §10.19: la guardia sugli orfani è ora attiva su entrambi i box.
 - **`config/settings.py`** (commit dedicato `144a458`): `OPTIONS={'timeout': 20}` sulla connessione SQLite e due logger a `INFO` — `matches.services.ocr_queue` e `matches.management.commands.ocr_worker` — con il **root lasciato a `WARNING`**. **WAL escluso deliberatamente**: in WAL il DB non è più un solo file e il rituale di backup, che copia e verifica il solo `db.sqlite3`, diventerebbe silenziosamente incompleto. Serve un giro che riveda prima la procedura di backup.
 - **Osservabilità confermata sul campo.** Nel journal di prod: SIGTERM con uscita pulita, riavvio, e la riga `Avvio (interval=3.0s, revision=36296a51…)` **nello stesso secondo del restart**. È la prova che le due condizioni sono congiunte: `PYTHONUNBUFFERED` sulla unit (OPS §3.17) fa scorrere il buffer, il livello `INFO` fa esistere le righe. Una sola delle due non basta.
 
-**Quello che il giro 3 NON dimostra.** Il worker su prod **non ha ancora elaborato un solo referto reale**: la coda era vuota per tutta la finestra e nessun upload è stato fatto. Quindi l'asincrono su prod è verificato come *processo che parte, si ferma e si riavvia correttamente*, non come *pipeline che porta un referto da upload a estrazione*. È la ragione per cui questa macro **non è chiusa**: il primo upload reale su prod è il collaudo mancante, e il candidato naturale è il referto 15 (orfano in `UPLOADED`, mai accodato — OPS_RUNBOOK §10.23).
+**Quello che il giro 3 NON dimostra.** Il worker su prod **non ha ancora elaborato un solo referto reale**: la coda era vuota per tutta la finestra e nessun upload è stato fatto. Quindi l'asincrono su prod è verificato come *processo che parte, si ferma e si riavvia correttamente*, non come *pipeline che porta un referto da upload a estrazione*. È la ragione per cui questa macro **non è chiusa**: il primo upload reale su prod è il collaudo mancante, e il candidato naturale è il referto 15 (orfano in `UPLOADED`, mai accodato — DEBITI_CHIUSI.md §10.23).
 
 ### Collaudo end-to-end su prod (2026-07-21, VERDE)
 
@@ -103,7 +103,7 @@ Il pezzo che il giro 3 dichiarava mancante. Procedura, tabella degli assert e ra
 Verificata contro l'"Ambito" e l'"Uscita" di questa scheda:
 
 - I sette punti di ambito operativi sono soddisfatti e il **collaudo end-to-end è ora spuntato**.
-- **Non soddisfatto: la rimozione dei timeout 300s** (giro 4), che è sia l'ultima voce di ambito sia la condizione dichiarata nella sezione "Uscita" ("a lavoro finito, rimuovere i timeout a 300s: sono il cerotto che questa macro elimina") e la condizione di chiusura di OPS_RUNBOOK §10.20.
+- **Non soddisfatto: la rimozione dei timeout 300s** (giro 4), che è sia l'ultima voce di ambito sia la condizione dichiarata nella sezione "Uscita" ("a lavoro finito, rimuovere i timeout a 300s: sono il cerotto che questa macro elimina") e la condizione di chiusura di DEBITI.md §10.20.
 
 **Verdetto: Macro 22 NON chiudibile oggi.** Manca un criterio esplicito su due — non è una formalità: finché i 300s restano, la macro non ha ancora rimosso ciò per cui era nata. Resta 🔄, con un solo giro davanti.
 
@@ -114,7 +114,7 @@ Verificata contro l'"Ambito" e l'"Uscita" di questa scheda:
 - [x] Worker come **servizio systemd** dedicato (unit versionata in `deploy/systemd/`, pattern OPS_RUNBOOK §9)
 - [x] Endpoint di polling `GET /api/referti/{id}/status` (contratto BLUEPRINT §11)
 - [x] UX upload: risposta immediata + stato in polling
-- [x] Guardia `recover_stale_reports` + timer systemd, e aggancio a `ops_check` (profondità coda, referti stale) — **giro 2**, chiude OPS_RUNBOOK §10.19 (residuo dell'install su prod chiuso col giro 3)
+- [x] Guardia `recover_stale_reports` + timer systemd, e aggancio a `ops_check` (profondità coda, referti stale) — **giro 2**, chiude il debito §10.19 (ora in DEBITI_CHIUSI.md) (residuo dell'install su prod chiuso col giro 3)
 - [x] Deploy su prod: migration gated dopo backup DB, install unit worker **e unit del backstop**, `OPTIONS timeout` + logging in `config/settings.py` — **giro 3, 2026-07-20** (OPS_RUNBOOK §2.7)
 - [x] **Collaudo end-to-end su prod**: un referto reale che attraversi upload → `QUEUED` → claim → estrazione — **eseguito e VERDE il 2026-07-21** sul report 15 (OPS_RUNBOOK §2.8)
 - [ ] Rimozione dei timeout 300s — **giro 4**, dopo un periodo di osservazione su prod — **unico criterio residuo, la macro resta aperta per questo**
@@ -125,7 +125,7 @@ Verificata contro l'"Ambito" e l'"Uscita" di questa scheda:
 
 ### Uscita
 
-A lavoro finito, **rimuovere i timeout a 300s** (gunicorn `deploy/gunicorn/{prod,dev}/` + nginx `proxy_read_timeout`): sono il cerotto che questa macro elimina. Chiude anche OPS_RUNBOOK §10.20 (saturazione pool).
+A lavoro finito, **rimuovere i timeout a 300s** (gunicorn `deploy/gunicorn/{prod,dev}/` + nginx `proxy_read_timeout`): sono il cerotto che questa macro elimina. Chiude anche il debito §10.20 (saturazione pool, in DEBITI.md).
 
 ---
 
