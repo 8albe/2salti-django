@@ -983,13 +983,15 @@ class OcrPromptV3ContentTest(TestCase):
             "a0f50fbe5244",
         )
 
-    def test_registry_exposes_v2_and_v3(self):
+    def test_registry_exposes_v2_v3_and_v3_2(self):
         from matches.services.vision_providers import (
-            OCR_SYSTEM_PROMPT_V2, OCR_SYSTEM_PROMPT_V3, OCR_SYSTEM_PROMPTS,
+            OCR_SYSTEM_PROMPT_V2, OCR_SYSTEM_PROMPT_V3, OCR_SYSTEM_PROMPT_V3_2,
+            OCR_SYSTEM_PROMPTS,
         )
         self.assertEqual(
             OCR_SYSTEM_PROMPTS,
-            {"v2": OCR_SYSTEM_PROMPT_V2, "v3": OCR_SYSTEM_PROMPT_V3},
+            {"v2": OCR_SYSTEM_PROMPT_V2, "v3": OCR_SYSTEM_PROMPT_V3,
+             "v3_2": OCR_SYSTEM_PROMPT_V3_2},
         )
 
     def test_v3_hash_is_pinned(self):
@@ -1028,24 +1030,83 @@ class OcrPromptV3ContentTest(TestCase):
         # il GOL su rigore resta type GOAL (conta come gol), non un tipo nuovo
         self.assertIn('"type": "GOAL" con', OCR_SYSTEM_PROMPT_V3)
 
+    def test_v3_2_hash_is_pinned(self):
+        # V3.2 è la variante sperimentale di V3.1 (giro §8.x, 22/07) con DUE sole
+        # modifiche additive alla sezione EVENTI: (a) campo clock mm:ss accanto a
+        # minute; (b) ancoraggio di periodo rinforzato per gli eventi isolati.
+        # È costruita per sostituzione mirata su V3, così che punteggi/nomi/data/
+        # rigori restino identici byte-per-byte a V3.1. Come V2/V3, l'hash è
+        # fissato: un cambio deve essere una decisione esplicita, non silenziosa.
+        import hashlib
+        from matches.services.vision_providers import OCR_SYSTEM_PROMPT_V3_2
+        self.assertEqual(
+            hashlib.sha256(OCR_SYSTEM_PROMPT_V3_2.encode("utf-8")).hexdigest()[:12],
+            "9661b340d9e1",
+        )
+
+    def test_v3_2_adds_clock_and_reinforces_period_anchoring(self):
+        """V3.2: le due sole modifiche alla sezione EVENTI sono presenti."""
+        from matches.services.vision_providers import OCR_SYSTEM_PROMPT_V3_2
+        # (a) clock mm:ss a scalare, additivo accanto a minute
+        self.assertIn("CRONOMETRO A SCALARE", OCR_SYSTEM_PROMPT_V3_2)
+        self.assertIn("il clock NON identifica il periodo", OCR_SYSTEM_PROMPT_V3_2)
+        self.assertIn('"clock": "<cronometro a scalare mm:ss', OCR_SYSTEM_PROMPT_V3_2)
+        # (b) ancoraggio di periodo rinforzato per l'evento isolato
+        self.assertIn("UNICO evento di una squadra", OCR_SYSTEM_PROMPT_V3_2)
+        self.assertIn("NON spostare un evento isolato", OCR_SYSTEM_PROMPT_V3_2)
+
+    def test_v3_2_preserves_v3_1_scores_names_date_rigori_byte_for_byte(self):
+        """V3.2 differisce da V3.1 SOLO nella sezione EVENTI: il resto è identico.
+
+        Garanzia sperimentale: qualunque scarto sui punteggi tra V3.1 e V3.2 è
+        varianza di campionamento, non effetto del prompt. Verifica strutturale:
+        le sezioni 1-2 (pre-EVENTI) sono identiche byte-per-byte, e dalla sezione 4
+        alla fine i due prompt coincidono a meno della sola riga additiva "clock"
+        nello schema dell'oggetto evento.
+        """
+        from matches.services.vision_providers import (
+            OCR_SYSTEM_PROMPT_V3, OCR_SYSTEM_PROMPT_V3_2,
+        )
+        i3v3 = OCR_SYSTEM_PROMPT_V3.index("        3. EVENTI")
+        i4v3 = OCR_SYSTEM_PROMPT_V3.index("        4. DATA DELLA GARA")
+        i3v32 = OCR_SYSTEM_PROMPT_V3_2.index("        3. EVENTI")
+        i4v32 = OCR_SYSTEM_PROMPT_V3_2.index("        4. DATA DELLA GARA")
+        # Sezioni 1-2 (tutto ciò che precede EVENTI): identiche.
+        self.assertEqual(
+            OCR_SYSTEM_PROMPT_V3[:i3v3], OCR_SYSTEM_PROMPT_V3_2[:i3v32]
+        )
+        # Dalla sezione 4 in poi (data, regole critiche, schema): identiche a meno
+        # della sola riga "clock" additiva nello schema events.
+        clock_line = (
+            '                    "clock": "<cronometro a scalare mm:ss '
+            "come scritto sul foglio, es. '4:44', o null>\",\n"
+        )
+        self.assertEqual(
+            OCR_SYSTEM_PROMPT_V3[i4v3:],
+            OCR_SYSTEM_PROMPT_V3_2[i4v32:].replace(clock_line, ""),
+        )
+
 
 class OcrZonePromptTest(TestCase):
     """Guardrail sul prompt del secondo passaggio (zone) e sui registri dei prompt."""
 
     def test_second_pass_registry_and_all_prompts(self):
         from matches.services.vision_providers import (
-            OCR_SYSTEM_PROMPT_V2, OCR_SYSTEM_PROMPT_V3, OCR_SYSTEM_PROMPT_ZONE,
+            OCR_SYSTEM_PROMPT_V2, OCR_SYSTEM_PROMPT_V3, OCR_SYSTEM_PROMPT_V3_2,
+            OCR_SYSTEM_PROMPT_ZONE,
             OCR_SYSTEM_PROMPTS, OCR_SECOND_PASS_PROMPTS, OCR_ALL_PROMPTS,
         )
-        # La registry di produzione resta v2/v3: zone è tenuta separata.
+        # La registry di produzione espone v2/v3/v3_2: zone è tenuta separata.
         self.assertEqual(
-            OCR_SYSTEM_PROMPTS, {"v2": OCR_SYSTEM_PROMPT_V2, "v3": OCR_SYSTEM_PROMPT_V3}
+            OCR_SYSTEM_PROMPTS,
+            {"v2": OCR_SYSTEM_PROMPT_V2, "v3": OCR_SYSTEM_PROMPT_V3,
+             "v3_2": OCR_SYSTEM_PROMPT_V3_2},
         )
         self.assertEqual(OCR_SECOND_PASS_PROMPTS, {"zone": OCR_SYSTEM_PROMPT_ZONE})
         self.assertEqual(
             OCR_ALL_PROMPTS,
             {"v2": OCR_SYSTEM_PROMPT_V2, "v3": OCR_SYSTEM_PROMPT_V3,
-             "zone": OCR_SYSTEM_PROMPT_ZONE},
+             "v3_2": OCR_SYSTEM_PROMPT_V3_2, "zone": OCR_SYSTEM_PROMPT_ZONE},
         )
 
     def test_zone_prompt_inherits_v3_rules_and_is_minimal(self):

@@ -276,13 +276,78 @@ OCR_SYSTEM_PROMPT_V3 = """
         Rispondi SOLO con il JSON. Non aggiungere testo, commenti o markdown.
         """
 
+# V3.2 — variante sperimentale di V3.1 con DUE sole modifiche additive alla
+# sezione EVENTI (giro §8.x, 22/07):
+#   (a) campo "clock" (cronometro a scalare mm:ss) accanto a "minute", con
+#       l'istruzione esplicita che gli stessi valori di clock si ripetono nei
+#       quattro periodi (il clock NON identifica il periodo);
+#   (b) ancoraggio di periodo rinforzato per gli EVENTI ISOLATI: un evento
+#       appartiene al periodo della SEZIONE in cui è scritto anche quando è
+#       l'unico evento di una squadra in quella sezione; se la sezione non è
+#       certa, quarter=null è preferibile a un periodo indovinato.
+# Costruita per SOSTITUZIONE MIRATA su V3 così che ogni altra zona (punteggi,
+# nomi, data, rigori) resti IDENTICA byte-per-byte a V3.1: qualunque scarto sui
+# punteggi tra V3.1 e V3.2 è varianza di campionamento, non effetto del prompt.
+# NON è il default di produzione: si seleziona via settings.OCR_PROMPT_VERSION
+# o dal bench (ocr_bench --prompt-version v3_2). La promozione a default è una
+# decisione di prodotto sui numeri del bench, non un fatto tecnico.
+OCR_SYSTEM_PROMPT_V3_2 = (
+    OCR_SYSTEM_PROMPT_V3
+    # (a) CLOCK COMPLETO: cronometro a scalare mm:ss accanto al minuto.
+    .replace(
+        "           - Importante: Trascrivi i gol (GOL) e le espulsioni (ET come EXCLUSION_20).\n",
+        "           - Importante: Trascrivi i gol (GOL) e le espulsioni (ET come EXCLUSION_20).\n"
+        "           - TEMPO (\"clock\"): la colonna Tempo è un CRONOMETRO A SCALARE dentro il\n"
+        "             periodo, in formato mm:ss: parte da circa 7:55 a inizio periodo e SCENDE\n"
+        "             fino a 0:00. Trascrivilo ESATTAMENTE come scritto nella stringa \"clock\"\n"
+        "             (es. \"4:44\", \"0:58\", \"0:09\"), oltre al campo \"minute\". NON arrotondare.\n"
+        "             Gli STESSI valori di clock si ripetono in tutti e quattro i periodi:\n"
+        "             il clock NON identifica il periodo, indica solo l'ordine dentro la sezione.\n",
+    )
+    # (b) ANCORAGGIO DI PERIODO: rinforzo esplicito per gli eventi isolati.
+    .replace(
+        "           - PERIODO DI OGNI EVENTO (\"quarter\"): la 'STORIA CRONOMETRICA' è divisa in\n"
+        "             sezioni o blocchi, uno per periodo (1°, 2°, 3°, 4° tempo). Ricava il campo\n"
+        "             \"quarter\" di ogni evento dalla SEZIONE in cui l'evento è scritto, non dal\n"
+        "             minuto e non dai punteggi parziali.\n"
+        "           - Se non riesci a stabilire con certezza in quale sezione/periodo cade un\n"
+        "             evento, scrivi null in \"quarter\": è un valore ammesso e preferibile.\n"
+        "             NON dedurre il periodo dal minuto e NON distribuire gli eventi fra i\n"
+        "             periodi per farli tornare con i punteggi parziali.\n",
+        "           - PERIODO DI OGNI EVENTO (\"quarter\"): la 'STORIA CRONOMETRICA' è divisa in\n"
+        "             sezioni o blocchi, uno per periodo (1°, 2°, 3°, 4° tempo). Ricava il campo\n"
+        "             \"quarter\" di ogni evento dalla SEZIONE in cui l'evento è scritto, non dal\n"
+        "             minuto, non dal clock e non dai punteggi parziali.\n"
+        "           - Questo vale ANCHE quando un evento è l'UNICO evento di una squadra in una\n"
+        "             sezione: l'evento appartiene comunque al periodo della SEZIONE in cui è\n"
+        "             scritto sul foglio. NON spostare un evento isolato in un'altra sezione\n"
+        "             perché \"sembra\" appartenerci o per farlo coincidere con eventi di un altro\n"
+        "             periodo: la posizione sul foglio decide, non la plausibilità.\n"
+        "           - Se non riesci a stabilire con certezza in quale sezione/periodo cade un\n"
+        "             evento — isolato o no — scrivi null in \"quarter\": è un valore ammesso e\n"
+        "             preferibile a un periodo indovinato. NON dedurre il periodo dal minuto o\n"
+        "             dal clock e NON distribuire gli eventi fra i periodi per farli tornare con\n"
+        "             i punteggi parziali.\n",
+    )
+    # (a) schema: campo "clock" additivo accanto a "minute" nell'oggetto evento.
+    .replace(
+        "                    \"minute\": <int o null>,\n"
+        "                    \"quarter\": <int o null>,\n",
+        "                    \"minute\": <int o null>,\n"
+        "                    \"clock\": \"<cronometro a scalare mm:ss come scritto sul foglio, es. '4:44', o null>\",\n"
+        "                    \"quarter\": <int o null>,\n",
+    )
+)
+
 # Registro delle versioni di prompt selezionabili. Il default di produzione
-# resta "v2": si cambia solo via settings.OCR_PROMPT_VERSION (non impostato
-# in config/settings.py) o per-chiamata (parametro prompt_version, usato dal
-# bench). Aggiungere una versione = una costante sopra + una entry qui.
+# resta "v2" (fallback tecnico); config/settings.py imposta v3 come default reale.
+# V3.2 è sperimentale e NON promossa: si seleziona solo per-chiamata (parametro
+# prompt_version, usato dal bench: ocr_bench --prompt-version v3_2).
+# Aggiungere una versione = una costante sopra + una entry qui.
 OCR_SYSTEM_PROMPTS = {
     "v2": OCR_SYSTEM_PROMPT_V2,
     "v3": OCR_SYSTEM_PROMPT_V3,
+    "v3_2": OCR_SYSTEM_PROMPT_V3_2,
 }
 
 # Prompt "solo zona" per il SECONDO passaggio della doppia estrazione
