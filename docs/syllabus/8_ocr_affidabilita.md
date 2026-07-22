@@ -453,6 +453,48 @@ Separazione netta veri/falsi positivi: **veri positivi** = Salerno (5/5, foglio 
 
 Un debito registra la non-adozione e il residuo: [DEBITI.md](../DEBITI.md) §10.33.
 
+### 8.14 V3.1 — semantica rigori `is_penalty` nello schema OCR (2026-07-22)
+
+Giro innescato dalla trascrizione umana di eventi e roster del referto 11 (caso gold
+Olympic–Libertas, §"gold standard"): il modello, sul foglio, emetteva spontaneamente
+`type: "PENALTY_GOAL"` per il gol su rigore del Libertas — un tipo **fuori** dall'enum
+dello schema, quindi scartato da `SCORE_EVENT_CODES` e invisibile al conteggio. Era la
+causa diretta del blocker "P3 OSPITE 0 eventi-gol vs parziale 1" del referto 11: il gol
+c'era, letto, ma buttato via per tipo inventato.
+
+**Cosa è cambiato.** Aggiunto `events[].is_penalty` (bool, default false) allo schema OCR,
+in modo additivo e retrocompatibile (`_normalize_response` lo forza a false quando assente,
+così V2/mock/prompt più vecchi restano validi). Il prompt **V3** ora istruisce il modello a:
+(i) NON inventare tipi fuori enum (cita `PENALTY_GOAL` come esempio da **non** usare);
+(ii) trascrivere il gol su rigore come `type: "GOAL"` con `is_penalty: true` (conta come
+gol); (iii) marcare l'espulsione che comporta un rigore come `EXCLUSION_20` con
+`is_penalty: true` (la calottina è di chi commette il fallo). Il flag si propaga a valle:
+`MatchDataConverter.get_events_data` → `MatchEvent.is_penalty` (campo già esistente a DB).
+
+**V3 cambia hash: `87b86a945215` → `be51e9c6bc42` (V3.1).** V3 è il prompt promosso a
+produzione, quindi la modifica è tracciata come per V2: hash **fissato a test**
+(`test_v3_hash_is_pinned`), guardrail di contenuto esteso (`is_penalty`, divieto di tipi
+inventati). Conseguenza di confrontabilità: i run bench V3 di §8.12 (`87b86a945215`) e i
+futuri (`be51e9c6bc42`) **non sono confrontabili** sui campi eventi — sui campi
+finale/parziali/data/nomi/roster il prompt è invariato, il confronto lì regge. **Zero
+chiamate API in questo giro**: il re-run V3.1 sul gold è rimandato (decisione Alberto, per
+misurare la versione nuova senza spendere due volte). V2 (`a0f50fbe5244`) e il prompt zone
+(`8a25dff54e59`) invariati.
+
+**Regola di dominio derivata, non estratta.** L'accoppiamento rigore↔gol (gol allo stesso
+clock+periodo di un'espulsione `is_penalty` = rigore realizzato; assenza = sbagliato) resta
+**calcolato a valle**, mai chiesto al modello né codificato nella truth. Stessa natura del
+"fouled out" (3 espulsioni = fuori partita): derivato dalla lista eventi
+(`matches/event_types.py`: `fouled_out_players`, `players_over_exclusion_limit`, soglia
+`FOUL_OUT_EXCLUSIONS=3`), esposto in `get_fouled_out_stats`. Validazione simmetrica del
+limite di 3: sui casi gold (test automatico sulla trascrizione umana) e sui dati OCR
+(`validate_coherence` avvisa se un giocatore supera 3 — segnale di errore di estrazione).
+Le statistiche abilitate (rigori causati/ottenuti/segnati/sbagliati, % realizzazione,
+fouled out per giocatore/partita/stagione) sono idee di prodotto in
+[FUTURE_IDEAS.md](../FUTURE_IDEAS.md) §4: **dato già sul cartaceo**, oggi scartato — a
+differenza delle statistiche avanzate del §1 di FUTURE_IDEAS, che una fonte reale non
+l'hanno.
+
 ---
 
 ← [Macro precedente](7_profilo_fan.md) | → [Macro successiva](9_sistema_sponsor.md)

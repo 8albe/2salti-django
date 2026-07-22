@@ -45,3 +45,48 @@ Cosa riaprirebbe la visione: un prodotto pallanuoto consolidato (dati reali, soc
 
 ### Referto digitale giuria completo (Jury App) — SBLOCCATA E RIENTRATA IN ROADMAP (2026-07-19)
 Questa voce è **uscita dal parcheggio**: la risposta federale del 2026-07-19 ha chiuso la dipendenza esterna, in negativo (le designazioni sono del GUG nazionale e il portale federale non sarà accessibile a terzi — nessuna anagrafica FIN), e la Macro 14 è stata riscritta sul modello a **link monouso per-partita**, progettabile e costruibile senza accordo federale. Vedi SYLLABUS Macro 14 (stato 🔄) e BLUEPRINT §7.4.1. L'unico pezzo morto — il modello a **Jury Token federale** — è archiviato in §1. Con la FIN resta un'unica question aperta (la consegna del link, §14.2), che non blocca la costruzione. Questa voce resta qui solo come traccia storica del periodo di differimento (2026-06-02 → 2026-07-19).
+
+---
+
+## 4. Statistiche abilitate dalla semantica rigori/espulsioni (dato GIÀ sul cartaceo)
+
+Repository di idee di prodotto, senza etichette di stato. A differenza delle
+"Statistiche avanzate pallanuoto" del §1 (palombelle, contropiedi, parate: **nessuna
+fonte reale**, la federazione non le rileva nemmeno in Serie A → il Dato Certo vieta di
+inventarle), queste **hanno già la fonte**: sono scritte sul referto cartaceo standard e
+oggi vengono semplicemente **scartate** in estrazione. Con la semantica `is_penalty`
+introdotta il 2026-07-22 (prompt OCR V3.1 + `MatchEvent.is_penalty`) il dato entra nel
+sistema e queste metriche diventano derivabili a valle, senza rilevazione aggiuntiva a
+bordo vasca.
+
+### Statistiche rigori
+Dalla lettura della storia cronometrica (espulsione con `is_penalty` = fallo che comporta
+un rigore; gol `type=GOAL` con `is_penalty` = rigore realizzato; espulsione `is_penalty`
+senza gol allo stesso clock+periodo = rigore sbagliato/parato):
+
+- **Rigori causati** per giocatore/squadra (chi commette il fallo da rigore).
+- **Rigori ottenuti** per squadra (rigori concessi a favore).
+- **Rigori segnati** e **rigori sbagliati/parati** per giocatore/squadra.
+- **Percentuale di realizzazione** (segnati / ottenuti) per giocatore, squadra, stagione.
+
+L'accoppiamento rigore↔gol è una **regola derivata** (stesso clock+periodo), non un campo
+estratto: si calcola a valle, non si chiede al modello OCR. Prerequisito già soddisfatto:
+`is_penalty` su gol ed espulsioni nella pipeline. Manca solo l'aggregazione statistica e
+la sua esposizione nel percorso stats (`matches/stats_services.py`).
+
+### Conteggio "fouled out" (3 espulsioni)
+A regolamento, alla **terza espulsione** un giocatore è fuori per tutta la partita. È uno
+stato di gioco reale, non solo un check di plausibilità, e segnala indisciplina o durezza
+difensiva. Metriche:
+
+- **Fouled out per giocatore/partita**: se e quante volte un giocatore raggiunge le 3.
+- **Fouled out per giocatore/stagione**: in quante partite è uscito per falli.
+- **Fouled out per squadra**: frequenza aggregata.
+
+Derivato dalla lista espulsioni (regola, non estrazione): base già implementata in
+`matches/event_types.py` (`fouled_out_players`, soglia `FOUL_OUT_EXCLUSIONS=3`) ed esposta
+in `get_fouled_out_stats` (percorso stats lega). Estensioni naturali: viste per-atleta e
+per-stagione, e il flag "uscito per falli" nel timeline della singola partita.
+
+Cosa riaprirebbe/allargherebbe: dati reali a regime (più referti con eventi riconciliati) e
+una decisione UX su dove mostrarli (profilo atleta, pagina lega, timeline partita).
