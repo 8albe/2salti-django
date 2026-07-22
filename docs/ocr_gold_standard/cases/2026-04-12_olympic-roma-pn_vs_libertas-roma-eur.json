@@ -65,8 +65,8 @@
       "clock": "cronometro a scalare del periodo in formato mm:ss; scende da ~8:00 (inizio) a 0:00 (fine). NON e' un minuto progressivo di partita: gli stessi valori si ripetono nei quattro periodi.",
       "cap": "numero di calottina del giocatore. 'team' home=Olympic Roma P.N. (B sul foglio), away=Libertas Roma Eur (N sul foglio).",
       "goal_cap": "sui gol, 'cap' e' chi ha segnato; 'score_after' e' il punteggio progressivo dopo il gol.",
-      "penalty_awarded": "su un'espulsione, penalty_awarded=true significa che quell'espulsione ha COMPORTATO un tiro di rigore per la squadra avversaria; 'cap' e' chi ha commesso il fallo, NON chi tira.",
-      "rigore_gol_coupling": "NON codificato in questa truth: l'accoppiamento rigore->gol e' una REGOLA derivata (gol allo stesso clock+periodo di un'espulsione penalty_awarded = rigore realizzato; assenza = non realizzato), da calcolare a valle, non un'osservazione."
+      "rigore_gol_coupling": "NON codificato in questa truth: l'accoppiamento rigore->gol e' una REGOLA derivata (gol allo stesso clock+periodo di un'espulsione is_penalty = rigore realizzato; assenza = non realizzato), da calcolare a valle, non un'osservazione.",
+      "is_penalty": "su un'espulsione, is_penalty=true significa che quell'espulsione ha COMPORTATO un tiro di rigore per la squadra avversaria (il cap e' chi commette il fallo, non chi tira). Allineato al campo events[].is_penalty dello schema OCR (prompt V3.1). Sui GOL is_penalty NON e' impostato in truth: quale gol sia su rigore e' derivato (stesso clock+periodo di un'espulsione is_penalty), non osservato sulla riga del gol."
     },
     "events": [
       {
@@ -268,7 +268,7 @@
         "quarter": 1,
         "clock": "3:03",
         "sanction_duration": 20,
-        "penalty_awarded": true
+        "is_penalty": true
       },
       {
         "type": "EXCLUSION_20",
@@ -285,7 +285,7 @@
         "quarter": 2,
         "clock": "5:18",
         "sanction_duration": 20,
-        "penalty_awarded": true
+        "is_penalty": true
       },
       {
         "type": "EXCLUSION_20",
@@ -310,7 +310,7 @@
         "quarter": 2,
         "clock": "2:28",
         "sanction_duration": 20,
-        "penalty_awarded": true
+        "is_penalty": true
       },
       {
         "type": "EXCLUSION_20",
@@ -327,7 +327,7 @@
         "quarter": 3,
         "clock": "7:55",
         "sanction_duration": 20,
-        "penalty_awarded": true
+        "is_penalty": true
       },
       {
         "type": "EXCLUSION_20",
@@ -376,7 +376,7 @@
         "quarter": 3,
         "clock": "1:13",
         "sanction_duration": 20,
-        "penalty_awarded": true
+        "is_penalty": true
       },
       {
         "type": "EXCLUSION_20",
@@ -385,7 +385,7 @@
         "quarter": 3,
         "clock": "0:59",
         "sanction_duration": 20,
-        "penalty_awarded": true
+        "is_penalty": true
       },
       {
         "type": "EXCLUSION_20",
@@ -394,7 +394,7 @@
         "quarter": 4,
         "clock": "7:13",
         "sanction_duration": 20,
-        "penalty_awarded": true
+        "is_penalty": true
       },
       {
         "type": "EXCLUSION_20",
@@ -576,9 +576,9 @@
     "Distribuzione DB pre-correzione (5-0/5-0/5-0/5-1) sospettosamente regolare: possibile firma di allucinazione, ipotesi da verificare su altri casi (syllabus §8.5).",
     "Eventi e roster promossi in truth il 2026-07-22 da trascrizione umana della storia cronometrica e degli elenchi giocatori (NON da proposta del bench; riversamento umano legittimo, regola D1). 44 eventi: 21 gol (20 casa + 1 ospite) e 23 espulsioni.",
     "Cross-check indipendente: gol-per-periodo derivati dalla cronologia == parziali gia' in truth (COINCIDONO). Vedi 'corroboration'.",
-    "Rigori: 7 espulsioni con penalty_awarded. Diagnostica a valle (non codificata in truth): 5 rigori realizzati (gol allo stesso clock+periodo), 2 non realizzati (P2 5:18 fallo N#4, P4 7:13 fallo N#6). L'unico gol del Libertas (13-1, P3 1:13) e' un rigore realizzato (fallo B#12, segna N#2). B#6 (de lena d.) segna 4 dei 5 rigori realizzati.",
+    "Rigori: 7 espulsioni con is_penalty. Diagnostica a valle (non codificata in truth): 5 rigori realizzati (gol allo stesso clock+periodo), 2 non realizzati (P2 5:18 fallo N#4, P4 7:13 fallo N#6). L'unico gol del Libertas (13-1, P3 1:13) e' un rigore realizzato (fallo B#12, segna N#2). B#6 (de lena d.) segna 4 dei 5 rigori realizzati.",
     "Coerenza espulsioni: nessun giocatore supera il limite di 3 (N#3, N#4, N#7, N#12 esattamente a 3). Nessun sforamento -> nessun sospetto di errore di trascrizione sul conteggio.",
-    "Semantica rigore NON esprimibile nello schema OCR di estrazione (matches/services/vision_providers.py, events[].type in GOAL|EXCLUSION_20|YELLOW_CARD|RED_CARD|TIMEOUT|OTHER): manca un flag rigore. Il modello DB MatchEvent HA gia' is_penalty (bool) + notes, ma la normalized_data no. Proposta additiva (NON applicata): aggiungere events[].is_penalty (default false) allo schema OCR, cosi' che l'estrazione possa marcare l'espulsione-con-rigore come fa la truth. Vedi §diagnosi referto 11."
+    "Semantica rigore NON esprimibile nello schema OCR di estrazione (matches/services/vision_providers.py, events[].type in GOAL|EXCLUSION_20|YELLOW_CARD|RED_CARD|TIMEOUT|OTHER): manca un flag rigore. Il modello DB MatchEvent HA gia' is_penalty (bool) + notes, ma la normalized_data no. Aggiunta ESEGUITA il 2026-07-22 (prompt V3.1, hash be51e9c6bc42): events[].is_penalty (default false) nello schema OCR; il gol su rigore resta type=GOAL con is_penalty=true (non piu' il tipo inventato PENALTY_GOAL) e il flag si propaga a MatchEvent.is_penalty. Vedi §diagnosi referto 11."
   ],
   "corroboration": {
     "status": "concorde",
