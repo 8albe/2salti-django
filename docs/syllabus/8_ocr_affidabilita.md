@@ -417,6 +417,42 @@ Risposte alle domande di misura del giro:
 
 **Lettura del giro in una riga:** V3 migliora il contorno (nomi da prior, varianza su foglio ruotato, ambigui dimezzati, date già-quasi-buone) ma **non scalfisce i due errori stabili** — Bellator finale casa e Triscelon data — che restano invisibili a qualunque ripetizione e a qualunque coerenza interna. Sono la classe di errore per cui l'audit del 22/07 aveva già indicato la strada successiva: la **doppia estrazione per zona** (secondo atto di lettura indipendente sulla sola griglia/testata), che è l'esperimento candidato del prossimo giro.
 
+### 8.13 Doppia estrazione per zona sul dataset gold (2026-07-22)
+
+Esperimento successivo a §8.12: un **secondo atto di lettura indipendente**, ristretto alle sole tre zone dove vivono gli errori stabili (griglia parziali, finale di ciascuna squadra, data), da confrontare col primo passaggio. Ipotesi da falsificare: *una seconda lettura indipendente discorderà dalla prima sull'errore, esponendolo*.
+
+**Cosa è stato costruito.** `OCR_SYSTEM_PROMPT_ZONE` (`@sha256:8a25dff54e59`) — secondo passaggio, output JSON minimale (solo finale/parziali/data + confidence + warnings), eredita da V3 anti-riconciliazione e trascrizione cifra-per-cifra, **niente crop** (variabile isolata: il secondo atto di lettura, non lo zoom — il crop è l'esperimento dopo). Regola di divergenza pura in `matches/services/ocr_double_extraction.py` (`compare_passes`): discordanza su finale, parziali o data fra le due letture → `NEEDS_REVIEW`; una lettura `null` è **astensione**, non divergenza. La regola **alza la bandiera, non sceglie il valore giusto**, e in questo giro **non è attiva in produzione**: è selezionabile dal bench (`ocr_bench --second-pass --first-pass-dir …`, default off). La seconda chiamata non riceve mai il risultato della prima (indipendenza reale).
+
+Run: `gemini-2.5-pro`, secondo passaggio `--repeat 5` × 6 casi = **30 chiamate zone** (primo passaggio **riusato** dai risultati V3 di §8.12 in `gold_v3_20260722/`, non rifatto). Proposte in `ocr_bench_out/gold_secondpass_20260722/` (D1: mai riversate nei casi). Accoppiamento delle ripetizioni indice per indice — due serie di campioni iid, l'accoppiamento è arbitrario ma equivalente a qualunque altro.
+
+**Tabella divergenze (rip. divergenti su 5, poi per zona):**
+
+| caso | legib. | div/5 | finale | parziali | data | natura |
+|---|---|---|---|---|---|---|
+| Delta vs Villa York | 3 | **0/5** | 0 | 0 | 0 | pulito, nessun falso positivo |
+| Unime vs Nautilus | 2 | **0/5** | 0 | 0 | 0 | pulito, nessun falso positivo |
+| **Bellator** vs Lazio | 1 | 5/5 | **0** | 5 | 0 | vero pos. sui parziali, **finale NON intercettato** |
+| Olympic vs Libertas | 3 | 4/5 | 0 | 4 | 0 | rumore sui parziali (finale e data corretti) |
+| Salerno vs Nautilus | 2 | 5/5 | 5 | 5 | 4 | vero pos. (foglio davvero illeggibile) |
+| **Triscelon** vs Nautilus | 2 | **0/5** | 0 | 0 | 0 | **data NON intercettata** (concordi sul valore sbagliato) |
+
+Separazione netta veri/falsi positivi: **veri positivi** = Salerno (5/5, foglio score-2 che l'OCR legge male: il secondo passaggio legge finali diversi e sbagliati, la bandiera è giusta) e Bellator sui *parziali* (5/5). **Falsi positivi puri** (foglio che l'OCR legge bene, eppure diverge) = **zero sui due controlli** Delta/Unime; ma **Olympic** diverge 4/5 sui soli parziali pur avendo finale e data corretti 5/5 → rumore operativo, la griglia dei parziali è instabile fra letture anche quando il finale è giusto.
+
+**Risposte alle domande di misura:**
+
+1. **Sui due errori stabili la seconda lettura NON diverge dalla prima, e non legge mai il valore giusto. Il meccanismo di confronto fra passaggi non li cattura.** Bellator finale casa: entrambi i passaggi leggono **5-19** in tutti e 5 i run (divergenza sul finale **0/5**, valore corretto 4 letto **0/5**). Triscelon data: entrambi leggono **28** in tutti e 5 (divergenza **0/5**, valore corretto 25 letto **0/5**). L'errore è stabile *fra atti di lettura*, non solo fra ripetizioni dello stesso atto: il modello rilegge "4"→"5" e "25"→"28" in modo sistematico anche nella lettura ristretta. Detto chiaramente: **per i due bersagli il meccanismo non serve.** *Silver lining su Bellator*: il secondo passaggio, ristretto alla griglia, la legge correttamente (somma casa **4**) e **auto-segnala** la discordanza somma≠finale in `extraction_warnings` in **4/5** run — segnale che il V3 a passaggio singolo non produceva mai (§8.12: 0/5). La restrizione di zona **rompe la ricostruzione compensativa**: qui è il check *interno* del secondo passaggio a mordere, non il confronto fra i due.
+2. **Falsi positivi sui fogli puliti: zero sui due controlli** (Delta 0/5, Unime 0/5). Il costo operativo del meccanismo non è sui fogli puliti *certificati*, ma sulla **zona parziali** in generale: Olympic (finale+data corretti) va in review 4/5 per sola instabilità della griglia. Se il trigger scattasse su qualunque divergenza di zona, Olympic sarebbe review inutile 4/5.
+3. **Quando divergono, quale è giusta? Non c'è un criterio.** Bellator parziali: giusta la **seconda** (somma 4 = truth). Salerno finale: giusta la **prima** (12-17), la seconda è sbagliata (17-17/17-12). Il vincitore cambia caso per caso: la regola **può solo alzare la bandiera**, esattamente come progettata — la scelta resta umana.
+4. **Il secondo passaggio riconcilia sui fogli facili, ma NON su Bellator.** Riconcilia (somma parziali == suo finale) 5/5 su Delta, Unime, Triscelon; **1/5 su Bellator** (in 4/5 espone la discordanza: parziali corretti a 4, finale sbagliato a 5). Sulla zona ristretta la trascrizione è davvero indipendente: l'anti-riconciliazione **funziona** dove nel passaggio pieno V3 falliva 5/5.
+5. **Costo reale.** 30 chiamate zone: 35.790 token in, 7.010 out (media **1.193 in / 234 out** per chiamata, latenza media 11,8s). Costo a listino ($1,25/$10 per M): **$0,1148** totali, **$0,0038/chiamata** — ~11× più economica di una chiamata piena V3 ($0,044), perché sia il prompt (breve) sia l'output (minimale) sono piccoli. **A regime la doppia estrazione aggiunge ~$0,0038 per referto** (una chiamata zona sopra il passaggio pieno): **+~8,6%** sul costo di una singola estrazione V3. Trascurabile: la decisione è di efficacia, non di costo.
+
+**Raccomandazione: MODIFICARE, non adottare la regola così com'è né scartare tutto.**
+- **Scartare** il confronto *cross-passaggio* come meccanismo per i due errori bersaglio: misurato **0/5 su entrambi**, non li cattura. Fa scattare la review sull'*instabilità dei parziali* (Olympic, Bellator-parziali), che è un segnale diverso e più rumoroso.
+- **Tenere e valorizzare** ciò che ha funzionato: il **check somma≠finale *interno* al secondo passaggio zona** ha morso su Bellator (4/5) dove il V3 pieno non mordeva mai (0/5), perché la restrizione di zona disaccoppia griglia e finale. È una leva a **una sola chiamata extra** ($0,0038) che aggredisce la classe della ricostruzione compensativa (Bellator) senza bisogno del confronto fra due passaggi: candidato = far scattare `NEEDS_REVIEW` quando il warning somma≠finale del passaggio zona compare, da valutare in un giro dedicato.
+- **L'errore data (Triscelon) non è catturabile da nessun segnale di coerenza**: campo singolo, senza ridondanza interna, e le due letture concordano sul valore sbagliato (28). Non lo prende né il confronto fra passaggi né un check interno. Resta il residuo per l'**esperimento crop/zoom** (lettura ravvicinata della sola testata) o la review umana — la doppia estrazione **non** lo risolve e non va spacciata come tale.
+
+Un debito registra la non-adozione e il residuo: [DEBITI.md](../DEBITI.md) §10.33.
+
 ---
 
 ← [Macro precedente](7_profilo_fan.md) | → [Macro successiva](9_sistema_sponsor.md)

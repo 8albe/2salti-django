@@ -119,3 +119,15 @@ Conseguenze oggi, distinte:
 **Perché severità bassa:** la superficie è la review admin, staff-only; su prod non esiste alcun referto `PUBLISHED` e il livello `SCORE_ONLY` è a codice solo su dev (deploy prod pendente); il downgrade D3 presuppone un referto già `PUBLISHED FULL`, che oggi non esiste su nessun box. Il fallimento attuale è **restrittivo** (blocca o pubblica con audit povero), mai corruttivo. La severità va rialzata al trigger indicato sopra.
 
 **Nota di contesto:** la definizione precisa della UI (dove vive il campo reason, per quali azioni) era stata deliberatamente rimandata "a quando la superficie di publish viene esercitata davvero" (session note 22/07); questa voce esiste perché quel rinvio non era registrato da nessuna parte e sarebbe diventato una dimenticanza.
+
+### §10.33 Doppia estrazione per zona: regola di divergenza misurata ma non adottata; errore data non catturabile — DEBITO APERTO 2026-07-22 (severità bassa)
+
+> **Severità:** bassa (è codice bench-only, default off, nessun effetto in produzione) · **Aperta dal:** 2026-07-22 · **Condizione di chiusura:** decisione esplicita su (a) adottare o no il warning somma≠finale del passaggio zona come trigger `NEEDS_REVIEW` in produzione, e (b) l'esito dell'esperimento crop/zoom sull'errore data. Fino ad allora il seam `--second-pass` resta strumento di misura, non pipeline.
+
+L'esperimento della doppia estrazione per zona ([syllabus §8.13](syllabus/8_ocr_affidabilita.md)) ha misurato tre cose che restano da chiudere:
+
+- **La regola di divergenza cross-passaggio NON cattura i due errori bersaglio** (Bellator finale casa, Triscelon data): misurata 0/5 su entrambi, le due letture concordano sul valore sbagliato. La regola (`matches/services/ocr_double_extraction.py`, `compare_passes`) è implementata, testata e **selezionabile solo dal bench** (`ocr_bench --second-pass`, default off): **non è cablata in produzione** e in questo giro **non va adottata così com'è**. Va tenuta viva la decisione di scartarla come meccanismo per gli errori stabili di finale/data.
+- **Ciò che ha funzionato — il check somma≠finale *interno* al passaggio zona** (Bellator 4/5 vs V3 pieno 0/5) — è un candidato a diventare trigger di review in produzione, ma con una sola chiamata extra ($0,0038/referto) e senza il confronto fra passaggi. Non implementato in produzione in questo giro: è la leva del prossimo giro dedicato, da valutare insieme a Opzione A (chi scatta, su quale livello di publish).
+- **L'errore data (Triscelon 28 vs 25) non è catturabile da nessun segnale di coerenza**: campo singolo, senza ridondanza, letture concordi sul valore sbagliato. Resta scoperto fino all'esperimento **crop/zoom** sulla sola testata (lettura ravvicinata), che è l'esperimento candidato successivo. La doppia estrazione **non** lo risolve: va evitato di considerarlo coperto.
+
+**Perché severità bassa:** tutto ciò che è a codice (`OCR_SYSTEM_PROMPT_ZONE`, `compare_passes`, `--second-pass`) è **default off e bench-only**; la produzione a passaggio singolo è invariata (V2, o V3 alla promozione — §8.12). Nessun effetto su referti reali finché non c'è una decisione di adozione esplicita.
