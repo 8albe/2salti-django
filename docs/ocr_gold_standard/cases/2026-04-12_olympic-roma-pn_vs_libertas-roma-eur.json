@@ -5,7 +5,6 @@
   "verified_by": "Alberto Galbiati",
   "verified_at": "2026-07-20",
   "verification_method": "collazione a mano del referto cartaceo originale",
-
   "reverification": {
     "reverified_at": "2026-07-20",
     "reverified_by": "Alberto Galbiati",
@@ -13,7 +12,6 @@
     "outcome": "CONFERMATO: 'Olympic Roma P.N.' (con la Y), invariato rispetto alla prima collazione del 2026-07-19.",
     "context": "Riverifica innescata dall'errore di collazione trovato sul caso Bellator (stessa sessione del 19/07, vedi 'corrections' in 2026-04-11_bellator-frusino_vs_ss-lazio-nuoto.json). A differenza di Bellator, qui la prima lettura era corretta: la divergenza di grafia foglio<->DB ('Olympic' sul foglio vs 'Olimpic' a DB, Team pk=7) e' REALE, non un artefatto di collazione. Vedi syllabus §8.6 per la diagnosi aggiornata (fase 3 'tabella alias' ripristinata su questo caso)."
   },
-
   "match": {
     "db_match_pk": 4,
     "db_league_pk": 5,
@@ -41,32 +39,551 @@
       "name_on_paper": "Libertas Roma Eur"
     }
   },
-
   "truth": {
     "scores": {
       "final_score": "20-1",
       "quarters": {
-        "1": [5, 0],
-        "2": [4, 0],
-        "3": [5, 1],
-        "4": [6, 0]
+        "1": [
+          5,
+          0
+        ],
+        "2": [
+          4,
+          0
+        ],
+        "3": [
+          5,
+          1
+        ],
+        "4": [
+          6,
+          0
+        ]
+      }
+    },
+    "_conventions": {
+      "clock": "cronometro a scalare del periodo in formato mm:ss; scende da ~8:00 (inizio) a 0:00 (fine). NON e' un minuto progressivo di partita: gli stessi valori si ripetono nei quattro periodi.",
+      "cap": "numero di calottina del giocatore. 'team' home=Olympic Roma P.N. (B sul foglio), away=Libertas Roma Eur (N sul foglio).",
+      "goal_cap": "sui gol, 'cap' e' chi ha segnato; 'score_after' e' il punteggio progressivo dopo il gol.",
+      "penalty_awarded": "su un'espulsione, penalty_awarded=true significa che quell'espulsione ha COMPORTATO un tiro di rigore per la squadra avversaria; 'cap' e' chi ha commesso il fallo, NON chi tira.",
+      "rigore_gol_coupling": "NON codificato in questa truth: l'accoppiamento rigore->gol e' una REGOLA derivata (gol allo stesso clock+periodo di un'espulsione penalty_awarded = rigore realizzato; assenza = non realizzato), da calcolare a valle, non un'osservazione."
+    },
+    "events": [
+      {
+        "type": "GOAL",
+        "team": "home",
+        "cap": 14,
+        "quarter": 1,
+        "clock": "4:44",
+        "score_after": "1-0"
+      },
+      {
+        "type": "GOAL",
+        "team": "home",
+        "cap": 5,
+        "quarter": 1,
+        "clock": "3:21",
+        "score_after": "2-0"
+      },
+      {
+        "type": "GOAL",
+        "team": "home",
+        "cap": 6,
+        "quarter": 1,
+        "clock": "3:03",
+        "score_after": "3-0"
+      },
+      {
+        "type": "GOAL",
+        "team": "home",
+        "cap": 12,
+        "quarter": 1,
+        "clock": "0:58",
+        "score_after": "4-0"
+      },
+      {
+        "type": "GOAL",
+        "team": "home",
+        "cap": 9,
+        "quarter": 1,
+        "clock": "0:09",
+        "score_after": "5-0"
+      },
+      {
+        "type": "GOAL",
+        "team": "home",
+        "cap": 4,
+        "quarter": 2,
+        "clock": "3:13",
+        "score_after": "6-0"
+      },
+      {
+        "type": "GOAL",
+        "team": "home",
+        "cap": 6,
+        "quarter": 2,
+        "clock": "2:28",
+        "score_after": "7-0"
+      },
+      {
+        "type": "GOAL",
+        "team": "home",
+        "cap": 10,
+        "quarter": 2,
+        "clock": "2:02",
+        "score_after": "8-0"
+      },
+      {
+        "type": "GOAL",
+        "team": "home",
+        "cap": 6,
+        "quarter": 2,
+        "clock": "0:58",
+        "score_after": "9-0"
+      },
+      {
+        "type": "GOAL",
+        "team": "home",
+        "cap": 6,
+        "quarter": 3,
+        "clock": "7:55",
+        "score_after": "10-0"
+      },
+      {
+        "type": "GOAL",
+        "team": "home",
+        "cap": 5,
+        "quarter": 3,
+        "clock": "7:14",
+        "score_after": "11-0"
+      },
+      {
+        "type": "GOAL",
+        "team": "home",
+        "cap": 5,
+        "quarter": 3,
+        "clock": "4:16",
+        "score_after": "12-0"
+      },
+      {
+        "type": "GOAL",
+        "team": "home",
+        "cap": 6,
+        "quarter": 3,
+        "clock": "3:14",
+        "score_after": "13-0"
+      },
+      {
+        "type": "GOAL",
+        "team": "away",
+        "cap": 2,
+        "quarter": 3,
+        "clock": "1:13",
+        "score_after": "13-1"
+      },
+      {
+        "type": "GOAL",
+        "team": "home",
+        "cap": 6,
+        "quarter": 3,
+        "clock": "0:59",
+        "score_after": "14-1"
+      },
+      {
+        "type": "GOAL",
+        "team": "home",
+        "cap": 7,
+        "quarter": 4,
+        "clock": "6:44",
+        "score_after": "15-1"
+      },
+      {
+        "type": "GOAL",
+        "team": "home",
+        "cap": 2,
+        "quarter": 4,
+        "clock": "5:34",
+        "score_after": "16-1"
+      },
+      {
+        "type": "GOAL",
+        "team": "home",
+        "cap": 10,
+        "quarter": 4,
+        "clock": "4:39",
+        "score_after": "17-1"
+      },
+      {
+        "type": "GOAL",
+        "team": "home",
+        "cap": 9,
+        "quarter": 4,
+        "clock": "3:43",
+        "score_after": "18-1"
+      },
+      {
+        "type": "GOAL",
+        "team": "home",
+        "cap": 9,
+        "quarter": 4,
+        "clock": "3:00",
+        "score_after": "19-1"
+      },
+      {
+        "type": "GOAL",
+        "team": "home",
+        "cap": 9,
+        "quarter": 4,
+        "clock": "2:20",
+        "score_after": "20-1"
+      },
+      {
+        "type": "EXCLUSION_20",
+        "team": "away",
+        "cap": 7,
+        "quarter": 1,
+        "clock": "7:35",
+        "sanction_duration": 20
+      },
+      {
+        "type": "EXCLUSION_20",
+        "team": "home",
+        "cap": 7,
+        "quarter": 1,
+        "clock": "4:28",
+        "sanction_duration": 20
+      },
+      {
+        "type": "EXCLUSION_20",
+        "team": "away",
+        "cap": 5,
+        "quarter": 1,
+        "clock": "3:10",
+        "sanction_duration": 20
+      },
+      {
+        "type": "EXCLUSION_20",
+        "team": "away",
+        "cap": 7,
+        "quarter": 1,
+        "clock": "3:03",
+        "sanction_duration": 20,
+        "penalty_awarded": true
+      },
+      {
+        "type": "EXCLUSION_20",
+        "team": "away",
+        "cap": 4,
+        "quarter": 1,
+        "clock": "0:11",
+        "sanction_duration": 20
+      },
+      {
+        "type": "EXCLUSION_20",
+        "team": "away",
+        "cap": 4,
+        "quarter": 2,
+        "clock": "5:18",
+        "sanction_duration": 20,
+        "penalty_awarded": true
+      },
+      {
+        "type": "EXCLUSION_20",
+        "team": "home",
+        "cap": 2,
+        "quarter": 2,
+        "clock": "4:54",
+        "sanction_duration": 20
+      },
+      {
+        "type": "EXCLUSION_20",
+        "team": "home",
+        "cap": 11,
+        "quarter": 2,
+        "clock": "3:50",
+        "sanction_duration": 20
+      },
+      {
+        "type": "EXCLUSION_20",
+        "team": "away",
+        "cap": 12,
+        "quarter": 2,
+        "clock": "2:28",
+        "sanction_duration": 20,
+        "penalty_awarded": true
+      },
+      {
+        "type": "EXCLUSION_20",
+        "team": "away",
+        "cap": 12,
+        "quarter": 2,
+        "clock": "0:11",
+        "sanction_duration": 20
+      },
+      {
+        "type": "EXCLUSION_20",
+        "team": "away",
+        "cap": 12,
+        "quarter": 3,
+        "clock": "7:55",
+        "sanction_duration": 20,
+        "penalty_awarded": true
+      },
+      {
+        "type": "EXCLUSION_20",
+        "team": "away",
+        "cap": 5,
+        "quarter": 3,
+        "clock": "7:16",
+        "sanction_duration": 20
+      },
+      {
+        "type": "EXCLUSION_20",
+        "team": "away",
+        "cap": 8,
+        "quarter": 3,
+        "clock": "5:40",
+        "sanction_duration": 20
+      },
+      {
+        "type": "EXCLUSION_20",
+        "team": "away",
+        "cap": 4,
+        "quarter": 3,
+        "clock": "3:25",
+        "sanction_duration": 20
+      },
+      {
+        "type": "EXCLUSION_20",
+        "team": "away",
+        "cap": 7,
+        "quarter": 3,
+        "clock": "2:30",
+        "sanction_duration": 20
+      },
+      {
+        "type": "EXCLUSION_20",
+        "team": "away",
+        "cap": 3,
+        "quarter": 3,
+        "clock": "1:40",
+        "sanction_duration": 20
+      },
+      {
+        "type": "EXCLUSION_20",
+        "team": "home",
+        "cap": 12,
+        "quarter": 3,
+        "clock": "1:13",
+        "sanction_duration": 20,
+        "penalty_awarded": true
+      },
+      {
+        "type": "EXCLUSION_20",
+        "team": "away",
+        "cap": 11,
+        "quarter": 3,
+        "clock": "0:59",
+        "sanction_duration": 20,
+        "penalty_awarded": true
+      },
+      {
+        "type": "EXCLUSION_20",
+        "team": "away",
+        "cap": 6,
+        "quarter": 4,
+        "clock": "7:13",
+        "sanction_duration": 20,
+        "penalty_awarded": true
+      },
+      {
+        "type": "EXCLUSION_20",
+        "team": "away",
+        "cap": 3,
+        "quarter": 4,
+        "clock": "5:44",
+        "sanction_duration": 20
+      },
+      {
+        "type": "EXCLUSION_20",
+        "team": "away",
+        "cap": 3,
+        "quarter": 4,
+        "clock": "4:58",
+        "sanction_duration": 20
+      },
+      {
+        "type": "EXCLUSION_20",
+        "team": "away",
+        "cap": 2,
+        "quarter": 4,
+        "clock": "1:30",
+        "sanction_duration": 20
+      },
+      {
+        "type": "EXCLUSION_20",
+        "team": "away",
+        "cap": 1,
+        "quarter": 4,
+        "clock": "0:25",
+        "sanction_duration": 20
+      }
+    ],
+    "rosters": {
+      "home": {
+        "name_on_paper": "Olympic Roma P.N.",
+        "players": [
+          {
+            "number": 1,
+            "name": "giovannini f."
+          },
+          {
+            "number": 2,
+            "name": "santori r."
+          },
+          {
+            "number": 3,
+            "name": "bonanni g."
+          },
+          {
+            "number": 4,
+            "name": "turone v."
+          },
+          {
+            "number": 5,
+            "name": "laino a."
+          },
+          {
+            "number": 6,
+            "name": "de lena d."
+          },
+          {
+            "number": 7,
+            "name": "varriale l."
+          },
+          {
+            "number": 8,
+            "name": "latini a."
+          },
+          {
+            "number": 9,
+            "name": "proietti c."
+          },
+          {
+            "number": 10,
+            "name": "fontana f."
+          },
+          {
+            "number": 11,
+            "name": "pica l."
+          },
+          {
+            "number": 12,
+            "name": "bonanni e."
+          },
+          {
+            "number": 13,
+            "name": "roscioli m."
+          },
+          {
+            "number": 14,
+            "name": "dessy f."
+          },
+          {
+            "number": 15,
+            "name": "di bari c."
+          }
+        ]
+      },
+      "away": {
+        "name_on_paper": "Libertas Roma Eur",
+        "players": [
+          {
+            "number": 1,
+            "name": "pelliccione j."
+          },
+          {
+            "number": 2,
+            "name": "mustazza d."
+          },
+          {
+            "number": 3,
+            "name": "d'aniello r."
+          },
+          {
+            "number": 4,
+            "name": "d'angelo f."
+          },
+          {
+            "number": 5,
+            "name": null,
+            "ambiguous": true,
+            "variants": [
+              "della rortella c.",
+              "della portella c."
+            ],
+            "note": "quinta lettera del cognome illeggibile fra 'r' e 'p': registrata come ambigua con entrambe le varianti, NON risolta."
+          },
+          {
+            "number": 6,
+            "name": "garbelli c."
+          },
+          {
+            "number": 7,
+            "name": "de santis e."
+          },
+          {
+            "number": 8,
+            "name": "pellegrini c."
+          },
+          {
+            "number": 9,
+            "name": "coppa t."
+          },
+          {
+            "number": 10,
+            "name": null,
+            "unknown": true,
+            "note": "casella non trascritta: giocatore SCONOSCIUTO, NON assente. Da non riempire."
+          },
+          {
+            "number": 11,
+            "name": "montani c."
+          },
+          {
+            "number": 12,
+            "name": "conti g."
+          },
+          {
+            "number": 13,
+            "name": "urbinelli d."
+          }
+        ]
       }
     }
   },
-
   "not_verified": [
-    "roster casa e trasferta (nomi, numeri di maglia)",
-    "eventi (marcatori, minuti, esclusioni, cartellini)",
     "ufficiali di gara (arbitro, segretario, cronometrista)",
-    "attribuzione dei gol ai singoli giocatori per periodo"
+    "allenatori (coach) di entrambe le squadre",
+    "roster away #5 (della ?ortella): quinta lettera del cognome NON risolta (r/p) — registrata come ambigua, non verificata",
+    "roster away #10: casella non trascritta — giocatore sconosciuto, non verificato"
   ],
-
   "extractions": [],
-
   "findings": [
     "Somma parziali verificata: 5+4+5+6=20, 0+0+1+0=1, coerente col finale 20-1.",
     "Nome sul cartaceo 'Olympic Roma P.N.' vs nome a DB 'Olimpic Roma P.N.' (Team pk=7): divergenza di grafia foglio<->DB CONFERMATA da riverifica il 2026-07-20 (vedi 'reverification') — rischio di mancato aggancio in discovery se il fuzzy matching non tollera questa variante. Diverso dal caso Bellator (§8.6): li' il foglio e il DB coincidevano e a sbagliare era stato l'OCR; qui il foglio diverge davvero dal DB. E' uno dei casi fondativi della fase 3 (tabella alias).",
     "Confermato sul sistema vivo: il Match a DB aveva lo stesso punteggio finale ma tutti e 4 i parziali sbagliati con somma comunque coerente al totale — errore compensativo, terzo caso su tre confrontabili con questo pattern (vedi syllabus §8.5). Corretto su dev il 2026-07-19, prod ancora da correggere.",
-    "Distribuzione DB pre-correzione (5-0/5-0/5-0/5-1) sospettosamente regolare: possibile firma di allucinazione, ipotesi da verificare su altri casi (syllabus §8.5)."
-  ]
+    "Distribuzione DB pre-correzione (5-0/5-0/5-0/5-1) sospettosamente regolare: possibile firma di allucinazione, ipotesi da verificare su altri casi (syllabus §8.5).",
+    "Eventi e roster promossi in truth il 2026-07-22 da trascrizione umana della storia cronometrica e degli elenchi giocatori (NON da proposta del bench; riversamento umano legittimo, regola D1). 44 eventi: 21 gol (20 casa + 1 ospite) e 23 espulsioni.",
+    "Cross-check indipendente: gol-per-periodo derivati dalla cronologia == parziali gia' in truth (COINCIDONO). Vedi 'corroboration'.",
+    "Rigori: 7 espulsioni con penalty_awarded. Diagnostica a valle (non codificata in truth): 5 rigori realizzati (gol allo stesso clock+periodo), 2 non realizzati (P2 5:18 fallo N#4, P4 7:13 fallo N#6). L'unico gol del Libertas (13-1, P3 1:13) e' un rigore realizzato (fallo B#12, segna N#2). B#6 (de lena d.) segna 4 dei 5 rigori realizzati.",
+    "Coerenza espulsioni: nessun giocatore supera il limite di 3 (N#3, N#4, N#7, N#12 esattamente a 3). Nessun sforamento -> nessun sospetto di errore di trascrizione sul conteggio.",
+    "Semantica rigore NON esprimibile nello schema OCR di estrazione (matches/services/vision_providers.py, events[].type in GOAL|EXCLUSION_20|YELLOW_CARD|RED_CARD|TIMEOUT|OTHER): manca un flag rigore. Il modello DB MatchEvent HA gia' is_penalty (bool) + notes, ma la normalized_data no. Proposta additiva (NON applicata): aggiungere events[].is_penalty (default false) allo schema OCR, cosi' che l'estrazione possa marcare l'espulsione-con-rigore come fa la truth. Vedi §diagnosi referto 11."
+  ],
+  "corroboration": {
+    "status": "concorde",
+    "corroborated_at": "2026-07-22",
+    "corroborated_by": "Alberto Galbiati",
+    "method_note": "Seconda zona indipendente del foglio: la STORIA CRONOMETRICA (sequenza dei 21 gol con minuto/cronometro, calottina e squadra) e' stata trascritta a mano separatamente dal riquadro dei parziali. I gol derivati per periodo e squadra (P1 5-0, P2 4-0, P3 5-1, P4 6-0; finale 20-1) COINCIDONO esattamente con i parziali e il finale gia' in truth, verificati per altra via il 2026-07-20. Validazione incrociata indipendente fra due letture umane di zone diverse dello stesso foglio."
+  }
 }
