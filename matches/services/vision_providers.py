@@ -117,6 +117,161 @@ OCR_SYSTEM_PROMPT_V2 = """
         Rispondi SOLO con il JSON. Non aggiungere testo, commenti o markdown.
         """
 
+# Prompt sperimentale v3 (Macro 8, giro 2026-07-22): V2 più tre modifiche mirate
+# alle classi di errore misurate dalla baseline §8.9 del syllabus 8:
+#   (a) anti-riconciliazione sulla griglia parziali (l'errore compensativo:
+#       parziali ricostruiti per far tornare la somma col finale estratto);
+#   (b) trascrizione letterale dei nomi (allucinazione plausibile, es.
+#       FRUSINO -> FROSINONE);
+#   (c) data trascritta cifra per cifra, con confidence dedicata
+#       (confidence_fields.date) e trascrizione grezza (match_info.date_digits).
+# Le aggiunte allo schema JSON sono additive e retrocompatibili:
+# _normalize_response tollera sia l'assenza sia la presenza dei nuovi campi.
+# NON è il default di produzione: si seleziona via settings.OCR_PROMPT_VERSION
+# o dal bench (ocr_bench --prompt-version v3). La promozione a default è una
+# decisione di prodotto sui numeri del bench, non un fatto tecnico.
+OCR_SYSTEM_PROMPT_V3 = """
+        Sei un esperto di analisi di referti di partite di pallanuoto (FIN - GUG).
+        Riceverai la FOTO di un referto ufficiale. Segui queste istruzioni spaziali:
+
+        1. SQUADRE E PUNTEGGIO:
+           - In alto a sinistra (Tabella 1): Squadra CASA (es. POL. DELTA). 'Risultato finale' è il numero in fondo a questa casella.
+           - In basso a sinistra (Tabella 2): Squadra OSPITE (es. VILLA YORK). 'Risultato finale' è il numero in fondo a questa casella.
+           - Punteggi parziali: Nella tabella 'Risultati parziali' al centro.
+           - GRIGLIA 'Risultati parziali': trascrivi le 8 celle ESATTAMENTE come
+             le vedi, cella per cella. Ogni cella è una LETTURA, mai un calcolo:
+             NON ricavare nessuna cella da altre celle né dal risultato finale.
+           - Il 'Risultato finale' di ciascuna squadra è una trascrizione
+             INDIPENDENTE del numero scritto in fondo alla sua casella: NON è la
+             somma dei parziali e NON va ricavato né corretto a partire da essi.
+           - Se la somma dei parziali NON torna col risultato finale trascritto,
+             NON aggiustare niente: riporta i valori discordi esattamente come
+             sono scritti e segnala la discordanza in extraction_warnings.
+             La discordanza è un esito ammesso e prezioso, non un errore da
+             nascondere.
+
+        2. ROSTER (GIOCATORI):
+           - Sotto il nome di ogni squadra c'è l'elenco 'Giocatori'. Estrai 'N.' (numero calottina) e 'Cognome e Nome'.
+           - Un roster tipico ha tra 7 e 15 giocatori per squadra.
+
+        3. EVENTI (CRONOLOGIA):
+           - TABELLE A DESTRA ('STORIA CRONOMETRICA'): Elenca tutti gli eventi.
+           - Colonne: Tempo (Minuto), N. Calottina (chi fa l'azione), Evento (GOL, ET per Esclusione 20", TR per Rigore, ecc.).
+           - Importante: Trascrivi i gol (GOL) e le espulsioni (ET come EXCLUSION_20).
+           - PERIODO DI OGNI EVENTO ("quarter"): la 'STORIA CRONOMETRICA' è divisa in
+             sezioni o blocchi, uno per periodo (1°, 2°, 3°, 4° tempo). Ricava il campo
+             "quarter" di ogni evento dalla SEZIONE in cui l'evento è scritto, non dal
+             minuto e non dai punteggi parziali.
+           - Se non riesci a stabilire con certezza in quale sezione/periodo cade un
+             evento, scrivi null in "quarter": è un valore ammesso e preferibile.
+             NON dedurre il periodo dal minuto e NON distribuire gli eventi fra i
+             periodi per farli tornare con i punteggi parziali.
+
+        4. DATA DELLA GARA:
+           - Leggila cifra per cifra come scritta sul foglio, senza dedurla dal
+             contesto (stagione, campionato, altre scritte sul foglio).
+           - Riporta in "date_digits" la trascrizione esatta come scritta
+             (es. "11/04/2026") e in "date" la stessa data in formato YYYY-MM-DD.
+           - Se anche una sola cifra è incerta, usa null in "date" e segnala il
+             dubbio in extraction_warnings.
+           - Dichiara la fiducia sulla lettura della data in confidence_fields.date.
+
+        REGOLE CRITICHE:
+        - Se un dato è ILLEGGIBILE, PARZIALE o AMBIGUO: usa null. NON INDOVINARE MAI.
+        - NOMI (squadre e giocatori): trascrivi ESATTAMENTE le lettere scritte,
+          anche se il nome sembra insolito, raro o "sbagliato" (es. se sul foglio
+          c'è scritto FRUSINO, trascrivi FRUSINO: NON correggerlo in FROSINONE).
+          NON normalizzare MAI verso nomi di città, di società note o forme più
+          comuni: la mappatura ai nomi ufficiali avviene a valle, non è compito tuo.
+        - Se un nome è parzialmente leggibile, trascrivi solo le lettere chiare e aggiungi "?" (es. "ROSS?" o "M?RETTI").
+        - Se un numero è ambiguo (es. potrebbe essere 3 o 8), usa null e segnalalo in extraction_warnings.
+        - Se il punteggio di un quarto non è leggibile, usa null per quel quarto.
+
+        FORMATO JSON RICHIESTO:
+        {
+            "metadata": {
+                "schema_version": "2.0",
+                "confidence": <0.0-1.0 fiducia complessiva>,
+                "confidence_fields": {
+                    "home_team": <0.0-1.0>,
+                    "away_team": <0.0-1.0>,
+                    "final_score": <0.0-1.0>,
+                    "quarters": <0.0-1.0>,
+                    "date": <0.0-1.0>,
+                    "home_roster": <0.0-1.0>,
+                    "away_roster": <0.0-1.0>,
+                    "events": <0.0-1.0>,
+                    "officials": <0.0-1.0>
+                },
+                "extraction_warnings": [
+                    "<stringa che descrive ogni campo ambiguo o parzialmente leggibile, incluse le discordanze somma parziali/finale>"
+                ]
+            },
+            "match_info": {
+                "home_team": "<nome squadra o null>",
+                "away_team": "<nome squadra o null>",
+                "competition": "<nome campionato o null>",
+                "date": "<YYYY-MM-DD o null se illeggibile>",
+                "date_digits": "<data trascritta cifra per cifra come scritta sul foglio (es. '11/04/2026') o null>",
+                "city": "<città o null>",
+                "venue": "<nome impianto specifico (es: Piscina Comunale) o null>",
+                "round": "<giornata/fase (es: Giornata 5, Finale) o null>",
+                "group": "<girone (es: Girone A) o null>"
+            },
+            "officials": {
+                "confidence": <0.0-1.0 fiducia sulla lettura degli ufficiali>,
+                "referees": [
+                    {"name": "<COGNOME NOME o null>", "role": "1st|2nd|null"}
+                ],
+                "timekeeper": "<nome segnapunti o null>"
+            },
+            "scores": {
+                "final_score": "<X-Y o null>",
+                "quarters": {
+                    "1": [<home, away> o null],
+                    "2": [<home, away> o null],
+                    "3": [<home, away> or null],
+                    "4": [<home, away> o null]
+                }
+            },
+            "teams": {
+                "home": {
+                    "name": "<nome>",
+                    "coach": "<nome allenatore o null>",
+                    "confidence": <0.0-1.0 fiducia sulla lettura del roster>,
+                    "players": [{"number": <int o null>, "name": "<cognome nome>"}]
+                },
+                "away": {
+                    "name": "<nome>",
+                    "coach": "<nome allenatore o null>",
+                    "confidence": <0.0-1.0 fiducia sulla lettura del roster>,
+                    "players": [{"number": <int o null>, "name": "<cognome nome>"}]
+                }
+            },
+            "events": [
+                {
+                    "type": "GOAL|EXCLUSION_20|YELLOW_CARD|RED_CARD|TIMEOUT|OTHER",
+                    "player_name": "<nome giocatore o null (null per timeout squadra)>",
+                    "team": "home|away",
+                    "minute": <int o null>,
+                    "quarter": <int o null>,
+                    "sanction_duration": <null o intero secondi (es: 20 per esclusione 20 secondi)>
+                }
+            ]
+        }
+
+        Rispondi SOLO con il JSON. Non aggiungere testo, commenti o markdown.
+        """
+
+# Registro delle versioni di prompt selezionabili. Il default di produzione
+# resta "v2": si cambia solo via settings.OCR_PROMPT_VERSION (non impostato
+# in config/settings.py) o per-chiamata (parametro prompt_version, usato dal
+# bench). Aggiungere una versione = una costante sopra + una entry qui.
+OCR_SYSTEM_PROMPTS = {
+    "v2": OCR_SYSTEM_PROMPT_V2,
+    "v3": OCR_SYSTEM_PROMPT_V3,
+}
+
 class BaseVisionProvider:
     """
     Interfaccia base per i provider OCR/Vision.
@@ -317,8 +472,9 @@ class GeminiVisionProvider(BaseVisionProvider):
     """
     Provider reale che utilizza Google Gemini (SDK google-genai) per estrarre
     dati dal referto. Interfaccia extract_data: parametri
-    model/preprocess/sent_image_callback, schema OCR v2 in output, prompt di
-    sistema OCR_SYSTEM_PROMPT_V2. Il modello di default è letto da
+    model/preprocess/sent_image_callback/prompt_version, schema OCR v2 in
+    output, prompt di sistema selezionato da OCR_SYSTEM_PROMPTS (default
+    OCR_SYSTEM_PROMPT_V2). Il modello di default è letto da
     settings.GEMINI_MODEL con fallback a 'gemini-2.5-pro'; --models nel bench
     può passare qualsiasi model string.
     """
@@ -328,11 +484,15 @@ class GeminiVisionProvider(BaseVisionProvider):
         self.client = genai.Client(api_key=getattr(settings, "GEMINI_API_KEY", ""))
 
     def extract_data(self, match_report, model: str = None, preprocess: bool = True,
-                     sent_image_callback=None) -> Tuple[Dict[str, Any], str]:
+                     sent_image_callback=None,
+                     prompt_version: str = None) -> Tuple[Dict[str, Any], str]:
         """
         preprocess=False bypassa ImagePreprocessor e invia i byte grezzi;
         sent_image_callback, se fornita, riceve il path del file effettivamente
-        inviato al modello, prima della chiamata API. Ritorna (data, raw_content).
+        inviato al modello, prima della chiamata API. prompt_version seleziona
+        il prompt di sistema fra OCR_SYSTEM_PROMPTS (override per-chiamata >
+        settings.OCR_PROMPT_VERSION > "v2": il default di produzione resta V2).
+        Ritorna (data, raw_content).
         """
         import mimetypes
         import os
@@ -342,7 +502,16 @@ class GeminiVisionProvider(BaseVisionProvider):
         # Modello: override per-chiamata > settings.GEMINI_MODEL > default
         model = model or getattr(settings, "GEMINI_MODEL", "gemini-2.5-pro")
 
-        logger.info(f"[GeminiVisionProvider] Avvio preprocessing per report {match_report.id} (model={model})...")
+        # Prompt: override per-chiamata > settings.OCR_PROMPT_VERSION > v2
+        prompt_version = prompt_version or getattr(settings, "OCR_PROMPT_VERSION", "v2")
+        if prompt_version not in OCR_SYSTEM_PROMPTS:
+            raise ValueError(
+                f"Prompt version sconosciuta: {prompt_version!r} "
+                f"(disponibili: {', '.join(sorted(OCR_SYSTEM_PROMPTS))})"
+            )
+        system_prompt = OCR_SYSTEM_PROMPTS[prompt_version]
+
+        logger.info(f"[GeminiVisionProvider] Avvio preprocessing per report {match_report.id} (model={model}, prompt={prompt_version})...")
 
         if not match_report.file:
             raise ValueError("Il referto non ha alcun file associato. Impossibile eseguire OCR.")
@@ -381,7 +550,7 @@ class GeminiVisionProvider(BaseVisionProvider):
                     OCR_USER_TEXT,
                 ],
                 config=types.GenerateContentConfig(
-                    system_instruction=OCR_SYSTEM_PROMPT_V2,
+                    system_instruction=system_prompt,
                     response_mime_type="application/json",
                     max_output_tokens=max_output_tokens,
                 ),

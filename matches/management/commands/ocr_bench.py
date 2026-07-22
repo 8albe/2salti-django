@@ -72,7 +72,11 @@ from django.core.management.base import BaseCommand, CommandError
 from django.utils import timezone
 
 from matches.models import MatchReport
-from matches.services.vision_providers import GeminiVisionProvider, OCR_SYSTEM_PROMPT_V2
+from matches.services.vision_providers import (
+    GeminiVisionProvider,
+    OCR_SYSTEM_PROMPT_V2,
+    OCR_SYSTEM_PROMPTS,
+)
 
 # Mappa provider bench: nome CLI -> (setting del modello di default, fallback).
 # NB: la CLASSE del provider viene risolta a runtime dentro handle() leggendo i
@@ -121,9 +125,18 @@ GOLD_OUT_DIR_DEFAULT = os.path.join("ocr_bench_out", "gold")
 # Versione del prompt registrata in ogni run: nome del simbolo + hash del testo.
 # L'hash cambia se il prompt cambia, quindi due run sono confrontabili solo a
 # parità di questa stringa. Read-only sulla pipeline: il prompt non si tocca.
-PROMPT_VERSION = "OCR_SYSTEM_PROMPT_V2@sha256:" + hashlib.sha256(
-    OCR_SYSTEM_PROMPT_V2.encode("utf-8")
-).hexdigest()[:12]
+
+
+def prompt_version_string(version):
+    """Stringa identificativa del prompt selezionato: simbolo + hash del testo."""
+    text = OCR_SYSTEM_PROMPTS[version]
+    return f"OCR_SYSTEM_PROMPT_{version.upper()}@sha256:" + hashlib.sha256(
+        text.encode("utf-8")
+    ).hexdigest()[:12]
+
+
+# Retrocompatibilità: la costante storica resta la stringa del default (v2).
+PROMPT_VERSION = prompt_version_string("v2")
 
 
 def normalize_team_name(name):
@@ -167,7 +180,9 @@ def confidence_key_for(field):
     if field == "away_team_name":
         return "away_team"
     if field == "date":
-        return None
+        # Chiave presente solo nello schema del prompt v3 (confidence dedicata
+        # alla data); con v2 la chiave manca e la confidence resta N/A come prima.
+        return "date"
     return None
 
 
@@ -411,7 +426,8 @@ def aggregate_gold_repeats(per_repeat):
 
 
 def build_gold_proposal(case, data, provider_label, model, resolved_pk, image_path,
-                        image_resolved_from, preprocess, fields, inversion, run_ts):
+                        image_resolved_from, preprocess, fields, inversion, run_ts,
+                        prompt_version_str=PROMPT_VERSION):
     """Costruisce la voce di proposta nello schema di extractions[] dei casi gold.
 
     È una PROPOSTA: va salvata nella directory di output, mai dentro il caso.
@@ -452,7 +468,7 @@ def build_gold_proposal(case, data, provider_label, model, resolved_pk, image_pa
         "bench_run": {
             "provider_cli": provider_label,
             "model": model,
-            "prompt_version": PROMPT_VERSION,
+            "prompt_version": prompt_version_str,
             "preprocessing": preprocess,
             "timestamp": run_ts.isoformat(),
             "image": image_path,
@@ -467,7 +483,8 @@ def build_gold_proposal(case, data, provider_label, model, resolved_pk, image_pa
 
 def build_gold_proposal_repeated(case, per_repeat, provider_label, model, resolved_pk,
                                  image_path, image_resolved_from, preprocess, aggregated,
-                                 summary, run_ts, repeat):
+                                 summary, run_ts, repeat,
+                                 prompt_version_str=PROMPT_VERSION):
     """Come build_gold_proposal, ma per N estrazioni indipendenti (--repeat).
 
     Contiene TUTTE le estrazioni in repeats[] (non solo l'ultima) più l'aggregato
@@ -534,7 +551,7 @@ def build_gold_proposal_repeated(case, per_repeat, provider_label, model, resolv
         "bench_run": {
             "provider_cli": provider_label,
             "model": model,
-            "prompt_version": PROMPT_VERSION,
+            "prompt_version": prompt_version_str,
             "preprocessing": preprocess,
             "timestamp": run_ts.isoformat(),
             "image": image_path,
@@ -693,6 +710,17 @@ class Command(BaseCommand):
             help="Bypassa ImagePreprocessor e invia l'immagine grezza (no auto-rotate, no downscale)",
         )
         parser.add_argument(
+            "--prompt-version",
+            choices=sorted(OCR_SYSTEM_PROMPTS.keys()),
+            default="v2",
+            help=(
+                "Versione del prompt di sistema da usare per l'estrazione "
+                "(default: v2, il prompt di produzione). La versione e l'hash "
+                "del prompt selezionato finiscono nei metadati di run: due run "
+                "sono confrontabili solo a parità di questa stringa."
+            ),
+        )
+        parser.add_argument(
             "--repeat",
             type=int,
             default=1,
@@ -771,9 +799,13 @@ class Command(BaseCommand):
         if dump_dir:
             os.makedirs(dump_dir, exist_ok=True)
 
+        prompt_version = options["prompt_version"]
+        prompt_version_str = prompt_version_string(prompt_version)
+
         if not gold_mode:
             results = self._run_models(
-                provider, provider_name, models, image_opt, preprocess, dump_dir
+                provider, provider_name, models, image_opt, preprocess, dump_dir,
+                prompt_version=prompt_version,
             )
             self._print_show_and_save(results, options)
             if validated_fields is not None and results:
@@ -817,7 +849,7 @@ class Command(BaseCommand):
 
         run_ts = timezone.localtime()
         self.stdout.write(f"Run gold: provider={provider_name} modelli={', '.join(models)}")
-        self.stdout.write(f"  prompt: {PROMPT_VERSION}")
+        self.stdout.write(f"  prompt: {prompt_version_str}")
         self.stdout.write(f"  preprocessing: {'on' if preprocess else 'off'}")
         self.stdout.write(f"  timestamp: {run_ts.isoformat()}")
         self.stdout.write(f"  output proposte: {out_dir}")
@@ -851,11 +883,14 @@ class Command(BaseCommand):
                     case, case_id, provider, provider_name, provider_label, models,
                     image_path, resolved_pk, resolved_from, preprocess, dump_dir,
                     out_dir, run_ts, repeat, options,
+                    prompt_version=prompt_version,
+                    prompt_version_str=prompt_version_str,
                 )
                 continue
 
             results = self._run_models(
-                provider, provider_name, models, image_path, preprocess, dump_dir
+                provider, provider_name, models, image_path, preprocess, dump_dir,
+                prompt_version=prompt_version,
             )
             self._print_show_and_save(results, options, case_id=case_id)
 
@@ -865,6 +900,7 @@ class Command(BaseCommand):
                 proposal = build_gold_proposal(
                     case, data, provider_label, model, resolved_pk, image_path,
                     resolved_from, preprocess, fields, inversion, run_ts,
+                    prompt_version_str=prompt_version_str,
                 )
                 fname = (
                     f"{case_id}__{safe_model_slug(model)}_"
@@ -928,7 +964,8 @@ class Command(BaseCommand):
             return path, pk, None
         return None, None, "nessuna immagine risolvibile — " + "; ".join(tried) + "."
 
-    def _run_models(self, provider, provider_name, models, image_path, preprocess, dump_dir):
+    def _run_models(self, provider, provider_name, models, image_path, preprocess, dump_dir,
+                    prompt_version="v2"):
         """Esegue l'estrazione per ogni modello e stampa la tabella. Ritorna {model: data}."""
         # Stub minimale: extract_data usa solo .id (logging) e .file.path
         bench_report = SimpleNamespace(
@@ -954,6 +991,8 @@ class Command(BaseCommand):
             extract_kwargs = {"model": model}
             if not preprocess:
                 extract_kwargs["preprocess"] = False
+            if prompt_version != "v2":
+                extract_kwargs["prompt_version"] = prompt_version
             if dump_dir:
                 ts = timezone.localtime().strftime("%Y%m%d_%H%M%S")
 
@@ -1078,7 +1117,8 @@ class Command(BaseCommand):
     def _process_gold_case_repeated(self, case, case_id, provider, provider_name,
                                      provider_label, models, image_path, resolved_pk,
                                      resolved_from, preprocess, dump_dir, out_dir, run_ts,
-                                     repeat, options):
+                                     repeat, options, prompt_version="v2",
+                                     prompt_version_str=PROMPT_VERSION):
         """--repeat N: esegue N estrazioni indipendenti per modello e ne misura la varianza.
 
         Ogni ripetizione è una chiamata reale indipendente (stesso modello, stessa
@@ -1090,7 +1130,8 @@ class Command(BaseCommand):
         for i in range(1, repeat + 1):
             self.stdout.write(f"\n-- Ripetizione {i}/{repeat} --")
             results = self._run_models(
-                provider, provider_name, models, image_path, preprocess, dump_dir
+                provider, provider_name, models, image_path, preprocess, dump_dir,
+                prompt_version=prompt_version,
             )
             self._print_show_and_save(results, options, case_id=f"{case_id}__run{i}")
             for model, data in results.items():
@@ -1117,6 +1158,7 @@ class Command(BaseCommand):
             proposal = build_gold_proposal_repeated(
                 case, per_repeat, provider_label, model, resolved_pk, image_path,
                 resolved_from, preprocess, aggregated, summary, run_ts, len(data_list),
+                prompt_version_str=prompt_version_str,
             )
             fname = (
                 f"{case_id}__{safe_model_slug(model)}_repeat{len(data_list)}_"

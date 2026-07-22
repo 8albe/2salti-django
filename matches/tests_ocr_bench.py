@@ -75,7 +75,8 @@ class OcrBenchCommandTest(TestCase):
         mock_provider = MagicMock()
         mock_class.return_value = mock_provider
 
-        def _fake_extract(report, model=None, preprocess=True, sent_image_callback=None):
+        def _fake_extract(report, model=None, preprocess=True, sent_image_callback=None,
+                          prompt_version=None):
             # Stesso contratto del provider reale: la callback riceve il path
             # dei byte inviati, prima della chiamata API.
             if sent_image_callback:
@@ -246,6 +247,17 @@ class OcrBenchCommandTest(TestCase):
         )
         kwargs = mock_provider.extract_data.call_args.kwargs
         self.assertEqual(set(kwargs), {"model"})
+
+    def test_prompt_version_v3_propagates_to_provider(self):
+        """--prompt-version v3 passa prompt_version='v3' al provider; v2 resta implicito."""
+        mock_provider = self._patch_provider()
+        call_command(
+            "ocr_bench", "--image", self.image_path, "--models", "gemini-2.5-pro",
+            "--prompt-version", "v3",
+            stdout=StringIO(),
+        )
+        kwargs = mock_provider.extract_data.call_args.kwargs
+        self.assertEqual(kwargs.get("prompt_version"), "v3")
 
     def test_no_preprocess_propagates_flag(self):
         """--no-preprocess passa preprocess=False al provider."""
@@ -447,7 +459,8 @@ class OcrBenchGoldModeTest(TestCase):
         mock_provider = MagicMock()
         mock_class.return_value = mock_provider
 
-        def _fake_extract(report, model=None, preprocess=True, sent_image_callback=None):
+        def _fake_extract(report, model=None, preprocess=True, sent_image_callback=None,
+                          prompt_version=None):
             return extraction_factory(model), "raw"
 
         mock_provider.extract_data.side_effect = _fake_extract
@@ -497,6 +510,17 @@ class OcrBenchGoldModeTest(TestCase):
         self.assertTrue(run["preprocessing"])
         self.assertTrue(run["timestamp"])
         self.assertEqual(run["image_resolved_from"], f"db_report_pk={self.report.pk}")
+
+    def test_gold_case_prompt_v3_recorded_in_proposal(self):
+        """Con --prompt-version v3 la proposta registra simbolo e hash del prompt V3."""
+        case_id = self._write_case(report_pk=self.report.pk)
+        output = self._call_gold("--gold-case", case_id, "--prompt-version", "v3")
+        self.assertIn("OCR_SYSTEM_PROMPT_V3@sha256:", output)
+        _fname, proposal = self._proposal()
+        self.assertIn(
+            "OCR_SYSTEM_PROMPT_V3@sha256:", proposal["bench_run"]["prompt_version"]
+        )
+        self.assertNotIn("OCR_SYSTEM_PROMPT_V2", proposal["bench_run"]["prompt_version"])
 
     def test_gold_case_wrong_and_null_counted_separately(self):
         """wrong e null distinti: l'astensione dichiarata non è un errore."""
@@ -902,3 +926,48 @@ class OcrBenchGoldModeTest(TestCase):
         )
         self.assertIn("nessuna estrazione riuscita su 3 tentativi", out.getvalue())
         self.assertEqual(os.listdir(self.out_dir), [])
+
+
+class OcrPromptV3ContentTest(TestCase):
+    """Guardrail sul contenuto dei prompt: V2 immutato, V3 con le tre modifiche del giro 22/07.
+
+    V2 è il prompt di produzione: il suo hash è fissato qui perché la baseline
+    §8.9 (syllabus 8) è confrontabile solo a parità di prompt — se V2 cambia,
+    questo test deve fallire e forzare una decisione esplicita.
+    """
+
+    def test_v2_hash_is_unchanged(self):
+        # Genealogia: la baseline §8.9 (20/07) girò su 31f3335733e2; il 21/07
+        # il commit 5758642 ha aggiunto a V2 la derivazione del "quarter" degli
+        # eventi dalla sezione della storia cronometrica (campo NON coperto
+        # dalla truth gold), portando l'hash a a0f50fbe5244. Se questo test
+        # fallisce, V2 è cambiato di nuovo: aggiornare l'hash è una decisione
+        # esplicita, perché rompe la confrontabilità dei run bench.
+        import hashlib
+        from matches.services.vision_providers import OCR_SYSTEM_PROMPT_V2
+        self.assertEqual(
+            hashlib.sha256(OCR_SYSTEM_PROMPT_V2.encode("utf-8")).hexdigest()[:12],
+            "a0f50fbe5244",
+        )
+
+    def test_registry_exposes_v2_and_v3(self):
+        from matches.services.vision_providers import (
+            OCR_SYSTEM_PROMPT_V2, OCR_SYSTEM_PROMPT_V3, OCR_SYSTEM_PROMPTS,
+        )
+        self.assertEqual(
+            OCR_SYSTEM_PROMPTS,
+            {"v2": OCR_SYSTEM_PROMPT_V2, "v3": OCR_SYSTEM_PROMPT_V3},
+        )
+
+    def test_v3_contains_the_three_experimental_changes(self):
+        from matches.services.vision_providers import OCR_SYSTEM_PROMPT_V3
+        # (a) anti-riconciliazione sulla griglia parziali
+        self.assertIn("NON aggiustare niente", OCR_SYSTEM_PROMPT_V3)
+        self.assertIn("trascrizione\n             INDIPENDENTE", OCR_SYSTEM_PROMPT_V3)
+        # (b) trascrizione letterale dei nomi
+        self.assertIn("FRUSINO", OCR_SYSTEM_PROMPT_V3)
+        self.assertIn("NON normalizzare MAI", OCR_SYSTEM_PROMPT_V3)
+        # (c) data cifra per cifra + campi additivi dello schema
+        self.assertIn("cifra per cifra", OCR_SYSTEM_PROMPT_V3)
+        self.assertIn('"date_digits"', OCR_SYSTEM_PROMPT_V3)
+        self.assertIn('"date": <0.0-1.0>', OCR_SYSTEM_PROMPT_V3)
