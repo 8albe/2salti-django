@@ -907,6 +907,39 @@ class OcrBenchGoldModeTest(TestCase):
         self.assertEqual(away_scores, ["10-8", "10-9", "10-10"])
         self.assertEqual(proposal["aggregate"]["final_score_away"]["stability"], "instabile")
 
+    def test_repeat_proposal_persists_extraction_warnings(self):
+        """Ogni ripetizione porta i suoi extraction_warnings (segnale somma!=finale misurabile)."""
+        def factory(model):
+            data = gold_truth_extraction(model)
+            data["metadata"]["extraction_warnings"] = [
+                "somma parziali (5) diversa dal finale casa (4)"
+            ]
+            return data
+
+        case_id = self._write_case(report_pk=self.report.pk)
+        self._call_gold("--gold-case", case_id, "--repeat", "2", factory=factory)
+        _, proposal = self._proposal()
+        self.assertEqual(len(proposal["repeats"]), 2)
+        for rep in proposal["repeats"]:
+            self.assertEqual(
+                rep["extraction_warnings"],
+                ["somma parziali (5) diversa dal finale casa (4)"],
+            )
+
+    def test_single_proposal_persists_extraction_warnings(self):
+        """Anche la proposta a estrazione singola porta gli extraction_warnings."""
+        def factory(model):
+            data = gold_truth_extraction(model)
+            data["metadata"]["extraction_warnings"] = ["nome away parzialmente leggibile"]
+            return data
+
+        case_id = self._write_case(report_pk=self.report.pk)
+        self._call_gold("--gold-case", case_id, factory=factory)
+        _, proposal = self._proposal()
+        self.assertEqual(
+            proposal["extraction_warnings"], ["nome away parzialmente leggibile"]
+        )
+
     def test_repeat_all_calls_failing_skips_model_without_crashing(self):
         """Se ogni ripetizione fallisce, il modello viene saltato (non un traceback)."""
         patcher = patch("matches.management.commands.ocr_bench.GeminiVisionProvider")
@@ -971,3 +1004,216 @@ class OcrPromptV3ContentTest(TestCase):
         self.assertIn("cifra per cifra", OCR_SYSTEM_PROMPT_V3)
         self.assertIn('"date_digits"', OCR_SYSTEM_PROMPT_V3)
         self.assertIn('"date": <0.0-1.0>', OCR_SYSTEM_PROMPT_V3)
+
+
+class OcrZonePromptTest(TestCase):
+    """Guardrail sul prompt del secondo passaggio (zone) e sui registri dei prompt."""
+
+    def test_second_pass_registry_and_all_prompts(self):
+        from matches.services.vision_providers import (
+            OCR_SYSTEM_PROMPT_V2, OCR_SYSTEM_PROMPT_V3, OCR_SYSTEM_PROMPT_ZONE,
+            OCR_SYSTEM_PROMPTS, OCR_SECOND_PASS_PROMPTS, OCR_ALL_PROMPTS,
+        )
+        # La registry di produzione resta v2/v3: zone è tenuta separata.
+        self.assertEqual(
+            OCR_SYSTEM_PROMPTS, {"v2": OCR_SYSTEM_PROMPT_V2, "v3": OCR_SYSTEM_PROMPT_V3}
+        )
+        self.assertEqual(OCR_SECOND_PASS_PROMPTS, {"zone": OCR_SYSTEM_PROMPT_ZONE})
+        self.assertEqual(
+            OCR_ALL_PROMPTS,
+            {"v2": OCR_SYSTEM_PROMPT_V2, "v3": OCR_SYSTEM_PROMPT_V3,
+             "zone": OCR_SYSTEM_PROMPT_ZONE},
+        )
+
+    def test_zone_prompt_inherits_v3_rules_and_is_minimal(self):
+        from matches.services.vision_providers import OCR_SYSTEM_PROMPT_ZONE
+        # eredita anti-riconciliazione (parziali = letture, discordanza non aggiustata)
+        self.assertIn("NON aggiustare niente", OCR_SYSTEM_PROMPT_ZONE)
+        self.assertIn("trascrizione INDIPENDENTE", OCR_SYSTEM_PROMPT_ZONE)
+        # eredita la data cifra per cifra
+        self.assertIn("cifra per cifra", OCR_SYSTEM_PROMPT_ZONE)
+        self.assertIn('"date_digits"', OCR_SYSTEM_PROMPT_ZONE)
+        # secondo atto di lettura, indipendente
+        self.assertIn("SECONDO atto", OCR_SYSTEM_PROMPT_ZONE)
+        # output minimale: niente roster/eventi/ufficiali
+        self.assertNotIn("players", OCR_SYSTEM_PROMPT_ZONE)
+        self.assertNotIn("officials", OCR_SYSTEM_PROMPT_ZONE)
+        self.assertNotIn("events", OCR_SYSTEM_PROMPT_ZONE)
+
+    def test_extract_data_resolves_zone_prompt(self):
+        """extract_data accetta prompt_version='zone' (via OCR_ALL_PROMPTS)."""
+        from matches.services.vision_providers import (
+            GeminiVisionProvider, OCR_ALL_PROMPTS,
+        )
+        # Non facciamo la chiamata reale: verifichiamo solo che la risoluzione del
+        # prompt non sollevi ValueError per 'zone' e la sollevi per un nome ignoto.
+        self.assertIn("zone", OCR_ALL_PROMPTS)
+        self.assertNotIn("zone", __import__(
+            "matches.services.vision_providers", fromlist=["OCR_SYSTEM_PROMPTS"]
+        ).OCR_SYSTEM_PROMPTS)
+
+
+def zone_extraction(final_score, quarters, date, warnings=None, date_digits=None):
+    """Estrazione 'solo zona' del secondo passaggio (schema minimale)."""
+    return {
+        "metadata": {
+            "confidence": 0.95,
+            "confidence_fields": {"final_score": 1.0, "quarters": 0.9, "date": 1.0},
+            "extraction_warnings": warnings or [],
+        },
+        "match_info": {"date": date, "date_digits": date_digits},
+        "scores": {"final_score": final_score, "quarters": quarters},
+    }
+
+
+class OcrBenchSecondPassTest(TestCase):
+    """--second-pass: doppia estrazione per zona, confronto col primo passaggio riusato."""
+
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, self.tmp)
+        self.cases_dir = os.path.join(self.tmp, "cases")
+        self.first_dir = os.path.join(self.tmp, "first")
+        self.out_dir = os.path.join(self.tmp, "out")
+        self.media_root = os.path.join(self.tmp, "media")
+        os.makedirs(self.cases_dir)
+        override = override_settings(MEDIA_ROOT=self.media_root)
+        override.enable()
+        self.addCleanup(override.disable)
+        self.report = MatchReport.objects.create(
+            file=SimpleUploadedFile("referto_gold.jpg", b"gold image", content_type="image/jpeg"),
+            status=MatchReport.Status.NEEDS_REVIEW,
+        )
+        self.case_id = "2026-01-01_test-home_vs_test-away"
+        case = {
+            "case_id": self.case_id,
+            "verified_by": "Test Umano",
+            "match": {
+                "date": "2026-01-01",
+                "home_team": {"name_on_paper": "CASA"},
+                "away_team": {"name_on_paper": "OSPITI"},
+            },
+            "truth": {
+                "scores": {
+                    "final_score": "4-19",
+                    "quarters": {"1": [1, 3], "2": [0, 5], "3": [3, 6], "4": [0, 5]},
+                }
+            },
+            "not_verified": [],
+            "extractions": [{"db_report_pk": self.report.pk}],
+        }
+        with open(os.path.join(self.cases_dir, f"{self.case_id}.json"), "w") as f:
+            json.dump(case, f)
+
+    def _call_bench(self, factory, *args):
+        with patch("matches.management.commands.ocr_bench.GeminiVisionProvider") as mock_class:
+            mock_provider = MagicMock()
+            mock_class.return_value = mock_provider
+
+            def _fake_extract(report, model=None, preprocess=True,
+                              sent_image_callback=None, prompt_version=None):
+                return factory(model, prompt_version), "raw"
+
+            mock_provider.extract_data.side_effect = _fake_extract
+            out = StringIO()
+            call_command(
+                "ocr_bench", "--models", "gemini-2.5-pro",
+                "--cases-dir", self.cases_dir, *args, stdout=out,
+            )
+            return out.getvalue()
+
+    def _gen_first_pass(self, first_data, repeat=3):
+        """Genera la proposta del primo passaggio in first_dir (schema --repeat)."""
+        self._call_bench(
+            lambda model, pv: first_data,
+            "--gold-case", self.case_id, "--repeat", str(repeat),
+            "--out-dir", self.first_dir,
+        )
+
+    def _run_second_pass(self, zone_data, repeat=3):
+        return self._call_bench(
+            lambda model, pv: zone_data,
+            "--gold-case", self.case_id, "--repeat", str(repeat),
+            "--second-pass", "--first-pass-dir", self.first_dir,
+            "--out-dir", self.out_dir,
+        )
+
+    def _second_pass_proposal(self):
+        files = [f for f in os.listdir(self.out_dir) if "_secondpass" in f]
+        self.assertEqual(len(files), 1)
+        with open(os.path.join(self.out_dir, files[0])) as f:
+            return json.load(f)
+
+    def test_second_pass_flags_divergence_on_final_score(self):
+        """Primo legge 5-19 (sbagliato), secondo 4-19 (giusto): divergenza -> review."""
+        first = zone_extraction(
+            "5-19", {"1": [1, 3], "2": [0, 5], "3": [3, 6], "4": [0, 5]}, "2026-01-01"
+        )
+        zone = zone_extraction(
+            "4-19", {"1": [1, 3], "2": [0, 5], "3": [3, 6], "4": [0, 5]}, "2026-01-01"
+        )
+        self._gen_first_pass(first, repeat=3)
+        output = self._run_second_pass(zone, repeat=3)
+        self.assertIn("DIVERGE", output)
+        self.assertIn("NEEDS_REVIEW", output)
+        proposal = self._second_pass_proposal()
+        self.assertEqual(proposal["mode"], "second_pass_divergence")
+        self.assertEqual(proposal["summary"]["repeats_compared"], 3)
+        self.assertEqual(proposal["summary"]["repeats_diverging"], 3)
+        self.assertEqual(proposal["summary"]["by_zone"]["final_score"], 3)
+        self.assertEqual(proposal["summary"]["by_zone"]["quarters"], 0)
+        self.assertTrue(proposal["summary"]["needs_review_any"])
+        self.assertEqual(
+            proposal["repeats"][0]["divergence"]["diverging_zones"], ["final_score"]
+        )
+
+    def test_second_pass_no_divergence_when_reads_agree(self):
+        agree = zone_extraction(
+            "4-19", {"1": [1, 3], "2": [0, 5], "3": [3, 6], "4": [0, 5]}, "2026-01-01"
+        )
+        self._gen_first_pass(agree, repeat=2)
+        output = self._run_second_pass(agree, repeat=2)
+        self.assertIn("concorde", output)
+        proposal = self._second_pass_proposal()
+        self.assertEqual(proposal["summary"]["repeats_diverging"], 0)
+        self.assertFalse(proposal["summary"]["needs_review_any"])
+
+    def test_second_pass_persists_zone_extraction_warnings(self):
+        first = zone_extraction("4-19", {"1": [1, 3]}, "2026-01-01")
+        zone = zone_extraction(
+            "4-19", {"1": [1, 3]}, "2026-01-01",
+            warnings=["somma parziali != finale casa (segnalata)"],
+        )
+        self._gen_first_pass(first, repeat=2)
+        self._run_second_pass(zone, repeat=2)
+        proposal = self._second_pass_proposal()
+        self.assertEqual(
+            proposal["repeats"][0]["second"]["extraction_warnings"],
+            ["somma parziali != finale casa (segnalata)"],
+        )
+
+    def test_second_pass_requires_first_pass_dir(self):
+        with self.assertRaises(CommandError):
+            self._call_bench(
+                lambda model, pv: zone_extraction("4-19", {}, "2026-01-01"),
+                "--gold-case", self.case_id, "--second-pass", "--out-dir", self.out_dir,
+            )
+
+    def test_first_pass_dir_requires_second_pass(self):
+        with self.assertRaises(CommandError):
+            self._call_bench(
+                lambda model, pv: zone_extraction("4-19", {}, "2026-01-01"),
+                "--gold-case", self.case_id,
+                "--first-pass-dir", self.first_dir, "--out-dir", self.out_dir,
+            )
+
+    def test_second_pass_requires_gold_mode(self):
+        fd, loose = tempfile.mkstemp(suffix=".jpg", dir=self.tmp)
+        with os.fdopen(fd, "wb") as f:
+            f.write(b"img")
+        os.makedirs(self.first_dir, exist_ok=True)
+        with self.assertRaises(CommandError):
+            self._call_bench(
+                lambda model, pv: zone_extraction("4-19", {}, "2026-01-01"),
+                "--image", loose, "--second-pass", "--first-pass-dir", self.first_dir,
+            )

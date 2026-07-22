@@ -272,6 +272,100 @@ OCR_SYSTEM_PROMPTS = {
     "v3": OCR_SYSTEM_PROMPT_V3,
 }
 
+# Prompt "solo zona" per il SECONDO passaggio della doppia estrazione
+# (Macro 8, giro 2026-07-22). Non è un prompt di produzione a sé: è la seconda
+# lettura, indipendente dalla prima, ristretta alle tre zone in cui vivono gli
+# errori stabili misurati sul gold — griglia 'Risultati parziali' (8 celle),
+# 'Risultato finale' di ciascuna squadra, data della gara. Output JSON minimale
+# (solo quei campi + confidence + warnings). Eredita da V3 le due regole che
+# contano su queste zone: anti-riconciliazione (parziali = letture, mai calcoli;
+# finale trascritto indipendentemente, discordanza somma/finale segnalata e MAI
+# aggiustata) e trascrizione letterale cifra-per-cifra (la data non si deduce dal
+# contesto). Non estrae nomi/roster/eventi: quelli restano al primo passaggio.
+# La seconda chiamata NON deve MAI ricevere il risultato della prima: l'indipendenza
+# è il punto dell'esperimento (secondo atto di lettura, non confronto guidato).
+OCR_SYSTEM_PROMPT_ZONE = """
+        Sei un esperto di analisi di referti di partite di pallanuoto (FIN - GUG).
+        Riceverai la FOTO di un referto ufficiale. Questo è un SECONDO atto di
+        lettura, indipendente: leggi SOLO tre zone del foglio e ignora tutto il
+        resto (roster, eventi, ufficiali, campionato). Non hai memoria di alcuna
+        lettura precedente: trascrivi ciò che vedi ORA sul foglio, mai ciò che
+        "ti aspetteresti" di leggere.
+
+        Le tre zone da leggere, e SOLO queste:
+
+        1. GRIGLIA 'Risultati parziali' (le 8 celle al centro del foglio):
+           - Trascrivi le 8 celle ESATTAMENTE come le vedi, cella per cella. Ogni
+             cella è una LETTURA, mai un calcolo: NON ricavare nessuna cella da
+             altre celle né dal risultato finale.
+           - Se il punteggio di un quarto non è leggibile, usa null per quel quarto.
+
+        2. 'Risultato finale' di ciascuna squadra (il numero in fondo alla casella
+           di ogni squadra: casa in alto a sinistra, ospite in basso a sinistra):
+           - È una trascrizione INDIPENDENTE del numero scritto: NON è la somma dei
+             parziali e NON va ricavato né corretto a partire da essi.
+           - Se la somma dei parziali NON torna col risultato finale trascritto,
+             NON aggiustare niente: riporta i valori discordi esattamente come
+             sono scritti e segnala la discordanza in extraction_warnings. La
+             discordanza è un esito ammesso e prezioso, non un errore da nascondere.
+
+        3. DATA della gara:
+           - Leggila cifra per cifra come scritta sul foglio, senza dedurla dal
+             contesto (stagione, campionato, altre scritte sul foglio).
+           - Riporta in "date_digits" la trascrizione esatta come scritta
+             (es. "11/04/2026") e in "date" la stessa data in formato YYYY-MM-DD.
+           - Se anche una sola cifra è incerta, usa null in "date" e segnala il
+             dubbio in extraction_warnings.
+
+        REGOLE CRITICHE:
+        - Se un dato è ILLEGGIBILE, PARZIALE o AMBIGUO: usa null. NON INDOVINARE MAI.
+        - NON normalizzare, NON dedurre, NON correggere verso valori "attesi":
+          trascrivi esattamente le cifre scritte, anche se il risultato sembra
+          insolito o la somma non torna.
+
+        FORMATO JSON RICHIESTO (SOLO questi campi, niente altro):
+        {
+            "metadata": {
+                "schema_version": "zone-1.0",
+                "confidence": <0.0-1.0 fiducia complessiva sulle tre zone>,
+                "confidence_fields": {
+                    "final_score": <0.0-1.0>,
+                    "quarters": <0.0-1.0>,
+                    "date": <0.0-1.0>
+                },
+                "extraction_warnings": [
+                    "<ogni ambiguità o discordanza somma parziali/finale>"
+                ]
+            },
+            "match_info": {
+                "date": "<YYYY-MM-DD o null se illeggibile>",
+                "date_digits": "<data trascritta cifra per cifra come scritta, o null>"
+            },
+            "scores": {
+                "final_score": "<X-Y o null>",
+                "quarters": {
+                    "1": [<home, away> o null],
+                    "2": [<home, away> o null],
+                    "3": [<home, away> o null],
+                    "4": [<home, away> o null]
+                }
+            }
+        }
+
+        Rispondi SOLO con il JSON. Non aggiungere testo, commenti o markdown.
+        """
+
+# Registro dei prompt del secondo passaggio (doppia estrazione). Tenuto SEPARATO
+# da OCR_SYSTEM_PROMPTS: "zone" non è una versione di prompt di produzione (non
+# estrae roster/eventi), non va mai usata come OCR_PROMPT_VERSION di default.
+OCR_SECOND_PASS_PROMPTS = {
+    "zone": OCR_SYSTEM_PROMPT_ZONE,
+}
+
+# Vista unificata usata dalla risoluzione del prompt (extract_data) e dal bench:
+# accetta sia le versioni di produzione sia i prompt del secondo passaggio.
+OCR_ALL_PROMPTS = {**OCR_SYSTEM_PROMPTS, **OCR_SECOND_PASS_PROMPTS}
+
 class BaseVisionProvider:
     """
     Interfaccia base per i provider OCR/Vision.
@@ -502,14 +596,18 @@ class GeminiVisionProvider(BaseVisionProvider):
         # Modello: override per-chiamata > settings.GEMINI_MODEL > default
         model = model or getattr(settings, "GEMINI_MODEL", "gemini-2.5-pro")
 
-        # Prompt: override per-chiamata > settings.OCR_PROMPT_VERSION > v2
+        # Prompt: override per-chiamata > settings.OCR_PROMPT_VERSION > v2.
+        # Risoluzione su OCR_ALL_PROMPTS: include sia le versioni di produzione
+        # (v2/v3) sia i prompt del secondo passaggio (zone), così il bench può
+        # richiedere "zone" per-chiamata senza che questo diventi una versione
+        # di produzione (OCR_PROMPT_VERSION resta v2 salvo decisione esplicita).
         prompt_version = prompt_version or getattr(settings, "OCR_PROMPT_VERSION", "v2")
-        if prompt_version not in OCR_SYSTEM_PROMPTS:
+        if prompt_version not in OCR_ALL_PROMPTS:
             raise ValueError(
                 f"Prompt version sconosciuta: {prompt_version!r} "
-                f"(disponibili: {', '.join(sorted(OCR_SYSTEM_PROMPTS))})"
+                f"(disponibili: {', '.join(sorted(OCR_ALL_PROMPTS))})"
             )
-        system_prompt = OCR_SYSTEM_PROMPTS[prompt_version]
+        system_prompt = OCR_ALL_PROMPTS[prompt_version]
 
         logger.info(f"[GeminiVisionProvider] Avvio preprocessing per report {match_report.id} (model={model}, prompt={prompt_version})...")
 
