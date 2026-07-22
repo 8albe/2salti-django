@@ -495,6 +495,94 @@ fouled out per giocatore/partita/stagione) sono idee di prodotto in
 differenza delle statistiche avanzate del §1 di FUTURE_IDEAS, che una fonte reale non
 l'hanno.
 
+### 8.15 Misura V3.1 sul gold — eventi, roster e rigori (2026-07-22)
+
+Primo re-run del gold sul prompt **V3.1** (`OCR_SYSTEM_PROMPT_V3@sha256:be51e9c6bc42`),
+rimandato in §8.14. È anche la **prima** misura possibile su EVENTI e ROSTER: la truth
+Olympic è stata promossa (44 eventi, 2 roster, §8.14) e le proposte del bench ora
+persistono il contenuto grezzo eventi/roster (commit `da27fd4`) — senza quello il confronto
+a contenuto è impossibile. Run: `gemini-2.5-pro`, `--repeat 5` × 6 casi = **30 chiamate**
+(5 via `--gold-all` + Triscelon con `--image`, come §8.12), preprocessing on. Proposte in
+`ocr_bench_out/gold_v3_1_20260722/` su dev (D1: mai riversate nei casi). **Costo reale: 30
+chiamate, 76.770 token in, 142.761 out, $1,52** a listino ($1,25/$10 per M); latenza media
+88s (referto Olympic denso di eventi → output alto). Zero chiamate fallite.
+
+**Punteggi — nessuna regressione attribuibile al prompt.** Sui 78 campi (finale/parziali/
+nomi/data), V3.1 vs §8.12 (V3): stabili-corretti **58 vs 59**, stabili-SBAGLIATI **3 vs 2**,
+instabili **15 vs 15**, ambigui **2 vs 2**. Il prompt dei campi punteggio è **identico byte
+per byte** fra V3 e V3.1 (§8.14: cambia solo la sezione eventi), quindi lo scarto 58/3 vs
+59/2 è **varianza di campionamento**, non effetto del prompt rigori. Il campo che diventa
+stabile-sbagliato (Bellator `quarter_3_home`, verità 3, letto **2**) leggeva già "2" in
+maggioranza in §8.12 (3/5 campioni → ora 5/5): stesso valore sbagliato, solo più
+concentrato. I due errori stabili duri restano **invariati** — Bellator finale casa (5≠4) e
+Triscelon data (28≠25). Inversioni casa/trasferta **1/30**. **Verdetto: i rigori non hanno
+introdotto regressioni sui punteggi.**
+
+**Eventi/roster Olympic (vs truth 20 gol casa / 1 ospite, 44 eventi).**
+- **Gol casa estratti: 20/21/19/21/19** sui 5 run (verità 20) — contro la **baseline 11/20**
+  del referto 11. Il difetto di completezza della cronologia è **chiuso**: ±1 gol, esatto
+  (20) nel run 1.
+- **Gol con autore: 21/22/21/22/19** — **tutti** i gol hanno `player_name`. Baseline: **zero**.
+  È la causa diretta del blocker "Zero Eventi", ora rimosso (vedi sotto).
+- **Distribuzione per periodo:** il run 1 è **perfetto** (5-0/4-0/5-1/6-0 = truth). Gli altri
+  sbagliano solo la collocazione dell'unico gol del Libertas.
+- **Gol del Libertas nel periodo giusto (P3):** **1/5** — solo il run 1 lo mette in P3; i run
+  2/4/5 lo spostano in **P4**, il run 3 mette 2 gol in P4. Errore di periodo residuo, non di
+  lettura del gol.
+- **Roster:** casa **14/15 esatti + 1 approx, 0 mismatch** su tutti i run; ospite **9/13
+  esatti (11 confrontabili) + 2 approx, 0 mismatch** (#5 e #10 vuoti in truth, fuori
+  confronto). **Lo slittamento di numerazione dal #10 NON si ripresenta:** i numeri estratti
+  dell'ospite sono `[1..9, 11, 12, 13]` in tutti i 5 run — la casella vuota #10 è percepita e
+  11/12/13 restano ai numeri giusti.
+
+**Rigori (novità V3.1).**
+- **Tipi fuori enum: ELIMINATI.** `PENALTY_GOAL` (e ogni tipo non-enum) **0 occorrenze** su
+  tutti i 6 casi × 5 run. Baseline referto 11: `PENALTY_GOAL` ×1. Il fix del prompt V3.1
+  funziona: il gol su rigore è ora `type=GOAL` con `is_penalty`, quindi **conta**.
+- **Il modello USA `is_penalty`:** 158 EXCLUSION_20 + 111 GOAL marcati su tutti i run.
+- **Olympic vs 7 rigori-truth:** il modello marca **esattamente 7** espulsioni `is_penalty`
+  (run 1–4; 8 nel run 5). Applicando la **regola derivata** (accoppiamento clock+periodo)
+  all'estrazione: realizzati/non **5/2, 5/2, 6/1, 3/4, 4/4** — la truth derivata è **5/2**
+  (run 1–2 esatti, run 3 vicino). **Limite di merito:** l'estrazione salva solo il minuto
+  intero (`minute`), non `mm:ss`, quindi il match posizionale esatto (squadra+periodo+clock)
+  con la truth non è calcolabile; sul multiset (squadra, periodo) l'overlap è **5/7**. Il
+  modello marca tutte le 7 come `away` e **manca l'unica espulsione `home`** (fallo B#12 che
+  dà il rigore al Libertas). Falsi positivi modesti (sovra-marcatura P3/P4, +1 nel run 5).
+
+**Ricalcolo dei 4 blocker del referto 11 (livello FULL, per run).**
+| Blocker baseline (referto 11) | Esito V3.1 |
+|---|---|
+| Zero Eventi (0 gol con autore) | **CHIUSO** — 0/5 run: tutti i gol hanno autore |
+| Incoerenza eventi CASA (11 ≠ 20) | **Sostanzialmente chiuso** — ora 20/21/19/21/19; sparisce nel run 1, altrove ±1 |
+| Per-periodo P3 OSPITE 0 vs 1 (difetto, PENALTY_GOAL scartato) | **Chiuso nel run 1**; riappare 2–5 solo perché il gol Libertas finisce in P4 |
+| Per-periodo P4 OSPITE (eccesso) | Legato allo stesso errore di periodo del gol Libertas |
+
+Nota: sul dato **grezzo del bench** compare un blocker "Riconciliazione incompleta" in tutti
+i run — è un **artefatto**: il bench non esegue lo step di riconciliazione della pipeline
+(mappa vuota → ogni evento con nome scatta), non si presenta in produzione. I blocker
+*strutturali* del referto 11 sono chiusi o ridotti a rumore ±1; il residuo reale è la
+**collocazione di periodo** dell'unico gol ospite.
+
+**Validazione >3 espulsioni su dati reali: SCATTA.** Il check `players_over_exclusion_limit`
+si attiva su più casi/run (es. Salerno `muro p.` 5, `garessan c.` 5; Triscelon `chinnici a.`
+5; Olympic run 3 due giocatori a 4) — segnala correttamente lo sforamento del limite di 3,
+sintomo di errore di lettura (nomi collassati o eventi duplicati). Il limite noto (raggruppa
+per `player_name`) qui **non morde**, perché V3.1 fornisce gli autori: con nome presente il
+check attribuisce e conta. Su un run degradato (Olympic run 5) compare un "giocatore" di
+nome `4` — lettura degradata che il check comunque intercetta.
+
+**Raccomandazione — cosa attaccare dopo.** Il prompt V3.1 ha **risolto la classe che lo ha
+motivato** (autori dei gol → Zero Eventi chiuso; `PENALTY_GOAL` → tipo enum; completezza
+cronologia 11→~20). I due residui, in ordine di valore:
+1. **Collocazione di periodo del gol isolato** (Libertas P3→P4 in 4/5): è il difetto che
+   tiene vivi i blocker per-periodo. Candidato: nel prompt, legare esplicitamente ogni gol al
+   confine di periodo del cronometro (il clock a scalare riparte a ~8:00 a ogni periodo).
+2. **Granularità del clock degli eventi** (`minute` intero invece di `mm:ss`): senza i
+   secondi l'accoppiamento rigore↔gol e il match posizionale coi rigori-truth non sono
+   verificabili con precisione. Candidato: chiedere il clock `mm:ss` nello schema eventi.
+I due errori stabili sui **punteggi** (Bellator finale, Triscelon data) restano fuori portata
+di V3.1 e appartengono alla strada §8.13 (doppia estrazione / check zona), non a questo giro.
+
 ---
 
 ← [Macro precedente](7_profilo_fan.md) | → [Macro successiva](9_sistema_sponsor.md)
