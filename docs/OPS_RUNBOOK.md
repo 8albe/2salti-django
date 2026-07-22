@@ -809,6 +809,20 @@ La view staff `report_review` ([matches/views.py](../matches/views.py), ramo POS
 
 **Condizione di riapertura / fix:** riscrivere il ramo POST di `report_review` perché deleghi a `publish_report` (proiezione, eventi, guardrail, livello) invece di scrivere Match e `MatchEvent` a mano, e **non** rimpiazzare mai `match_info` con un dict di soli punteggi. Da fare in un giro dedicato con i suoi test; **non** toccato dalla task Opzione A del 2026-07-22 (che lo ha solo registrato qui).
 
+### §10.31 Il declassamento dei blocker event-scoped su SCORE_ONLY dipende dal wording umano dei blocker — DEBITO APERTO 2026-07-22 (severità media)
+
+Il livello di pubblicazione `SCORE_ONLY` (Opzione A) declassa a warning i blocker che dipendono dagli eventi (roster vuoti, incoerenza eventi, incoerenza per-periodo, zero eventi, riconciliazione incompleta): su `SCORE_ONLY` non devono bloccare, perché il referto dichiara "eventi non disponibili". Il declassamento vive in `OCRSchemaValidator.assess_publish_readiness` ([matches/services/schema.py](../matches/services/schema.py), ramo `level == LEVEL_SCORE_ONLY`) e riconosce quali blocker sono event-scoped **per match di sottostringa sul testo umano del blocker** contro `_EVENT_SCOPED_BLOCKER_MARKERS` (`"Entrambi i roster sono vuoti"`, `"Incoerenza eventi"`, `PERIOD_BLOCKER_PREFIX`, `"Zero Eventi"`, `"Riconciliazione incompleta"`).
+
+**Il difetto:** il comportamento del publish è così **accoppiato alle stringhe di visualizzazione**. I marker sono le stesse frasi che l'utente legge in review; non c'è un identificatore strutturale che leghi il blocker alla sua categoria. Se qualcuno cambia il wording di un blocker event-scoped nel punto in cui viene generato (rinomina, ritocco di copy, correzione di refuso) senza aggiornare in modo speculare la tupla dei marker, il match per sottostringa smette di agganciare — e il declassamento **smette di funzionare in modo silenzioso**: nessuna eccezione, nessun warning, il blocker semplicemente resta blocker. Un referto legittimamente pubblicabile a solo-punteggio resta bloccato da un blocker che a quel livello doveva essere fuori livello.
+
+**È la stessa forma d'errore del `.gitignore` del 21/07 (§10.28 area):** una protezione che *sembra* attiva e in realtà non copre più il caso, senza alcun segnale di rottura. La sicurezza è nel wording, non nella struttura; il giorno in cui il wording cambia, la garanzia evapora senza rumore.
+
+**Severità media:** non corrompe dati e non allarga la superficie pubblica (il fallimento è restrittivo — blocca di più, non di meno); ma vanifica in modo invisibile una feature deliberata (il publish score-only) e il sintomo — "un referto score-only non si pubblica" — non punta al wording come causa, quindi costa tempo di diagnosi.
+
+**Soluzione indicata:** dare a ogni blocker un **codice strutturato** (enum/costante) separato dal testo umano, e far decidere il declassamento sul codice, non sulla stringa di visualizzazione. La categoria event-scoped diventa un attributo del blocker, non un indovinello sul suo testo.
+
+**Condizione di riapertura:** qualsiasi modifica al wording dei blocker in [matches/services/schema.py](../matches/services/schema.py) (sia i letterali in `_EVENT_SCOPED_BLOCKER_MARKERS`, sia le frasi generate a monte che quei marker devono agganciare), **oppure** il primo publish `SCORE_ONLY` reale — il quale è anche il primo momento in cui il declassamento viene esercitato sul campo e in cui un aggancio silenziosamente rotto diventerebbe visibile.
+
 ## 11. Sicurezza operativa e frontiera reversibile
 
 Questa sezione codifica le regole di sicurezza operativa emerse dalle sessioni di aprile-maggio 2026, e in particolare consolidate dopo l'incidente del 4 maggio 2026 in cui una password sudo in chiaro è stata trovata nella history pubblica del repo (`install_service.sh`, commit `473c296` del 15 marzo 2026). La regola madre è che le operazioni con effetti permanenti, distruttivi o privilegiati passano per Alberto e mai per l'agente, e che i segreti non transitano mai in contesti condivisi.
