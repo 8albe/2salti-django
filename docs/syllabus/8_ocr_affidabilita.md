@@ -583,6 +583,72 @@ cronologia 11→~20). I due residui, in ordine di valore:
 I due errori stabili sui **punteggi** (Bellator finale, Triscelon data) restano fuori portata
 di V3.1 e appartengono alla strada §8.13 (doppia estrazione / check zona), non a questo giro.
 
+### 8.16 Esperimento prompt V3.2 — clock mm:ss e ancoraggio di periodo (2026-07-22)
+
+Variante sperimentale **V3.2** (`OCR_SYSTEM_PROMPT_V3_2@sha256:9661b340d9e1`), attacco ai
+due residui di §8.15, entrambi sulla stessa riga del foglio (P3, clock 1:13: il gol isolato
+del Libertas e l'unica espulsione-rigore lato CASA, fallo B#12). **Due sole modifiche additive
+alla sezione EVENTI**, costruite per sostituzione mirata su V3 così che punteggi/nomi/data/
+rigori restino **identici byte-per-byte** a V3.1 (verificato in test): (a) campo `clock`
+(cronometro a scalare mm:ss) accanto a `minute`, con l'istruzione esplicita che gli stessi
+valori si ripetono nei quattro periodi (il clock **non** identifica il periodo); (b) ancoraggio
+di periodo rinforzato per gli **eventi isolati** (un evento appartiene alla SEZIONE in cui è
+scritto anche quando è l'unico della squadra; quarter=null preferibile a un periodo indovinato).
+V3.2 **non promossa**: V3.1 (`v3`) resta il default di produzione.
+
+**Run parziale per cap di spesa.** `gemini-2.5-pro`, `--prompt-version v3_2 --repeat 5`. Il
+run ha colpito a metà il **cap di spesa mensile del progetto Google** (429 RESOURCE_EXHAUSTED):
+completati **4 casi su 6 × 5 = 20 chiamate riuscite** (pol-delta, unime, bellator, **Olympic**
+— tutti 5/5 reali), falliti Salerno e Triscelon (10×429, costo ~0). **Costo reale: 20 chiamate,
+57.120 token in, 102.561 out, ~$1,10** a listino ($1,25/$10 per M), latenza media 90s. Le
+domande di misura sono tutte Olympic-centriche → rispondibili; le regressioni punteggi si
+leggono sul **sottoinsieme comparabile dei 4 casi comuni** vs V3.1. Proposte in
+`ocr_bench_out/gold_v3_2_20260722/` su dev (D1: mai riversate nei casi). **Nota ops: cap Gemini
+esaurito** — nessuna chiamata reale passa finché Alberto non lo rialza/resetta.
+
+**Risposte alle domande di misura.**
+1. **Gol del Libertas in P3:** **1/5** (solo run 4) — **identico** al baseline V3.1 (1/5).
+   L'ancoraggio rinforzato **non ha spostato il residuo**. Peggio: nei run 2 e 3 il gol away
+   **sparisce del tutto** (0 gol ospite), mentre in V3.1 era presente in tutti e 5 i run.
+2. **Espulsione-rigore CASA (B#12, home/P3/clock 1:13):** ora **misurabile per posizione
+   esatta** grazie al clock. Estratta nella posizione esatta (home, P3, 1:13) in **2/5 run**
+   (run 2 e 5) — baseline esatto **0/5**. Guadagno modesto e rumoroso, in realtà **sottoprodotto
+   del clock** (risoluzione di posizione), non dell'ancoraggio.
+3. **Clock mm:ss:** **popolato su ~100% degli eventi** (47–48/47–48 per run) e **plausibile**
+   (formato mm:ss, valori a scalare). Baseline: 0. **Vittoria netta e indipendente dai residui.**
+   Sblocca l'accoppiamento posizionale rigore↔gol, impossibile in V3.1.
+4. **Completezza cronologia:** gol casa **21/25/23/21/21** (truth 20) — **più rumorosa** del
+   baseline V3.1 (20/21/19/21/19): due run in **sovra-conteggio** (25, 23). Autori: **22/25/0/22/21**
+   — il run 3 **perde tutti gli autori** (0/23), degrado assente in V3.1.
+5. **Regressioni punteggi (4 casi comuni, 20 run):** V3.2 **40 stabili-corretti / 1 sbagliato /
+   9 instabili / 2 ambigui** vs V3.1 **43 / 2 / 7 / 0** sugli stessi 52 campi. Il prompt dei campi
+   punteggio è **byte-identico** fra V3.1 e V3.2 → lo scarto (−3 corretti, +2 instabili, +2 ambigui)
+   è **varianza di campionamento, non regressione attribuibile al prompt**. Inversioni casa/
+   trasferta **0/20** (V3.1 0/20 sugli stessi 4 casi).
+
+**Accoppiamento rigore↔gol per posizione esatta (novità V3.2).** Truth Olympic derivata: **5
+realizzati / 2 non** su 7 rigori. Match posizionale delle 7 espulsioni `is_penalty` estratte
+contro la truth per (squadra+periodo+clock): **5/3/5/4/2 su 7** per run (in V3.1 era **0/7**
+ovunque, il clock mancava). Coupling realizzati/non ricalcolato sull'estrazione: **5/2, 2/5,
+6/2, 4/4, 2/7** (truth 5/2) — il run 1 azzecca esattamente 5/2, gli altri divergono. Il clock
+rende la misura **possibile** ma l'estrazione degli eventi resta **instabile** su questo referto
+denso.
+
+**Lettura.** Il clock è una **vittoria di capacità di misura** (popolazione ~100%, sblocca il
+match posizionale). L'**ancoraggio di periodo rinforzato NON ha ridotto il residuo 1** (gol
+isolato in P3: 1/5 → 1/5) e la sezione eventi più pesante coincide con **più rumore** (gol away
+droppato in 2/5, sovra-conteggio casa, un run senza autori). Il residuo di **collocazione di
+periodo dell'evento isolato appare irriducibile via questo prompt**: la leva mirata (istruzione
+esplicita sull'evento isolato) ha prodotto zero movimento. Va instradato alla strada §8.13
+(doppia estrazione / lettura di zona), come i residui stabili sui punteggi, non a un altro giro
+di prompt.
+
+**Raccomandazione — NON promuovere V3.2.** Il residuo 1 è irriducibile via prompt (misurato:
+nessun movimento). Il clock, però, è un guadagno reale e **indipendente**: se serve, va isolato
+in una variante **clock-only** (senza il paragrafo di ancoraggio, che ha aggiunto peso e rumore
+senza beneficio) e rimisurato **quando il cap Gemini è rialzato**. Decisione sui numeri: Alberto.
+I due errori stabili sui punteggi restano in §8.13.
+
 ---
 
 ← [Macro precedente](7_profilo_fan.md) | → [Macro successiva](9_sistema_sponsor.md)
