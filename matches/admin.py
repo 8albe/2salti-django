@@ -95,7 +95,7 @@ class OpAdminSite(admin.AdminSite):
 op_admin_site = OpAdminSite(name='op_admin')
 
 class MatchAdmin(admin.ModelAdmin):
-    list_display = ('id', 'match_date', 'home_team', 'away_team', 'home_score', 'away_score', 'is_finished', 'has_report')
+    list_display = ('id', 'match_date', 'home_team', 'away_team', 'home_score', 'away_score', 'is_finished', 'has_report', 'published_level')
     list_filter = ('is_finished', 'has_report', 'league', 'match_date')
     search_fields = ('home_team__name', 'away_team__name', 'location')
     ordering = ('-match_date',)
@@ -103,9 +103,18 @@ class MatchAdmin(admin.ModelAdmin):
         fields = super().get_fields(request, obj)
         return fields
 
+    def published_level(self, obj):
+        """Livello del referto PUBLISHED corrente (Opzione A). Derivato dal
+        referto, non un campo su Match: il Match resta una proiezione."""
+        rep = obj.published_report
+        if not rep:
+            return "—"
+        return rep.get_publication_level_display()
+    published_level.short_description = 'Livello referto'
+
 class MatchReportAdmin(admin.ModelAdmin):
     form = MatchReportAdminForm
-    list_display = ('id', 'priority_label', 'status_colored', 'match_link', 'match_date', 'has_blocking_issues', 'has_warnings', 'created_at', 'review_action')
+    list_display = ('id', 'priority_label', 'status_colored', 'match_link', 'match_date', 'level_label', 'has_blocking_issues', 'has_warnings', 'created_at', 'review_action')
     list_filter = ('status', BlockingIssuesFilter, WarningsFilter, 'match__league', 'created_at', 'uploader', 'in_review_by')
     
     def has_blocking_issues(self, obj):
@@ -148,6 +157,14 @@ class MatchReportAdmin(admin.ModelAdmin):
 
     def match_date(self, obj): return obj.match.match_date if obj.match else "-"
     match_date.short_description = 'Data Match'
+
+    def level_label(self, obj):
+        """Livello di pubblicazione, valorizzato solo per i referti PUBLISHED
+        (Opzione A); '—' altrimenti — il livello ha senso solo una volta pubblicato."""
+        if obj.status != MatchReport.Status.PUBLISHED:
+            return "—"
+        return obj.get_publication_level_display()
+    level_label.short_description = 'Livello pubbl.'
 
     def review_action(self, obj):
         url = reverse('admin:matches_matchreport_review', args=[obj.id])
@@ -364,10 +381,16 @@ class MatchReportAdmin(admin.ModelAdmin):
                     report=obj, user=request.user, action='validate',
                     old_status=old_status, new_status=obj.status,
                 )
-                # publish_now / publish_force: PublishingService scrive già il proprio audit log
-                # (action='publish' o 'republish'), quindi non duplichiamo qui.
-                if action in ['publish_now', 'publish_force']:
-                    success, msg = PublishingService.publish_report(obj, user=request.user, force=(action=='publish_force'))
+                # publish_now / publish_force / publish_score_only: PublishingService
+                # scrive già il proprio audit log, quindi non duplichiamo qui.
+                # Il livello SCORE_ONLY (Opzione A) pubblica solo punteggio/parziali
+                # e NON crea eventi (quelli esistenti sono rimossi, vedi conferma D1b).
+                if action in ['publish_now', 'publish_force', 'publish_score_only']:
+                    from .services.schema import LEVEL_FULL, LEVEL_SCORE_ONLY
+                    level = LEVEL_SCORE_ONLY if action == 'publish_score_only' else LEVEL_FULL
+                    success, msg = PublishingService.publish_report(
+                        obj, user=request.user, force=(action == 'publish_force'), level=level,
+                    )
                     self.message_user(request, msg, messages.SUCCESS if success else messages.WARNING)
                 return redirect('admin:matches_matchreport_changelist')
         else:
@@ -399,7 +422,16 @@ class MatchReportAdmin(admin.ModelAdmin):
                 c_id = cur_recon.get(f"{side}_players", {}).get(n)
                 recon_ui[side].append({"extracted_name": n, "suggestions": suggestions(n, db_list), "current_id": c_id, "is_unresolved": not c_id, "db_athletes": [{"id": a.id, "name": a.get_full_name()} for a in db_list]})
         
-        safe, blockers, p_w = OCRSchemaValidator.assess_publish_readiness(obj.normalized_data)
+        from .services.schema import LEVEL_FULL, LEVEL_SCORE_ONLY
+        safe, blockers, p_w = OCRSchemaValidator.assess_publish_readiness(obj.normalized_data, level=LEVEL_FULL)
+        # Doppia valutazione (Opzione A): il livello SCORE_ONLY declassa i blocker
+        # event-scoped a warning, quindi puo' essere pubblicabile quando il FULL
+        # non lo e'. Il terzo bottone si attiva su questo.
+        safe_score_only, blockers_score_only, warnings_score_only = \
+            OCRSchemaValidator.assess_publish_readiness(obj.normalized_data, level=LEVEL_SCORE_ONLY)
+        # Conteggio eventi che un publish SCORE_ONLY rimuoverebbe (D1b): mostrato
+        # in conferma PRIMA del click, cosi' eventuali eventi manuali sono visibili.
+        events_to_remove = match.events.count() if match else 0
         gate_ctx = {}
         if match:
             if home_team:
@@ -419,7 +451,7 @@ class MatchReportAdmin(admin.ModelAdmin):
         meta = (obj.normalized_data or {}).get('metadata', {}) if isinstance(obj.normalized_data, dict) else {}
         confidence = meta.get('confidence', 0.0) or 0.0
         context = self.admin_site.each_context(request)
-        context.update({'opts': self.model._meta, 'original': obj, 'title': f"Review: {obj}", 'potential_matches': potential_matches, 'form': form, 'is_image': obj.file.name.lower().endswith(('.png', '.jpg', '.jpeg')) if obj.file else False, 'reconciliation_data': recon_ui, 'publish_safe': safe, 'publish_blockers': blockers, 'unresolved_count': sum(1 for s in ["home", "away"] for item in recon_ui[s] if item["is_unresolved"]), 'bootstrap': EntityBootstrapService.preview_creation(obj.normalized_data, obj.match) if obj.match else None, 'ocr_is_valid': ocr_is_valid, 'ocr_blockers': ocr_blockers, 'ocr_warnings': ocr_warnings, 'confidence': confidence, 'confidence_percent': round(confidence * 100), 'extraction_warnings': meta.get('extraction_warnings', []), 'period_check': period_check, 'report_audit_logs': obj.audit_logs.select_related('user').all()})
+        context.update({'opts': self.model._meta, 'original': obj, 'title': f"Review: {obj}", 'potential_matches': potential_matches, 'form': form, 'is_image': obj.file.name.lower().endswith(('.png', '.jpg', '.jpeg')) if obj.file else False, 'reconciliation_data': recon_ui, 'publish_safe': safe, 'publish_blockers': blockers, 'publish_safe_score_only': safe_score_only, 'publish_blockers_score_only': blockers_score_only, 'publish_warnings_score_only': warnings_score_only, 'events_to_remove': events_to_remove, 'unresolved_count': sum(1 for s in ["home", "away"] for item in recon_ui[s] if item["is_unresolved"]), 'bootstrap': EntityBootstrapService.preview_creation(obj.normalized_data, obj.match) if obj.match else None, 'ocr_is_valid': ocr_is_valid, 'ocr_blockers': ocr_blockers, 'ocr_warnings': ocr_warnings, 'confidence': confidence, 'confidence_percent': round(confidence * 100), 'extraction_warnings': meta.get('extraction_warnings', []), 'period_check': period_check, 'report_audit_logs': obj.audit_logs.select_related('user').all()})
         return TemplateResponse(request, 'admin/matches/matchreport/review.html', context)
 
 op_admin_site.register(Match, MatchAdmin)

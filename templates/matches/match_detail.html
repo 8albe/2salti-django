@@ -198,6 +198,16 @@
     </div>
     {% endif %}
 
+    <!-- 2.6 CRONOLOGIA NON DISPONIBILE (Opzione A, publish SCORE_ONLY) -->
+    {% if score_only_notice %}
+    <div class="glass-panel p-6 md:p-8 mb-8 border-l-4 border-amber-500/50">
+        <div class="flex items-center gap-4">
+            <span class="w-10 h-10 rounded-xl bg-amber-500/10 flex items-center justify-center text-amber-400 text-xl"><i class="fas fa-circle-info"></i></span>
+            <p class="text-sm text-slate-300 leading-relaxed">Punteggio e parziali verificati dal referto ufficiale. La cronologia degli eventi non è disponibile per questa partita.</p>
+        </div>
+    </div>
+    {% endif %}
+
     <!-- 3. DETTAGLI PARTITA: Timeline & Rosters -->
     <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
         
@@ -244,7 +254,11 @@
                 </div>
                 {% empty %}
                 <div class="text-center py-20 opacity-30 italic">
+                    {% if score_only_notice %}
+                    <p>Cronologia eventi non disponibile per questa partita.</p>
+                    {% else %}
                     <p>Nessun evento principale registrato.</p>
+                    {% endif %}
                 </div>
                 {% endfor %}
 

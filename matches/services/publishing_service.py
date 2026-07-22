@@ -3,7 +3,7 @@ from typing import Tuple
 from matches.models import MatchReport, MatchEvent
 from .converters import MatchDataConverter
 from .data_verification_service import set_data_verified
-from .schema import OCRSchemaValidator
+from .schema import OCRSchemaValidator, LEVEL_FULL, LEVEL_SCORE_ONLY
 from .standings_service import StandingsService
 from django.db import transaction
 from django.utils import timezone
@@ -132,20 +132,54 @@ class PublishingService:
     """
 
     @staticmethod
-    def publish_report(report: MatchReport, user=None, force: bool = False, reason: str = '') -> Tuple[bool, str]:
+    def publish_report(report: MatchReport, user=None, force: bool = False, reason: str = '',
+                       level: str = LEVEL_FULL) -> Tuple[bool, str]:
         """
         Trasferisce i dati dal report (normalized_data) al record Match e crea eventi.
         Transactional, Idempotent, and Safe on Re-publish.
+
+        `level` (Opzione A):
+          - LEVEL_FULL (default): comportamento storico, INVARIATO. Crea gli
+            eventi e valuta l'abort zero-eventi (Policy A strict).
+          - LEVEL_SCORE_ONLY: proietta punteggio e parziali, NON crea eventi e
+            cancella quelli esistenti (il referto dichiara "eventi non
+            disponibili"); l'abort zero-eventi NON viene valutato. La proiezione
+            dei punteggi, il guardrail dato-verificato, il supersede e il rebuild
+            della classifica sono IDENTICI ai due livelli.
         """
+        if level not in (LEVEL_FULL, LEVEL_SCORE_ONLY):
+            return False, f"Livello di pubblicazione sconosciuto: {level!r}."
+
         if report.status not in [MatchReport.Status.VALIDATED, MatchReport.Status.PUBLISHED]:
             return False, f"Il referto deve essere in stato VALIDATED o PUBLISHED per la pubblicazione, attuale: {report.get_status_display()}"
-            
+
+        # --- GUARDRAIL DOWNGRADE DI LIVELLO (D3) ---
+        # Un republish che porta un referto gia' pubblicato FULL a SCORE_ONLY
+        # DISTRUGGE la cronologia eventi gia' pubblica: richiede una motivazione
+        # esplicita, sullo stesso principio del guardrail dato-verificato.
+        # L'upgrade SCORE_ONLY->FULL e il primo publish sono liberi.
+        is_downgrade = (
+            report.status == MatchReport.Status.PUBLISHED
+            and report.publication_level == LEVEL_FULL
+            and level == LEVEL_SCORE_ONLY
+        )
+        if is_downgrade and (not reason or not str(reason).strip()):
+            logger.warning(
+                f"Referto {report.id} downgrade FULL->SCORE_ONLY RIFIUTATO: reason mancante."
+            )
+            return False, (
+                "Downgrade del livello di pubblicazione da FULL a SCORE_ONLY rifiutato: "
+                "declassare un referto gia' pubblicato con eventi ne cancella la "
+                "cronologia pubblica, quindi la motivazione e' obbligatoria e non puo' "
+                "essere vuota."
+            )
+
         data = report.normalized_data
         if not data:
             return False, "Nessun dato normalizzato presente nel referto."
 
-        # --- PUBLISH READINESS CHECK ---
-        safe, blockers, warnings = OCRSchemaValidator.assess_publish_readiness(data)
+        # --- PUBLISH READINESS CHECK (al livello dichiarato) ---
+        safe, blockers, warnings = OCRSchemaValidator.assess_publish_readiness(data, level=level)
         
         if not safe and not force:
             blocker_msg = "; ".join(blockers)
@@ -243,43 +277,53 @@ class PublishingService:
                 # Eliminazione preventiva eventi (Idempotenza Re-publish)
                 deleted_events_count, _ = MatchEvent.objects.filter(match=match).delete()
 
-                events_data = MatchDataConverter.get_events_data(data)
-                created_events_count = 0
-
                 from accounts.models import AthleteProfile
+                created_events_count = 0
                 involved_athlete_ids = set()
-                for ed in events_data:
-                    # Determiniamo il team corretto
-                    target_team = None
-                    if ed["team"] == "home":
-                        target_team = match.home_team
-                    elif ed["team"] == "away":
-                        target_team = match.away_team
 
-                    if not target_team:
-                        continue # Team non configurato nel match
+                if level == LEVEL_SCORE_ONLY:
+                    # SCORE_ONLY (Opzione A): nessun evento creato. Gli eventi
+                    # esistenti sono gia' stati cancellati sopra (D1): il referto
+                    # dichiara "eventi non disponibili", nessun evento puo'
+                    # restare attribuito. L'abort zero-eventi NON si valuta: zero
+                    # eventi qui e' il contratto del livello, non un'anomalia.
+                    pass
+                else:
+                    events_data = MatchDataConverter.get_events_data(data)
+                    for ed in events_data:
+                        # Determiniamo il team corretto
+                        target_team = None
+                        if ed["team"] == "home":
+                            target_team = match.home_team
+                        elif ed["team"] == "away":
+                            target_team = match.away_team
 
-                    # Creiamo l'evento solo se abbiamo un player_id (Reconciled)
-                    if ed["player_id"]:
-                        # Protezione: Verifica che il player appartenga effettivamente al team target
-                        if AthleteProfile.objects.filter(user_id=ed["player_id"], current_team=target_team).exists():
-                            MatchEvent.objects.create(
-                                match=match,
-                                event_type=ed["event_type"],
-                                team=target_team,
-                                player_id=ed["player_id"],
-                                minute=ed["minute"] or 0,
-                                quarter=ed.get("quarter") or 1,
-                                notes=ed["notes"]
-                            )
-                            created_events_count += 1
-                            involved_athlete_ids.add(ed["player_id"])
-                        else:
-                            logger.warning(f"Player ID {ed['player_id']} riconciliato con team sbagliato {target_team}. Evento saltato.")
+                        if not target_team:
+                            continue # Team non configurato nel match
+
+                        # Creiamo l'evento solo se abbiamo un player_id (Reconciled)
+                        if ed["player_id"]:
+                            # Protezione: Verifica che il player appartenga effettivamente al team target
+                            if AthleteProfile.objects.filter(user_id=ed["player_id"], current_team=target_team).exists():
+                                MatchEvent.objects.create(
+                                    match=match,
+                                    event_type=ed["event_type"],
+                                    team=target_team,
+                                    player_id=ed["player_id"],
+                                    minute=ed["minute"] or 0,
+                                    quarter=ed.get("quarter") or 1,
+                                    notes=ed["notes"]
+                                )
+                                created_events_count += 1
+                                involved_athlete_ids.add(ed["player_id"])
+                            else:
+                                logger.warning(f"Player ID {ed['player_id']} riconciliato con team sbagliato {target_team}. Evento saltato.")
 
                 # GUARDRAIL Policy A: 0 events created with positive score → abort
                 # Anche con force=True. Previene drift sulle statistiche atleti.
-                if created_events_count == 0 and (match.home_score > 0 or match.away_score > 0):
+                # Valutato SOLO sul livello FULL: su SCORE_ONLY zero eventi e' il
+                # contratto dichiarato del livello, non un'anomalia da abortire.
+                if level == LEVEL_FULL and created_events_count == 0 and (match.home_score > 0 or match.away_score > 0):
                     transaction.set_rollback(True)
                     _abort_message = (
                         f"Pubblicazione abortita: 0 eventi creati con score "
@@ -325,7 +369,10 @@ class PublishingService:
                     report.status = MatchReport.Status.PUBLISHED
                     report.published_by = user
                     report.published_at = timezone.now()
-                    report.save(update_fields=['status', 'published_by', 'published_at'])
+                    # Il livello di pubblicazione si scrive SOLO qui, nello stesso
+                    # save() della transizione a PUBLISHED (Opzione A).
+                    report.publication_level = level
+                    report.save(update_fields=['status', 'published_by', 'published_at', 'publication_level'])
 
                     # 3.4 Aggiornamento Statistiche Atleti (Dati derivati)
                     # Eseguito DOPO la transizione a PUBLISHED perché update_stats() ora
@@ -352,6 +399,7 @@ class PublishingService:
                         after={
                             'events_deleted': deleted_events_count,
                             'events_created': created_events_count,
+                            'publication_level': level,
                             'forced': force,
                             'warnings': warnings,
                         }
@@ -402,6 +450,7 @@ class PublishingService:
                             "is_republish": is_republish,
                             "events_deleted": deleted_events_count,
                             "events_created": created_events_count,
+                            "publication_level": level,
                             "warnings": warnings,
                             "forced": force,
                             "overridden_blockers": blockers if force and not safe else []
@@ -411,7 +460,12 @@ class PublishingService:
                     action_str = "Ripubblicato" if is_republish else "Pubblicato"
                     if force and not safe:
                         action_str = f"FORZATO ({action_str})"
-                    msg = f"{action_str}: Match aggiornato, {deleted_events_count} vecchi eventi cancellati, creati {created_events_count} eventi statistici."
+                    if level == LEVEL_SCORE_ONLY:
+                        msg = (f"{action_str} (SOLO PUNTEGGIO): Match aggiornato, "
+                               f"{deleted_events_count} eventi rimossi, nessun evento creato "
+                               f"(cronologia non disponibile).")
+                    else:
+                        msg = f"{action_str}: Match aggiornato, {deleted_events_count} vecchi eventi cancellati, creati {created_events_count} eventi statistici."
                     if conflict:
                         msg += (
                             " ATTENZIONE: sovrascritti dati verificati a mano; "

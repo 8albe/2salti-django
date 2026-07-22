@@ -449,6 +449,18 @@
                     {% else %}
                         <button type="button" class="btn-header btn-publish" disabled title="Risolvi i blocchi per pubblicare">Valida & Pubblica Ora</button>
                     {% endif %}
+
+                    {# Opzione A — publish SOLO PUNTEGGIO (SCORE_ONLY): attivo quando #}
+                    {# il livello score-only e' safe. La conferma dichiara quanti #}
+                    {# eventi verranno rimossi PRIMA del click (D1b). #}
+                    {% if publish_safe_score_only %}
+                        <button type="submit" id="btn-publish-score-only" name="_action" value="publish_score_only" class="btn-header btn-publish" style="background:#0ea5e9;"
+                                onclick="return confirm('Pubblicazione SOLO PUNTEGGIO (eventi non disponibili): {{ events_to_remove }} eventi verranno rimossi da questa partita e la cronologia risultera' non disponibile al pubblico. Procedere?');">
+                            Valida &amp; Pubblica solo punteggio
+                        </button>
+                    {% else %}
+                        <button type="button" class="btn-header btn-publish" disabled title="Risolvi i blocchi score-scoped (punteggio, nomi squadre, coerenza somma-quarti) per pubblicare solo punteggio">Valida &amp; Pubblica solo punteggio</button>
+                    {% endif %}
                 </div>
             </div>
             <!-- Reason/Motivation Input Row -->
@@ -571,6 +583,27 @@
                             <p style="margin: 8px 0 0 0; font-size: 13px; color: #64748b;">Tutti i controlli automatici sono stati superati.</p>
                         {% endif %}
                     </div>
+
+                    {# Opzione A — livello SOLO PUNTEGGIO: cosa resta fuori dal livello. #}
+                    {# Mostrato quando il FULL e' bloccato ma lo score-only e' pubblicabile: #}
+                    {# spiega al revisore che pubblicando solo il punteggio i blocchi #}
+                    {# event-scoped (eventi, riconciliazione, roster, per-periodo) non si #}
+                    {# risolvono, si dichiarano fuori livello (cronologia non disponibile). #}
+                    {% if publish_safe_score_only and not publish_safe %}
+                    <div class="review-card" style="border-left: 4px solid #0ea5e9;">
+                        <h3><span>ℹ️</span> Pubblicazione solo punteggio disponibile</h3>
+                        <div style="font-size: 12px; color: #475569; margin-bottom: 8px;">
+                            Punteggio e parziali sono pubblicabili. Pubblicando <strong>solo punteggio</strong>,
+                            <strong>{{ events_to_remove }}</strong> eventi verranno rimossi e la cronologia sarà dichiarata non disponibile.
+                            Restano fuori dal livello (non risolti, solo declassati):
+                        </div>
+                        <ul class="problem-list">
+                            {% for w in publish_warnings_score_only %}
+                                {% if '[fuori livello]' in w %}<li><span class="text-warning">🟠 {{ w }}</span></li>{% endif %}
+                            {% endfor %}
+                        </ul>
+                    </div>
+                    {% endif %}
 
                     <!-- 1a. Coerenza interna per periodo — EVIDENZA, non verifica di verità.
                          Confronta gli eventi-gol estratti con il parziale dello stesso periodo.
