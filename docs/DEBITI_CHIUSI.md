@@ -323,6 +323,22 @@ Due difetti della stessa famiglia (data UTC dove serviva Europe/Rome), **severit
 
 **Non-fratelli, verificati:** `matches/services/match_discovery.py:70` (`match_date__date=target_date`) — `target_date` è la data **estratta dal referto**, non "oggi": scenario diverso, non questo bug. `management/ops_services.py:120` usa già `timezone.localdate()` — è il pattern corretto, precedente da imitare.
 
+### §10.32 Reason obbligatoria in admin per downgrade a SCORE_ONLY e force publish — CHIUSA 2026-07-22
+
+*Cosa era:* la review admin invocava `publish_report(obj, user=…, force=…, level=…)` **senza mai passare `reason`**. Il campo "Motivazione" (`name="reason_message"`) era POSTato ma `admin.py` non lo leggeva: raccolto e scartato. Il seam di servizio ([matches/services/publishing_service.py](../matches/services/publishing_service.py)) esige una `reason` non vuota su due gesti — downgrade `FULL`→`SCORE_ONLY` su republish (D3) e force su match con dato verificato — quindi da questa UI quei gesti fallivano **sempre**, anche compilando il campo, con un rifiuto senza via d'uscita (redirect in changelist).
+
+*Chiuso (parte del giro di riparazione della review admin, 2026-07-22):*
+- `matches/admin.py` (`review_view`, ramo `publish_now`/`publish_force`/`publish_score_only`): legge `reason_message` dal POST (trim) e la passa a `publish_report(..., reason=reason)`.
+- **Obbligatorietà lato admin sul force:** il gesto più discrezionale (override blocchi) era l'unico che passava senza motivazione umana (audit povero). Ora `publish_force` senza `reason` è rifiutato in UI, **prima** di invocare il servizio, con messaggio leggibile. Downgrade e force-su-verificato restano obbligati dal servizio, ora navigabili.
+- **Via d'uscita:** su rifiuto (di servizio o della guardia force) l'operatore **resta sulla review page** invece di finire in changelist, così può compilare Motivazione e ritentare.
+- La motivazione dell'operatore finisce nell'audit trail come già previsto dal servizio (`reason` nei log di publish).
+
+*JS morto correlato, nato e morto nello stesso giro (nessun debito a sé):* il blocco `<script>` della review page moriva per `SyntaxError` a causa di payload Python renderizzati via `|safe` (`rawExtractedData` col repr, `roster_names`/`event_types` mai passati → `const … = ;`). La causa radice è stata rimossa (serializzazione via `json_script`, variabili di context passate, codice diff-vs-OCR residuo eliminato perché leggeva uno schema inesistente). Senza quella riparazione la reason non sarebbe comunque bastata: i widget di editing perdevano silenziosamente le correzioni perché il sync JSON era morto.
+
+*Vive in:* [matches/admin.py](../matches/admin.py), [templates/admin/matches/matchreport/review.html](../templates/admin/matches/matchreport/review.html); test in [matches/tests_review_ui.py](../matches/tests_review_ui.py) (`ReviewContextAndReasonTest`).
+
+*Residuo:* nessuno per §10.32. La correttezza end-to-end su prod (console pulita, widget che salvano, Motivazione richiesta) va confermata a occhio nel browser su dev (prompt di verifica Antigravity preparato nel giro). Restano aperti, distinti: §10.30 (`report_review` frontend) e §10.31 (declassamento SCORE_ONLY per wording).
+
 ### §12.9 Debito semantico A1: utility `cyan-*` che rendono blue (Macro 17 Fase 2) — SALDATO 2026-06-30 (A2, `dev`); archiviato qui 2026-07-22
 
 > **ID fuori serie** (unica voce non-§10.x): la voce nasce come §12.9 di OPS_RUNBOOK — sezione 12 "Verifiche e regole di processo", non la sezione 10 dei debiti — e conserva l'ID originale perché syllabus Macro 17, session note e memorie la citano come "OPS §12.9": la continuità di citazione vale più dell'uniformità di numerazione. In OPS_RUNBOOK §12.9 resta il rimando.

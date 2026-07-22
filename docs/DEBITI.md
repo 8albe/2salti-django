@@ -106,19 +106,9 @@ Il livello di pubblicazione `SCORE_ONLY` (Opzione A) declassa a warning i blocke
 
 **Condizione di riapertura:** qualsiasi modifica al wording dei blocker in [matches/services/schema.py](../matches/services/schema.py) (sia i letterali in `_EVENT_SCOPED_BLOCKER_MARKERS`, sia le frasi generate a monte che quei marker devono agganciare), **oppure** il primo publish `SCORE_ONLY` reale — il quale è anche il primo momento in cui il declassamento viene esercitato sul campo e in cui un aggancio silenziosamente rotto diventerebbe visibile.
 
-### §10.32 Reason obbligatoria in admin per downgrade a SCORE_ONLY e force publish — DEBITO APERTO 2026-07-22 (severità bassa)
+### §10.32 Reason obbligatoria in admin per downgrade a SCORE_ONLY e force publish — CHIUSA 2026-07-22 → [DEBITI_CHIUSI.md](DEBITI_CHIUSI.md) §10.32
 
-> **Severità:** bassa (fail-closed oggi sui due gesti più pericolosi; superficie staff-only; zero referti `PUBLISHED` su prod) · **Aperta dal:** 2026-07-22 · **Condizione di chiusura:** la superficie admin raccoglie e **obbliga** la `reason` per downgrade e force publish e la passa a `publish_report()`, allineandosi al seam di servizio; la motivazione dell'operatore finisce nell'audit trail come già avviene lato servizio. · **Trigger di rialzo severità:** primo publish reale, o deploy di Opzione A (SCORE_ONLY) su prod.
-
-Il seam di servizio richiede una `reason` non vuota in due punti ([matches/services/publishing_service.py](../matches/services/publishing_service.py)): (1) **downgrade `FULL`→`SCORE_ONLY` su republish** (cross-check D3, [STATE_MACHINES.md](STATE_MACHINES.md) §MatchReport/Guardrails "Livello di pubblicazione") — distrugge la cronologia eventi già pubblica, senza reason ritorna `(False, msg)`; (2) **force publish su match con dato verificato** — sovrascrive una verifica umana, stessa regola. La review admin ([matches/admin.py](../matches/admin.py), ramo `publish_now`/`publish_force`/`publish_score_only`) invoca però `publish_report(obj, user=…, force=…, level=…)` **senza mai passare `reason`**: la `ReviewForm` non ha alcun campo per raccoglierla.
-
-Conseguenze oggi, distinte:
-- **Downgrade D3 e force su dato verificato da admin: impossibili.** Il servizio li rifiuta per reason mancante — fail-closed, nessun rischio dati, ma i due gesti legittimi non sono eseguibili dalla superficie che dovrebbe ospitarli: al primo bisogno reale l'operatore troverà un rifiuto senza via d'uscita in UI.
-- **Force "semplice" (override di blocker, senza conflitto su dato verificato): passa senza motivazione umana.** L'audit registra i blocker scavalcati (`overridden_blockers`) e la reason generica `Pubblicazione forzata (override blocchi)`, ma non il **perché** dell'operatore — l'audit trail resta scoperto proprio sul gesto più discrezionale.
-
-**Perché severità bassa:** la superficie è la review admin, staff-only; su prod non esiste alcun referto `PUBLISHED` e il livello `SCORE_ONLY` è a codice solo su dev (deploy prod pendente); il downgrade D3 presuppone un referto già `PUBLISHED FULL`, che oggi non esiste su nessun box. Il fallimento attuale è **restrittivo** (blocca o pubblica con audit povero), mai corruttivo. La severità va rialzata al trigger indicato sopra.
-
-**Nota di contesto:** la definizione precisa della UI (dove vive il campo reason, per quali azioni) era stata deliberatamente rimandata "a quando la superficie di publish viene esercitata davvero" (session note 22/07); questa voce esiste perché quel rinvio non era registrato da nessuna parte e sarebbe diventato una dimenticanza.
+Chiusa nel giro di riparazione della review admin (2026-07-22): `reason_message` ora letta dal POST e passata a `publish_report()` per tutte le azioni di publish, con obbligatorietà lato admin sul force e i messaggi di rifiuto del servizio resi navigabili (l'operatore resta sulla review page). Dettaglio, riferimenti e test in [DEBITI_CHIUSI.md](DEBITI_CHIUSI.md) §10.32.
 
 ### §10.33 Doppia estrazione per zona: regola di divergenza misurata ma non adottata; errore data non catturabile — DEBITO APERTO 2026-07-22 (severità bassa)
 
