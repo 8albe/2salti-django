@@ -388,10 +388,38 @@ class MatchReportAdmin(admin.ModelAdmin):
                 if action in ['publish_now', 'publish_force', 'publish_score_only']:
                     from .services.schema import LEVEL_FULL, LEVEL_SCORE_ONLY
                     level = LEVEL_SCORE_ONLY if action == 'publish_score_only' else LEVEL_FULL
+                    # §10.32: la Motivazione (name="reason_message") era raccolta e
+                    # scartata. publish_report la esige su due gesti a rischio
+                    # (downgrade FULL->SCORE_ONLY, force su dato verificato) e senza
+                    # di essa li rifiuta: da questa UI fallivano sempre. Ora la
+                    # leggiamo e la passiamo al servizio.
+                    reason = (request.POST.get('reason_message') or '').strip()
+                    # Il force e' discrezionale per definizione (scavalca blocchi o un
+                    # dato gia' verificato): la Motivazione e' sempre obbligatoria e
+                    # finisce nell'audit. Il servizio la esige solo sul force-su-verificato;
+                    # qui la imponiamo anche sul force "semplice" (override blocchi), il
+                    # gesto piu' discrezionale, che altrimenti resterebbe senza il perche'
+                    # dell'operatore nell'audit (§10.32).
+                    if action == 'publish_force' and not reason:
+                        self.message_user(
+                            request,
+                            "Motivazione obbligatoria per forzare la pubblicazione: "
+                            "il force scavalca i controlli, la ragione dell'operatore "
+                            "va registrata nell'audit.",
+                            messages.ERROR,
+                        )
+                        return redirect('admin:matches_matchreport_review', object_id)
                     success, msg = PublishingService.publish_report(
-                        obj, user=request.user, force=(action == 'publish_force'), level=level,
+                        obj, user=request.user, force=(action == 'publish_force'),
+                        level=level, reason=reason,
                     )
                     self.message_user(request, msg, messages.SUCCESS if success else messages.WARNING)
+                    if not success:
+                        # Il rifiuto del servizio e' leggibile (message_user sopra):
+                        # restiamo sulla review page perche' l'operatore possa
+                        # compilare Motivazione e ritentare, invece di finire sulla
+                        # changelist senza via d'uscita.
+                        return redirect('admin:matches_matchreport_review', object_id)
                 return redirect('admin:matches_matchreport_changelist')
         else:
             if not obj.normalized_data: obj.normalized_data = obj.raw_extracted_data
@@ -451,7 +479,17 @@ class MatchReportAdmin(admin.ModelAdmin):
         meta = (obj.normalized_data or {}).get('metadata', {}) if isinstance(obj.normalized_data, dict) else {}
         confidence = meta.get('confidence', 0.0) or 0.0
         context = self.admin_site.each_context(request)
-        context.update({'opts': self.model._meta, 'original': obj, 'title': f"Review: {obj}", 'potential_matches': potential_matches, 'form': form, 'is_image': obj.file.name.lower().endswith(('.png', '.jpg', '.jpeg')) if obj.file else False, 'reconciliation_data': recon_ui, 'publish_safe': safe, 'publish_blockers': blockers, 'publish_safe_score_only': safe_score_only, 'publish_blockers_score_only': blockers_score_only, 'publish_warnings_score_only': warnings_score_only, 'events_to_remove': events_to_remove, 'unresolved_count': sum(1 for s in ["home", "away"] for item in recon_ui[s] if item["is_unresolved"]), 'bootstrap': EntityBootstrapService.preview_creation(obj.normalized_data, obj.match) if obj.match else None, 'ocr_is_valid': ocr_is_valid, 'ocr_blockers': ocr_blockers, 'ocr_warnings': ocr_warnings, 'confidence': confidence, 'confidence_percent': round(confidence * 100), 'extraction_warnings': meta.get('extraction_warnings', []), 'period_check': period_check, 'report_audit_logs': obj.audit_logs.select_related('user').all()})
+        context.update({'opts': self.model._meta, 'original': obj, 'title': f"Review: {obj}", 'potential_matches': potential_matches, 'form': form, 'is_image': obj.file.name.lower().endswith(('.png', '.jpg', '.jpeg')) if obj.file else False, 'reconciliation_data': recon_ui, 'publish_safe': safe, 'publish_blockers': blockers, 'publish_warnings': p_w, 'publish_safe_score_only': safe_score_only, 'publish_blockers_score_only': blockers_score_only, 'publish_warnings_score_only': warnings_score_only, 'events_to_remove': events_to_remove, 'unresolved_count': sum(1 for s in ["home", "away"] for item in recon_ui[s] if item["is_unresolved"]), 'bootstrap': EntityBootstrapService.preview_creation(obj.normalized_data, obj.match) if obj.match else None, 'ocr_is_valid': ocr_is_valid, 'ocr_blockers': ocr_blockers, 'ocr_warnings': ocr_warnings, 'confidence': confidence, 'confidence_percent': round(confidence * 100), 'extraction_warnings': meta.get('extraction_warnings', []), 'period_check': period_check, 'report_audit_logs': obj.audit_logs.select_related('user').all(),
+            # Variabili prima assenti che il template usava (rese vive in questo giro):
+            # - roster_names / event_types: alimentano l'editor eventi (dropdown
+            #   giocatore per lato e tipo evento); serializzate via json_script nel
+            #   template, non piu' via |safe (che rendeva il repr Python -> SyntaxError).
+            # - publish_warnings: avvisi di coerenza a livello FULL (contatore e lista);
+            #   erano calcolati (p_w) ma mai passati -> il contatore mostrava sempre 0.
+            # - raw_data_json: dump leggibile del raw OCR nel pannello "Evidence Raw Data".
+            'roster_names': extracted,
+            'event_types': DEFAULT_EVENT_TYPES,
+            'raw_data_json': json.dumps(obj.raw_extracted_data or {}, indent=2, ensure_ascii=False)})
         return TemplateResponse(request, 'admin/matches/matchreport/review.html', context)
 
 op_admin_site.register(Match, MatchAdmin)

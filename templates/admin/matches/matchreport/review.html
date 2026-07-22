@@ -466,7 +466,7 @@
             <!-- Reason/Motivation Input Row -->
             <div class="reason-input-row">
                 <label for="reason_message">📝 Motivazione:</label>
-                <input type="text" name="reason_message" id="reason_message" placeholder="Inserisci la ragione della modifica (obbligatorio per validazione/pubblicazione)" maxlength="500">
+                <input type="text" name="reason_message" id="reason_message" placeholder="Motivazione: obbligatoria per forzare la pubblicazione su un dato verificato o per declassare da FULL a solo-punteggio" maxlength="500">
             </div>
 
             <div class="review-container">
@@ -969,28 +969,11 @@
                     </div>
                     {% endif %}
 
-                    <!-- 4c. Publishing History (Legacy AuditLog) -->
-                    {% if publish_history %}
-                    <div class="review-card" style="background: #f1f5f9; border-color: #cbd5e1;">
-                        <h3 style="border-bottom-color: #cbd5e1;"><span>⏳</span> Cronologia Pubblicazione</h3>
-                        <div style="font-size: 11.5px; line-height: 1.5;">
-                            {% for log in publish_history %}
-                            <div style="display: flex; justify-content: space-between; padding: 6px 0; border-bottom: 1px solid #e2e8f0;">
-                                <div>
-                                    <strong>{{ log.action }}</strong> da 
-                                    <span style="color: #0366d6;">{{ log.user.username|default:"System" }}</span>
-                                    <div style="color: #64748b; font-size: 10px;">
-                                        Eventi: -{{ log.details.events_deleted|default:0 }} / +{{ log.details.events_created|default:0 }}
-                                    </div>
-                                </div>
-                                <div style="text-align: right; color: #64748b;">
-                                    {{ log.timestamp|date:"d M H:i" }}
-                                </div>
-                            </div>
-                            {% endfor %}
-                        </div>
-                    </div>
-                    {% endif %}
+                    {# 4c. "Cronologia Pubblicazione" (publish_history) RIMOSSA il #}
+                    {# 2026-07-22: blocco morto. La variabile non e' mai stata passata #}
+                    {# e il markup leggeva un modello legacy (log.details, log.timestamp) #}
+                    {# che MatchReportAuditLog non ha (usa created_at, niente details). #}
+                    {# La cronologia reale e' gia' renderizzata sopra da report_audit_logs. #}
 
                     <!-- 5. Technical -->
                     <details>
@@ -1048,18 +1031,21 @@
     </form>
 </div>
 
+{{ roster_names|json_script:"roster-names-data" }}
+{{ event_types|json_script:"event-types-data" }}
 <script>
     const jsonTextarea = document.querySelector('.json-textarea');
     const dirtyIndicator = document.getElementById('dirty-indicator');
     const jsonErrorBanner = document.getElementById('json-error-banner');
     const mainForm = document.getElementById('matchreport_form');
-    
-    // Comparison Data
-    const rawExtractedData = {{ original.raw_extracted_data|safe }};
-    // `confidenceFields` rimossa il 2026-07-21 (fetta A1) insieme agli highlight che
-    // la usavano. Nota: la variabile di contesto `confidence_fields` non e' MAI stata
-    // popolata dalla view, quindi questa riga renderizzava `const confidenceFields = ;`
-    // — SyntaxError che uccideva l'intero blocco script della review page.
+
+    // `rawExtractedData` e gli highlight "differisce dall'OCR" RIMOSSI il 2026-07-22:
+    // erano codice morto. Il diff leggeva `current.teams.home.score` /
+    // `rawExtractedData.teams.home.score`, uno schema che l'OCR non produce (i punteggi
+    // stanno in `scores.final_score`/`scores.quarters`), quindi `ocrVal` era sempre
+    // undefined e nessun highlight scattava mai — anche prima che il blocco script
+    // morisse. Rianimarlo avrebbe significato far rivivere una feature mai funzionante.
+    // `confidenceFields` era gia' stata rimossa il 2026-07-21 (fetta A1).
 
     window.previewZoomLevel = 1;
     function zoomPreview(delta) {
@@ -1236,7 +1222,6 @@
             });
             jsonTextarea.value = JSON.stringify(data, null, 4);
             markDirty();
-            applyUncertaintyHighlights();
         } catch (e) {}
     }
 
@@ -1255,57 +1240,14 @@
                     if (hInput) hInput.value = q[k][0]; if (aInput) aInput.value = q[k][1];
                 }
             });
-            applyUncertaintyHighlights();
         } catch (e) {}
-    }
-
-    function applyUncertaintyHighlights() {
-        // 1. Confidence Highlights — RIMOSSI il 2026-07-21 (fetta A1).
-        //    Evidenziavano i campi con confidence < 0.7: una soglia che sui dati
-        //    reali non si attiva mai (tutti gli errori osservati stanno fra 0.90 e
-        //    1.00), quindi l'assenza di evidenziazione veniva letta come "campo
-        //    affidabile" proprio sui campi sbagliati. La confidence resta visibile
-        //    come dato grezzo nei metadati OCR, etichettata "non calibrata".
-
-        // 2. Difference Highlights (vs Raw OCR)
-        try {
-            const current = JSON.parse(jsonTextarea.value);
-            const checkDiff = (inputId, currentVal, ocrVal) => {
-                const el = document.getElementById(inputId);
-                if (!el) return;
-                if (currentVal != ocrVal && ocrVal !== undefined) {
-                    el.classList.add('field-differs');
-                    if (!el.parentNode.querySelector('.diff-hint')) {
-                        const hint = document.createElement('div');
-                        hint.className = 'ocr-value-hint diff-hint';
-                        hint.innerHTML = `<span class="ocr-label">OCR</span> ${ocrVal}`;
-                        el.parentNode.appendChild(hint);
-                    }
-                } else {
-                    el.classList.remove('field-differs');
-                    el.parentNode.querySelector('.diff-hint')?.remove();
-                }
-            };
-
-            // Home
-            checkDiff('input-home-final', current.teams?.home?.score, rawExtractedData.teams?.home?.score);
-            for(let i=1; i<=4; i++) {
-                checkDiff(`input-home-q${i}`, current.teams?.home?.period_scores?.[i], rawExtractedData.teams?.home?.period_scores?.[i]);
-            }
-            // Away
-            checkDiff('input-away-final', current.teams?.away?.score, rawExtractedData.teams?.away?.score);
-            for(let i=1; i<=4; i++) {
-                checkDiff(`input-away-q${i}`, current.teams?.away?.period_scores?.[i], rawExtractedData.teams?.away?.period_scores?.[i]);
-            }
-
-        } catch(e) { console.error("Highlight sync error:", e); }
     }
 
     Object.values(scoreInputs).forEach(side => { Object.values(side).forEach(input => { if (input) input.addEventListener('input', syncStructuredToJson); }); });
 
-    // Events Sync Logic
-    const rosterNames = {{ roster_names|safe }};
-    const eventTypes = {{ event_types|safe }};
+    // Events Sync Logic — dati serializzati via json_script (mai repr Python via |safe)
+    const rosterNames = JSON.parse(document.getElementById('roster-names-data').textContent);
+    const eventTypes = JSON.parse(document.getElementById('event-types-data').textContent);
 
     function addEventRow(data = {}) {
         const tbody = document.getElementById('events-tbody');
@@ -1405,7 +1347,6 @@
     window.onload = function() {
         syncJsonToStructured();
         syncJsonToEvents();
-        applyUncertaintyHighlights();
         autoFocusFirstProblem();
         renderValidationNotes();
         try {
