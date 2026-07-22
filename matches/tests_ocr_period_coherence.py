@@ -310,3 +310,32 @@ class PeriodCheckAtPublishTest(SimpleTestCase):
         safe, blockers, warnings = OCRSchemaValidator.assess_publish_readiness(wrap(REPORT_11))
         self.assertFalse(safe)
         self.assertTrue(any("Incoerenza eventi" in b for b in blockers))
+
+
+class PenaltyGoalCountingTest(SimpleTestCase):
+    """Referto 11, blocker 'P3 OSPITE 0 eventi-gol vs parziale 1' (before/after V3.1).
+
+    Il gol su rigore del Libertas era stato tipizzato 'PENALTY_GOAL', un tipo FUORI
+    da SCORE_EVENT_CODES, quindi scartato dal conteggio -> deficit. Con V3.1 il gol su
+    rigore resta 'GOAL' con is_penalty=true e viene contato: il blocker sparisce.
+    """
+
+    def _p3_away_goal(self, ev_type, is_penalty):
+        return {
+            "scores": {"final_score": "0-1", "quarters": {"3": [0, 1]}},
+            "events": [{"type": ev_type, "team": "away", "quarter": 3, "is_penalty": is_penalty}],
+        }
+
+    def test_before_invented_penalty_goal_type_is_discarded(self):
+        r = OCRSchemaValidator.check_goal_events_per_period(
+            self._p3_away_goal("PENALTY_GOAL", True))
+        row = r["rows"][0]
+        self.assertEqual(row["away_goals"], 0)          # scartato: tipo fuori enum
+        self.assertEqual(row["away_outcome"], PERIOD_DEFICIT)
+
+    def test_after_goal_with_is_penalty_is_counted(self):
+        r = OCRSchemaValidator.check_goal_events_per_period(
+            self._p3_away_goal("GOAL", True))
+        row = r["rows"][0]
+        self.assertEqual(row["away_goals"], 1)          # GOAL+is_penalty conta come gol
+        self.assertEqual(row["away_outcome"], PERIOD_OK)

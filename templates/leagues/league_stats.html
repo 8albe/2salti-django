@@ -179,6 +179,71 @@
             </div>
         </div>
 
+        <!-- FOULED OUT (3 espulsioni = fuori partita) -->
+        <div class="glass-panel p-6 relative overflow-hidden group border-slate-700/50">
+            <div class="absolute top-0 right-0 w-32 h-32 bg-orange-500/10 rounded-full blur-3xl -mr-16 -mt-16"></div>
+
+            <h2 class="text-xl font-bold text-orange-400 mb-6 flex items-center">
+                <i class="fas fa-ban mr-3"></i>
+                Usciti per falli (3 espulsioni)
+            </h2>
+
+            <div class="overflow-x-auto">
+                <table class="w-full text-left border-collapse">
+                    <thead>
+                        <tr class="text-slate-400 text-sm border-b border-white/10">
+                            <th class="py-3 px-2">#</th>
+                            <th class="py-3 px-2">Atleta</th>
+                            <th class="py-3 px-2">Squadra</th>
+                            <th class="py-3 px-2 text-right">Volte</th>
+                        </tr>
+                    </thead>
+                    <tbody class="text-slate-200 divide-y divide-white/5">
+                        {% for player in fouled_out %}
+                        <tr class="hover:bg-white/5 transition-colors group">
+                            <td class="py-4 px-4 font-mono text-slate-500 font-bold">
+                                {{ forloop.counter }}
+                            </td>
+                            <td class="py-4 px-4">
+                                <div class="font-bold text-white group-hover:text-orange-400 transition-colors">
+                                    {{ player.player__first_name }} {{ player.player__last_name }}
+                                </div>
+                            </td>
+                            <td class="py-4 px-4">
+                                <div class="flex items-center gap-3">
+                                    <div
+                                        class="w-8 h-8 rounded-full bg-slate-800 flex items-center justify-center p-1 border border-white/10 shrink-0">
+                                        {% if player.team__society__logo %}
+                                        <img src="/media/{{ player.team__society__logo }}"
+                                            class="w-full h-full object-contain" alt="{{ player.team__society__name }}">
+                                        {% else %}
+                                        <span class="text-xs">🛡️</span>
+                                        {% endif %}
+                                    </div>
+                                    <div class="text-sm text-slate-300 hidden sm:block">
+                                        {{ player.team__name }}
+                                    </div>
+                                </div>
+                            </td>
+                            <td class="py-4 px-4 text-right">
+                                <div
+                                    class="font-display font-bold text-2xl text-orange-500 drop-shadow-[0_0_8px_rgba(249,115,22,0.4)]">
+                                    {{ player.fouled_out_count }}
+                                </div>
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="4" class="py-8 text-center text-slate-500 italic">
+                                Nessun giocatore uscito per falli.
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
     </div>
 </div>
 {% endblock %}

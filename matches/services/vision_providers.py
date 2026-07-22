@@ -158,6 +158,18 @@ OCR_SYSTEM_PROMPT_V3 = """
            - TABELLE A DESTRA ('STORIA CRONOMETRICA'): Elenca tutti gli eventi.
            - Colonne: Tempo (Minuto), N. Calottina (chi fa l'azione), Evento (GOL, ET per Esclusione 20", TR per Rigore, ecc.).
            - Importante: Trascrivi i gol (GOL) e le espulsioni (ET come EXCLUSION_20).
+           - USA SOLO i tipi dell'enum "type" qui sotto. NON inventare MAI tipi
+             fuori enum (es. NON usare "PENALTY_GOAL", "TR", "RIGORE" come "type"):
+             il rigore si esprime col flag "is_penalty", non con un tipo nuovo.
+           - RIGORI (flag "is_penalty", default false):
+             * Il GOL segnato su rigore va trascritto come "type": "GOAL" con
+               "is_penalty": true (il "team"/calottina sono di chi SEGNA).
+             * L'ESPULSIONE che comporta un rigore per gli avversari va trascritta
+               come "type": "EXCLUSION_20" con "is_penalty": true (la calottina è di
+               chi COMMETTE il fallo, non di chi tira).
+             * Un rigore parato o sbagliato NON produce un GOAL: resta solo
+               l'espulsione con "is_penalty": true, senza gol corrispondente.
+             * Per ogni altro evento "is_penalty" è false (o omesso).
            - PERIODO DI OGNI EVENTO ("quarter"): la 'STORIA CRONOMETRICA' è divisa in
              sezioni o blocchi, uno per periodo (1°, 2°, 3°, 4° tempo). Ricava il campo
              "quarter" di ogni evento dalla SEZIONE in cui l'evento è scritto, non dal
@@ -255,6 +267,7 @@ OCR_SYSTEM_PROMPT_V3 = """
                     "team": "home|away",
                     "minute": <int o null>,
                     "quarter": <int o null>,
+                    "is_penalty": <true|false: true se GOAL segnato su rigore o EXCLUSION_20 che ha comportato un rigore; altrimenti false>,
                     "sanction_duration": <null o intero secondi (es: 20 per esclusione 20 secondi)>
                 }
             ]
@@ -456,8 +469,14 @@ class BaseVisionProvider:
                 if isinstance(p.get("name"), str):
                     p["name"] = p["name"].strip()
 
-        # Ensure events structure
+        # Ensure events structure. `is_penalty` è additivo e retrocompatibile:
+        # un'estrazione che non lo emette (V2, mock, prompt più vecchi) lo riceve
+        # a false qui, così il percorso a valle può leggerlo sempre come booleano.
         data.setdefault("events", [])
+        if isinstance(data["events"], list):
+            for ev in data["events"]:
+                if isinstance(ev, dict):
+                    ev["is_penalty"] = bool(ev.get("is_penalty", False))
 
         return data
 

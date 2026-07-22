@@ -312,6 +312,7 @@ class PublishingService:
                                     player_id=ed["player_id"],
                                     minute=ed["minute"] or 0,
                                     quarter=ed.get("quarter") or 1,
+                                    is_penalty=ed.get("is_penalty", False),
                                     notes=ed["notes"]
                                 )
                                 created_events_count += 1

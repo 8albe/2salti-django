@@ -992,6 +992,20 @@ class OcrPromptV3ContentTest(TestCase):
             {"v2": OCR_SYSTEM_PROMPT_V2, "v3": OCR_SYSTEM_PROMPT_V3},
         )
 
+    def test_v3_hash_is_pinned(self):
+        # V3 è il prompt promosso a produzione (syllabus §8.x). Come V2, il suo hash
+        # è fissato qui: un cambio deve essere una decisione esplicita, non silenziosa,
+        # perché rende i run bench non confrontabili a cavallo del cambio.
+        # Genealogia: la baseline V3 del 22/07 (§8.12) girò su 87b86a945215; il giro
+        # successivo (V3.1, 22/07) ha aggiunto events[].is_penalty per esprimere il
+        # rigore senza tipo inventato (PENALTY_GOAL), portando l'hash a be51e9c6bc42.
+        import hashlib
+        from matches.services.vision_providers import OCR_SYSTEM_PROMPT_V3
+        self.assertEqual(
+            hashlib.sha256(OCR_SYSTEM_PROMPT_V3.encode("utf-8")).hexdigest()[:12],
+            "be51e9c6bc42",
+        )
+
     def test_v3_contains_the_three_experimental_changes(self):
         from matches.services.vision_providers import OCR_SYSTEM_PROMPT_V3
         # (a) anti-riconciliazione sulla griglia parziali
@@ -1004,6 +1018,15 @@ class OcrPromptV3ContentTest(TestCase):
         self.assertIn("cifra per cifra", OCR_SYSTEM_PROMPT_V3)
         self.assertIn('"date_digits"', OCR_SYSTEM_PROMPT_V3)
         self.assertIn('"date": <0.0-1.0>', OCR_SYSTEM_PROMPT_V3)
+
+    def test_v3_1_models_penalty_via_is_penalty_flag_not_invented_type(self):
+        """V3.1: il rigore si esprime col flag is_penalty, MAI con un tipo fuori enum."""
+        from matches.services.vision_providers import OCR_SYSTEM_PROMPT_V3
+        self.assertIn('"is_penalty"', OCR_SYSTEM_PROMPT_V3)
+        self.assertIn("NON inventare MAI tipi", OCR_SYSTEM_PROMPT_V3)
+        self.assertIn("PENALTY_GOAL", OCR_SYSTEM_PROMPT_V3)  # citato come esempio da NON usare
+        # il GOL su rigore resta type GOAL (conta come gol), non un tipo nuovo
+        self.assertIn('"type": "GOAL" con', OCR_SYSTEM_PROMPT_V3)
 
 
 class OcrZonePromptTest(TestCase):
@@ -1282,21 +1305,40 @@ class OcrBenchEventsRosterComparisonTest(TestCase):
     def test_roster_comparison_matches_surnames_and_isolates_ambiguous(self):
         from matches.management.commands.ocr_bench import compare_roster_to_truth
         data = {"teams": {
-            "home": {"players": [{"number": 6, "name": "DE LENA D."},      # cognome ok, iniziale ok
-                                 {"number": 9, "name": "PROIETTA A."}]},   # cognome sbagliato
-            "away": {"players": [{"number": 2, "name": "MUSTAZZA D."},     # ok
+            "home": {"players": [{"number": 6, "name": "DE LENA D."},      # esatto
+                                 {"number": 9, "name": "CARLEALE A."}]},   # altro giocatore (d>=2)
+            "away": {"players": [{"number": 2, "name": "MUSTAZZA D."},     # esatto
                                  {"number": 5, "name": "DELLA RORTELLA C."},
                                  {"number": 10, "name": "QUALCUNO X."}]},
         }}
         res = compare_roster_to_truth(self._case(), data)
-        self.assertEqual(res["home"]["surname_matched"], 1)      # #6
-        self.assertEqual(res["home"]["surname_mismatched"], 1)   # #9
+        self.assertEqual(res["home"]["surname_matched"], 1)      # #6 de lena
+        self.assertEqual(res["home"]["surname_approx"], 0)
+        self.assertEqual(res["home"]["surname_mismatched"], 1)   # #9 proietti vs carleale
         self.assertEqual(res["home"]["unresolved_in_truth"], 0)
         # away: #2 match; #5 e #10 sono ambigui/sconosciuti in truth -> fuori confronto,
         # mai contati come errore dell'OCR.
         self.assertEqual(res["away"]["surname_matched"], 1)
         self.assertEqual(res["away"]["surname_mismatched"], 0)
         self.assertEqual(res["away"]["unresolved_in_truth"], 2)
+
+    def test_roster_comparison_single_letter_error_is_approx_not_mismatch(self):
+        """garbelli/barbelli: una lettera sostituita -> approx, distinto dal leggere un altro."""
+        from matches.management.commands.ocr_bench import compare_roster_to_truth
+        case = {"truth": {"rosters": {
+            "home": {"players": [{"number": 1, "name": "garbelli c."},   # -> approx (g->b, d=1)
+                                 {"number": 2, "name": "de lena d."}]},   # -> esatto
+            "away": {"players": []},
+        }}}
+        data = {"teams": {
+            "home": {"players": [{"number": 1, "name": "BARBELLI G."},
+                                 {"number": 2, "name": "DE LENA X."}]},
+            "away": {"players": []},
+        }}
+        res = compare_roster_to_truth(case, data)
+        self.assertEqual(res["home"]["surname_matched"], 1)      # #2
+        self.assertEqual(res["home"]["surname_approx"], 1)       # #1: una lettera
+        self.assertEqual(res["home"]["surname_mismatched"], 0)
 
     def test_returns_none_when_case_has_no_events_or_rosters(self):
         from matches.management.commands.ocr_bench import (

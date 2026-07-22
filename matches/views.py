@@ -195,7 +195,7 @@ def upload_report(request, match_id=None):
 def league_statistics(request, league_slug):
     """Pagina statistiche avanzate campionato"""
     from core.models import League
-    from .stats_services import get_top_scorers, get_discipline_stats
+    from .stats_services import get_top_scorers, get_discipline_stats, get_fouled_out_stats
     
     league = get_object_or_404(League, slug=league_slug)
     
@@ -239,10 +239,14 @@ def league_statistics(request, league_slug):
         
     bad_boys_list.sort(key=bad_boy_sort_key)
 
+    # 4. Fouled out: quante volte un giocatore raggiunge le 3 espulsioni (dato derivato)
+    fouled_out_list = list(get_fouled_out_stats(league.id, limit=15))
+
     context = {
         'league': league,
         'top_scorers': top_scorers_list[:15], # Show top 15
         'bad_boys': bad_boys_list[:15],       # Show top 15
+        'fouled_out': fouled_out_list,
         'sport': league.sport,
         'sport_color': league.sport.hex_color,
         'seo_title': f"Statistiche e Marcatori {league.name}",

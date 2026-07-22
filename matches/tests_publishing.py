@@ -134,6 +134,38 @@ class PublishingServiceTestCase(TestCase):
         self.assertEqual(self.match.away_score, 8)
         self.assertEqual(self.match.quarter_scores["1"], [3, 2])
 
+    def test_penalty_goal_propagates_is_penalty_to_matchevent(self):
+        """Un GOAL con is_penalty=true conta come gol E propaga il flag al MatchEvent DB.
+
+        Referto 11: il gol su rigore del Libertas veniva scartato perche' tipizzato
+        PENALTY_GOAL (fuori enum). Con V3.1 resta type GOAL + is_penalty: qui verifichiamo
+        il percorso a valle (converter -> MatchEvent.is_penalty).
+        """
+        from matches.models import MatchEvent
+        from matches.event_types import SCORE_EVENT_CODES
+
+        data = self.report.normalized_data
+        marked = False
+        for e in data["events"]:
+            if e["team"] == "away" and e["type"] == "GOAL":
+                e["is_penalty"] = True
+                marked = True
+                break
+        self.assertTrue(marked, "setUp deve avere almeno un gol away da marcare")
+        self.report.normalized_data = data
+        self.report.save(update_fields=["normalized_data"])
+
+        success, _msg = PublishingService.publish_report(self.report)
+        self.assertTrue(success)
+
+        penalties = MatchEvent.objects.filter(match=self.match, is_penalty=True)
+        self.assertEqual(penalties.count(), 1)
+        pen = penalties.first()
+        # resta un gol: conta nelle statistiche (SCORE_EVENT_CODES), non un tipo a parte
+        self.assertIn(pen.event_type, SCORE_EVENT_CODES)
+        # gli altri eventi restano is_penalty=false (default retrocompatibile)
+        self.assertTrue(MatchEvent.objects.filter(match=self.match, is_penalty=False).exists())
+
     def test_publish_invalid_state(self):
         """Verifica che i report non VALIDATED non vengano pubblicati"""
         self.report.status = MatchReport.Status.EXTRACTED

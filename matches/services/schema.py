@@ -470,6 +470,19 @@ class OCRSchemaValidator:
         warnings.extend(period_check["messages"]["excess"])
         warnings.extend(period_check["messages"]["distribution"])
 
+        # 4-ter. Espulsioni per giocatore oltre il limite di 3 (regolamento pallanuoto).
+        # Un 4o cartellino per lo stesso giocatore e' impossibile a regolamento: alla
+        # terza il giocatore e' fuori partita. Se l'estrazione lo produce, e' un errore
+        # di lettura (es. due giocatori diversi collassati sullo stesso nome, o un evento
+        # duplicato). Simmetrico alla validazione sui casi gold (trascrizione umana).
+        from ..event_types import players_over_exclusion_limit, FOUL_OUT_EXCLUSIONS
+        for team, identity, cnt in players_over_exclusion_limit(events):
+            side = {"home": "CASA", "away": "OSPITE"}.get(team, team or "?")
+            warnings.append(
+                f"Espulsioni oltre il limite: giocatore {identity} ({side}) con {cnt} "
+                f"espulsioni (max {FOUL_OUT_EXCLUSIONS} a regolamento) — possibile errore di estrazione."
+            )
+
         # 5. Unicità numeri giocatori
         teams = data.get("teams", {})
         for t_side in ["home", "away"]:

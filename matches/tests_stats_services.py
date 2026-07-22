@@ -2,7 +2,7 @@ from django.test import TestCase
 from django.contrib.auth import get_user_model
 from core.models import League, Sport, Society, Team
 from matches.models import Match, MatchEvent, MatchReport
-from matches.stats_services import get_top_scorers, get_discipline_stats
+from matches.stats_services import get_top_scorers, get_discipline_stats, get_fouled_out_stats
 from django.utils import timezone
 from django.core.files.uploadedfile import SimpleUploadedFile
 
@@ -61,3 +61,20 @@ class StatsTestCase(TestCase):
         self.assertEqual(len(bad_boys_list), 1)
         self.assertEqual(bad_boys_list[0]['player__last_name'], "Di Fulvio")
         self.assertEqual(bad_boys_list[0]['total_expulsions'], 1)
+
+    def test_fouled_out_counts_matches_with_three_exclusions(self):
+        # p1 raggiunge 3 espulsioni in questa partita (fouled out); p2 ne ha 1 (dal setUp).
+        for m in (5, 6, 7):
+            MatchEvent.objects.create(
+                match=self.match, event_type='EXCLUSION_20', player=self.p1,
+                team=self.team, minute=m, quarter=4,
+            )
+        fouled = list(get_fouled_out_stats(self.league.id))
+        self.assertEqual(len(fouled), 1)
+        self.assertEqual(fouled[0]['player__last_name'], "Velotto")
+        self.assertEqual(fouled[0]['fouled_out_count'], 1)          # 1 partita con >=3
+        self.assertEqual(fouled[0]['total_expulsions_in_fouled_out'], 3)
+
+    def test_fouled_out_empty_when_nobody_reaches_three(self):
+        # Nel setUp base nessuno arriva a 3 espulsioni.
+        self.assertEqual(list(get_fouled_out_stats(self.league.id)), [])

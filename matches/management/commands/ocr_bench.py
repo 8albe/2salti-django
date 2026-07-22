@@ -319,6 +319,36 @@ def _norm_surname(name):
     return s or None
 
 
+def _edit_distance_le1(a, b):
+    """True se `a` e `b` distano al più 1 edit (sostituzione/inserimento/cancellazione).
+
+    Bounded a 1: distingue 'l'OCR ha sbagliato una lettera' (pelliccione/pellicone,
+    d=1) da 'ha letto un altro giocatore' (d>=2). Non serve un Levenshtein pieno.
+    """
+    if a == b:
+        return True
+    la, lb = len(a), len(b)
+    if abs(la - lb) > 1:
+        return False
+    if la == lb:  # una sola sostituzione ammessa
+        return sum(1 for x, y in zip(a, b) if x != y) == 1
+    # lunghezze che differiscono di 1: b deve essere a con un carattere inserito
+    if la > lb:
+        a, b, la, lb = b, a, lb, la
+    i = j = 0
+    skipped = False
+    while i < la and j < lb:
+        if a[i] == b[j]:
+            i += 1
+            j += 1
+        elif skipped:
+            return False
+        else:
+            skipped = True  # salta il carattere in più di b
+            j += 1
+    return True
+
+
 def compare_events_to_truth(case, data):
     """Confronto ADDITIVO eventi estratti vs truth eventi di un caso gold.
 
@@ -390,9 +420,14 @@ def compare_roster_to_truth(case, data):
     """Confronto ADDITIVO roster estratto vs truth roster di un caso gold.
 
     Ritorna None se il caso non ha `truth.rosters`. Per lato confronta, per numero di
-    calottina, se il COGNOME e' stato letto (match su cognome normalizzato, iniziale
-    ignorata). Le caselle truth senza nome (ambigue o sconosciute, es. away #5 e #10 del
-    caso Olympic) NON sono confrontabili e vengono contate a parte (`unresolved_in_truth`),
+    calottina, se il COGNOME e' stato letto. Tre esiti distinti, mai collassati:
+      - `surname_matched`: cognome normalizzato IDENTICO;
+      - `surname_approx`: distanza di edit == 1 (una lettera sbagliata, es.
+        pelliccione/pellicone) — l'OCR ha letto QUEL giocatore ma con un refuso,
+        diverso dall'aver letto un altro giocatore;
+      - `surname_mismatched`: distanza >= 2 (o numero assente nell'estrazione).
+    Le caselle truth senza nome (ambigue o sconosciute, es. away #5 e #10 del caso
+    Olympic) NON sono confrontabili e vengono contate a parte (`unresolved_in_truth`),
     mai come errore dell'OCR.
     """
     truth = case.get("truth") or {}
@@ -408,7 +443,7 @@ def compare_roster_to_truth(case, data):
         for p in e_players:
             if isinstance(p, dict) and p.get("number") is not None:
                 e_by_num[p["number"]] = _norm_surname(p.get("name"))
-        matched = mismatched = unresolved = 0
+        matched = approx = mismatched = unresolved = 0
         details = []
         for tp in t_players:
             if not isinstance(tp, dict):
@@ -419,17 +454,21 @@ def compare_roster_to_truth(case, data):
                 unresolved += 1
                 continue
             e_norm = e_by_num.get(num)
-            ok = e_norm is not None and e_norm == t_norm
-            if ok:
+            if e_norm is not None and e_norm == t_norm:
                 matched += 1
+            elif e_norm is not None and _edit_distance_le1(e_norm, t_norm):
+                approx += 1
+                details.append({"number": num, "truth": tp.get("name"),
+                                "extracted_norm": e_norm, "kind": "approx"})
             else:
                 mismatched += 1
                 details.append({"number": num, "truth": tp.get("name"),
-                                "extracted_norm": e_norm})
+                                "extracted_norm": e_norm, "kind": "mismatch"})
         out[side] = {
             "truth_size": len(t_players),
             "extracted_size": len(e_players),
             "surname_matched": matched,
+            "surname_approx": approx,
             "surname_mismatched": mismatched,
             "unresolved_in_truth": unresolved,
             "mismatches": details,
