@@ -794,6 +794,19 @@ Due difetti della stessa famiglia (data UTC dove serviva Europe/Rome), **severit
 
 **Non-fratelli, verificati:** `matches/services/match_discovery.py:70` (`match_date__date=target_date`) — `target_date` è la data **estratta dal referto**, non "oggi": scenario diverso, non questo bug. `management/ops_services.py:120` usa già `timezone.localdate()` — è il pattern corretto, precedente da imitare.
 
+### §10.30 `report_review` scrive il Match fuori da `publish_report` e corrompe `normalized_data` al publish — DEBITO APERTO 2026-07-22 (severità media)
+
+La view staff `report_review` ([matches/views.py](../matches/views.py), ramo POST della review manuale) **viola l'Opzione A** (ratificata 2026-07-21: `Match` è una proiezione del referto, `publish_report` ne è l'unico scrittore legittimo). Tre difetti distinti nello stesso ramo:
+1. scrive `match.home_score`/`away_score`/`quarter_scores`/`is_finished` **direttamente** dai campi della form, non via `publish_report` — il Match smette di essere una proiezione del referto;
+2. crea/cancella `MatchEvent` a mano (loop sui `player_goals_*` della form), fuori dal converter e dai guardrail;
+3. al publish, se `report.normalized_data` esiste, lo **sovrascrive** con `{'home_score', 'away_score'}` in `normalized_data['match_info']` — **distruggendo** nomi squadre, data e tutto il resto di `match_info`, poi chiama `publish_report` su quel payload mutilato.
+
+**Perché non è esploso finora:** il percorso reale dei 5 referti gold passa dalla **review admin** (`MatchReportAdmin.review_view`), non da questa view; e nessun referto è ancora stato pubblicato in produzione. Ma è un percorso vivo e raggiungibile da uno staff, e con l'arrivo del publish score-only (Opzione A) la superficie di pubblicazione cresce.
+
+**Severità media:** non tocca dati pubblici oggi (nessun `PUBLISHED` su prod), ma può corrompere `normalized_data` — l'evidenza-livello-di-correzione — in modo silenzioso e irreversibile appena qualcuno usa questa view per pubblicare.
+
+**Condizione di riapertura / fix:** riscrivere il ramo POST di `report_review` perché deleghi a `publish_report` (proiezione, eventi, guardrail, livello) invece di scrivere Match e `MatchEvent` a mano, e **non** rimpiazzare mai `match_info` con un dict di soli punteggi. Da fare in un giro dedicato con i suoi test; **non** toccato dalla task Opzione A del 2026-07-22 (che lo ha solo registrato qui).
+
 ## 11. Sicurezza operativa e frontiera reversibile
 
 Questa sezione codifica le regole di sicurezza operativa emerse dalle sessioni di aprile-maggio 2026, e in particolare consolidate dopo l'incidente del 4 maggio 2026 in cui una password sudo in chiaro è stata trovata nella history pubblica del repo (`install_service.sh`, commit `473c296` del 15 marzo 2026). La regola madre è che le operazioni con effetti permanenti, distruttivi o privilegiati passano per Alberto e mai per l'agente, e che i segreti non transitano mai in contesti condivisi.
