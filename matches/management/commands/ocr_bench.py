@@ -303,6 +303,140 @@ def compare_extraction_to_truth(case, data):
     return fields, inversion
 
 
+def _norm_surname(name):
+    """Cognome normalizzato per confronto: minuscole, iniziale finale e formattazione rimosse.
+
+    'DE LENA D.' e 'de lena d.' -> 'delena'; "D'ANGELO C." -> 'dangelo'. Il confronto
+    ignora l'iniziale del nome (spesso illeggibile e non discriminante) e punteggiatura,
+    perche' il segnale utile e' se il COGNOME e' stato letto, non la sua formattazione.
+    Ritorna None se il nome non e' una stringa (es. casella ambigua o sconosciuta in truth).
+    """
+    if not isinstance(name, str):
+        return None
+    s = name.strip().lower()
+    s = re.sub(r"\s+[a-z]\.?$", "", s)   # via l'iniziale finale ('d.', 'm')
+    s = re.sub(r"[^a-z]", "", s)          # via spazi, apostrofi, punti
+    return s or None
+
+
+def compare_events_to_truth(case, data):
+    """Confronto ADDITIVO eventi estratti vs truth eventi di un caso gold.
+
+    Non tocca il confronto sui punteggi (compare_extraction_to_truth): misura la
+    dimensione EVENTI, oggi assente dal bench. Ritorna None se il caso non ha
+    `truth.events` (retrocompatibile: i casi senza eventi verificati restano invariati).
+
+    Usa gli stessi SCORE_EVENT_CODES della pipeline: un gol tipizzato con un codice
+    fuori da quell'insieme (es. 'PENALTY_GOAL', emesso davvero dal modello sul referto
+    11) NON conta come gol, esattamente come nel gate di pubblicazione — cosi' il bench
+    riproduce il difetto reale invece di mascherarlo.
+
+    Confronta cio' che entrambe le zone hanno in comune: tipo + squadra + periodo.
+    L'attribuzione al singolo giocatore NON e' confrontabile qui (la truth porta la
+    calottina, l'OCR il nome), ma la presenza/assenza dell'autore sul gol lo e':
+    `goals_with_author` misura il blocker 'Zero Eventi'.
+    """
+    truth = case.get("truth") or {}
+    truth_events = truth.get("events")
+    if not isinstance(truth_events, list):
+        return None
+    from matches.event_types import SCORE_EVENT_CODES
+
+    def summarize(events):
+        goals_by_pt = {}
+        goals_total = {"home": 0, "away": 0}
+        goals_with_author = 0
+        for e in events or []:
+            if not isinstance(e, dict):
+                continue
+            if e.get("type") in SCORE_EVENT_CODES and e.get("team") in ("home", "away"):
+                side = e["team"]
+                goals_total[side] += 1
+                q = e.get("quarter")
+                key = f"{'' if q is None else str(q).strip()}:{side}"
+                goals_by_pt[key] = goals_by_pt.get(key, 0) + 1
+                if e.get("player_name") or e.get("player") or e.get("cap") is not None:
+                    goals_with_author += 1
+        return goals_by_pt, goals_total, goals_with_author
+
+    t_by_pt, t_total, _ = summarize(truth_events)
+    ext_events = data.get("events") or []
+    e_by_pt, e_total, e_author = summarize(ext_events)
+
+    periods = sorted(
+        {k.split(":")[0] for k in set(t_by_pt) | set(e_by_pt) if k.split(":")[0]},
+        key=lambda x: (0, int(x)) if x.isdigit() else (1, x),
+    )
+    per_period = []
+    for q in periods:
+        for side in ("home", "away"):
+            key = f"{q}:{side}"
+            per_period.append({
+                "quarter": q, "team": side,
+                "truth_goals": t_by_pt.get(key, 0),
+                "extracted_goals": e_by_pt.get(key, 0),
+            })
+    return {
+        "truth_goals_total": t_total,
+        "extracted_goals_total": e_total,
+        "extracted_goals_with_author": e_author,
+        "extracted_events_total": len([e for e in ext_events if isinstance(e, dict)]),
+        "truth_events_total": len(truth_events),
+        "per_period_goals": per_period,
+    }
+
+
+def compare_roster_to_truth(case, data):
+    """Confronto ADDITIVO roster estratto vs truth roster di un caso gold.
+
+    Ritorna None se il caso non ha `truth.rosters`. Per lato confronta, per numero di
+    calottina, se il COGNOME e' stato letto (match su cognome normalizzato, iniziale
+    ignorata). Le caselle truth senza nome (ambigue o sconosciute, es. away #5 e #10 del
+    caso Olympic) NON sono confrontabili e vengono contate a parte (`unresolved_in_truth`),
+    mai come errore dell'OCR.
+    """
+    truth = case.get("truth") or {}
+    rosters = truth.get("rosters")
+    if not isinstance(rosters, dict):
+        return None
+    teams = data.get("teams") or {}
+    out = {}
+    for side in ("home", "away"):
+        t_players = ((rosters.get(side) or {}).get("players")) or []
+        e_players = ((teams.get(side) or {}).get("players")) or []
+        e_by_num = {}
+        for p in e_players:
+            if isinstance(p, dict) and p.get("number") is not None:
+                e_by_num[p["number"]] = _norm_surname(p.get("name"))
+        matched = mismatched = unresolved = 0
+        details = []
+        for tp in t_players:
+            if not isinstance(tp, dict):
+                continue
+            num = tp.get("number")
+            t_norm = _norm_surname(tp.get("name"))
+            if t_norm is None:  # casella ambigua/sconosciuta in truth: fuori confronto
+                unresolved += 1
+                continue
+            e_norm = e_by_num.get(num)
+            ok = e_norm is not None and e_norm == t_norm
+            if ok:
+                matched += 1
+            else:
+                mismatched += 1
+                details.append({"number": num, "truth": tp.get("name"),
+                                "extracted_norm": e_norm})
+        out[side] = {
+            "truth_size": len(t_players),
+            "extracted_size": len(e_players),
+            "surname_matched": matched,
+            "surname_mismatched": mismatched,
+            "unresolved_in_truth": unresolved,
+            "mismatches": details,
+        }
+    return out
+
+
 def aggregate_gold_repeats(per_repeat):
     """Aggrega i confronti (fields) di N estrazioni indipendenti sullo stesso caso/modello.
 
@@ -450,6 +584,8 @@ def build_gold_proposal(case, data, provider_label, model, resolved_pk, image_pa
     # Come nello schema esistente: ciò che non è in truth resta unverified.
     verdict.setdefault("roster", "unverified")
     verdict.setdefault("events", "unverified")
+    events_comparison = compare_events_to_truth(case, data)
+    roster_comparison = compare_roster_to_truth(case, data)
     return {
         "case_id": case.get("case_id"),
         "provider": meta.get("provider") or provider_label,
@@ -467,12 +603,21 @@ def build_gold_proposal(case, data, provider_label, model, resolved_pk, image_pa
                 "home_roster": len((teams.get("home") or {}).get("players") or []),
                 "away_roster": len((teams.get("away") or {}).get("players") or []),
             },
+            # Contenuto grezzo persistito additivamente: rende misurabile su dati
+            # esistenti il confronto eventi/roster senza rifare la chiamata API.
+            "events": data.get("events") or [],
+            "rosters": {
+                side: {"players": (teams.get(side) or {}).get("players") or []}
+                for side in ("home", "away")
+            },
         },
         "self_reported_confidence": confidence,
         "extraction_warnings": meta.get("extraction_warnings") or [],
         "verdict": verdict,
         "inversion_check": inversion,
         "comparison": fields,
+        "events_comparison": events_comparison,
+        "roster_comparison": roster_comparison,
         "bench_run": {
             "provider_cli": provider_label,
             "model": model,
@@ -526,12 +671,20 @@ def build_gold_proposal_repeated(case, per_repeat, provider_label, model, resolv
                     "home_roster": len((teams.get("home") or {}).get("players") or []),
                     "away_roster": len((teams.get("away") or {}).get("players") or []),
                 },
+                # Contenuto grezzo persistito additivamente (vedi build_gold_proposal).
+                "events": data.get("events") or [],
+                "rosters": {
+                    side: {"players": (teams.get(side) or {}).get("players") or []}
+                    for side in ("home", "away")
+                },
             },
             "self_reported_confidence": confidence,
             "extraction_warnings": meta.get("extraction_warnings") or [],
             "verdict": verdict,
             "inversion_check": entry["inversion"],
             "comparison": entry["fields"],
+            "events_comparison": compare_events_to_truth(case, data),
+            "roster_comparison": compare_roster_to_truth(case, data),
         })
 
     aggregate_out = {

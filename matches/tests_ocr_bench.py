@@ -1217,3 +1217,90 @@ class OcrBenchSecondPassTest(TestCase):
                 lambda model, pv: zone_extraction("4-19", {}, "2026-01-01"),
                 "--image", loose, "--second-pass", "--first-pass-dir", self.first_dir,
             )
+
+
+class OcrBenchEventsRosterComparisonTest(TestCase):
+    """Confronto ADDITIVO eventi/roster vs truth (compare_events_to_truth / compare_roster_to_truth).
+
+    Funzioni pure: nessun DB, nessun provider. Verificano che il bench misuri la
+    dimensione eventi/roster senza toccare la logica sui punteggi, e che i casi
+    senza truth.events/rosters restino invariati (None).
+    """
+
+    def _case(self):
+        return {
+            "case_id": "test",
+            "truth": {
+                "scores": {"final_score": "3-1", "quarters": {"1": [2, 0], "2": [1, 1]}},
+                "events": [
+                    {"type": "GOAL", "team": "home", "cap": 6, "quarter": 1},
+                    {"type": "GOAL", "team": "home", "cap": 6, "quarter": 1},
+                    {"type": "GOAL", "team": "home", "cap": 9, "quarter": 2},
+                    {"type": "GOAL", "team": "away", "cap": 2, "quarter": 2, "penalty_awarded_goal": True},
+                    {"type": "EXCLUSION_20", "team": "away", "cap": 7, "quarter": 1},
+                ],
+                "rosters": {
+                    "home": {"players": [{"number": 6, "name": "de lena d."},
+                                         {"number": 9, "name": "proietti c."}]},
+                    "away": {"players": [
+                        {"number": 2, "name": "mustazza d."},
+                        {"number": 5, "name": None, "ambiguous": True,
+                         "variants": ["della rortella c.", "della portella c."]},
+                        {"number": 10, "name": None, "unknown": True}]},
+                },
+            },
+        }
+
+    def test_events_comparison_counts_goals_per_period_and_authors(self):
+        from matches.management.commands.ocr_bench import compare_events_to_truth
+        # Estrazione: away goal messo nel periodo sbagliato (P1 invece di P2), e
+        # un gol away tipizzato PENALTY_GOAL (fuori da SCORE_EVENT_CODES: non conta).
+        data = {"events": [
+            {"type": "GOAL", "team": "home", "quarter": 1, "player_name": "X"},
+            {"type": "GOAL", "team": "home", "quarter": 1},          # senza autore
+            {"type": "PENALTY_GOAL", "team": "away", "quarter": 2},  # non-score type
+            {"type": "GOAL", "team": "away", "quarter": 1},          # periodo sbagliato
+        ]}
+        res = compare_events_to_truth(self._case(), data)
+        self.assertEqual(res["truth_goals_total"], {"home": 3, "away": 1})
+        self.assertEqual(res["extracted_goals_total"], {"home": 2, "away": 1})
+        # PENALTY_GOAL non conteggiato come gol: come nel gate di pubblicazione.
+        self.assertEqual(res["extracted_events_total"], 4)
+        # solo 1 dei 3 gol-score estratti ha autore
+        self.assertEqual(res["extracted_goals_with_author"], 1)
+        # tutti i gol truth hanno la calottina -> contati come "con autore"
+        # (verificato indirettamente: la truth ha cap su ogni gol)
+        by = {(r["quarter"], r["team"]): r for r in res["per_period_goals"]}
+        self.assertEqual(by[("1", "home")]["truth_goals"], 2)
+        self.assertEqual(by[("1", "home")]["extracted_goals"], 2)
+        # away: truth in P2, estratto in P1 -> deficit P2, eccesso P1
+        self.assertEqual(by[("2", "away")]["truth_goals"], 1)
+        self.assertEqual(by[("2", "away")]["extracted_goals"], 0)
+        self.assertEqual(by[("1", "away")]["truth_goals"], 0)
+        self.assertEqual(by[("1", "away")]["extracted_goals"], 1)
+
+    def test_roster_comparison_matches_surnames_and_isolates_ambiguous(self):
+        from matches.management.commands.ocr_bench import compare_roster_to_truth
+        data = {"teams": {
+            "home": {"players": [{"number": 6, "name": "DE LENA D."},      # cognome ok, iniziale ok
+                                 {"number": 9, "name": "PROIETTA A."}]},   # cognome sbagliato
+            "away": {"players": [{"number": 2, "name": "MUSTAZZA D."},     # ok
+                                 {"number": 5, "name": "DELLA RORTELLA C."},
+                                 {"number": 10, "name": "QUALCUNO X."}]},
+        }}
+        res = compare_roster_to_truth(self._case(), data)
+        self.assertEqual(res["home"]["surname_matched"], 1)      # #6
+        self.assertEqual(res["home"]["surname_mismatched"], 1)   # #9
+        self.assertEqual(res["home"]["unresolved_in_truth"], 0)
+        # away: #2 match; #5 e #10 sono ambigui/sconosciuti in truth -> fuori confronto,
+        # mai contati come errore dell'OCR.
+        self.assertEqual(res["away"]["surname_matched"], 1)
+        self.assertEqual(res["away"]["surname_mismatched"], 0)
+        self.assertEqual(res["away"]["unresolved_in_truth"], 2)
+
+    def test_returns_none_when_case_has_no_events_or_rosters(self):
+        from matches.management.commands.ocr_bench import (
+            compare_events_to_truth, compare_roster_to_truth)
+        bare = {"truth": {"scores": {"final_score": "1-0"}}}
+        self.assertIsNone(compare_events_to_truth(bare, {"events": [{"type": "GOAL"}]}))
+        self.assertIsNone(compare_roster_to_truth(bare, {"teams": {"home": {}}}))
