@@ -771,7 +771,7 @@ Valutazione fatta e registrata: repo privato, dati limitati a nome+cognome già 
 
 Condizione di riapertura esplicita: se il repo diventasse pubblico, oppure se emergessero altri file storici con PII più estesa (date di nascita, email, contatti), il debito va rivalutato e la bonifica via `git filter-repo` torna sul tavolo — col costo noto della riscrittura di **tutti** gli hash e del re-clone obbligato di ogni copia (`/opt/2salti-new`, `/opt/2salti-dev`, `/home/alberto`).
 
-### §10.29 Data "oggi" calcolata in UTC invece che in Europe/Rome — bug di PRODUZIONE FIXATO (`e435a95`) + sibling LATO-TEST FIXATO (`2e7f9ee`) — 2026-07-21
+### §10.29 Data "oggi" calcolata in UTC invece che in Europe/Rome — CHIUSA 2026-07-22 (bug di PRODUZIONE `e435a95` + sibling LATO-TEST `2e7f9ee` il 21/07; fratelli pilot fixati il 22/07)
 
 Due difetti della stessa famiglia (data UTC dove serviva Europe/Rome), **severità incomparabili**, tenuti distinti apposta.
 
@@ -787,10 +787,12 @@ Due difetti della stessa famiglia (data UTC dove serviva Europe/Rome), **severit
 
 **Prove eseguite dentro la finestra 00:00-02:00 di Roma** (2026-07-21 ~23:00 UTC = 22-07 ~01:00 Roma), perché **fuori dalla finestra non sono riproducibili** (dopo le 02:00 di Roma i tre test tornano verdi da soli, che si fixi o no): view — rosso con `now().date()`, verde con `localdate()`, controprova che i due test default tornano rossi rimettendo il bug; test — rosso prima, verde dopo, controprova che il test fixato **fallisce ancora** sul view buggato (guarda ancora la view, non è stato neutralizzato). Suite intera dopo entrambi i fix: `Ran 770 — OK (skipped=2)`, in-window.
 
-**Fratelli dello stesso pattern trovati col grep, NON fixati in questo giro — DEBITO APERTO:**
-- `management/pilot_services.py:28` (`report_date = date.today()` → `created_at__date`) e `:128` (`today = date.today()` → `timestamp__date`): **stesso difetto confermato**, `date.today()` = data locale-server = UTC. Nella finestra notturna il report pilota conta i bug/feedback "di oggi" sul giorno UTC, sfasando i conteggi vicino alla mezzanotte di Roma. Impatto: report interno ops, basso ma reale. Non fixati qui perché **privi di un test che ne provi il flip nei due versi** in-window; vanno fixati con `timezone.localdate()` quando si potrà provarli.
-- `core/views.py:21` (`today = timezone.now().date()` usato solo in `strftime` del titolo/description SEO): sibling **cosmetico**, nella finestra il titolo mostra la data di ieri. Nessun dato nascosto.
-- `core/utils.py:10` (default `center_date` di `get_calendar_dates`): sibling **latente/morto**, l'unico chiamante (`sport_matches`) passa `center_date` esplicito, quindi il default non è mai esercitato.
+**Fratelli dello stesso pattern trovati col grep — ri-verificati sul codice il 2026-07-22, esito differenziato:**
+- `management/pilot_services.py:28` (`report_date = date.today()`, alimenta `filter(date=…)`, `created_at__date`, `updated_at__date`) e `:128` (`today = date.today()`, alimenta il dedup `AuditLog.filter(timestamp__date=today)`): **bug reali confermati e FIXATI il 2026-07-22** (`timezone.localdate()`, stesso pattern di `e435a95`; import `date` rimosso perché non più usato). Il flip è blindato da due test in `management/tests_pilot_ops.py` (`PilotTimezoneTodayTest`) che **congelano l'orologio** con `mock.patch('django.utils.timezone.now', …)` all'istante `2025-07-15 23:30 UTC` (Roma `2025-07-16`): rossi sul codice buggato, verdi sul fixato, **riproducibili sempre** e non solo nella finestra 00:00-02:00 reale. Controprova eseguita nei due versi.
+- `core/views.py:21` (`today = timezone.now().date()`): **ri-verificato COSMETICO** — `today` è usato **solo** in `seo_title`/`seo_description` via `strftime` (righe ~65-66 di `home()`), **nessuna query** lo consuma. Nella finestra il titolo SEO mostra la data di ieri; nessun dato nascosto, nessun conteggio sfasato. **Non fixato** (nulla di funzionale da correggere).
+- `core/utils.py:10` (default `center_date` di `get_calendar_dates`): **ri-verificato LATENTE/morto** — l'unico chiamante nel repo è `matches/views.py:307` (`get_calendar_dates(center_date=selected_date)`), che passa `center_date` **esplicito**; il default `timezone.now().date()` non è mai esercitato. **Non fixato** (percorso non raggiungibile).
+
+**Grep di chiusura (2026-07-22):** fuori dai tre fratelli noti **non restano** altri `timezone.now().date()` / `date.today()` / `datetime.now().date()` nel codice applicativo (esclusi `.venv`, test e migration). Le due occorrenze superstiti (`core/views.py:21`, `core/utils.py:10`) sono quelle qui sopra, cosmetica e latente. **Voce §10.29 CHIUSA:** il solo bug funzionale (pilot) è fixato e testato; il resto è documentato come non-bug.
 
 **Non-fratelli, verificati:** `matches/services/match_discovery.py:70` (`match_date__date=target_date`) — `target_date` è la data **estratta dal referto**, non "oggi": scenario diverso, non questo bug. `management/ops_services.py:120` usa già `timezone.localdate()` — è il pattern corretto, precedente da imitare.
 
