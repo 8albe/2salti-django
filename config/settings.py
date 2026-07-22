@@ -191,6 +191,9 @@ OCR_PROVIDER = os.getenv("OCR_PROVIDER", "gemini")
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
 GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-2.5-pro")
 OCR_MAX_OUTPUT_TOKENS = int(os.getenv("OCR_MAX_OUTPUT_TOKENS", "32000"))
+# Prompt di sistema OCR di produzione (single-pass). Promosso a v3 il 2026-07-22
+# sui numeri di §8.12 (V3 domina o pareggia V2 su ogni campo, 0 regressioni).
+OCR_PROMPT_VERSION = os.getenv("OCR_PROMPT_VERSION", "v3")
 # OPENAI_API_KEY: usata SOLO da AIStatsEngine (chat stats non-OCR), non dall'OCR.
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
 
