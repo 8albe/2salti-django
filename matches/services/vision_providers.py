@@ -28,7 +28,15 @@ OCR_SYSTEM_PROMPT_V2 = """
            - TABELLE A DESTRA ('STORIA CRONOMETRICA'): Elenca tutti gli eventi.
            - Colonne: Tempo (Minuto), N. Calottina (chi fa l'azione), Evento (GOL, ET per Esclusione 20", TR per Rigore, ecc.).
            - Importante: Trascrivi i gol (GOL) e le espulsioni (ET come EXCLUSION_20).
-        
+           - PERIODO DI OGNI EVENTO ("quarter"): la 'STORIA CRONOMETRICA' è divisa in
+             sezioni o blocchi, uno per periodo (1°, 2°, 3°, 4° tempo). Ricava il campo
+             "quarter" di ogni evento dalla SEZIONE in cui l'evento è scritto, non dal
+             minuto e non dai punteggi parziali.
+           - Se non riesci a stabilire con certezza in quale sezione/periodo cade un
+             evento, scrivi null in "quarter": è un valore ammesso e preferibile.
+             NON dedurre il periodo dal minuto e NON distribuire gli eventi fra i
+             periodi per farli tornare con i punteggi parziali.
+
         REGOLE CRITICHE:
         - Se un dato è ILLEGGIBILE, PARZIALE o AMBIGUO: usa null. NON INDOVINARE MAI.
         - Se un nome è parzialmente leggibile, trascrivi solo le lettere chiare e aggiungi "?" (es. "ROSS?" o "M?RETTI").

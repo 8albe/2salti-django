@@ -13,7 +13,7 @@ I test qui sotto fissano le due meta' del contratto:
 """
 from django.test import TestCase
 
-from core.models import League, Society, Sport, Team
+from core.models import League, Society, Sport, Team, TeamAlias
 from matches.services.ocr_service import (
     TEAM_FUZZY_THRESHOLD,
     normalize_team_name,
@@ -22,10 +22,16 @@ from matches.services.ocr_service import (
     team_similarity,
 )
 
-#: Le 13 squadre realmente a DB su dev e prod al 2026-07-21.
+#: Le 13 squadre realmente a DB su dev al 2026-07-21, DOPO il merge D1 (§8.7).
+#:
+#: Prima di D1 le voci Lazio erano ``'SS. Lazio Nuoto'`` (Allievi, societa' 6) e
+#: ``'S.S. Lazio Nuoto'`` (Serie C, societa' 12): due anagrafiche per un ente
+#: solo. Il merge ha eliminato la societa' 6 e ri-puntato la sua squadra sulla
+#: 12, rinominandola ``'S.S. Lazio Nuoto Allievi'``. Le SQUADRE restano due —
+#: sono in due leghe diverse, ed e' legittimo — ma ora hanno un solo genitore.
 REAL_TEAMS = [
     'Pol. Delta', 'Villa York', 'Nautilus N. Roma', 'Unime', 'Bellator Frusino',
-    'SS. Lazio Nuoto', 'Olimpic Roma P.N.', 'Libertas Roma Eur', 'De Akker',
+    'S.S. Lazio Nuoto Allievi', 'Olimpic Roma P.N.', 'Libertas Roma Eur', 'De Akker',
     'Pro Recco Waterpolo', 'Onda Forte', 'S.S. Lazio Nuoto', 'Zero9',
 ]
 
@@ -186,31 +192,88 @@ class ResolveTeamEntityAgainstRealPopulationTest(TestCase):
             with self.subTest(probe=probe):
                 self.assertIsNone(resolve_team_entity(probe, self.all_teams))
 
-    # --- ambiguita': meglio nessuna risposta che quella sbagliata ---
+    # --- ambiguita' anagrafica Lazio: com'era, e cosa il merge D1 ha cambiato ---
 
-    def test_lazio_duplicate_is_decided_by_a_razor_thin_margin(self):
-        """RISCHIO NOTO, non un comportamento desiderato — motiva D1.
+    def test_lazio_ambiguity_removed_by_the_merge(self):
+        """Il merge D1 (§8.7) ha reso univoca la discovery sui nomi Lazio.
 
-        Le due anagrafiche Lazio (§8.7) sono quasi identiche fra loro. Il
-        posizionale non le raggiungeva affatto (referto orfano); difflib le
-        raggiunge entrambe, e sceglie per uno scarto di ~0.03:
+        Sostituisce ``test_lazio_duplicate_is_decided_by_a_razor_thin_margin``,
+        che fissava il RISCHIO che motivava D1: con due anagrafiche quasi
+        identiche a DB, difflib le raggiungeva entrambe e sceglieva per rumore.
 
-            'SS Lazio Nuoto' -> 'ss. lazio nuoto'  0.846   <- vince
-                             -> 's.s. lazio nuoto' 0.815
+            PRIMA (due anagrafiche)      'SS Lazio Nuoto'
+                -> 'ss. lazio nuoto'      0.8462   <- vinceva, Allievi
+                -> 's.s. lazio nuoto'     0.8148
+                scarto 0.0314
 
-        Cioe' su un referto Lazio la discovery ora RISPONDE, e la risposta e'
-        decisa da un punto e mezzo di rumore fra due anagrafiche che
-        rappresentano la stessa societa' reale. Non e' un aggancio spurio verso
-        una squadra estranea — e' l'ambiguita' anagrafica di §8.7 che si
-        manifesta. La cura e' il merge (fetta D1), non alzare la soglia: a
-        qualunque soglia le due restano indistinguibili.
+            DOPO (una anagrafica, D1)    'SS Lazio Nuoto'
+                -> 's.s. lazio nuoto allievi'  0.6286
+                -> 's.s. lazio nuoto'          0.8148   <- vince, Serie C
+                scarto 0.1862
 
-        Questo test fissa il fatto misurato. Dopo D1 andra' riscritto: con una
-        sola anagrafica Lazio la risposta diventa univoca e legittima.
+        Due cose da non confondere. La prima e' l'irrobustimento: lo scarto
+        passa da 0.03 a 0.19, cioe' da rumore a segnale, e la risposta smette di
+        dipendere da un punto e mezzo di differenza. La seconda e' che **il
+        vincitore cambia**: la stessa grafia che prima andava agli Allievi ora
+        va alla Serie C. E' l'effetto voluto — la scelta di prima era un
+        accidente, non un giudizio — ma resta un cambiamento di SEMANTICA, non
+        solo di robustezza, ed e' il motivo per cui i referti storici hanno
+        bisogno dell'alias verificato dal test successivo.
         """
-        resolved = resolve_team_entity("SS Lazio Nuoto", self.all_teams)
-        self.assertIn(resolved, (self.teams['SS. Lazio Nuoto'], self.teams['S.S. Lazio Nuoto']))
+        allievi = self.teams['S.S. Lazio Nuoto Allievi']
+        serie_c = self.teams['S.S. Lazio Nuoto']
 
-        a = team_similarity(normalize_team_name("SS Lazio Nuoto"), normalize_team_name("SS. Lazio Nuoto"))
-        b = team_similarity(normalize_team_name("SS Lazio Nuoto"), normalize_team_name("S.S. Lazio Nuoto"))
-        self.assertLess(abs(a - b), 0.05, "il margine fra le due Lazio e' rumore, non segnale")
+        self.assertEqual(resolve_team_entity("SS Lazio Nuoto", self.all_teams), serie_c)
+
+        probe = normalize_team_name("SS Lazio Nuoto")
+        s_allievi = team_similarity(probe, normalize_team_name(allievi.name))
+        s_serie_c = team_similarity(probe, normalize_team_name(serie_c.name))
+
+        self.assertGreater(s_serie_c, s_allievi, "vince la Serie C, non gli Allievi")
+        self.assertGreaterEqual(
+            s_serie_c - s_allievi, 0.10,
+            f"scarto {s_serie_c - s_allievi:.4f}: prima di D1 era 0.0314 (rumore), "
+            f"dopo deve essere segnale",
+        )
+        self.assertGreaterEqual(s_serie_c, TEAM_FUZZY_THRESHOLD)
+
+    def test_losing_spelling_still_resolves_through_the_alias(self):
+        """I referti storici col nome vecchio non sono diventati orfani.
+
+        ``SS. Lazio Nuoto`` era il nome della societa' eliminata da D1 e della
+        sua squadra: prima del merge risolveva per exact match sugli Allievi.
+        Il merge lo preserva come ``TeamAlias`` di origine ``ANAGRAFICA``, cosi'
+        un referto gia' compilato con quella grafia continua a risolvere dove
+        risolveva.
+
+        Il test verifica che a decidere sia l'ALIAS e non il fuzzy, e lo fa
+        mostrando che i due darebbero risposte DIVERSE: senza alias la grafia
+        vecchia finirebbe sulla Serie C (0.9677 contro 0.7692), cioe' sulla
+        squadra sbagliata. E' esattamente il danno che l'alias previene.
+        """
+        allievi = self.teams['S.S. Lazio Nuoto Allievi']
+        serie_c = self.teams['S.S. Lazio Nuoto']
+        grafia = "SS. Lazio Nuoto"
+
+        # 1. Senza alias il fuzzy sbaglia squadra: e' la premessa del test.
+        self.assertEqual(
+            resolve_team_entity(grafia, self.all_teams), serie_c,
+            "premessa: senza alias questa grafia finisce sulla Serie C",
+        )
+
+        # 2. Con l'alias creato da D1 la risposta cambia e torna corretta.
+        TeamAlias.objects.create(
+            team=allievi, alias=grafia, alias_normalized=TeamAlias.normalize(grafia),
+            origin=TeamAlias.Origin.ANAGRAFICA,
+            note="Grafia della Society eliminata dal merge D1 (§8.7).",
+        )
+        self.assertEqual(resolve_team_entity(grafia, self.all_teams), allievi)
+
+        # 3. E' l'alias a decidere, non un cambio di punteggi: il fuzzy da solo
+        #    continuerebbe a preferire la Serie C.
+        probe = normalize_team_name(grafia)
+        self.assertGreater(
+            team_similarity(probe, normalize_team_name(serie_c.name)),
+            team_similarity(probe, normalize_team_name(allievi.name)),
+            "il fuzzy preferisce ancora la Serie C: a scavalcarlo e' l'alias",
+        )

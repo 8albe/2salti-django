@@ -64,9 +64,13 @@ class EndToEndPilotVerificationTest(TestCase):
                 "scores": {"final_score": "5-3", "quarters": {"1": [2, 1], "2": [3, 2]}},
                 "teams": {"home": {"players": [{"name": "Velotto", "number": 1}]}, "away": {"players": []}},
                 "events": [
-                    {"type": "GOAL", "team": "home", "player_name": "Velotto", "minute": i, "quarter": 1} for i in range(1, 6)
+                    # Periodi coerenti con i parziali 2-1 / 3-2: dal 2026-07-21 il
+                    # gate confronta gli eventi-gol con il parziale di ogni periodo.
+                    {"type": "GOAL", "team": "home", "player_name": "Velotto", "minute": i,
+                     "quarter": 1 if i <= 2 else 2} for i in range(1, 6)
                 ] + [
-                    {"type": "GOAL", "team": "away", "player_name": "Opponent", "minute": j, "quarter": 1} for j in range(1, 4)
+                    {"type": "GOAL", "team": "away", "player_name": "Opponent", "minute": j,
+                     "quarter": 1 if j <= 1 else 2} for j in range(1, 4)
                 ],
 
                 "reconciliation": {

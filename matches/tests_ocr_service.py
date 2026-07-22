@@ -343,12 +343,15 @@ class PublishReadinessTestCase(TestCase):
                     {"number": i, "name": f"Opponent {i}"} for i in range(1, 14)
                 ]}
             },
+            # Periodi coerenti con i parziali 2-1 / 3-2 / 2-1 / 1-2: dal 2026-07-21
+            # `validate_coherence` confronta gli eventi-gol con il parziale di ogni
+            # periodo, non solo con il totale.
             "events": [
-                {"type": "GOAL", "team": "home", "player_name": f"Player {i}", "minute": i, "quarter": ((i-1) // 2) + 1}
-                for i in range(1, 9)
+                {"type": "GOAL", "team": "home", "player_name": f"Player {i}", "minute": i, "quarter": q}
+                for i, q in zip(range(1, 9), [1, 1, 2, 2, 2, 3, 3, 4])
             ] + [
-                {"type": "GOAL", "team": "away", "player_name": f"Opponent {i}", "minute": i, "quarter": ((i-1) // 2) + 1}
-                for i in range(1, 7)
+                {"type": "GOAL", "team": "away", "player_name": f"Opponent {i}", "minute": i, "quarter": q}
+                for i, q in zip(range(1, 7), [1, 2, 2, 3, 4, 4])
             ],
             "reconciliation": {
                 "home_players": {f"Player {i}": i for i in range(1, 9)},
@@ -705,12 +708,13 @@ class SchemaV2ExtensionTestCase(TestCase):
                 "home": {"name": "Team A", "players": [{"number": i, "name": f"Player {i}"} for i in range(1, 10)]},
                 "away": {"name": "Team B", "players": [{"number": i, "name": f"Opponent {i}"} for i in range(1, 10)]},
             },
+            # Periodi coerenti con i parziali 2-1 / 1-1 / 1-0 / 1-1 (vedi sopra).
             "events": [
-                {"type": "GOAL", "player_name": f"Player {i}", "team": "home", "minute": i * 3, "quarter": 1}
-                for i in range(1, 6)
+                {"type": "GOAL", "player_name": f"Player {i}", "team": "home", "minute": i * 3, "quarter": q}
+                for i, q in zip(range(1, 6), [1, 1, 2, 3, 4])
             ] + [
-                {"type": "GOAL", "player_name": f"Opponent {i}", "team": "away", "minute": i * 4, "quarter": 2}
-                for i in range(1, 4)
+                {"type": "GOAL", "player_name": f"Opponent {i}", "team": "away", "minute": i * 4, "quarter": q}
+                for i, q in zip(range(1, 4), [1, 2, 4])
             ],
             # Reconciliation pre-valorizzata: simula i referti reali già pubblicati
             "reconciliation": {

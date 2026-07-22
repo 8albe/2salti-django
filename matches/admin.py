@@ -411,10 +411,15 @@ class MatchReportAdmin(admin.ModelAdmin):
         ocr_is_valid, ocr_blockers, ocr_warnings, _ = OCRQualityGate.evaluate(
             obj.normalized_data or {}, context=gate_ctx
         )
+        # Tabella per-periodo: EVIDENZA per il revisore, non verdetto. Misura la
+        # coerenza interna del referto estratto (eventi-gol contro parziale dello
+        # stesso periodo) e non puo' dire nulla sulla verita' dei numeri: il
+        # referto 16 e' internamente coerente su parziali falsi (§8.11).
+        period_check = OCRSchemaValidator.check_goal_events_per_period(obj.normalized_data or {})
         meta = (obj.normalized_data or {}).get('metadata', {}) if isinstance(obj.normalized_data, dict) else {}
         confidence = meta.get('confidence', 0.0) or 0.0
         context = self.admin_site.each_context(request)
-        context.update({'opts': self.model._meta, 'original': obj, 'title': f"Review: {obj}", 'potential_matches': potential_matches, 'form': form, 'is_image': obj.file.name.lower().endswith(('.png', '.jpg', '.jpeg')) if obj.file else False, 'reconciliation_data': recon_ui, 'publish_safe': safe, 'publish_blockers': blockers, 'unresolved_count': sum(1 for s in ["home", "away"] for item in recon_ui[s] if item["is_unresolved"]), 'bootstrap': EntityBootstrapService.preview_creation(obj.normalized_data, obj.match) if obj.match else None, 'ocr_is_valid': ocr_is_valid, 'ocr_blockers': ocr_blockers, 'ocr_warnings': ocr_warnings, 'confidence': confidence, 'confidence_percent': round(confidence * 100), 'extraction_warnings': meta.get('extraction_warnings', []), 'report_audit_logs': obj.audit_logs.select_related('user').all()})
+        context.update({'opts': self.model._meta, 'original': obj, 'title': f"Review: {obj}", 'potential_matches': potential_matches, 'form': form, 'is_image': obj.file.name.lower().endswith(('.png', '.jpg', '.jpeg')) if obj.file else False, 'reconciliation_data': recon_ui, 'publish_safe': safe, 'publish_blockers': blockers, 'unresolved_count': sum(1 for s in ["home", "away"] for item in recon_ui[s] if item["is_unresolved"]), 'bootstrap': EntityBootstrapService.preview_creation(obj.normalized_data, obj.match) if obj.match else None, 'ocr_is_valid': ocr_is_valid, 'ocr_blockers': ocr_blockers, 'ocr_warnings': ocr_warnings, 'confidence': confidence, 'confidence_percent': round(confidence * 100), 'extraction_warnings': meta.get('extraction_warnings', []), 'period_check': period_check, 'report_audit_logs': obj.audit_logs.select_related('user').all()})
         return TemplateResponse(request, 'admin/matches/matchreport/review.html', context)
 
 op_admin_site.register(Match, MatchAdmin)

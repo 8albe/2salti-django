@@ -201,6 +201,39 @@ Primo referto reale portato da `UPLOADED` a esito finale dall'asincrono **su pro
 
 **Residuo di Macro 22 dopo questo collaudo:** solo il giro 4 (rimozione dei timeout 300s gunicorn + nginx, §10.20). La macro **non è chiusa**.
 
+### 2.9 Deploy 2026-07-21 — `36296a5` → `2ad3436` (filone OCR post-collaudo: quality gate A1, seam B1, `TeamAlias` C1, discovery difflib)
+
+Deploy reale dev→prod con lo stesso pattern di §2.5/§2.6/§2.7 (merge `--no-ff` `dev`→`master` da home + push; pull su prod; `migrate` manuale gated dopo backup). Prod portato da `36296a5` a **`2ad3436`** (20 commit oltre il merge). **Unica migration nel delta: `core/0026_teamalias`, additiva** (`CreateModel`, tabella `core_teamalias` creata vuota).
+
+**La premessa iniziale era falsa: nessuna migration distruttiva in questo giro.** La session note di partenza dava la distruttiva `matches/0017` (`DROP TABLE matches_ocrrawresponse`) come parte di questo deploy. È **stale**: la `0017` era già applicata su prod dal **2026-07-19** (§2.6). Le tre evidenze usate per stabilirlo, tutte read-only: (a) `git merge-base` e `git diff --name-only master..dev -- '*/migrations/*'` in home, che restituisce la sola `core/migrations/0026_teamalias.py`; (b) `showmigrations matches` sul DB prod, che dà `[X] 0017_delete_ocrrawresponse`; (c) la voce §2.6 di questo runbook, che registra il rituale con cui la `0017` fu applicata. È lo stesso schema del gotcha §2.4: **la narrativa di sessione non è la topologia** — si verifica a git e a DB, non si deduce dal racconto.
+
+**La scoperta è stata codificata nel gate, non solo raccontata.** Il BLOCCO 1 della checklist non si limita a documentare che la `0017` è già applicata: **asserisce** che lo sia, con `exit 1` se `showmigrations` non la desse `[X]` (messaggio: "contraddice OPS §2.6: fermarsi e rivalutare"). Se la premessa stale fosse stata invece quella vera, il giro si sarebbe fermato al primo blocco anziché procedere su un'assunzione. Stesso trattamento per le altre precondizioni: HEAD attesi di home e prod, tree puliti, `core` fermo a `0025`, `0026` assente, `core_teamalias` inesistente, `Team` pk 3 e 7 coi nomi attesi dallo script alias.
+
+**Sequenza eseguita** (checklist a blocchi in `scratch/deploy_prod_filone_ocr_20260721.sh`, untracked: **un blocco alla volta leggendo l'output**, stesso pattern di §2.7 e §2.8 — l'intestazione del file lo dice esplicitamente):
+
+1. **Gate e recon read-only** (sopra): tutte le precondizioni asserite, `exit 1` alla prima che non regge.
+2. **Backup DB prod** in `/var/tmp/db.sqlite3.filone-ocr-20260721`, gate = `PRAGMA integrity_check` + dimensione plausibile, `.sha256` con la **sola riga del backup** (learning §2.5).
+3. **Merge `--no-ff` `dev`→`master` + push** da home (`dev`/`master` divergenti by design, merge-base `144a458`), con asserzione di **tree-equality** `git diff master dev` vuoto dopo il merge.
+4. **Pull su prod** — codice nuovo su disco, schema ancora vecchio: stato **atteso**, non un bug (CLAUDE.md).
+5. **Dry-run della `0026` su copia dell'intero progetto** in `/var/tmp` (il path del DB è hardcoded, gotcha §3.15), con DB copiato dal backup del punto 2 e SHA256 del DB prod reale verificato **invariato** prima/dopo.
+6. **`restart 2salti` PRIMA del `migrate`**, poi `migrate core 0026`, `collectstatic`, `restart 2salti-ocrworker` — rituale §2.6 punto 4 nella variante additiva di §2.7 punto 5: qui la finestra scomoda è **codice nuovo su schema vecchio**, quindi i comandi in sequenza immediata, senza pause.
+7. **Smoke.**
+8. **Post-deploy: alias fondativi.**
+
+**Esito: verde.** Smoke a 4 URL (`/`, `/matches/1/`, `/matches/2/`, `/accounts/login/`) tutti **200**; `showmigrations core` dà `[X] 0026_teamalias`; `2salti` e `2salti-ocrworker` entrambi `active`; nel journal il worker dichiara la riga `Avvio (… revision=2ad3436e…)`, cioè il **nuovo** SHA — la stessa conferma dal vivo già usata in §2.7. `ops_check --mode morning` **GREEN** (`Findings: 1`, non contraddittorio: §3.18 — ma non leggibile, vedi §10.25).
+
+**Post-deploy — i 3 alias fondativi.** Creati su prod con lo script idempotente `scratch/alias_fondativi_20260721.py` (`get_or_create` sulla colonna normalizzata, con assert di autoprotezione sui nomi di `Team` pk 3 e 7), poi **verificati funzionalmente** — non solo contati — richiamando `resolve_team_entity()` su ciascuna grafia: `Olympic Roma P.N.` → `Team` 7, `Nautilus Roma` → `Team` 3, `Nautilus Nuoto Roma` → `Team` 3. `TeamAlias.objects.count() == 3`. Questo chiude la divergenza dev/prod sulla discovery aperta dalla fetta C1: prod ha ora tabella alias e comportamento di risoluzione allineati a dev.
+
+**Divergenza riaperta lo stesso giorno, su un altro asse.** Il merge D1 delle anagrafiche Lazio è **solo su `dev`** (`4daca63`) e **non è propagato su prod**: oggi `SS Lazio Nuoto` risolve **sugli Allievi su prod** e **sulla Serie C su dev**. È il prossimo giro, separato da questo; fino ad allora la discovery dei nomi Lazio dà esiti diversi nei due ambienti — da tenere presente leggendo qualunque referto di quelle squadre.
+
+**Divergenza chiusa il 2026-07-21**: il merge D1 è ora propagato anche su prod (§2.10). `SS Lazio Nuoto` risolve allo stesso modo in entrambi gli ambienti.
+
+### 2.10 Merge D1 anagrafiche Lazio — propagato su prod 2026-07-21 (sola scrittura dati, nessun deploy)
+
+Delta: **nessun codice**, sola scrittura dati — HEAD prod invariato a `2ad3436`. Eseguito con lo stesso corpo `scratch/d1_merge_lazio_core.py` già usato su dev (§8.7 del syllabus), checklist a blocchi in `scratch/d1_merge_lazio_prod_20260721.sh`. Backup pre-merge `/var/tmp/db.sqlite3.d1-lazio-prod-20260721`, sha256 `ec35019c884552a1ec1a2294b045d8d122388d120ef10bb83b7fc961d2d158d1`. Asserzione finale: **11 controlli verdi** contro costanti fissate prima dell'esecuzione. Esito verificato anche via browser: rinomina visibile, nessun duplicato, URL invariati, navigazione OK.
+
+**Nota di recon collegata, non un effetto del merge.** La verifica browser ha rilevato la classifica della lega 4 interamente a zero nonostante il match 3 sia concluso e verificato; recon dedicato (sola lettura, confronto col backup pre-merge) ha stabilito che lo zero è **preesistente** — identico prima e dopo il merge, generale a tutte le leghe di prod, atteso perché nessun referto è in stato `PUBLISHED` — già documentato in syllabus §8.5 e BLUEPRINT (falsi positivi strutturali del monitor integrità).
+
 ## 3. Trappole tecniche note
 
 ### 3.1 `git rm --cached` + file dirty = pull abortito
@@ -627,7 +660,7 @@ Il timer è un **backstop, non il meccanismo primario**: il recupero rapido lo f
 ## 10. Debiti aperti
 
 Registro vivo di problemi noti che richiedono follow-up. Non sono trappole (§3) né bug attivi: sono incoerenze scoperte ma non risolte, da affrontare in sessioni dedicate.
-> Le voci §10.1-10.16 sono CHIUSE e archiviate in Appendice A, che ne conserva razionale, commit e test. Delle voci aperte il 2026-07-19 dal deploy §2.6, **§10.17 e §10.19 sono CHIUSE** (la seconda col deploy §2.7) e restano aperte **§10.18, §10.20** (solo per il giro 4) **e §10.21**. Il deploy §2.7 ha aggiunto **§10.22 e §10.23**; **§10.23 è CHIUSA** col collaudo §2.8 del 2026-07-21.
+> Le voci §10.1-10.16 sono CHIUSE e archiviate in Appendice A, che ne conserva razionale, commit e test. Delle voci aperte il 2026-07-19 dal deploy §2.6, **§10.17 e §10.19 sono CHIUSE** (la seconda col deploy §2.7) e restano aperte **§10.18, §10.20** (solo per il giro 4) **e §10.21**. Il deploy §2.7 ha aggiunto **§10.22 e §10.23**; **§10.23 è CHIUSA** col collaudo §2.8 del 2026-07-21. Il deploy §2.9 del 2026-07-21 ha aggiunto **§10.25 e §10.26**, entrambe aperte.
 
 ### §10.17 `2salti_nginx_config` fuori repo — CHIUSO 2026-07-19
 
@@ -705,6 +738,53 @@ Anomalia minore rilevata nello stesso censimento: `in_review_at` è valorizzato 
 **Decisione presa (Alberto, 2026-07-21): resta in `NEEDS_REVIEW` come orfano documentato.** Nessuna azione a DB. Le squadre lette sul foglio non hanno anagrafica a sistema, quindi non c'è nulla a cui collegarlo: il referto diventerà risolvibile solo se e quando quelle società entreranno a DB. Non è più un punto cieco della strumentazione — è ora in uno stato finale, visibile in review e nel cockpit come ogni altro `NEEDS_REVIEW`.
 
 Resta aperta l'osservazione generale che l'ha originato: **uno stato `UPLOADED` non accodato non è coperto da alcun segnale** di `ops_check`. Nessun referto è oggi in quella condizione, ma nulla impedisce che ne ricompaiano; se accadrà, il segnale va aggiunto.
+
+### §10.24 Naming dei `Team` incoerente con la convenzione dichiarata — APERTO 2026-07-21 (cosmetico)
+
+`Team.name` dichiara nell'`help_text` la convenzione "Society + tipo lega", ma solo alcune squadre la rispettano (il merge D1 di syllabus §8.7 ha lasciato `S.S. Lazio Nuoto Allievi` accanto a `S.S. Lazio Nuoto`, che dovrebbe essere `… Serie C`): l'asimmetria è **preesistente e generale su tutte e 13 le squadre**, quindi va sanata in un giro cosmetico dedicato su tutte o su nessuna — mai su una sola, perché ogni rinomina sposta i punteggi della discovery (§8.6).
+
+### §10.25 `ops_check` conta i findings ma non li stampa — APERTO 2026-07-21
+
+Nello smoke del deploy §2.9 il comando ha riportato `GREEN, Findings: 1` senza alcun modo, a CLI, di sapere **quale** finding fosse (nemmeno con `--verbosity 2`: non esiste il ramo, §3.18); un segnale che non si può leggere non è un segnale, e finché resta così l'unica via è il JSON in `logs/ops/`.
+
+### §10.26 Backup vecchi in accumulo in `/var/tmp`, uno da 0 byte — APERTO 2026-07-21
+
+`/var/tmp` conserva backup DB di giri passati mai ripuliti, fra cui `db.sqlite3.match3-correction-20260719` di **0 byte** — un backup che non contiene nulla e su cui nessun rollback può contare; il gate `PRAGMA integrity_check` + dimensione plausibile del rituale attuale (§2.5) esiste proprio per non produrne altri, ma non ripulisce quelli già a terra.
+
+### §10.27 Coerenza referto 10 / match 3 su prod a un epsilon di floating point dalla soglia — APERTO 2026-07-21
+
+Il punteggio `team_similarity()` fra il nome squadra del referto 10 (`S.S. LAZIO NUOTO`, away) e `Team` 6 (`S.S. Lazio Nuoto Allievi`) vale, bit per bit, `0.80000000000000004441` — lo stesso double di `TEAM_FUZZY_THRESHOLD = 0.80` (`matches/services/ocr_service.py`): l'uguaglianza non è un margine, è un pareggio esatto sulla rappresentazione IEEE 754. Qualunque modifica a `TEAM_FUZZY_THRESHOLD`, `normalize_team_name` o `team_similarity` può spostare quel punteggio sotto soglia senza che nulla lo segnali, orfanizzando il referto 10 rispetto a quella squadra.
+
+### §10.28 PII storica in `scratch/seed_pilot_data.py` — APERTO 2026-07-21 (severità bassa, nessuna bonifica decisa)
+
+Il file contiene nomi e cognomi di atleti **reali** hardcoded nel sorgente, scrapati da 1x2pallanuoto.it, ed è in git dal 2026-04-17 (commit `8f47d34`). De-trackato il 2026-07-21 (`121d210`, con `scratch/` ignorata per intero): è fuori dall'albero versionato e dai commit futuri, ma **resta nella storia** di git e resta raggiungibile a chiunque abbia il repo.
+
+Valutazione fatta e registrata: repo privato, dati limitati a nome+cognome già pubblicati su una fonte pubblica sportiva. **Severità bassa, nessuna bonifica della storia decisa.**
+
+Condizione di riapertura esplicita: se il repo diventasse pubblico, oppure se emergessero altri file storici con PII più estesa (date di nascita, email, contatti), il debito va rivalutato e la bonifica via `git filter-repo` torna sul tavolo — col costo noto della riscrittura di **tutti** gli hash e del re-clone obbligato di ogni copia (`/opt/2salti-new`, `/opt/2salti-dev`, `/home/alberto`).
+
+### §10.29 Data "oggi" calcolata in UTC invece che in Europe/Rome — bug di PRODUZIONE FIXATO (`e435a95`) + sibling LATO-TEST FIXATO (`2e7f9ee`) — 2026-07-21
+
+Due difetti della stessa famiglia (data UTC dove serviva Europe/Rome), **severità incomparabili**, tenuti distinti apposta.
+
+**Il bug di produzione (commit A, `e435a95`).** In `matches/views.py` la view pubblica `sport_matches` usava `today = timezone.now().date()` come default del sotto-filtro data, ma il filtro `match_date__date` opera in `Europe/Rome` (Django, `USE_TZ=True`, `TIME_ZONE='Europe/Rome'`). Il server gira in UTC. Fra le **00:00 e le 02:00 ora di Roma** (server UTC+2 d'estate, +1 d'inverno → finestra di 1-2 ore) `now().date()` restituisce il giorno UTC — ieri, per un utente italiano — mentre le partite del giorno cadono sotto il giorno di Roma. Effetto utente reale: in quella finestra notturna **le partite odierne sparivano dalla lista pubblica** e l'evidenziazione "oggi" del calendario era sfasata di un giorno. Fix: `timezone.localdate()`.
+
+**Come è emerso, e la prova di ortogonalità.** Tre test in `matches/tests_public_read.py` (`test_default_is_current_season`, `test_querystring_overrides_default`, `test_date_subfilter_still_works`, classe `SportMatchesSeasonSelectorTest`) sono passati **rossi** durante il giro del 2026-07-21. Il file era stato toccato l'ultima volta il **2026-06-14** (`62c582c`, Macro 3) — non in questa sessione, i cui commit di codice erano fino a quel momento **solo-doc** e la cui riparazione dati girava su una tabella `MatchReport` invisibile ai test (DB di test isolato, costruito in `setUp`). Nessun meccanismo collegava la sessione a quei rossi: erano ortogonali.
+
+**La prova che è il calendario/orologio, non una regressione.** La stessa suite era **verde il 2026-07-21 alle ~12:36 UTC** (`Ran 749 tests — OK (skipped=2)`, session note del 21/07) e **rossa lo stesso 2026-07-21 alle ~22:35 UTC** (`Ran 770 — failures=3`; i +21 test sono le fette cross-check di questa sessione). Stesso giorno **solare UTC**, ma il secondo run cade **dopo la mezzanotte di Roma**: alle 12:36 UTC `now().date()` e `localdate()` coincidevano (entrambi 2026-07-21), alle 22:35 UTC divergevano (UTC 2026-07-21 vs Roma 2026-07-22). Il delta verde→rosso è la firma della **dipendenza dall'orario**, non dal confine stagionale.
+
+**Ipotesi (i) — "test fragili al season hardcoded" — ESCLUSA.** L'assert `selected_season == "2025/2026"` *passava*: la stagione era calcolata giusta (`Season.is_current`). A svuotarsi era l'insieme delle partite per via del sotto-filtro data. La causa non è mai stata il confine stagionale.
+
+**Il sibling lato-test (commit B, `2e7f9ee`).** Dopo il fix della view, `test_date_subfilter_still_works` restava rosso per un difetto **suo**: costruiva il parametro `?date` con `other_day.date()` — `.date()` su un `datetime` aware, quindi la data **UTC** — incoerente col filtro Roma della view (ormai corretta). Difetto di aritmetica **lato-test, mai visibile a un utente**: lo vede solo chi lancia la suite nella finestra notturna. Fix: `timezone.localtime(other_day).date()`. Tenuto in un commit separato dal bug di produzione apposta: severità incomparabili, la storia di git non deve annacquare la prima nella seconda.
+
+**Prove eseguite dentro la finestra 00:00-02:00 di Roma** (2026-07-21 ~23:00 UTC = 22-07 ~01:00 Roma), perché **fuori dalla finestra non sono riproducibili** (dopo le 02:00 di Roma i tre test tornano verdi da soli, che si fixi o no): view — rosso con `now().date()`, verde con `localdate()`, controprova che i due test default tornano rossi rimettendo il bug; test — rosso prima, verde dopo, controprova che il test fixato **fallisce ancora** sul view buggato (guarda ancora la view, non è stato neutralizzato). Suite intera dopo entrambi i fix: `Ran 770 — OK (skipped=2)`, in-window.
+
+**Fratelli dello stesso pattern trovati col grep, NON fixati in questo giro — DEBITO APERTO:**
+- `management/pilot_services.py:28` (`report_date = date.today()` → `created_at__date`) e `:128` (`today = date.today()` → `timestamp__date`): **stesso difetto confermato**, `date.today()` = data locale-server = UTC. Nella finestra notturna il report pilota conta i bug/feedback "di oggi" sul giorno UTC, sfasando i conteggi vicino alla mezzanotte di Roma. Impatto: report interno ops, basso ma reale. Non fixati qui perché **privi di un test che ne provi il flip nei due versi** in-window; vanno fixati con `timezone.localdate()` quando si potrà provarli.
+- `core/views.py:21` (`today = timezone.now().date()` usato solo in `strftime` del titolo/description SEO): sibling **cosmetico**, nella finestra il titolo mostra la data di ieri. Nessun dato nascosto.
+- `core/utils.py:10` (default `center_date` di `get_calendar_dates`): sibling **latente/morto**, l'unico chiamante (`sport_matches`) passa `center_date` esplicito, quindi il default non è mai esercitato.
+
+**Non-fratelli, verificati:** `matches/services/match_discovery.py:70` (`match_date__date=target_date`) — `target_date` è la data **estratta dal referto**, non "oggi": scenario diverso, non questo bug. `management/ops_services.py:120` usa già `timezone.localdate()` — è il pattern corretto, precedente da imitare.
 
 ## 11. Sicurezza operativa e frontiera reversibile
 

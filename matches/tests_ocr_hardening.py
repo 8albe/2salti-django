@@ -100,10 +100,31 @@ class OCRHardeningTest(TestCase):
         self.assertTrue(any("Incoerenza punteggio" in b for b in blockers))
 
     def test_event_total_exceeds_final_fails(self):
-        """Too many goals in events vs final score should block."""
+        """Too many goals in events vs final score should block.
+
+        D6 (2026-07-21): al gate il confronto per-periodo SOSTITUISCE quello
+        aggregato quando lo domina — qui tutti i parziali sono leggibili e ogni
+        gol ha un periodo, quindi il blocco arriva dal periodo 4 e non dal
+        totale. Il messaggio cambia, la difesa no: e' piu' specifica di prima
+        perche' dice in quale periodo l'eccesso e' impossibile.
+        """
         for _ in range(20):
              self.valid_data["events"].append({"type": "GOAL", "team": "home", "quarter": 4})
-        
+
+        is_valid, blockers, warnings, _ = OCRQualityGate.evaluate(self.valid_data, context=self.context)
+        self.assertFalse(is_valid)
+        self.assertTrue(any("Incoerenza per-periodo" in b and "Periodo 4" in b for b in blockers))
+        self.assertFalse(any("Incoerenza eventi" in b for b in blockers))
+
+    def test_event_total_exceeds_final_fails_con_gol_senza_periodo(self):
+        """Se i gol non hanno periodo il per-periodo non domina: resta l'aggregato.
+
+        Contro-prova della sostituzione D6: senza periodo il confronto
+        per-periodo non puo' vedere l'eccesso, e la copertura non deve sparire.
+        """
+        for _ in range(20):
+            self.valid_data["events"].append({"type": "GOAL", "team": "home", "quarter": None})
+
         is_valid, blockers, warnings, _ = OCRQualityGate.evaluate(self.valid_data, context=self.context)
         self.assertFalse(is_valid)
         self.assertTrue(any("Incoerenza eventi" in b for b in blockers))

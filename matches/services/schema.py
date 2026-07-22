@@ -3,6 +3,21 @@ from typing import Dict, Any, Tuple, List
 # -- Schema version --
 SCHEMA_VERSION = "2.0"
 
+# --- Esiti del confronto eventi-gol / parziale, per periodo (§8.5(b)-1) -------
+#: Conteggio eventi-gol del periodo uguale al parziale del periodo.
+PERIOD_OK = "ok"
+#: Piu' eventi-gol del parziale: impossibile per costruzione (D1).
+PERIOD_EXCESS = "excess"
+#: Meno eventi-gol del parziale: puo' essere semplice mancata rilevazione (D2/D3).
+PERIOD_DEFICIT = "deficit"
+#: Confronto non eseguibile su quel periodo (parziale illeggibile o malformato).
+PERIOD_NOT_APPLICABLE = "not_applicable"
+
+#: Prefisso dei messaggi che `assess_publish_readiness` promuove a blocker.
+PERIOD_BLOCKER_PREFIX = "Incoerenza per-periodo"
+#: Prefisso dei messaggi puramente informativi (mai blocker, in nessun punto).
+PERIOD_EVIDENCE_PREFIX = "Evidenza per-periodo"
+
 class OCRSchemaValidator:
     """
     Validatore nativo e strutturato per il payload OCR (normalized_data).
@@ -96,6 +111,256 @@ class OCRSchemaValidator:
         return True, "Validazione passata."
 
     @staticmethod
+    def check_goal_events_per_period(data: Dict[str, Any]) -> Dict[str, Any]:
+        """Confronta, periodo per periodo, gli eventi-gol estratti con il parziale.
+
+        Gemello per-periodo del check aggregato (eventi-gol totali contro
+        punteggio finale) che vive nel punto 4 di ``validate_coherence``. E'
+        strettamente piu' informativo di quello: un eccesso locale puo' esistere
+        anche quando i totali tornano.
+
+        Opera ESCLUSIVAMENTE su ``normalized_data``. Non deve mai leggere
+        ``MatchEvent``: alla proiezione a DB il periodo mancante viene forzato a 1
+        (``quarter or 1`` in ``publishing_service``), quindi un gol senza periodo
+        diventa indistinguibile da un gol del primo tempo e il confronto darebbe
+        un risultato inventato.
+
+        Le due direzioni NON sono simmetriche:
+
+        * **Eccesso** (piu' eventi-gol del parziale) e' impossibile per
+          costruzione: nessuna mancata rilevazione puo' produrlo. E' sempre un
+          errore di estrazione. Resta valido anche se altri gol non hanno periodo,
+          perche' assegnarli potrebbe solo aumentare i conteggi.
+        * **Difetto** (meno eventi-gol del parziale) e' spiegabile da una
+          cronologia letta solo in parte. Diventa significativo solo quando
+          l'estrazione della squadra si dichiara completa (somma eventi-gol ==
+          punteggio finale della squadra), e non e' valutabile affatto se qualche
+          gol di quella squadra e' privo di periodo.
+
+        Returns:
+            dict con la tabella per-periodo (``rows``), gli esiti separati per
+            direzione, i gol senza periodo e i messaggi gia' formattati. Ogni
+            impossibilita' di concludere e' esplicita (``applicable``,
+            ``not_applicable_reason``, ``deficit_not_applicable``,
+            ``PERIOD_NOT_APPLICABLE`` sulla riga): non esiste un caso in cui il
+            check taccia senza dire perche'.
+        """
+        from ..event_types import SCORE_EVENT_CODES
+
+        result: Dict[str, Any] = {
+            "applicable": False,
+            "not_applicable_reason": None,
+            "rows": [],
+            "excess": [],
+            "deficit": [],
+            "deficit_not_applicable": {"home": None, "away": None},
+            "unassigned_goals": {"home": 0, "away": 0},
+            "extraction_complete": {"home": None, "away": None},
+            "counts": {
+                "periods": 0,
+                "periods_excess": 0,
+                "periods_deficit": 0,
+                "periods_not_applicable": 0,
+            },
+            "messages": {"excess": [], "distribution": [], "evidence": []},
+        }
+
+        def _bail(reason: str) -> Dict[str, Any]:
+            """Uscita anticipata che DICHIARA perche' il check non e' eseguibile.
+
+            Nessun ramo puo' restituire un risultato silenzioso: un check muto
+            si legge come "tutto a posto", ed e' la patologia che A1 ha rimosso.
+            """
+            result["not_applicable_reason"] = reason
+            result["messages"]["evidence"].append(f"{PERIOD_EVIDENCE_PREFIX}: {reason}")
+            return result
+
+        if not isinstance(data, dict):
+            return _bail("Payload OCR non valido: confronto per-periodo non eseguibile.")
+
+        scores = data.get("scores", {})
+        quarters = scores.get("quarters", {}) if isinstance(scores, dict) else {}
+        if not isinstance(quarters, dict) or not quarters:
+            return _bail(
+                "Nessun punteggio parziale per periodo nel referto: "
+                "il confronto per-periodo non e' eseguibile."
+            )
+
+        events = data.get("events", [])
+        if not isinstance(events, list):
+            return _bail("Sezione 'events' malformata: confronto per-periodo non eseguibile.")
+
+        goals = [
+            e for e in events
+            if isinstance(e, dict)
+            and e.get("type") in SCORE_EVENT_CODES
+            and e.get("team") in ("home", "away")
+        ]
+
+        # Gol per (periodo, squadra); il periodo e' preso com'e', mai dedotto.
+        per_period: Dict[str, Dict[str, int]] = {}
+        for e in goals:
+            side = e["team"]
+            q = e.get("quarter")
+            if q is None:
+                result["unassigned_goals"][side] += 1
+                continue
+            key = str(q).strip()
+            per_period.setdefault(key, {"home": 0, "away": 0})[side] += 1
+
+        # Completezza dichiarata dell'estrazione, per squadra: serve a separare
+        # D2 (distribuzione sbagliata) da D3 (cronologia letta solo in parte).
+        home_total, away_total = None, None
+        final_score = scores.get("final_score") if isinstance(scores, dict) else None
+        if isinstance(final_score, str) and "-" in final_score:
+            try:
+                home_total, away_total = map(int, [p.strip() for p in final_score.split("-")])
+            except (ValueError, TypeError):
+                home_total, away_total = None, None
+        totals_by_side = {"home": home_total, "away": away_total}
+        for side in ("home", "away"):
+            if totals_by_side[side] is None:
+                continue
+            extracted = sum(1 for e in goals if e["team"] == side)
+            result["extraction_complete"][side] = (extracted == totals_by_side[side])
+
+        # Il difetto non e' valutabile se qualche gol di quella squadra non ha periodo.
+        for side in ("home", "away"):
+            if result["unassigned_goals"][side]:
+                result["deficit_not_applicable"][side] = (
+                    f"{result['unassigned_goals'][side]} gol {'CASA' if side == 'home' else 'OSPITE'} "
+                    f"senza periodo: il difetto per-periodo non e' valutabile per questa squadra."
+                )
+
+        #: Difetti con la squadra a cui appartengono, per non doverla riestrarre
+        #: dal testo del messaggio quando si decide la severita'.
+        deficit_by_side: List[Tuple[str, str]] = []
+
+        def _sort_key(k):
+            try:
+                return (0, int(str(k).strip()))
+            except (ValueError, TypeError):
+                return (1, str(k))
+
+        for q_key in sorted(quarters.keys(), key=_sort_key):
+            q_vals = quarters[q_key]
+            counted = per_period.get(str(q_key).strip(), {"home": 0, "away": 0})
+            row = {
+                "quarter": str(q_key),
+                "home_partial": None,
+                "away_partial": None,
+                "home_goals": counted["home"],
+                "away_goals": counted["away"],
+                "home_outcome": PERIOD_NOT_APPLICABLE,
+                "away_outcome": PERIOD_NOT_APPLICABLE,
+                "outcome": PERIOD_NOT_APPLICABLE,
+                "not_applicable_reason": None,
+            }
+
+            parsed = None
+            if isinstance(q_vals, (list, tuple)) and len(q_vals) == 2:
+                try:
+                    parsed = (int(q_vals[0]), int(q_vals[1]))
+                except (ValueError, TypeError):
+                    parsed = None
+
+            if parsed is None:
+                row["not_applicable_reason"] = (
+                    "Parziale illeggibile o assente per questo periodo."
+                    if q_vals is None else
+                    "Parziale in forma non confrontabile per questo periodo."
+                )
+                result["counts"]["periods_not_applicable"] += 1
+                result["rows"].append(row)
+                continue
+
+            result["applicable"] = True
+            result["counts"]["periods"] += 1
+            row["home_partial"], row["away_partial"] = parsed
+
+            outcomes = []
+            for side, partial, count in (
+                ("home", parsed[0], counted["home"]),
+                ("away", parsed[1], counted["away"]),
+            ):
+                label = "CASA" if side == "home" else "OSPITE"
+                if count > partial:
+                    row[f"{side}_outcome"] = PERIOD_EXCESS
+                    result["excess"].append(
+                        f"Periodo {q_key} {label}: {count} eventi-gol estratti "
+                        f"contro un parziale di {partial}."
+                    )
+                elif count < partial:
+                    if result["deficit_not_applicable"][side]:
+                        row[f"{side}_outcome"] = PERIOD_NOT_APPLICABLE
+                    else:
+                        row[f"{side}_outcome"] = PERIOD_DEFICIT
+                        text = (
+                            f"Periodo {q_key} {label}: {count} eventi-gol estratti "
+                            f"contro un parziale di {partial}."
+                        )
+                        result["deficit"].append(text)
+                        deficit_by_side.append((side, text))
+                else:
+                    row[f"{side}_outcome"] = PERIOD_OK
+                outcomes.append(row[f"{side}_outcome"])
+
+            if PERIOD_EXCESS in outcomes:
+                row["outcome"] = PERIOD_EXCESS
+                result["counts"]["periods_excess"] += 1
+            elif PERIOD_DEFICIT in outcomes:
+                row["outcome"] = PERIOD_DEFICIT
+                result["counts"]["periods_deficit"] += 1
+            elif PERIOD_NOT_APPLICABLE in outcomes:
+                row["outcome"] = PERIOD_NOT_APPLICABLE
+            else:
+                row["outcome"] = PERIOD_OK
+
+            result["rows"].append(row)
+
+        if not result["applicable"] and result["not_applicable_reason"] is None:
+            result["not_applicable_reason"] = (
+                "Nessun periodo con un parziale confrontabile: "
+                "il confronto per-periodo non e' eseguibile."
+            )
+
+        # --- Messaggi, gia' separati per severita' ratificata (D1/D2/D3) ---
+        if result["excess"]:
+            result["messages"]["excess"] = [
+                f"{PERIOD_BLOCKER_PREFIX}: {m} Piu' gol del parziale e' impossibile "
+                f"per costruzione, non e' una mancata rilevazione."
+                for m in result["excess"]
+            ]
+
+        for side, m in deficit_by_side:
+            # La direzione "difetto" pesa solo se la squadra dichiara di aver
+            # estratto tutti i suoi gol: allora il totale torna ma la
+            # distribuzione fra i periodi no, ed e' un errore vero (D2).
+            # Altrimenti e' semplice cronologia letta in parte (D3).
+            if result["extraction_complete"].get(side):
+                result["messages"]["distribution"].append(
+                    f"{PERIOD_BLOCKER_PREFIX}: {m} La squadra ha estratto tutti i suoi gol, "
+                    f"quindi la distribuzione fra i periodi e' sbagliata."
+                )
+            else:
+                result["messages"]["evidence"].append(
+                    f"{PERIOD_EVIDENCE_PREFIX}: {m} Estrazione incompleta per questa "
+                    f"squadra: puo' essere solo cronologia letta in parte."
+                )
+
+        for side in ("home", "away"):
+            reason = result["deficit_not_applicable"][side]
+            if reason:
+                result["messages"]["evidence"].append(f"{PERIOD_EVIDENCE_PREFIX}: {reason}")
+
+        if not result["applicable"]:
+            result["messages"]["evidence"].append(
+                f"{PERIOD_EVIDENCE_PREFIX}: {result['not_applicable_reason']}"
+            )
+
+        return result
+
+    @staticmethod
     def validate_coherence(data: Dict[str, Any]) -> Tuple[bool, List[str]]:
         """
         Esegue controlli di coerenza logica profonda sui dati.
@@ -167,6 +432,19 @@ class OCRSchemaValidator:
                 warnings.append(f"Incoerenza eventi: {goal_count_h} gol estratti per CASA != {home_total} punteggio finale")
             if goal_count_a != away_total:
                 warnings.append(f"Incoerenza eventi: {goal_count_a} gol estratti per OSPITE != {away_total} punteggio finale")
+
+        # 4-bis. Coerenza gol-eventi vs parziale, periodo per periodo (§8.5(b)-1).
+        # Qui il per-periodo si AFFIANCA all'aggregato del punto 4, non lo
+        # sostituisce: al publish l'uguaglianza stretta fra gol estratti e
+        # punteggio finale resta un requisito a se' (D6).
+        # Passano solo le due direzioni "pesanti" (eccesso, e difetto con
+        # estrazione dichiarata completa): `assess_publish_readiness` le promuove
+        # a blocker. L'evidenza informativa NON entra qui — vive nella tabella
+        # per-periodo mostrata in review, dove il revisore la legge come dato e
+        # non come problema.
+        period_check = OCRSchemaValidator.check_goal_events_per_period(data)
+        warnings.extend(period_check["messages"]["excess"])
+        warnings.extend(period_check["messages"]["distribution"])
 
         # 5. Unicità numeri giocatori
         teams = data.get("teams", {})
@@ -275,7 +553,9 @@ class OCRSchemaValidator:
 
         # --- BLOCKERS (Coherence) ---
         _, coherence_warnings = OCRSchemaValidator.validate_coherence(data)
-        critical_keywords = ["Incoerenza punteggio", "Incoerenza eventi"]
+        # `PERIOD_BLOCKER_PREFIX` copre le due direzioni ratificate come blocco al
+        # publish: eccesso per-periodo (D1) e difetto con estrazione completa (D2).
+        critical_keywords = ["Incoerenza punteggio", "Incoerenza eventi", PERIOD_BLOCKER_PREFIX]
         
         # Filtriamo i warnings di validate_coherence: se sono critici diventano blockers
         for cw in coherence_warnings:
