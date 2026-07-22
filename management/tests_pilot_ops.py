@@ -1,7 +1,9 @@
 """
 Tests for pilot operations models, services, and commands.
 """
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
+from datetime import timezone as dt_timezone
+from unittest import mock
 
 from django.test import TestCase, override_settings
 from django.contrib.auth import get_user_model
@@ -215,3 +217,52 @@ class PilotAdminAccessTestCase(TestCase):
             url = f'/admin/management/{model_name}/'
             response = self.client.get(url)
             self.assertIn(response.status_code, [302, 403], f"Non-staff should not access {model_name}")
+
+
+# Istante di prova nella finestra critica, CONGELATO: 2025-07-15 23:30 UTC.
+# Roma e' CEST (UTC+2) a luglio -> 2025-07-16 01:30 di Roma. Quindi la data di
+# Roma (16) diverge da quella UTC (15). Congelando l'orologio il flip e'
+# riproducibile SEMPRE, non solo fra le 00:00 e le 02:00 reali (OPS §10.29).
+_FROZEN_UTC = datetime(2025, 7, 15, 23, 30, tzinfo=dt_timezone.utc)
+_ROME_DATE = date(2025, 7, 16)   # data corretta (Europe/Rome)
+_UTC_DATE = date(2025, 7, 15)    # data che darebbe il vecchio date.today() UTC
+
+
+@override_settings(EMAIL_BACKEND='django.core.mail.backends.locmem.EmailBackend')
+class PilotTimezoneTodayTest(TestCase):
+    """§10.29 — "oggi" del pilot report/alert deve essere Europe/Rome, non UTC.
+
+    Con l'orologio congelato all'istante critico il test fallisce sul codice
+    buggato (`date.today()` -> data UTC/locale-server) e passa sul fixato
+    (`timezone.localdate()` -> data di Roma), in modo deterministico nei due
+    versi indipendentemente dall'ora reale della macchina.
+    """
+
+    def setUp(self):
+        self.staff = User.objects.create_superuser('tz_staff', 'tz@test.com', 'pass123')
+
+    def test_report_date_defaults_to_rome_date_not_utc(self):
+        """§10.29 (:28) — `generate_daily_report_data` senza argomento usa la
+        data di Roma."""
+        with mock.patch('django.utils.timezone.now', return_value=_FROZEN_UTC):
+            data = generate_daily_report_data()
+        self.assertEqual(data['report_date'], _ROME_DATE)
+        self.assertNotEqual(data['report_date'], _UTC_DATE)
+
+    def test_alert_dedup_boundary_uses_rome_date(self):
+        """§10.29 (:128) — il dedup degli alert guarda il giorno di Roma.
+
+        Un alert precedente con timestamp "oggi a Roma / ieri in UTC" deve
+        contare come gia' inviato oggi: sul codice fixato non si rispedisce.
+        """
+        PilotDailyLog.objects.create(date=_ROME_DATE, operator=self.staff, status='RED')
+        prior = AuditLog.objects.create(action='PILOT_URGENT_ALERT', user=self.staff)
+        # 2025-07-15 22:30 UTC -> Roma 2025-07-16 00:30 (data di Roma = 16).
+        AuditLog.objects.filter(pk=prior.pk).update(
+            timestamp=datetime(2025, 7, 15, 22, 30, tzinfo=dt_timezone.utc)
+        )
+        with mock.patch('django.utils.timezone.now', return_value=_FROZEN_UTC):
+            check_and_send_urgent_alerts()
+        # Fixato: today=16 di Roma coincide con la data-Roma dell'alert prior
+        # -> dedup -> nessuna mail. Buggato: today=data reale != 16 -> rispedisce.
+        self.assertEqual(len(mail.outbox), 0)
