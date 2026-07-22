@@ -1,6 +1,6 @@
 # DEBITI — Registro dei debiti tecnici aperti
 
-Questo file contiene SOLO i debiti aperti. Alla chiusura, la voce si SPOSTA in [DEBITI_CHIUSI.md](DEBITI_CHIUSI.md) con data e riferimenti di chiusura, e si rimuove da qui. I nuovi debiti si aprono qui con ID progressivo nella numerazione esistente (§10.32, §10.33, ...).
+Questo file contiene SOLO i debiti aperti. Alla chiusura, la voce si SPOSTA in [DEBITI_CHIUSI.md](DEBITI_CHIUSI.md) con data e riferimenti di chiusura, e si rimuove da qui. I nuovi debiti si aprono qui con ID progressivo nella numerazione esistente (§10.33, §10.34, ...). In via d'eccezione il registro (e l'archivio dei chiusi) può ospitare ID **fuori dalla serie §10.x**, quando una voce migra da un'altra sezione di OPS_RUNBOOK e la continuità di citazione impone di conservarne l'ID originale — la continuità di citazione vale più dell'uniformità di numerazione (oggi l'unico caso è §12.9, archiviato in DEBITI_CHIUSI.md).
 
 > Origine della numerazione: gli ID §10.x nascono dalla ex sezione "10. Debiti aperti" di [OPS_RUNBOOK.md](OPS_RUNBOOK.md) (riorganizzazione doc 2026-07-22). I corpi delle voci sono spostati integralmente; la riga `>` di metadati sotto ogni titolo è aggiunta dalla riorganizzazione e sintetizza ciò che il corpo già dice. Questo file vive in `docs/` come il runbook, quindi i link relativi al codice (es. `../matches/...`) restano validi.
 
@@ -105,3 +105,17 @@ Il livello di pubblicazione `SCORE_ONLY` (Opzione A) declassa a warning i blocke
 **Soluzione indicata:** dare a ogni blocker un **codice strutturato** (enum/costante) separato dal testo umano, e far decidere il declassamento sul codice, non sulla stringa di visualizzazione. La categoria event-scoped diventa un attributo del blocker, non un indovinello sul suo testo.
 
 **Condizione di riapertura:** qualsiasi modifica al wording dei blocker in [matches/services/schema.py](../matches/services/schema.py) (sia i letterali in `_EVENT_SCOPED_BLOCKER_MARKERS`, sia le frasi generate a monte che quei marker devono agganciare), **oppure** il primo publish `SCORE_ONLY` reale — il quale è anche il primo momento in cui il declassamento viene esercitato sul campo e in cui un aggancio silenziosamente rotto diventerebbe visibile.
+
+### §10.32 Reason obbligatoria in admin per downgrade a SCORE_ONLY e force publish — DEBITO APERTO 2026-07-22 (severità bassa)
+
+> **Severità:** bassa (fail-closed oggi sui due gesti più pericolosi; superficie staff-only; zero referti `PUBLISHED` su prod) · **Aperta dal:** 2026-07-22 · **Condizione di chiusura:** la superficie admin raccoglie e **obbliga** la `reason` per downgrade e force publish e la passa a `publish_report()`, allineandosi al seam di servizio; la motivazione dell'operatore finisce nell'audit trail come già avviene lato servizio. · **Trigger di rialzo severità:** primo publish reale, o deploy di Opzione A (SCORE_ONLY) su prod.
+
+Il seam di servizio richiede una `reason` non vuota in due punti ([matches/services/publishing_service.py](../matches/services/publishing_service.py)): (1) **downgrade `FULL`→`SCORE_ONLY` su republish** (cross-check D3, [STATE_MACHINES.md](STATE_MACHINES.md) §MatchReport/Guardrails "Livello di pubblicazione") — distrugge la cronologia eventi già pubblica, senza reason ritorna `(False, msg)`; (2) **force publish su match con dato verificato** — sovrascrive una verifica umana, stessa regola. La review admin ([matches/admin.py](../matches/admin.py), ramo `publish_now`/`publish_force`/`publish_score_only`) invoca però `publish_report(obj, user=…, force=…, level=…)` **senza mai passare `reason`**: la `ReviewForm` non ha alcun campo per raccoglierla.
+
+Conseguenze oggi, distinte:
+- **Downgrade D3 e force su dato verificato da admin: impossibili.** Il servizio li rifiuta per reason mancante — fail-closed, nessun rischio dati, ma i due gesti legittimi non sono eseguibili dalla superficie che dovrebbe ospitarli: al primo bisogno reale l'operatore troverà un rifiuto senza via d'uscita in UI.
+- **Force "semplice" (override di blocker, senza conflitto su dato verificato): passa senza motivazione umana.** L'audit registra i blocker scavalcati (`overridden_blockers`) e la reason generica `Pubblicazione forzata (override blocchi)`, ma non il **perché** dell'operatore — l'audit trail resta scoperto proprio sul gesto più discrezionale.
+
+**Perché severità bassa:** la superficie è la review admin, staff-only; su prod non esiste alcun referto `PUBLISHED` e il livello `SCORE_ONLY` è a codice solo su dev (deploy prod pendente); il downgrade D3 presuppone un referto già `PUBLISHED FULL`, che oggi non esiste su nessun box. Il fallimento attuale è **restrittivo** (blocca o pubblica con audit povero), mai corruttivo. La severità va rialzata al trigger indicato sopra.
+
+**Nota di contesto:** la definizione precisa della UI (dove vive il campo reason, per quali azioni) era stata deliberatamente rimandata "a quando la superficie di publish viene esercitata davvero" (session note 22/07); questa voce esiste perché quel rinvio non era registrato da nessuna parte e sarebbe diventato una dimenticanza.
