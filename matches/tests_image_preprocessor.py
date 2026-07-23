@@ -106,3 +106,55 @@ class ImagePreprocessorRotationTest(unittest.TestCase):
             "Con EXIF orientation=6 ci si aspetta un file '_exif_fix' separato (rotazione applicata)."
         )
         self.assertTrue(fixed_path.endswith("_exif_fix.jpg"))
+
+
+class EnsureLandscapeFallbackTest(unittest.TestCase):
+    """
+    Rete di sicurezza orientamento (§8.24 stadio A): un referto rimasto verticale
+    dopo la logica esistente viene riportato in orizzontale, ma SOLO su opt-in
+    (`ensure_landscape=True`). Con i default `process()` resta byte-identico alla
+    produzione: nessuna rotazione by aspect-ratio.
+    """
+
+    def setUp(self):
+        fd, self.image_path = tempfile.mkstemp(suffix=".jpg")
+        os.close(fd)
+        self.addCleanup(lambda: os.path.exists(self.image_path) and os.remove(self.image_path))
+
+    def _write_plain_image(self, width, height):
+        img = np.full((height, width, 3), 200, dtype=np.uint8)
+        cv2.imwrite(self.image_path, img)
+        return self.image_path
+
+    def test_ensure_landscape_rotates_portrait_counterclockwise(self):
+        # Immagine portrait asimmetrica: riga superiore bianca, resto nero.
+        img = np.zeros((4, 2, 3), dtype=np.uint8)
+        img[0, :, :] = 255
+        out = ImagePreprocessor._ensure_landscape(img)
+        h, w = out.shape[:2]
+        self.assertGreater(w, h, "Il portrait non è stato portato in landscape")
+        # Direzione: antioraria (scelta sul caso sc-salerno), NON oraria.
+        np.testing.assert_array_equal(out, cv2.rotate(img, cv2.ROTATE_90_COUNTERCLOCKWISE))
+        self.assertFalse(np.array_equal(out, cv2.rotate(img, cv2.ROTATE_90_CLOCKWISE)))
+
+    def test_ensure_landscape_leaves_landscape_untouched(self):
+        img = np.zeros((2, 4, 3), dtype=np.uint8)
+        out = ImagePreprocessor._ensure_landscape(img)
+        np.testing.assert_array_equal(out, img)
+
+    def test_process_with_flag_brings_portrait_to_landscape(self):
+        self._write_plain_image(width=1000, height=1600)
+        output_path = ImagePreprocessor.process(self.image_path, ensure_landscape=True)
+        self.addCleanup(lambda: os.path.exists(output_path) and os.remove(output_path))
+        result = cv2.imread(output_path)
+        h, w = result.shape[:2]
+        self.assertGreater(w, h, f"Con ensure_landscape=True il portrait doveva diventare landscape: {w}x{h}")
+
+    def test_process_default_does_not_rotate_portrait(self):
+        """Contratto di produzione: senza il flag, un portrait resta portrait."""
+        self._write_plain_image(width=1000, height=1600)
+        output_path = ImagePreprocessor.process(self.image_path)
+        self.addCleanup(lambda: os.path.exists(output_path) and os.remove(output_path))
+        result = cv2.imread(output_path)
+        h, w = result.shape[:2]
+        self.assertGreater(h, w, f"Senza flag il portrait non deve essere ruotato: {w}x{h}")

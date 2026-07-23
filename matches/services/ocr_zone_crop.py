@@ -76,7 +76,10 @@ def crop_zone_from_file(image_path: str, zone: str, out_path: str, preprocess: b
     src = image_path
     if preprocess:
         from matches.services.image_preprocessor import ImagePreprocessor
-        src = ImagePreprocessor.process(image_path)
+        # ensure_landscape=True: il ritaglio a frazioni fisse presuppone un foglio
+        # orizzontale; un referto rimasto verticale inquadrerebbe la zona sbagliata
+        # (§8.24 stadio A). In produzione process() gira senza questo flag.
+        src = ImagePreprocessor.process(image_path, ensure_landscape=True)
 
     with Image.open(src) as im:
         im = im.convert("RGB")

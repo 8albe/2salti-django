@@ -16,10 +16,18 @@ class ImagePreprocessor:
     """
 
     @staticmethod
-    def process(image_path, output_name=None):
+    def process(image_path, output_name=None, ensure_landscape=False):
         """
         Processa un'immagine e restituisce il path del file preprocessato.
-        Pipeline: EXIF Fix -> Perspective correction -> Deskew -> Contrast -> Resize
+        Pipeline: EXIF Fix -> Perspective correction -> Deskew -> [Ensure landscape] -> Contrast -> Resize
+
+        `ensure_landscape` (default False): quando True, applica la rete di sicurezza
+        deterministica `_ensure_landscape` DOPO la logica di orientamento esistente
+        (EXIF + perspective + deskew). Default False per contratto: con i default,
+        `process()` resta BYTE-IDENTICO al comportamento di produzione (il provider
+        OCR chiama `process(path)` senza questo flag). L'opt-in è del bench / del
+        ritaglio per zona (§8.24), dove un referto rimasto verticale inquadra la
+        zona sbagliata; la promozione in produzione è una decisione separata.
         """
         try:
             # 0. Fix EXIF Rotation (Pillow) prima di passare a OpenCV
@@ -38,6 +46,12 @@ class ImagePreprocessor:
             # 2. Deskewing (solo se non abbiamo già fatto la prospettiva, che è più potente)
             if not perspective_corrected:
                 processed_img = ImagePreprocessor._deskew(processed_img)
+
+            # 2.5 Rete di sicurezza orientamento (§8.24 stadio A), SOLO se richiesta.
+            # DOPO la logica esistente, senza rimuoverla: interviene solo quando quella
+            # non ha già prodotto un landscape. Default off ⇒ produzione invariata.
+            if ensure_landscape:
+                processed_img = ImagePreprocessor._ensure_landscape(processed_img)
 
             # 3. Resize proporzionale (max 2000px per lato per l'invio all'LLM)
             h, w = processed_img.shape[:2]
@@ -194,6 +208,32 @@ class ImagePreprocessor:
         if w > h:
             logger.info("Auto-rotating image to portrait mode.")
             return cv2.rotate(img, cv2.ROTATE_90_CLOCKWISE)
+        return img
+
+    @staticmethod
+    def _ensure_landscape(img):
+        """Fallback deterministico: porta in orizzontale un referto rimasto verticale.
+
+        Il referto ufficiale FIN è un foglio ORIZZONTALE (landscape: squadre/roster a
+        sinistra, storia cronometrica a destra, testata in alto). Se, dopo la logica
+        di orientamento esistente (EXIF + perspective + deskew), l'immagine è ancora
+        PIÙ ALTA CHE LARGA, è quasi certamente ruotata di 90°: la ruotiamo di 90° in
+        senso ANTIORARIO per riportarla landscape. La direzione antioraria è stata
+        scelta empiricamente sul caso gold sc-salerno (l'unico rimasto verticale): con
+        essa la testata torna in alto a sinistra, la storia cronometrica a destra e il
+        testo dritto; in senso orario lo stesso foglio risultava capovolto.
+
+        NON è l'auto-rotate incondizionato by aspect-ratio (`_auto_rotate_to_portrait`,
+        rimosso dal flusso perché corrompeva i referti già orizzontali): agisce SOLO su
+        immagini portrait, cioè quando l'orientamento a valle è sbagliato per certo.
+        La direzione fissa risolve l'aspect ratio; se una foto fosse ruotata nell'altro
+        verso il contenuto potrebbe restare capovolto — la messa a testa-in-su robusta
+        (rilevazione dell'orientamento del testo) è un raffinamento separato, fuori scope.
+        """
+        h, w = img.shape[:2]
+        if h > w:
+            logger.info("Ensure-landscape: immagine portrait, ruoto 90° antiorario per portarla orizzontale.")
+            return cv2.rotate(img, cv2.ROTATE_90_COUNTERCLOCKWISE)
         return img
 
     @staticmethod
