@@ -1679,3 +1679,56 @@ class OcrBenchEventsRosterComparisonTest(TestCase):
         bare = {"truth": {"scores": {"final_score": "1-0"}}}
         self.assertIsNone(compare_events_to_truth(bare, {"events": [{"type": "GOAL"}]}))
         self.assertIsNone(compare_roster_to_truth(bare, {"teams": {"home": {}}}))
+
+
+class CompareEventCapsToTruthTest(TestCase):
+    """§8.24 stadio C: coincidenza calottine-vs-truth sui gol (asse AUTORI)."""
+
+    def _case(self, truth_events):
+        return {"truth": {"events": truth_events}}
+
+    def test_returns_none_without_truth_events(self):
+        from matches.management.commands.ocr_bench import compare_event_caps_to_truth
+        self.assertIsNone(compare_event_caps_to_truth({"truth": {}}, {"events": []}))
+
+    def test_matched_caps_counted_correct_and_wrong(self):
+        from matches.management.commands.ocr_bench import compare_event_caps_to_truth
+        truth = [
+            {"type": "GOAL", "team": "home", "quarter": 1, "clock": "7:40", "cap": 9},
+            {"type": "GOAL", "team": "away", "quarter": 1, "clock": "6:12", "cap": 4},
+        ]
+        data = {"events": [
+            {"type": "GOAL", "team": "home", "quarter": 1, "clock": "7:40", "cap": 9},   # correct
+            {"type": "GOAL", "team": "away", "quarter": 1, "clock": "6:12", "cap": 5},   # wrong cap
+        ]}
+        res = compare_event_caps_to_truth(self._case(truth), data)
+        self.assertEqual(res["truth_goals_total"], 2)
+        self.assertEqual(res["matched_by_time"], 2)
+        self.assertEqual(res["cap_correct"], 1)
+        self.assertEqual(res["cap_wrong"], 1)
+
+    def test_missing_cap_on_matched_goal(self):
+        from matches.management.commands.ocr_bench import compare_event_caps_to_truth
+        truth = [{"type": "GOAL", "team": "home", "quarter": 1, "clock": "7:40", "cap": 9}]
+        data = {"events": [{"type": "GOAL", "team": "home", "quarter": 1, "clock": "7:40", "cap": None}]}
+        res = compare_event_caps_to_truth(self._case(truth), data)
+        self.assertEqual(res["cap_missing_on_matched"], 1)
+        self.assertEqual(res["cap_correct"], 0)
+
+
+class SecondPassEventsCliTest(TestCase):
+    """Validazione CLI di --second-pass-events (nessuna chiamata reale)."""
+
+    def test_requires_first_pass_dir(self):
+        with self.assertRaises(CommandError):
+            call_command(
+                "ocr_bench", "--gold-case", "x", "--second-pass-events",
+                stdout=StringIO(), stderr=StringIO(),
+            )
+
+    def test_mutually_exclusive_with_second_pass(self):
+        with self.assertRaises(CommandError):
+            call_command(
+                "ocr_bench", "--gold-case", "x", "--second-pass", "--second-pass-events",
+                "--first-pass-dir", ".", stdout=StringIO(), stderr=StringIO(),
+            )

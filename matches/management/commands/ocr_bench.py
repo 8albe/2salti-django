@@ -72,7 +72,11 @@ from django.core.management.base import BaseCommand, CommandError
 from django.utils import timezone
 
 from matches.models import MatchReport
-from matches.services.ocr_double_extraction import ZONES, compare_passes
+from matches.services.ocr_double_extraction import ZONES, compare_passes, compare_event_passes
+from matches.services.ocr_zone_crop import crop_zone_from_file
+from matches.event_types import (
+    timeouts_over_team_limit, definitive_exclusions_over_player_limit,
+)
 from matches.services.vision_providers import (
     GeminiVisionProvider,
     OpenAIVisionProvider,
@@ -421,6 +425,82 @@ def compare_events_to_truth(case, data):
     }
 
 
+def _goal_time_key(e):
+    """(team, quarter_int_o_str, clock_str) di un evento-gol, per l'accoppiamento a truth."""
+    q = e.get("quarter")
+    if q is not None:
+        try:
+            q = int(str(q).strip())
+        except (ValueError, TypeError):
+            q = str(q).strip()
+    clock = e.get("clock")
+    clock = str(clock).strip() if isinstance(clock, str) and clock.strip() else None
+    return (e.get("team"), q, clock)
+
+
+def compare_event_caps_to_truth(case, data):
+    """Confronto ADDITIVO delle CALOTTINE dei gol estratti vs truth (§8.24 stadio C, asse AUTORI).
+
+    Ritorna None se il caso non ha `truth.events`. La truth identifica l'autore per
+    CALOTTINA; qui misuriamo quante calottine estratte COINCIDONO con la truth. I gol
+    si accoppiano per (team, quarter, clock) — la stessa chiave di compare_event_passes;
+    per ogni gol accoppiato si confronta la calottina. A differenza del confronto sui
+    NOMI (§8.22), la calottina è un intero: non esiste la categoria "a-una-lettera", un
+    numero coincide o no.
+    """
+    truth = case.get("truth") or {}
+    truth_events = truth.get("events")
+    if not isinstance(truth_events, list):
+        return None
+    from matches.event_types import SCORE_EVENT_CODES
+
+    def goals(evs):
+        return [
+            e for e in (evs or [])
+            if isinstance(e, dict) and e.get("type") in SCORE_EVENT_CODES
+            and e.get("team") in ("home", "away")
+        ]
+
+    t_goals = goals(truth_events)
+    e_goals = goals(data.get("events"))
+
+    t_by = {}
+    for te in t_goals:
+        t_by.setdefault(_goal_time_key(te), []).append(te)
+
+    used = set()
+    matched = cap_correct = cap_wrong = cap_missing = 0
+    for e in e_goals:
+        k = _goal_time_key(e)
+        idx = None
+        for i in range(len(t_by.get(k, []))):
+            if (k, i) not in used:
+                idx = i
+                break
+        if idx is None:
+            continue
+        used.add((k, idx))
+        matched += 1
+        tc = t_by[k][idx].get("cap")
+        ec = e.get("cap")
+        if ec is None:
+            cap_missing += 1
+        elif tc is not None and int(ec) == int(tc):
+            cap_correct += 1
+        else:
+            cap_wrong += 1
+
+    return {
+        "truth_goals_total": len(t_goals),
+        "extracted_goals_total": len(e_goals),
+        "extracted_goals_with_cap": sum(1 for e in e_goals if e.get("cap") is not None),
+        "matched_by_time": matched,
+        "cap_correct": cap_correct,
+        "cap_wrong": cap_wrong,
+        "cap_missing_on_matched": cap_missing,
+    }
+
+
 def compare_roster_to_truth(case, data):
     """Confronto ADDITIVO roster estratto vs truth roster di un caso gold.
 
@@ -728,6 +808,7 @@ def build_gold_proposal_repeated(case, per_repeat, provider_label, model, resolv
             "inversion_check": entry["inversion"],
             "comparison": entry["fields"],
             "events_comparison": compare_events_to_truth(case, data),
+            "event_caps_comparison": compare_event_caps_to_truth(case, data),
             "roster_comparison": compare_roster_to_truth(case, data),
         })
 
@@ -988,6 +1069,20 @@ class Command(BaseCommand):
                 "indice per indice con quelle del secondo passaggio."
             ),
         )
+        parser.add_argument(
+            "--second-pass-events",
+            action="store_true",
+            help=(
+                "Doppia estrazione per zona sugli EVENTI (§8.24 stadio C): esegue il "
+                "secondo passaggio 'zone_events' sul RITAGLIO della storia cronometrica "
+                "(ocr_zone_crop, ensure_landscape) e lo confronta col PRIMO passaggio "
+                "riletto da --first-pass-dir tramite compare_event_passes (chiave "
+                "(type, quarter, clock), payload cap/team). Riporta anche i due check da "
+                "regolamento (max 2 timeout/squadra, max 1 EDCS/giocatore) sul primo "
+                "passaggio, come sorgente SEPARATA dalla divergenza. Default OFF, "
+                "bench-only. Richiede modalità gold e --first-pass-dir."
+            ),
+        )
 
     def handle(self, *args, **options):
         image_opt = options["image"]
@@ -1018,27 +1113,34 @@ class Command(BaseCommand):
             raise CommandError("--repeat > 1 richiede --gold-case o --gold-all.")
 
         second_pass = options["second_pass"]
+        second_pass_events = options["second_pass_events"]
         first_pass_dir = options["first_pass_dir"]
-        if second_pass:
+        if second_pass and second_pass_events:
+            raise CommandError("--second-pass e --second-pass-events sono alternativi.")
+        if second_pass or second_pass_events:
+            forced_prompt = "zone_events" if second_pass_events else "zone"
+            flag = "--second-pass-events" if second_pass_events else "--second-pass"
             if not gold_mode:
-                raise CommandError("--second-pass richiede --gold-case o --gold-all.")
+                raise CommandError(f"{flag} richiede --gold-case o --gold-all.")
             if not first_pass_dir:
                 raise CommandError(
-                    "--second-pass richiede --first-pass-dir (la directory delle "
+                    f"{flag} richiede --first-pass-dir (la directory delle "
                     "proposte del primo passaggio da riusare)."
                 )
             if not os.path.isdir(first_pass_dir):
                 raise CommandError(f"--first-pass-dir non trovata: {first_pass_dir}")
-            if options["prompt_version"] not in ("v2", "zone"):
+            if options["prompt_version"] not in ("v2", forced_prompt):
                 raise CommandError(
-                    "--second-pass usa sempre il prompt 'zone' per il secondo "
+                    f"{flag} usa sempre il prompt '{forced_prompt}' per il secondo "
                     f"passaggio: --prompt-version {options['prompt_version']!r} è "
-                    "incompatibile (ometti --prompt-version o passa 'zone')."
+                    f"incompatibile (ometti --prompt-version o passa '{forced_prompt}')."
                 )
-            # Il secondo passaggio è, per definizione, la lettura 'zone'.
-            options["prompt_version"] = "zone"
+            # Il secondo passaggio è, per definizione, la lettura di zona corrispondente.
+            options["prompt_version"] = forced_prompt
         elif first_pass_dir:
-            raise CommandError("--first-pass-dir ha senso solo con --second-pass.")
+            raise CommandError(
+                "--first-pass-dir ha senso solo con --second-pass/--second-pass-events."
+            )
 
         provider_name = options["provider"]
         model_setting, model_fallback = PROVIDER_MODEL_SETTINGS[provider_name]
@@ -1172,6 +1274,14 @@ class Command(BaseCommand):
                     out_dir, run_ts, repeat, options, first_pass_dir,
                     prompt_version=prompt_version,
                     prompt_version_str=prompt_version_str,
+                )
+                continue
+
+            if second_pass_events:
+                self._process_gold_case_second_pass_events(
+                    case, case_id, provider, provider_name, provider_label, models,
+                    image_path, resolved_pk, resolved_from, out_dir, run_ts, repeat,
+                    options, first_pass_dir, prompt_version_str=prompt_version_str,
                 )
                 continue
 
@@ -1807,3 +1917,158 @@ class Command(BaseCommand):
             f"quarters={by_zone['quarters']}, date={by_zone['date']}; "
             f"NEEDS_REVIEW su {summary['repeats_diverging']}/{summary['repeats_compared']}."
         )
+
+    # --- doppia estrazione per zona sugli EVENTI (--second-pass-events) -------
+
+    def _process_gold_case_second_pass_events(self, case, case_id, provider, provider_name,
+                                              provider_label, models, image_path, resolved_pk,
+                                              resolved_from, out_dir, run_ts, repeat, options,
+                                              first_pass_dir, prompt_version_str=None):
+        """--second-pass-events: secondo passaggio 'zone_events' sul RITAGLIO vs primo passaggio.
+
+        Per ogni modello: ritaglia UNA volta la storia cronometrica (ensure_landscape),
+        esegue `repeat` letture zone_events sul ritaglio (chiamate reali), carica il primo
+        passaggio (v3_5, con eventi) da --first-pass-dir, accoppia indice per indice e
+        applica compare_event_passes. Riporta, SEPARATAMENTE, i due check da regolamento
+        sul primo passaggio (fonte gratuita) e la coincidenza calottine-vs-truth. Salva
+        una proposta per caso/modello. Non attiva nulla in produzione: è una misura.
+        """
+        # Ritaglio della zona (una volta per caso): ensure_landscape via crop_zone_from_file.
+        crop_path = os.path.join(out_dir, f"_crop_{case_id}_storia.jpg")
+        try:
+            crop_zone_from_file(image_path, "storia_cronometrica", crop_path, preprocess=True)
+        except Exception as e:
+            self.stdout.write(self.style.ERROR(
+                f"Caso '{case_id}': ritaglio storia cronometrica fallito ({e}); saltato."
+            ))
+            return
+
+        data_lists = {model: [] for model in models}
+        for i in range(1, repeat + 1):
+            self.stdout.write(f"\n-- Secondo passaggio (zone_events) {i}/{repeat} --")
+            # preprocess=False: il ritaglio è già preprocessato+orientato, non ri-preprocessare.
+            results = self._run_models(
+                provider, provider_name, models, crop_path, False, options["dump_sent_image"],
+                prompt_version="zone_events",
+                thinking_level=options.get("thinking_level"),
+                thinking_budget=options.get("thinking_budget"),
+            )
+            self._print_show_and_save(results, options, case_id=f"{case_id}__zoneevents_run{i}")
+            for model, data in results.items():
+                data_lists[model].append(data)
+
+        for model, second_list in data_lists.items():
+            if not second_list:
+                self.stdout.write(self.style.WARNING(
+                    f"\nModello '{model}': nessuna estrazione zone_events riuscita, saltato."
+                ))
+                continue
+            first_list, first_src, first_prompt = self._load_first_pass_repeats(
+                first_pass_dir, case_id, model
+            )
+            if not first_list:
+                self.stdout.write(self.style.WARNING(
+                    f"\nModello '{model}': nessun primo passaggio in {first_pass_dir} per "
+                    f"'{case_id}', confronto saltato."
+                ))
+                continue
+
+            k = min(len(first_list), len(second_list))
+            per_repeat = []
+            for i in range(k):
+                first = first_list[i]
+                second = second_list[i]
+                first_events = first.get("events") or []
+                per_repeat.append({
+                    "run_index": i + 1,
+                    "divergence": compare_event_passes(first, second),
+                    # Fonte SEPARATA dalla divergenza: i due check da regolamento sul
+                    # PRIMO passaggio (gratuiti, nessuna chiamata).
+                    "regulation": {
+                        "timeouts_over_limit": timeouts_over_team_limit(first_events),
+                        "definitive_exclusions_over_limit":
+                            definitive_exclusions_over_player_limit(first_events),
+                    },
+                    "caps_vs_truth": compare_event_caps_to_truth(case, {"events": first_events}),
+                    "second_events_total": len(second.get("events") or []),
+                    "first_events_total": len(first_events),
+                })
+
+            self._print_second_pass_events_comparison(case_id, model, per_repeat, k)
+
+            proposal = {
+                "case_id": case_id,
+                "mode": "second_pass_events_divergence",
+                "provider": provider_label,
+                "model": model,
+                "db_report_pk": resolved_pk,
+                "extracted_at": run_ts.date().isoformat(),
+                "first_pass": {
+                    "source_file": os.path.basename(first_src) if first_src else None,
+                    "prompt_version": first_prompt,
+                },
+                "second_pass": {"prompt_version": prompt_version_str, "crop": os.path.basename(crop_path)},
+                "bench_run": {
+                    "provider_cli": provider_label, "model": model,
+                    "timestamp": run_ts.isoformat(), "image": image_path,
+                    "image_resolved_from": resolved_from, "repeat": k,
+                },
+                "repeats": per_repeat,
+                "notes": [
+                    "Proposta generata da ocr_bench --second-pass-events: divergenza "
+                    "eventi (compare_event_passes) fra primo passaggio (v3_5, riusato) e "
+                    "secondo passaggio (zone_events sul ritaglio). I due check da "
+                    "regolamento sono riportati SEPARATAMENTE (fonte gratuita). Misura, "
+                    "NON attiva in produzione.",
+                ],
+            }
+            fname = (
+                f"{case_id}__{safe_model_slug(model)}_secondpassevents{k}_"
+                f"{run_ts.strftime('%Y%m%d_%H%M%S')}.json"
+            )
+            path = os.path.join(out_dir, fname)
+            with open(path, "w", encoding="utf-8") as f:
+                json.dump(proposal, f, indent=2, ensure_ascii=False)
+            self.stdout.write(f"Proposta salvata: {path} (misura, non attiva in produzione)")
+
+    def _print_second_pass_events_comparison(self, case_id, model, per_repeat, k):
+        """Tabella per-ripetizione: divergenza eventi + check regolamento (fonti separate)."""
+        self.stdout.write(
+            f"\n--- Doppia estrazione EVENTI (--second-pass-events, {k} ripetizioni): "
+            f"{case_id} — {model} ---"
+        )
+        for e in per_repeat:
+            div = e["divergence"]
+            c = div["counts"]
+            reg = e["regulation"]
+            caps = e["caps_vs_truth"]
+            self.stdout.write(
+                f"  rip {e['run_index']}: eventi primo={e['first_events_total']} "
+                f"secondo={e['second_events_total']} | confronto: "
+                f"agree={c['agree']} diverge={c['diverge']} "
+                f"first_only={c['first_only']} second_only={c['second_only']} "
+                f"→ {'DIVERGE' if div['diverges'] else 'concorde'}"
+            )
+            if caps:
+                self.stdout.write(
+                    f"        caps-vs-truth: {caps['cap_correct']}/{caps['matched_by_time']} "
+                    f"corrette su {caps['truth_goals_total']} gol truth "
+                    f"(wrong={caps['cap_wrong']}, missing={caps['cap_missing_on_matched']})"
+                )
+            self.stdout.write(
+                f"        REGOLAMENTO (fonte separata): timeout>2={reg['timeouts_over_limit']} "
+                f"EDCS>1={reg['definitive_exclusions_over_limit']}"
+            )
+        # Attribuzione: eventi dove team diverge fra i due passaggi (l'errore di
+        # attribuzione squadra), sorgente DIVERGENZA.
+        for e in per_repeat:
+            team_div = [
+                ev for ev in e["divergence"]["events"] if ev["team_status"] == "diverge"
+            ]
+            if team_div:
+                self.stdout.write(f"  rip {e['run_index']} — attribuzione squadra divergente:")
+                for ev in team_div:
+                    self.stdout.write(
+                        f"        {ev['type']} q{ev['quarter']} {ev['clock']}: "
+                        f"primo team={ev['first']['team']} vs secondo team={ev['second']['team']}"
+                    )
