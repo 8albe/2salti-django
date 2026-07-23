@@ -75,6 +75,7 @@ from matches.models import MatchReport
 from matches.services.ocr_double_extraction import ZONES, compare_passes
 from matches.services.vision_providers import (
     GeminiVisionProvider,
+    OpenAIVisionProvider,
     OCR_ALL_PROMPTS,
     OCR_SYSTEM_PROMPT_V2,
     OCR_SYSTEM_PROMPTS,
@@ -85,8 +86,12 @@ from matches.services.vision_providers import (
 # simboli di questo modulo, così i test possono patchare GeminiVisionProvider
 # senza che un riferimento catturato all'import lo scavalchi. Il seam resta
 # estendibile: aggiungere un provider = una entry qui + una nel map in handle().
+# 'openai' (syllabus §8.23) è un SECONDO LETTORE bench-only: non è nel path di
+# produzione (OCRService non lo conosce), il default di --provider resta 'gemini'.
+# OPENAI_OCR_MODEL non è definito in settings: vale il fallback salvo --models.
 PROVIDER_MODEL_SETTINGS = {
     "gemini": ("GEMINI_MODEL", "gemini-2.5-pro"),
+    "openai": ("OPENAI_OCR_MODEL", "gpt-5"),
 }
 
 # Campi top-level confrontati per l'accuracy exact-match
@@ -930,7 +935,9 @@ class Command(BaseCommand):
             help=(
                 "Livello di ragionamento per i modelli Gemini 3.x "
                 "('minimal' azzera i thought token, 'low', 'high'). "
-                "Default None: nessun ThinkingConfig, comportamento di produzione "
+                "Con --provider openai lo stesso valore è mappato 1:1 su "
+                "reasoning_effort ('minimal'|'low'|'medium'|'high') dei GPT-5.x. "
+                "Default None: nessun override, comportamento di produzione "
                 "invariato. Seam per-chiamata, non tocca settings."
             ),
         )
@@ -1038,6 +1045,7 @@ class Command(BaseCommand):
         # Risoluzione a runtime: rispetta gli eventuali patch dei test.
         provider_cls = {
             "gemini": GeminiVisionProvider,
+            "openai": OpenAIVisionProvider,
         }[provider_name]
 
         if options["models"]:

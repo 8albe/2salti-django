@@ -354,6 +354,44 @@ class OcrBenchCommandTest(TestCase):
         ]
         self.assertEqual(called_models, ["gemini-2.5-pro", "gemini-2.5-flash"])
 
+    def test_provider_openai_selectable_from_bench(self):
+        """--provider openai istanzia OpenAIVisionProvider (secondo lettore bench-only, §8.23).
+
+        Il seam resta parallelo a gemini: default invariato, produzione intatta.
+        """
+        patcher = patch("matches.management.commands.ocr_bench.OpenAIVisionProvider")
+        mock_class = patcher.start()
+        self.addCleanup(patcher.stop)
+        mock_provider = MagicMock()
+        mock_class.return_value = mock_provider
+
+        def _fake_extract(report, model=None, preprocess=True, sent_image_callback=None,
+                          prompt_version=None, thinking_level=None, thinking_budget=None):
+            if sent_image_callback:
+                sent_image_callback(report.file.path)
+            return fake_extraction(model), "raw"
+
+        mock_provider.extract_data.side_effect = _fake_extract
+
+        out = StringIO()
+        call_command(
+            "ocr_bench",
+            "--image", self.image_path,
+            "--provider", "openai",
+            "--models", "gpt-5",
+            "--prompt-version", "v3_4",
+            "--thinking-level", "high",
+            "--show",
+            stdout=out,
+        )
+        output = out.getvalue()
+        self.assertIn("Provider: openai", output)
+        mock_class.assert_called_once()
+        kwargs = mock_provider.extract_data.call_args.kwargs
+        self.assertEqual(kwargs["model"], "gpt-5")
+        self.assertEqual(kwargs["prompt_version"], "v3_4")
+        self.assertEqual(kwargs["thinking_level"], "high")
+
     def test_default_provider_is_gemini(self):
         """Senza --provider si usa GeminiVisionProvider (provider unico di default)."""
         mock_provider = self._patch_provider()

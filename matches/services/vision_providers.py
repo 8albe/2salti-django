@@ -928,3 +928,166 @@ class GeminiVisionProvider(BaseVisionProvider):
         except Exception as e:
             logger.error(f"Errore Gemini: {str(e)}")
             raise Exception(f"Errore durante la chiamata a Gemini: {str(e)}")
+
+
+class OpenAIVisionProvider(BaseVisionProvider):
+    """
+    Provider di visione OpenAI, reintrodotto il 2026-07-23 (syllabus §8.23) come
+    SECONDO LETTORE del cross-check: famiglia diversa da Gemini, quindi errori
+    attesi più scorrelati di quelli della coppia Pro/Flash (stesso addestramento).
+
+    NON è nel path di produzione: `OCRService.get_provider()` conosce solo
+    'gemini'/mock e non è stato toccato. Questo provider è selezionabile SOLO dal
+    bench (`ocr_bench --provider openai`). Reimplementa la stessa interfaccia
+    `extract_data` di GeminiVisionProvider sullo stesso seam (schema OCR v2 in
+    output, prompt selezionato da OCR_ALL_PROMPTS via `prompt_version` — es.
+    v3_4), su OpenAI Chat Completions con input immagine (data URI, detail high).
+
+    Reasoning: i modelli GPT-5.x accettano `reasoning_effort`
+    ('minimal'|'low'|'medium'|'high'). Il bench passa il livello via
+    `--thinking-level` (riusato: gli stessi valori valgono per Gemini 3.x e per
+    OpenAI), mappato 1:1 su `reasoning_effort`. Default None => nessun override,
+    l'API usa il default del modello. `thinking_budget` è Gemini-specifico e non
+    si applica a OpenAI: se valorizzato da solo viene ignorato con un log.
+    """
+    def __init__(self):
+        from django.conf import settings
+        from openai import OpenAI
+        self.client = OpenAI(api_key=getattr(settings, "OPENAI_API_KEY", ""))
+
+    def extract_data(self, match_report, model: str = None, preprocess: bool = True,
+                     sent_image_callback=None,
+                     prompt_version: str = None,
+                     thinking_level: str = None,
+                     thinking_budget: int = None) -> Tuple[Dict[str, Any], str]:
+        """
+        Stessa firma/semantica di GeminiVisionProvider.extract_data.
+        `thinking_level` -> `reasoning_effort` (nessun override se None).
+        `thinking_budget` non ha corrispettivo OpenAI: ignorato con un log.
+        Ritorna (data, raw_content).
+        """
+        import base64
+        import mimetypes
+        from django.conf import settings
+
+        # Modello: override per-chiamata > settings.OPENAI_OCR_MODEL > default.
+        # OPENAI_OCR_MODEL NON è definito in settings (nessun tocco a config):
+        # il fallback vale sempre salvo override esplicito via --models.
+        model = model or getattr(settings, "OPENAI_OCR_MODEL", "gpt-5")
+
+        # Prompt: stessa risoluzione di Gemini (override per-chiamata >
+        # settings.OCR_PROMPT_VERSION > "v2" come fallback tecnico).
+        prompt_version = prompt_version or getattr(settings, "OCR_PROMPT_VERSION", "v2")
+        if prompt_version not in OCR_ALL_PROMPTS:
+            raise ValueError(
+                f"Prompt version sconosciuta: {prompt_version!r} "
+                f"(disponibili: {', '.join(sorted(OCR_ALL_PROMPTS))})"
+            )
+        system_prompt = OCR_ALL_PROMPTS[prompt_version]
+
+        if thinking_budget is not None and thinking_level is None:
+            logger.warning(
+                "[OpenAIVisionProvider] thinking_budget è Gemini-specifico e non si "
+                "applica a OpenAI: ignorato (usa --thinking-level per reasoning_effort)."
+            )
+
+        logger.info(
+            f"[OpenAIVisionProvider] Avvio per report {match_report.id} "
+            f"(model={model}, prompt={prompt_version}, reasoning={thinking_level})..."
+        )
+
+        if not match_report.file:
+            raise ValueError("Il referto non ha alcun file associato. Impossibile eseguire OCR.")
+
+        original_path = match_report.file.path
+        if preprocess:
+            from .image_preprocessor import ImagePreprocessor
+            processed_path = ImagePreprocessor.process(original_path)
+            mime_type = "image/jpeg"
+        else:
+            logger.info(f"[OpenAIVisionProvider] Preprocessing bypassato per report {match_report.id}.")
+            processed_path = original_path
+            mime_type = mimetypes.guess_type(processed_path)[0] or "image/jpeg"
+
+        if sent_image_callback:
+            sent_image_callback(processed_path)
+
+        with open(processed_path, "rb") as f:
+            b64 = base64.b64encode(f.read()).decode("utf-8")
+
+        # Stesso tetto di output di Gemini: i reasoning token OpenAI sono fatturati
+        # come output e conteggiati in max_completion_tokens; un tetto basso li
+        # troncherebbe. Configurabile via settings.OCR_MAX_OUTPUT_TOKENS.
+        max_output_tokens = getattr(settings, "OCR_MAX_OUTPUT_TOKENS", 32000)
+
+        create_kwargs = {
+            "model": model,
+            "messages": [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": [
+                    {"type": "text", "text": OCR_USER_TEXT},
+                    {"type": "image_url", "image_url": {
+                        "url": f"data:{mime_type};base64,{b64}",
+                        "detail": getattr(settings, "OCR_IMAGE_DETAIL", "high"),
+                    }},
+                ]},
+            ],
+            "response_format": {"type": "json_object"},
+            "max_completion_tokens": max_output_tokens,
+        }
+        if thinking_level is not None:
+            create_kwargs["reasoning_effort"] = thinking_level
+
+        try:
+            response = self.client.chat.completions.create(**create_kwargs)
+            choice = response.choices[0]
+            content = choice.message.content
+            finish_reason = getattr(choice, "finish_reason", None)
+
+            if not content:
+                refusal = getattr(choice.message, "refusal", None)
+                if refusal:
+                    raise Exception(f"OpenAI refusal: {refusal}")
+                suffix = f" (finish_reason={finish_reason})" if finish_reason else ""
+                raise Exception(f"OpenAI ha restituito un contenuto vuoto{suffix}.")
+
+            # Parse difensivo: output troncato per limite token (finish_reason
+            # 'length') arriva come JSON incompleto — messaggio chiaro come su Gemini.
+            try:
+                data = json.loads(content)
+            except (ValueError, json.JSONDecodeError) as je:
+                if finish_reason == "length":
+                    hint = (
+                        f" (output troncato per limite token, finish_reason=length; "
+                        f"alza OCR_MAX_OUTPUT_TOKENS oltre {max_output_tokens})"
+                    )
+                elif finish_reason:
+                    hint = f" (finish_reason={finish_reason})"
+                else:
+                    hint = ""
+                raise Exception(f"JSON troncato/invalido dalla risposta{hint}: {je}")
+
+            # token_usage: OpenAI espone i reasoning token in
+            # usage.completion_tokens_details.reasoning_tokens (fatturati come output).
+            usage = None
+            u = getattr(response, "usage", None)
+            if u is not None:
+                details = getattr(u, "completion_tokens_details", None)
+                usage = SimpleNamespace(
+                    prompt_tokens=getattr(u, "prompt_tokens", None),
+                    completion_tokens=getattr(u, "completion_tokens", None),
+                    thoughts_tokens=getattr(details, "reasoning_tokens", None) if details else None,
+                )
+
+            data = self._normalize_response(
+                data, processed_path, original_path,
+                model=model,
+                usage=usage,
+                provider="OpenAIVisionProvider-v1",
+            )
+
+            return data, content
+
+        except Exception as e:
+            logger.error(f"Errore OpenAI: {str(e)}")
+            raise Exception(f"Errore durante la chiamata a OpenAI: {str(e)}")
