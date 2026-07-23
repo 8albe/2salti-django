@@ -489,6 +489,27 @@ class OCRSchemaValidator:
                 f"espulsioni (max {FOUL_OUT_EXCLUSIONS} a regolamento) — possibile errore di estrazione."
             )
 
+        # 4-quater(bis). Due check da regolamento sugli eventi (§8.24 stadio B), SOLO
+        # come WARNING (mai blocker): (a) max 2 timeout per squadra a partita; (b) max
+        # 1 espulsione definitiva (EDCS) per giocatore. Entrambi derivati dalla lista
+        # eventi, non estratti dal modello.
+        from ..event_types import (
+            timeouts_over_team_limit, TIMEOUTS_PER_TEAM_MAX,
+            definitive_exclusions_over_player_limit, DEFINITIVE_EXCLUSIONS_PER_PLAYER_MAX,
+        )
+        for team, cnt in timeouts_over_team_limit(events):
+            side = {"home": "CASA", "away": "OSPITE"}.get(team, team or "?")
+            warnings.append(
+                f"Timeout oltre il limite: {side} con {cnt} timeout (max {TIMEOUTS_PER_TEAM_MAX} "
+                f"a squadra nei tempi regolamentari) — verifica l'attribuzione della squadra."
+            )
+        for team, identity, cnt in definitive_exclusions_over_player_limit(events):
+            side = {"home": "CASA", "away": "OSPITE"}.get(team, team or "?")
+            warnings.append(
+                f"Espulsioni definitive oltre il limite: giocatore {identity} ({side}) con {cnt} "
+                f"EDCS (max {DEFINITIVE_EXCLUSIONS_PER_PLAYER_MAX} a partita) — possibile errore di estrazione."
+            )
+
         # 4-quater. Calottina d'evento non presente nel roster della sua squadra
         # (schema V3.5, §8.24). Se un evento porta "cap" N per la squadra X ma
         # nel roster di X non esiste il numero N, la calottina e' inventata o

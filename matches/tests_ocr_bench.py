@@ -1358,23 +1358,27 @@ class OcrZonePromptTest(TestCase):
         from matches.services.vision_providers import (
             OCR_SYSTEM_PROMPT_V2, OCR_SYSTEM_PROMPT_V3, OCR_SYSTEM_PROMPT_V3_2,
             OCR_SYSTEM_PROMPT_V3_3, OCR_SYSTEM_PROMPT_V3_4, OCR_SYSTEM_PROMPT_V3_5,
-            OCR_SYSTEM_PROMPT_ZONE,
+            OCR_SYSTEM_PROMPT_ZONE, OCR_SYSTEM_PROMPT_ZONE_EVENTS,
             OCR_SYSTEM_PROMPTS, OCR_SECOND_PASS_PROMPTS, OCR_ALL_PROMPTS,
         )
-        # La registry di produzione espone v2/v3/v3_2/v3_3/v3_4/v3_5: zone è tenuta separata.
+        # La registry di produzione espone v2/v3/v3_2/v3_3/v3_4/v3_5: le zone (punteggi
+        # e eventi) sono tenute separate.
         self.assertEqual(
             OCR_SYSTEM_PROMPTS,
             {"v2": OCR_SYSTEM_PROMPT_V2, "v3": OCR_SYSTEM_PROMPT_V3,
              "v3_2": OCR_SYSTEM_PROMPT_V3_2, "v3_3": OCR_SYSTEM_PROMPT_V3_3,
              "v3_4": OCR_SYSTEM_PROMPT_V3_4, "v3_5": OCR_SYSTEM_PROMPT_V3_5},
         )
-        self.assertEqual(OCR_SECOND_PASS_PROMPTS, {"zone": OCR_SYSTEM_PROMPT_ZONE})
+        self.assertEqual(
+            OCR_SECOND_PASS_PROMPTS,
+            {"zone": OCR_SYSTEM_PROMPT_ZONE, "zone_events": OCR_SYSTEM_PROMPT_ZONE_EVENTS},
+        )
         self.assertEqual(
             OCR_ALL_PROMPTS,
             {"v2": OCR_SYSTEM_PROMPT_V2, "v3": OCR_SYSTEM_PROMPT_V3,
              "v3_2": OCR_SYSTEM_PROMPT_V3_2, "v3_3": OCR_SYSTEM_PROMPT_V3_3,
              "v3_4": OCR_SYSTEM_PROMPT_V3_4, "v3_5": OCR_SYSTEM_PROMPT_V3_5,
-             "zone": OCR_SYSTEM_PROMPT_ZONE},
+             "zone": OCR_SYSTEM_PROMPT_ZONE, "zone_events": OCR_SYSTEM_PROMPT_ZONE_EVENTS},
         )
 
     def test_zone_prompt_inherits_v3_rules_and_is_minimal(self):

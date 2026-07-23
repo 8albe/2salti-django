@@ -593,11 +593,86 @@ OCR_SYSTEM_PROMPT_ZONE = """
         Rispondi SOLO con il JSON. Non aggiungere testo, commenti o markdown.
         """
 
+# Prompt "solo zona EVENTI" per il secondo passaggio sulla STORIA CRONOMETRICA
+# (§8.24 stadio B). Gemello di OCR_SYSTEM_PROMPT_ZONE ma per l'altra zona: legge
+# SOLO gli eventi della cronologia (gol/esclusioni con calottina, timeout di
+# squadra, espulsioni definitive), ignorando punteggi/roster/ufficiali. Riceve il
+# RITAGLIO della zona (ocr_zone_crop), non il foglio intero. Stessa disciplina di
+# V3.5: la CALOTTINA è l'identificativo primario, il nome secondario (qui di norma
+# non leggibile). Non è un prompt di produzione: è un secondo atto di lettura,
+# indipendente, e NON deve mai ricevere il risultato del primo passaggio.
+OCR_SYSTEM_PROMPT_ZONE_EVENTS = """
+        Sei un esperto di analisi di referti di partite di pallanuoto (FIN - GUG).
+        Riceverai il RITAGLIO della sola zona 'STORIA CRONOMETRICA' di un referto
+        ufficiale (la tabella degli eventi, a destra sul foglio). Questo è un
+        SECONDO atto di lettura, indipendente: leggi SOLO gli eventi di questa zona
+        e ignora tutto ciò che non è la cronologia (nomi squadra, roster, punteggi
+        parziali, ufficiali). Non hai memoria di alcuna lettura precedente:
+        trascrivi ciò che vedi ORA, mai ciò che "ti aspetteresti".
+
+        STRUTTURA DELLA ZONA:
+        - È divisa in quattro sezioni, una per periodo (I TEMPO, II TEMPO, III
+          TEMPO, IV TEMPO). Il "quarter" di ogni evento è la SEZIONE in cui è
+          scritto (1..4), MAI dedotto dal minuto.
+        - Ogni riga ha: Tempo (cronometro a scalare mm:ss), N° Calottina divisa in
+          due sotto-colonne B e N, Evento (GOL; ET = esclusione 20"; TR = rigore;
+          T.O. = timeout; EDCS = espulsione definitiva), Punteggio progressivo.
+        - SQUADRA: la sotto-colonna B è la squadra di CASA ("home"), la sotto-colonna
+          N è la squadra OSPITE ("away"). La calottina scritta sotto B è di casa,
+          quella sotto N è dell'ospite.
+
+        EVENTI DA ESTRARRE (SOLO questi tipi):
+        - GOL (type "GOAL"): "cap" (calottina, OBBLIGATORIA), "team", "clock", "quarter".
+        - ESCLUSIONE 20" (type "EXCLUSION_20", sigla "ET"): "cap", "team", "clock", "quarter".
+        - TIMEOUT (type "TIMEOUT", sigla "T.O."): è della SQUADRA — "team", "clock",
+          "quarter", ma "cap" e "player_name" null.
+        - ESPULSIONE DEFINITIVA (type "EXCLUSION_DEF", sigla "EDCS" o equivalente):
+          "cap", "team", "clock", "quarter"; la sigla verbatim in "sanction_sigla" e
+          l'eventuale numero d'articolo (colonna punteggio) verbatim in
+          "regulation_article". NON è un gol e quell'articolo NON entra nel punteggio.
+
+        IDENTITÀ (stessa disciplina di V3.5): la CALOTTINA ("cap") è l'IDENTIFICATIVO
+        PRIMARIO dell'autore, obbligatoria su GOL/ET/EDCS. Il "player_name" QUI di
+        norma NON è leggibile (la cronologia riporta il numero, non il nome):
+        lascialo null se non c'è. Un "player_name" null NON è un fallimento.
+
+        REGOLE CRITICHE:
+        - Se un dato è ILLEGGIBILE, PARZIALE o AMBIGUO: usa null. NON INDOVINARE MAI,
+          calottina compresa.
+        - Non dedurre il periodo dal minuto; non riordinare né inventare eventi per
+          far tornare i punteggi.
+
+        FORMATO JSON RICHIESTO (SOLO questi campi, niente altro):
+        {
+            "metadata": {
+                "schema_version": "zone-events-1.0",
+                "confidence": <0.0-1.0 fiducia complessiva sugli eventi della zona>,
+                "extraction_warnings": ["<ogni ambiguità o riga illeggibile>"]
+            },
+            "events": [
+                {
+                    "type": "GOAL|EXCLUSION_20|EXCLUSION_DEF|TIMEOUT",
+                    "cap": <int calottina (IDENTIFICATIVO PRIMARIO) o null (null per timeout o calottina illeggibile)>,
+                    "player_name": null,
+                    "team": "home|away",
+                    "clock": "<cronometro a scalare mm:ss come scritto, es. '4:44', o null>",
+                    "quarter": <1-4 o null>,
+                    "sanction_sigla": "<sigla verbatim, o null (solo EXCLUSION_DEF)>",
+                    "regulation_article": "<numero d'articolo verbatim come stringa, o null (solo EXCLUSION_DEF)>"
+                }
+            ]
+        }
+
+        Rispondi SOLO con il JSON. Non aggiungere testo, commenti o markdown.
+        """
+
 # Registro dei prompt del secondo passaggio (doppia estrazione). Tenuto SEPARATO
-# da OCR_SYSTEM_PROMPTS: "zone" non è una versione di prompt di produzione (non
-# estrae roster/eventi), non va mai usata come OCR_PROMPT_VERSION di default.
+# da OCR_SYSTEM_PROMPTS: non sono versioni di prompt di produzione (non estraggono
+# tutto il referto), non vanno mai usati come OCR_PROMPT_VERSION di default.
+# "zone" = punteggi/parziali/data; "zone_events" = eventi della storia cronometrica.
 OCR_SECOND_PASS_PROMPTS = {
     "zone": OCR_SYSTEM_PROMPT_ZONE,
+    "zone_events": OCR_SYSTEM_PROMPT_ZONE_EVENTS,
 }
 
 # Vista unificata usata dalla risoluzione del prompt (extract_data) e dal bench:

@@ -99,6 +99,45 @@ def players_over_exclusion_limit(events, exclusion_codes=(EVENT_TYPE_EXCLUSION_2
     ]
 
 
+# Regolamento pallanuoto: ogni squadra ha diritto ad al massimo 2 timeout a partita
+# nei tempi regolamentari. NB SUPPLEMENTARI: alcune competizioni concedono un
+# timeout aggiuntivo nei tempi supplementari — ma il dominio a oggi NON conosce una
+# regola diversa per i supplementari (nessuna nel codice, nessun campo che marchi un
+# evento come "supplementare"), quindi NON la si inventa: il limite resta 2 per
+# squadra e un eventuale terzo timeout è un WARNING da verificare, mai un blocco.
+TIMEOUTS_PER_TEAM_MAX = 2
+
+
+def count_timeouts_per_team(events):
+    """{team: count} dei timeout per squadra da una lista eventi (schema OCR/truth).
+
+    Il timeout e' team-level (nessun giocatore): si conta per squadra, non per
+    identita'. Eventi senza `team` finiscono sotto la chiave None (contati ma non
+    attribuibili a una squadra reale).
+    """
+    counts = {}
+    for e in events or []:
+        if isinstance(e, dict) and e.get("type") == EVENT_TYPE_TIMEOUT:
+            team = e.get("team")
+            counts[team] = counts.get(team, 0) + 1
+    return counts
+
+
+def timeouts_over_team_limit(events, max_per_team=TIMEOUTS_PER_TEAM_MAX):
+    """[(team, count)] delle squadre oltre il limite di timeout (count > max_per_team).
+
+    Regola da regolamento, non estratta dal modello: si deriva dalla lista eventi.
+    Un terzo timeout della stessa squadra e' quasi sempre un errore di lettura (es.
+    un T.O. attribuito alla squadra sbagliata). Ordinata per count decrescente.
+    """
+    counts = count_timeouts_per_team(events)
+    return [
+        (team, c)
+        for team, c in sorted(counts.items(), key=lambda kv: (-kv[1], str(kv[0])))
+        if c > max_per_team
+    ]
+
+
 def fouled_out_players(events, exclusion_codes=(EVENT_TYPE_EXCLUSION_20,)):
     """(team, giocatore) che raggiungono le 3 espulsioni (fouled out) in questa lista eventi.
 
@@ -189,6 +228,38 @@ def classify_definitive_exclusion(article):
         "next_matches_ban": None,
         "description": None,
     }
+
+
+# Un giocatore può ricevere al più UNA espulsione definitiva (EDCS) a partita: la
+# definitiva lo mette fuori per il resto della gara, quindi una seconda per lo stesso
+# giocatore è impossibile per costruzione (errore di lettura, es. calottina duplicata
+# su due righe EDCS). Diverso dal limite di 3 esclusioni di 20" (FOUL_OUT_EXCLUSIONS).
+DEFINITIVE_EXCLUSIONS_PER_PLAYER_MAX = 1
+
+
+def count_definitive_exclusions_per_player(events):
+    """{(team, identity): count} delle espulsioni definitive (EDCS) per giocatore.
+
+    Riusa `count_exclusions_per_player` sul solo codice EXCLUSION_DEF: l'identita' e'
+    calottina-aware (`_player_identity` preferisce il nome, poi la calottina), cosi'
+    un EDCS identificato per sola calottina viene comunque conteggiato.
+    """
+    return count_exclusions_per_player(events, exclusion_codes=(EVENT_TYPE_EXCLUSION_DEF,))
+
+
+def definitive_exclusions_over_player_limit(events, max_per_player=DEFINITIVE_EXCLUSIONS_PER_PLAYER_MAX):
+    """[(team, identity, count)] dei giocatori con più di `max_per_player` EDCS.
+
+    Una seconda espulsione definitiva per lo stesso giocatore e' impossibile a
+    regolamento: la sua presenza segnala un errore di estrazione (tipicamente lo
+    stesso rosso letto due volte per calottina). Ordinata per count decrescente.
+    """
+    counts = count_definitive_exclusions_per_player(events)
+    return [
+        (team, identity, c)
+        for (team, identity), c in sorted(counts.items(), key=lambda kv: (-kv[1], str(kv[0])))
+        if c > max_per_player
+    ]
 
 
 def get_event_label(code, sport=None):
