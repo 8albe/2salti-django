@@ -278,8 +278,13 @@ class PublishingService:
                 deleted_events_count, _ = MatchEvent.objects.filter(match=match).delete()
 
                 from accounts.models import AthleteProfile
+                from matches.event_types import is_team_level_event
                 created_events_count = 0
                 involved_athlete_ids = set()
+                # Warning (NON blocker) per gli eventi player-level non riconciliati:
+                # raccolti qui, riversati nella lista `warnings` esistente dopo il loop
+                # cosi' arrivano ad audit, log e al messaggio di review (DEBITI §10.37).
+                event_warnings = []
 
                 if level == LEVEL_SCORE_ONLY:
                     # SCORE_ONLY (Opzione A): nessun evento creato. Gli eventi
@@ -301,7 +306,30 @@ class PublishingService:
                         if not target_team:
                             continue # Team non configurato nel match
 
-                        # Creiamo l'evento solo se abbiamo un player_id (Reconciled)
+                        # Distinzione STRUTTURALE (attributo del tipo, non stringhe qui):
+                        # gli eventi TEAM-LEVEL (i TIMEOUT) hanno player_name null per
+                        # contratto — vanno persistiti con player=None e il riferimento
+                        # temporale che abbiamo (minute/quarter). Scartarli era un bug: i
+                        # timeout sono statistiche di livello Base promesse (BLUEPRINT
+                        # §7.4.3) e non arrivavano mai a DB (DEBITI §10.37).
+                        if is_team_level_event(ed["event_type"]):
+                            MatchEvent.objects.create(
+                                match=match,
+                                event_type=ed["event_type"],
+                                team=target_team,
+                                player=None,
+                                minute=ed["minute"] or 0,
+                                quarter=ed.get("quarter") or 1,
+                                is_penalty=ed.get("is_penalty", False),
+                                regulation_article=ed.get("regulation_article"),
+                                sanction_sigla=ed.get("sanction_sigla"),
+                                notes=ed["notes"]
+                            )
+                            created_events_count += 1
+                            continue
+
+                        # Eventi PLAYER-LEVEL: creiamo l'evento solo se riconciliato a un
+                        # player_id (Reconciled)
                         if ed["player_id"]:
                             # Protezione: Verifica che il player appartenga effettivamente al team target
                             if AthleteProfile.objects.filter(user_id=ed["player_id"], current_team=target_team).exists():
@@ -313,12 +341,33 @@ class PublishingService:
                                     minute=ed["minute"] or 0,
                                     quarter=ed.get("quarter") or 1,
                                     is_penalty=ed.get("is_penalty", False),
+                                    regulation_article=ed.get("regulation_article"),
+                                    sanction_sigla=ed.get("sanction_sigla"),
                                     notes=ed["notes"]
                                 )
                                 created_events_count += 1
                                 involved_athlete_ids.add(ed["player_id"])
                             else:
                                 logger.warning(f"Player ID {ed['player_id']} riconciliato con team sbagliato {target_team}. Evento saltato.")
+                        else:
+                            # Evento player-level NON riconciliato (un rosso/esclusione con
+                            # un nome che non aggancia alcun atleta): NON lo persistiamo
+                            # (non attribuibile) ma NON lo inghiottiamo — un WARNING (non un
+                            # blocker) lo rende visibile in review, con l'evento e il nome
+                            # che non ha riconciliato. Warning e non blocker per non bloccare
+                            # i publish SCORE_ONLY ne' introdurre marker event-scoped nuovi
+                            # (DEBITI §10.37).
+                            _unrec_name = ed.get("player_name") or "(nome assente)"
+                            event_warnings.append(
+                                f"Evento '{ed['event_type']}' non pubblicato: il nome "
+                                f"'{_unrec_name}' (squadra {ed['team']}) non aggancia alcun "
+                                f"atleta del roster."
+                            )
+
+                # Gli eventi player-level non riconciliati diventano warning visibili:
+                # confluiscono nella lista `warnings` gia' usata da audit/log/messaggio.
+                if event_warnings:
+                    warnings.extend(event_warnings)
 
                 # GUARDRAIL Policy A: 0 events created with positive score → abort
                 # Anche con force=True. Previene drift sulle statistiche atleti.
@@ -475,6 +524,11 @@ class PublishingService:
                         )
                     if warnings:
                         msg += f" Avvisi: {len(warnings)}."
+                    # Gli avvisi sugli eventi non riconciliati vanno resi per esteso nel
+                    # messaggio di review: il reviewer deve vedere QUALE nome non ha
+                    # agganciato, non solo il conteggio.
+                    if event_warnings:
+                        msg += " " + " ".join(event_warnings)
                     logger.info(f"Referto {report.id} {audit_action} con successo. {msg}")
                     return True, msg
 

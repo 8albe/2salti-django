@@ -8,17 +8,35 @@ EVENT_TYPE_YELLOW_CARD = 'YELLOW_CARD'
 EVENT_TYPE_RED_CARD = 'RED_CARD'
 EVENT_TYPE_TIMEOUT = 'TIMEOUT'
 
+# `is_team_level`: l'evento e' della SQUADRA, non di un giocatore (es. TIMEOUT,
+# che per contratto ha player_name null). E' un attributo STRUTTURALE del tipo di
+# evento — non un elenco di stringhe sparso nel publishing — cosi' la pipeline puo'
+# decidere in un punto solo il destino di un evento senza player_id: gli eventi
+# team-level si persistono con player=None; gli eventi player-level non riconciliati
+# NON si persistono e producono un warning (DEBITI §10.37).
 DEFAULT_EVENT_TYPES = [
-    {'code': EVENT_TYPE_GOAL, 'label': 'Gol', 'is_score': True},
-    {'code': EVENT_TYPE_EXCLUSION_20, 'label': 'Espulsione 20s', 'is_score': False},
-    {'code': EVENT_TYPE_YELLOW_CARD, 'label': 'Cartellino Giallo', 'is_score': False},
-    {'code': EVENT_TYPE_RED_CARD, 'label': 'Cartellino Rosso', 'is_score': False},
-    {'code': EVENT_TYPE_TIMEOUT, 'label': 'Timeout Squadra', 'is_score': False},
+    {'code': EVENT_TYPE_GOAL, 'label': 'Gol', 'is_score': True, 'is_team_level': False},
+    {'code': EVENT_TYPE_EXCLUSION_20, 'label': 'Espulsione 20s', 'is_score': False, 'is_team_level': False},
+    {'code': EVENT_TYPE_YELLOW_CARD, 'label': 'Cartellino Giallo', 'is_score': False, 'is_team_level': False},
+    {'code': EVENT_TYPE_RED_CARD, 'label': 'Cartellino Rosso', 'is_score': False, 'is_team_level': False},
+    {'code': EVENT_TYPE_TIMEOUT, 'label': 'Timeout Squadra', 'is_score': False, 'is_team_level': True},
 ]
 
 # Quick lookup maps
 EVENT_LABELS = {e['code']: e['label'] for e in DEFAULT_EVENT_TYPES}
 SCORE_EVENT_CODES = [e['code'] for e in DEFAULT_EVENT_TYPES if e.get('is_score', False)]
+TEAM_LEVEL_EVENT_CODES = frozenset(e['code'] for e in DEFAULT_EVENT_TYPES if e.get('is_team_level', False))
+
+
+def is_team_level_event(code):
+    """True se l'evento e' di livello SQUADRA (nessun giocatore): es. TIMEOUT.
+
+    Distinzione strutturale (deriva dall'attributo `is_team_level` del tipo di
+    evento in DEFAULT_EVENT_TYPES). Usata dal publishing per separare il destino
+    degli eventi senza player_id: team-level -> persisti con player null;
+    player-level non riconciliato -> non persistere, ma segnala con un warning.
+    """
+    return code in TEAM_LEVEL_EVENT_CODES
 
 # Regolamento pallanuoto: alla TERZA espulsione un giocatore e' fuori per tutta la
 # partita ("fouled out"). Non e' solo plausibilita': e' uno stato di gioco reale.

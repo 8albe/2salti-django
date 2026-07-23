@@ -1,5 +1,6 @@
 from typing import Dict, Any, List, Optional
 from matches.models import Match, MatchEvent
+from matches.event_types import EVENT_TYPE_EXCLUSION_DEF, EVENT_TYPE_RED_CARD
 
 class MatchDataConverter:
     """
@@ -54,19 +55,36 @@ class MatchDataConverter:
             event_type = e.get("type")
             if not event_type:
                 continue
-                
+
+            # In pallanuoto l'espulsione definitiva (EDCS) e il cartellino rosso sono
+            # lo STESSO evento reale: normalizziamo EXCLUSION_DEF -> RED_CARD, tipo gia'
+            # canonico (DEFAULT_EVENT_TYPES), pubblicabile e con blocco di template
+            # dedicato. Il V3 di produzione emette gia' RED_CARD di suo (senza articolo);
+            # il V3.4 emette EXCLUSION_DEF con articolo: dopo questa mappatura le due
+            # forme convergono sullo stesso tipo persistito. Non tocca il conteggio
+            # fouled-out, che opera solo su EXCLUSION_20 (DEBITI §10.35).
+            if event_type == EVENT_TYPE_EXCLUSION_DEF:
+                event_type = EVENT_TYPE_RED_CARD
+
             # Support both "player" and "player_name" keys (prompt version compat)
             player_name = e.get("player_name") or e.get("player")
             player_id = player_map.get(player_name) if player_name else None
-            
+
             processed_events.append({
                 "event_type": event_type,
                 "minute": e.get("minute"),
                 "player_id": player_id,
+                "player_name": player_name,  # serve al warning di publish per nominare un evento non riconciliato
                 "team": e.get("team"), # 'home' or 'away'
                 "quarter": e.get("quarter"),
                 "is_penalty": bool(e.get("is_penalty", False)),  # rigore: additivo, default false
+                # Metadati sanzione portati a valle VERBATIM (non piu' scartati, DEBITI §10.35).
+                # Possono restare null su un rosso legittimo privo di articolo (forma V3):
+                # nessuna validazione qui li pretende. La classificazione NON si persiste:
+                # si deriva a render-time da classify_definitive_exclusion.
+                "regulation_article": e.get("regulation_article"),
+                "sanction_sigla": e.get("sanction_sigla"),
                 "notes": f"Estratto da OCR: {player_name}" if player_name else ""
             })
-            
+
         return processed_events
