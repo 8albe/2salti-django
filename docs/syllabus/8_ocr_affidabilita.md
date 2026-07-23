@@ -829,6 +829,51 @@ Con il deploy §2.12 in esercizio (prompt di produzione **V3**, `gemini-2.5-pro`
 
 **Costo reale per referto — correzione: ~\$0,14, non ~\$0,06.** Misurato oggi in produzione su `gemini-2.5-pro`: **2.559 token in, 4.613 out, 8.784 di thinking**. I token di ragionamento sono **fatturati come output**, quindi il costo reale è `2.559 × \$1,25/M + (4.613 + 8.784) × \$10/M ≈ \$0,003 + \$0,134 ≈` **\$0,14 per referto**. Le stime precedenti (~\$0,044 §8.13, ~\$0,056 §8.20) contavano **solo l'output visibile** e **omettevano il thinking** (qui ~1,9× l'output visibile), sottostimando di ~2,5×. **Il braccio Flash (§8.20) risultava vicino a Pro anche perché girava con `thinking_level='minimal'` (0 thought token)**: a parità di misura — thinking incluso per Pro, assente per Flash — Flash è **molto** più economico di Pro, non ~16%. I costi-totali-run storici del §8 (a listino sui soli token di output visibili) vanno letti come **limite inferiore**.
 
+### 8.22 Zero-autori di Flash: la causa è il budget di ragionamento, non il prompt né il modello (2026-07-23)
+
+Giro dedicato a spiegare il **blocco duro** registrato in §8.20: con `gemini-3.6-flash`, prompt `v3_4`, `thinking_level='minimal'` (0 thought token), su tutti e 6 i casi del gold Flash estraeva i gol (conteggio e clock) ma con `player_name` **null** — gol-con-autore 0/22, 0/24, 0/23, 0/21, 0/28, 0/32 — mentre leggeva punteggi/parziali/data bene. §8.20 aveva chiuso con "Flash solo `SCORE_ONLY`", ma segnalando che lo zero-autori *poteva* essere un artefatto del prompt Pro-centrico, **condizione di falsificazione, non condanna**. Questo giro la falsifica.
+
+**Tre ipotesi, in ordine di costo crescente per essere smentite.** H1 — budget di ragionamento: `thinking_level='minimal'` non basta a leggere i nomi manoscritti (è un **parametro**, non il prompt). H2 — prompt: `v3_4` è tarato su Pro e non insiste sull'obbligatorietà dell'autore. H3 — limite del modello: Flash non sa leggere quei nomi. Si procede a scala, ci si ferma al primo gradino che risponde.
+
+**GRADINO 1 — H1 CONFERMATA al primo colpo.** Una sola chiamata sul referto 8 (il più denso, roster verificato, gold=truth), Flash + `v3_4` **invariato byte-per-byte**, `thinking_level='high'` (contro `'minimal'` di §8.20). Comando:
+```
+python manage.py ocr_bench --gold-case 2026-03-28_unime_vs_nautilus-roma \
+  --models gemini-3.6-flash --prompt-version v3_4 --thinking-level high
+```
+Esito: **22/22 gol con `player_name` valorizzato** (IANNE P., D'ANGELO V., GARRIA A., MILANA L., …) — a `minimal` erano 0/22. `tok_thk` 0 → **10.516**. La causa dello zero-autori è il **budget di ragionamento**: a `minimal` il modello non spende ragionamento sui nomi manoscritti; alzato a `high` li legge. **H2 e H3 non vanno nemmeno testate** (protocollo a scala): H3 in particolare è falsificata dal fatto stesso che gli autori compaiano. **`v3_4` NON è stato toccato** — resta identico a §8.19/§8.20, nessuna variante `v3_4_flash` creata.
+
+**GRADINO 3 — misura sulla configurazione vincente** (Flash 3.6 + `v3_4` invariato + `thinking_level='high'`), 6 casi, `--repeat 3`. Due assi separati.
+
+**Asse AUTORI (sui gol):**
+
+| Caso | gol estratti (r1/r2/r3) | con `player_name` | con calottina | coincidenza cognome↔truth |
+|---|---|---|---|---|
+| pol-delta | 24/24/24 | **100%** | 0 | n/d (truth senza roster/cap) |
+| unime (ref. 8) | 22/22/22 | **100%** | 0 | **18 esatti + 4 a-una-lettera + 0 sbagliati / 22** (repeat allineato) |
+| bellator-frusino | 21/22/21 | **100%** | 0 | n/d |
+| olympic | 21/21/21 | **100%** | 0 | 5–9 esatti, 1–2 sbagliati (dove allineato) |
+| sc-salerno | 29/29/30 | **100%** | 0 | n/d |
+| triscelon | 32/30/32 | **100%** | 0 | n/d |
+
+- **Nomi**: recuperati sul **100% dei gol**, tutti i casi, tutte le ripetizioni. È la metrica operativa: rimuove il gate autori / "Zero Eventi" (Policy A strict) che a `minimal` avrebbe abortito ogni publish `FULL`.
+- **Calottine**: **0 ovunque**, e non è un errore di Flash: lo schema evento di `v3_4` **non ha un campo calottina** sul gol (solo `player_name`; il `number` esiste solo nel roster). Flash emette il **nome**, che è per giunta la chiave con cui la pipeline riconcilia (`converters.py` aggancia per nome, non per calottina) — quindi il nome recuperato è esattamente ciò che sblocca il `FULL`.
+- **Coincidenza col la truth**: misurabile **solo su unime e olympic**, gli unici due casi con roster verificato + calottina sui gol nella truth (gli altri quattro hanno `goal_events_with_cap=0`: nessun ground-truth per l'autore, quindi "n/d", non un errore). Dove misurabile i cognomi agganciano la truth in larga maggioranza, con **zero cognomi palesemente sbagliati** su report 8 nella ripetizione ben allineata.
+
+**Asse A (punteggi/parziali/data) — NESSUNA regressione.** Bucket stability-aware su 78 campi (13×6), confronto diretto con la baseline `minimal` di §8.20:
+
+| | stabili-corretti | stabili-SBAGLIATI | instabili | ambigui |
+|---|---|---|---|---|
+| §8.20 Flash `minimal` | 65 | **0** | 12 | 1 |
+| §8.22 Flash `high` | **66** | **0** | 12 | 0 |
+
+Zero stabili-sbagliati su finale/parziali/data in entrambe le configurazioni: alzare il ragionamento **non degrada** ciò che Flash già faceva bene (il +1 stabile-corretto è banda di rumore). I campi finale/quarto che a occhio sembravano "sbagliati" (bellator finale casa, salerno quarti) sono **instabili**, non stabili-sbagliati, e pre-esistenti (bellator finale casa Flash lo leggeva già `7` a `minimal`, §8.20).
+
+**Costo.** Giro intero: **19 chiamate reali** (1 gradino 1 + 18 gradino 3), **77.027 tok in / 108.363 tok out / 243.672 tok di thinking**, **$2,76** (sotto il tetto di $3). Tutto BENCH-ONLY: nessun default di produzione toccato (`OCR_PROMPT_VERSION` resta `v3`, modello `gemini-2.5-pro`, thinking di default `None`).
+
+**Conseguenza economica — la leva che risolve gli autori erode il vantaggio di costo di Flash.** A `thinking_level='high'` Flash consuma ~12–16k thought token/referto (fatturati come output a $7,50/M): costo reale ~**$0,15/referto**, sostanzialmente **pari a Pro** (~$0,14, §8.21). Il ~16% di risparmio di §8.20 valeva **solo** perché Flash girava a `minimal` (0 thinking) — cioè nella configurazione che *non attribuisce gli autori*. Attivare gli autori e mantenere il risparmio sono, su questi numeri, **mutuamente esclusivi**.
+
+**Esito e riapertura.** §8.20 aveva chiuso "Flash → solo `SCORE_ONLY`" con l'esplicita clausola "si riapre se un prompt tarato su Flash recupera l'attribuzione". Il giro mostra che **non serve un prompt nuovo**: basta il **parametro** `thinking_level='high'`, e `v3_4` resta invariato. Flash + `v3_4` + `high` è quindi tecnicamente candidabile anche al `FULL` (autori 100%, asse A non-inferiore). Ma la scelta non è più tecnica bensì **economica**: a parità di costo con Pro e con Pro già in produzione e collaudato end-to-end (§8.21), promuovere Flash a `FULL` non ha una giustificazione di risparmio. **Nulla promosso: questo giro misura, non decide.** La nicchia `SCORE_ONLY` per Flash-a-`minimal` (economico, autori irrilevanti) resta valida e distinta.
+
 ---
 
 ← [Macro precedente](7_profilo_fan.md) | → [Macro successiva](9_sistema_sponsor.md)
