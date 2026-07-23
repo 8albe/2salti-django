@@ -710,6 +710,47 @@ La **mappatura articolo → tipo** vive nel **nostro codice** (`matches/event_ty
 
 **Stato di misura: sia V3.3 sia V3.4 sono DA MISURARE, bloccate dal cap di spesa Gemini** (§8.17). Nessuna chiamata reale in questo giro. La misura sul gold di entrambe resta al primo giro a cap rialzato (azione di Alberto sulla console AI Studio). Nuovi test a guardia (tutti mockati, verdi): hash V3.4, semantiche A/B presenti in V3.4 e assenti in V3.3, reversibilità V3.4→V3.3, mappatura `9.13`/`9.14`/sconosciuto, e le asserzioni derivate del referto 8 (fouled out casa #3/#12, timeout senza calottina, articolo mai come punteggio, rigore P2 non accoppiato).
 
+### 8.19 Misura tre bracci V3 / V3.3 / V3.4 sul gold — clock, timeout, espulsione definitiva (2026-07-23)
+
+Cap Gemini **ripristinato** (progetto `careful-yew-501810-s1` a 100 €/mese). Prima misura reale delle due varianti mai misurate (§8.17 V3.3, §8.18 V3.4) contro il baseline V3, **tre bracci nello stesso run** — protocollo §8.12/§8.15 (`--repeat 5`, tutti e 6 i casi gold, Triscelon con `--image`, preprocessing on):
+- `v3` baseline `OCR_SYSTEM_PROMPT_V3@sha256:be51e9c6bc42` (V3.1, default di produzione)
+- `v3_3` clock-only `@sha256:dd9f2af28a1d`
+- `v3_4` clock + timeout + espulsione definitiva `@sha256:4e9751eded9b`
+
+**90 chiamate reali** (3 × 6 × 5), `gemini-2.5-pro`, **zero 429** in tutto il run (~2h30, sequenziale). **Costo effettivo: $5,05** (256.080 tok in @1,25/M = $0,32; 472.901 tok out @10/M = $4,73 — l'output alto è il referto 8, 50+ eventi). Proposte in scratchpad (D1: mai riversate nei casi). **Baseline rimisurato in questo run**, non ripreso da §8.15: il gold è cambiato (referto 8 promosso a truth, §8.18) e l'estrazione è stocastica.
+
+**Trappola del denominatore neutralizzata**: timeout ed espulsione definitiva sono FUORI dal contratto di V3 e V3.3. Le metriche generali (assi a-f) li **escludono** dal confronto; timeout ed `EXCLUSION_DEF` vivono in un **asse separato (g), misurato solo su V3.4**.
+
+**Tabella per braccio (assi a-h):**
+
+| Asse | v3 (baseline) | v3_3 (clock) | v3_4 (clock+TO+EDCS) |
+|---|---|---|---|
+| **a** punteggi/parziali/data — *stabili-corretti* (su 78 campi = 13×6) | **57** sc / 1 sw / 15 inst / 5 amb | **60** sc / 1 sw / 13 inst / 4 amb | **61** sc / 2 sw / 11 inst / 4 amb |
+| **b** completezza eventi-gol referto 8 (denom = solo GOAL, 22) | 22–23/22 (5 rip) | 22/22 (5 rip) | 22/22 (5 rip) |
+| **c** clock mm:ss su gol referto 8 — copertura / *giusto-e-al-posto* | **0/22** (nessun clock) | **22/22** / [20,14,20,19,18] ≈ **83%** | **22/22** / [10,15,14,19,19] ≈ **70%** |
+| **d** rigori referto 8 (2 realizzati P3 6:48 + P4 4:23; 1 NON P2 6:20) | non collocabile (no clock) | 2 realizzati agganciati, **P2 6:20 mai accoppiato** ✓ | come v3_3 ✓ (flag `is_penalty` sull'esclusione incostante, ~2-3/5) |
+| **e** fouled out derivato (atteso casa `geloso`#3 + `cama`#12, nessun altro) | **rumoroso**: manca spesso #3/#12, aggiunge nomi spuri | **rumoroso** (1 rip `over-limit` >3) | **rumoroso** (1 rip `over-limit` >3) |
+| **f** collocazione periodo referto 8 (residuo §8.16) | **nessun movimento** (5/5 match) | **nessun movimento** (5/5) | **nessun movimento** (5/5) |
+| **g** timeout / EDCS (solo V3.4) | fuori contratto | fuori contratto | **timeout 3,3,2,3,3** (4/5 pieni); **EDCS 1/1 ogni rip**, art `9.13` + sigla `EDCS` verbatim, `classify`→noto *misconduct*; **finale 12-10 in tutte** (articolo NON entra nel punteggio), **mai tipizzato GOAL** ✓ |
+| **h** errori stabili noti | Bellator finale casa **5** (truth 4) *stabile*; Triscelon data **28** (truth 25) instabile 4/5 | Bellator **5** *stabile*; Triscelon **28** instabile 4/5 | Bellator finale casa **8** (instabile 8×4/5×1) — **valore DIVERSO**; Triscelon data **28** *ora stabile 5/5* |
+
+**Lettura onesta — asse a (ciò che la produzione pubblica oggi):** i tre bracci sono **statisticamente indistinguibili** sui punteggi/parziali/data. Lo scarto 57→60→61 stabili-corretti **non è un guadagno di qualità**: è la stessa banda di rumore (instabile 15→13→11) che si risolve diversamente fra campioni. La prova è nell'asse h — **nessun braccio corregge un solo errore stabile**, si limitano a **spostarlo**: Bellator finale casa passa `5`→`5`→`8` (V3.4 lo legge *peggio* e lo destabilizza), Triscelon data resta `28` e V3.4 la **stabilizza sul valore sbagliato** (5/5, peggio per la rilevabilità di un'instabile 4/5), e su V3.4 spunta un nuovo stabile-sbagliato (Olympic Q3 ospite `0`). Conferma diretta di §8.13/§8.16: **gli errori stabili di finale/parziali/data appartengono alla strada doppia-estrazione/zona, non al prompt.**
+
+**Guadagni reali e unici:**
+- **V3.3 → clock (asse c):** copertura da 0 a **100%**, correttezza-e-collocazione ≈ **83%**; additivo, **nessuna regressione** su punteggi (asse a non-inferiore) e **zero movimento di periodo** (asse f). L'aggancio posizionale dei rigori (asse d) diventa possibile e sul referto 8 **non produce falsi accoppiamenti** sul rigore NON realizzato.
+- **V3.4 → timeout + espulsione definitiva (asse g):** è l'unico braccio che estrae 3 timeout (4/5 pieni) e l'EDCS con articolo `9.13` verbatim, **senza corrompere il punteggio** (finale 12-10 in tutte le 5, articolo mai nella progressione) e **senza tipizzarla GOAL**. Esattamente il contratto di V3.4, verificato. Ma il clock di V3.4 è **più rumoroso** di V3.3 (70% vs 83%) e Bellator vi deriva a un valore peggiore.
+
+**Guadagno mancato (asse e):** il **fouled out derivato è inaffidabile in tutti e tre i bracci** — nessuno ricostruisce stabilmente `{geloso #3, cama #12}`, tutti aggiungono nomi spuri e V3.3/V3.4 producono in una ripetizione un `over-limit` >3 (impossibile a regolamento). Derivare il fouled-out dalle esclusioni OCR **non è affidabile a nessun prompt**: dipende da una lettura pulita di 24 esclusioni per calottina, che il modello non garantisce.
+
+**RACCOMANDAZIONE (la decisione è di Alberto, nulla promosso a default in questo giro):** **non promuovere né V3.3 né V3.4 a default di produzione su questi numeri.** L'unica cosa che la produzione pubblica oggi — punteggi/parziali/data — è indistinguibile fra i tre bracci, e i guadagni genuini di V3.3 (clock) e V3.4 (timeout/EDCS) sono su campi che la **pipeline pubblicabile non consuma ancora**: il clock non è persistito da nessuna parte, e `TIMEOUT`/`EXCLUSION_DEF` non sono `MatchEvent` canonici (**debito §10.35**). Promuovere ora cambierebbe il prompt di produzione per **zero beneficio visibile in produzione**, con V3.4 che costa più token in output e legge il clock un po' peggio.
+
+**Cosa falsificherebbe questa raccomandazione (e giustificherebbe la promozione):**
+- **V3.3** diventa promuovibile quando il **clock viene effettivamente consumato a valle** (ordinamento eventi dentro il periodo, o aggancio rigore→gol cablato nella pipeline): a quel punto, se una rimisura conferma clock ≥ ~80% e punteggi non-inferiori, si promuove V3.3 (additiva, a rischio zero sull'asse a).
+- **V3.4** diventa promuovibile quando **§10.35 è chiuso** (`EXCLUSION_DEF`/`TIMEOUT` nei `DEFAULT_EVENT_TYPES` + `MatchEvent` + sport config + migration) **e** una rimisura su un gold con più referti a eventi conferma estrazione timeout/EDCS ≥ ~4/5 **senza regressione di punteggio** vs V3.3 — V3.4 sussume il clock di V3.3.
+- In negativo: se una **ri-esecuzione** mostrasse V3.3/V3.4 **materialmente** meglio sull'asse a (es. +5 stabili-corretti con instabile che scende, e che **sopravvive** al ricampionamento), la tesi "è solo rumore" cadrebbe. Questo run mostra il contrario: le differenze sono nella banda di rumore e gli errori stabili si limitano a rilocarsi.
+
+**Nessun movimento su §8.16** (asse f): il muro di collocazione periodo regge in tutti e tre i bracci (5/5 match sul referto 8). La conclusione registrata in §8.16 non è contraddetta.
+
 ---
 
 ← [Macro precedente](7_profilo_fan.md) | → [Macro successiva](9_sistema_sponsor.md)
