@@ -18,6 +18,30 @@ PERIOD_BLOCKER_PREFIX = "Incoerenza per-periodo"
 #: Prefisso dei messaggi puramente informativi (mai blocker, in nessun punto).
 PERIOD_EVIDENCE_PREFIX = "Evidenza per-periodo"
 
+# --- Livelli di pubblicazione (Opzione A) ------------------------------------
+# Stringhe, non l'enum di `MatchReport`, per tenere questo modulo privo di
+# import di modelli (come `result_visibility`). Coincidono con
+# `MatchReport.PublicationLevel`.
+LEVEL_FULL = "FULL"
+LEVEL_SCORE_ONLY = "SCORE_ONLY"
+
+#: Marcatore anteposto a un blocker EVENT-SCOPED quando viene declassato a
+#: warning sul livello SCORE_ONLY (il referto dichiara "eventi non disponibili").
+OUT_OF_LEVEL_PREFIX = "[fuori livello]"
+
+#: Blocker che dipendono dagli EVENTI (roster, eventi-gol, riconciliazione,
+#: coerenza eventi/per-periodo). Sul livello SCORE_ONLY questi NON bloccano —
+#: sono declassati a warning marcati `OUT_OF_LEVEL_PREFIX`. Sul livello FULL
+#: restano blocker, invariati byte per byte: il declassamento e' attivo SOLO su
+#: SCORE_ONLY. Match per sottostringa sul testo del blocker.
+_EVENT_SCOPED_BLOCKER_MARKERS = (
+    "Entrambi i roster sono vuoti",
+    "Incoerenza eventi",
+    PERIOD_BLOCKER_PREFIX,          # "Incoerenza per-periodo"
+    "Zero Eventi",
+    "Riconciliazione incompleta",
+)
+
 class OCRSchemaValidator:
     """
     Validatore nativo e strutturato per il payload OCR (normalized_data).
@@ -446,6 +470,19 @@ class OCRSchemaValidator:
         warnings.extend(period_check["messages"]["excess"])
         warnings.extend(period_check["messages"]["distribution"])
 
+        # 4-ter. Espulsioni per giocatore oltre il limite di 3 (regolamento pallanuoto).
+        # Un 4o cartellino per lo stesso giocatore e' impossibile a regolamento: alla
+        # terza il giocatore e' fuori partita. Se l'estrazione lo produce, e' un errore
+        # di lettura (es. due giocatori diversi collassati sullo stesso nome, o un evento
+        # duplicato). Simmetrico alla validazione sui casi gold (trascrizione umana).
+        from ..event_types import players_over_exclusion_limit, FOUL_OUT_EXCLUSIONS
+        for team, identity, cnt in players_over_exclusion_limit(events):
+            side = {"home": "CASA", "away": "OSPITE"}.get(team, team or "?")
+            warnings.append(
+                f"Espulsioni oltre il limite: giocatore {identity} ({side}) con {cnt} "
+                f"espulsioni (max {FOUL_OUT_EXCLUSIONS} a regolamento) — possibile errore di estrazione."
+            )
+
         # 5. Unicità numeri giocatori
         teams = data.get("teams", {})
         for t_side in ["home", "away"]:
@@ -503,13 +540,21 @@ class OCRSchemaValidator:
         return len(warnings) == 0, warnings
 
     @staticmethod
-    def assess_publish_readiness(data: Dict[str, Any]) -> Tuple[bool, List[str], List[str]]:
+    def assess_publish_readiness(data: Dict[str, Any], level: str = LEVEL_FULL) -> Tuple[bool, List[str], List[str]]:
         """
-        Valuta se i dati sono pronti per la pubblicazione.
+        Valuta se i dati sono pronti per la pubblicazione, al livello dichiarato.
         Ritorna: (safe_to_publish: bool, blockers: List[str], warnings: List[str])
-        
+
         Blockers impediscono la pubblicazione.
         Warnings vengono loggati ma non bloccano (l'admin ha già revisionato).
+
+        `level` (Opzione A):
+          - LEVEL_FULL (default): comportamento storico, INVARIATO byte per byte.
+          - LEVEL_SCORE_ONLY: i blocker EVENT-SCOPED (`_EVENT_SCOPED_BLOCKER_MARKERS`)
+            sono declassati a warning marcati `OUT_OF_LEVEL_PREFIX` — il referto
+            dichiara "eventi non disponibili", quindi non bloccano. I blocker
+            SCORE-SCOPED (punteggio, nomi squadre, coerenza somma-quarti) restano
+            blocker. Non e' un `force`: e' una valutazione al livello giusto.
         """
         blockers = []
         warnings = []
@@ -630,6 +675,19 @@ class OCRSchemaValidator:
             referees = officials.get("referees", [])
             if not referees:
                 warnings.append("Arbitri non estratti dalla sezione officials.")
+
+        # --- Scoping per livello (Opzione A) ---
+        # SOLO su SCORE_ONLY: i blocker event-scoped diventano warning marcati
+        # [fuori livello]. Su FULL questo ramo non viene eseguito, quindi i
+        # blocker restano identici al comportamento storico.
+        if level == LEVEL_SCORE_ONLY:
+            kept = []
+            for b in blockers:
+                if any(m in b for m in _EVENT_SCOPED_BLOCKER_MARKERS):
+                    warnings.append(f"{OUT_OF_LEVEL_PREFIX} {b}")
+                else:
+                    kept.append(b)
+            blockers = kept
 
         safe = len(blockers) == 0
         return safe, blockers, warnings

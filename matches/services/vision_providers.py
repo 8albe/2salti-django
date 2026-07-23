@@ -117,6 +117,444 @@ OCR_SYSTEM_PROMPT_V2 = """
         Rispondi SOLO con il JSON. Non aggiungere testo, commenti o markdown.
         """
 
+# Prompt sperimentale v3 (Macro 8, giro 2026-07-22): V2 più tre modifiche mirate
+# alle classi di errore misurate dalla baseline §8.9 del syllabus 8:
+#   (a) anti-riconciliazione sulla griglia parziali (l'errore compensativo:
+#       parziali ricostruiti per far tornare la somma col finale estratto);
+#   (b) trascrizione letterale dei nomi (allucinazione plausibile, es.
+#       FRUSINO -> FROSINONE);
+#   (c) data trascritta cifra per cifra, con confidence dedicata
+#       (confidence_fields.date) e trascrizione grezza (match_info.date_digits).
+# Le aggiunte allo schema JSON sono additive e retrocompatibili:
+# _normalize_response tollera sia l'assenza sia la presenza dei nuovi campi.
+# NON è il default di produzione: si seleziona via settings.OCR_PROMPT_VERSION
+# o dal bench (ocr_bench --prompt-version v3). La promozione a default è una
+# decisione di prodotto sui numeri del bench, non un fatto tecnico.
+OCR_SYSTEM_PROMPT_V3 = """
+        Sei un esperto di analisi di referti di partite di pallanuoto (FIN - GUG).
+        Riceverai la FOTO di un referto ufficiale. Segui queste istruzioni spaziali:
+
+        1. SQUADRE E PUNTEGGIO:
+           - In alto a sinistra (Tabella 1): Squadra CASA (es. POL. DELTA). 'Risultato finale' è il numero in fondo a questa casella.
+           - In basso a sinistra (Tabella 2): Squadra OSPITE (es. VILLA YORK). 'Risultato finale' è il numero in fondo a questa casella.
+           - Punteggi parziali: Nella tabella 'Risultati parziali' al centro.
+           - GRIGLIA 'Risultati parziali': trascrivi le 8 celle ESATTAMENTE come
+             le vedi, cella per cella. Ogni cella è una LETTURA, mai un calcolo:
+             NON ricavare nessuna cella da altre celle né dal risultato finale.
+           - Il 'Risultato finale' di ciascuna squadra è una trascrizione
+             INDIPENDENTE del numero scritto in fondo alla sua casella: NON è la
+             somma dei parziali e NON va ricavato né corretto a partire da essi.
+           - Se la somma dei parziali NON torna col risultato finale trascritto,
+             NON aggiustare niente: riporta i valori discordi esattamente come
+             sono scritti e segnala la discordanza in extraction_warnings.
+             La discordanza è un esito ammesso e prezioso, non un errore da
+             nascondere.
+
+        2. ROSTER (GIOCATORI):
+           - Sotto il nome di ogni squadra c'è l'elenco 'Giocatori'. Estrai 'N.' (numero calottina) e 'Cognome e Nome'.
+           - Un roster tipico ha tra 7 e 15 giocatori per squadra.
+
+        3. EVENTI (CRONOLOGIA):
+           - TABELLE A DESTRA ('STORIA CRONOMETRICA'): Elenca tutti gli eventi.
+           - Colonne: Tempo (Minuto), N. Calottina (chi fa l'azione), Evento (GOL, ET per Esclusione 20", TR per Rigore, ecc.).
+           - Importante: Trascrivi i gol (GOL) e le espulsioni (ET come EXCLUSION_20).
+           - USA SOLO i tipi dell'enum "type" qui sotto. NON inventare MAI tipi
+             fuori enum (es. NON usare "PENALTY_GOAL", "TR", "RIGORE" come "type"):
+             il rigore si esprime col flag "is_penalty", non con un tipo nuovo.
+           - RIGORI (flag "is_penalty", default false):
+             * Il GOL segnato su rigore va trascritto come "type": "GOAL" con
+               "is_penalty": true (il "team"/calottina sono di chi SEGNA).
+             * L'ESPULSIONE che comporta un rigore per gli avversari va trascritta
+               come "type": "EXCLUSION_20" con "is_penalty": true (la calottina è di
+               chi COMMETTE il fallo, non di chi tira).
+             * Un rigore parato o sbagliato NON produce un GOAL: resta solo
+               l'espulsione con "is_penalty": true, senza gol corrispondente.
+             * Per ogni altro evento "is_penalty" è false (o omesso).
+           - PERIODO DI OGNI EVENTO ("quarter"): la 'STORIA CRONOMETRICA' è divisa in
+             sezioni o blocchi, uno per periodo (1°, 2°, 3°, 4° tempo). Ricava il campo
+             "quarter" di ogni evento dalla SEZIONE in cui l'evento è scritto, non dal
+             minuto e non dai punteggi parziali.
+           - Se non riesci a stabilire con certezza in quale sezione/periodo cade un
+             evento, scrivi null in "quarter": è un valore ammesso e preferibile.
+             NON dedurre il periodo dal minuto e NON distribuire gli eventi fra i
+             periodi per farli tornare con i punteggi parziali.
+
+        4. DATA DELLA GARA:
+           - Leggila cifra per cifra come scritta sul foglio, senza dedurla dal
+             contesto (stagione, campionato, altre scritte sul foglio).
+           - Riporta in "date_digits" la trascrizione esatta come scritta
+             (es. "11/04/2026") e in "date" la stessa data in formato YYYY-MM-DD.
+           - Se anche una sola cifra è incerta, usa null in "date" e segnala il
+             dubbio in extraction_warnings.
+           - Dichiara la fiducia sulla lettura della data in confidence_fields.date.
+
+        REGOLE CRITICHE:
+        - Se un dato è ILLEGGIBILE, PARZIALE o AMBIGUO: usa null. NON INDOVINARE MAI.
+        - NOMI (squadre e giocatori): trascrivi ESATTAMENTE le lettere scritte,
+          anche se il nome sembra insolito, raro o "sbagliato" (es. se sul foglio
+          c'è scritto FRUSINO, trascrivi FRUSINO: NON correggerlo in FROSINONE).
+          NON normalizzare MAI verso nomi di città, di società note o forme più
+          comuni: la mappatura ai nomi ufficiali avviene a valle, non è compito tuo.
+        - Se un nome è parzialmente leggibile, trascrivi solo le lettere chiare e aggiungi "?" (es. "ROSS?" o "M?RETTI").
+        - Se un numero è ambiguo (es. potrebbe essere 3 o 8), usa null e segnalalo in extraction_warnings.
+        - Se il punteggio di un quarto non è leggibile, usa null per quel quarto.
+
+        FORMATO JSON RICHIESTO:
+        {
+            "metadata": {
+                "schema_version": "2.0",
+                "confidence": <0.0-1.0 fiducia complessiva>,
+                "confidence_fields": {
+                    "home_team": <0.0-1.0>,
+                    "away_team": <0.0-1.0>,
+                    "final_score": <0.0-1.0>,
+                    "quarters": <0.0-1.0>,
+                    "date": <0.0-1.0>,
+                    "home_roster": <0.0-1.0>,
+                    "away_roster": <0.0-1.0>,
+                    "events": <0.0-1.0>,
+                    "officials": <0.0-1.0>
+                },
+                "extraction_warnings": [
+                    "<stringa che descrive ogni campo ambiguo o parzialmente leggibile, incluse le discordanze somma parziali/finale>"
+                ]
+            },
+            "match_info": {
+                "home_team": "<nome squadra o null>",
+                "away_team": "<nome squadra o null>",
+                "competition": "<nome campionato o null>",
+                "date": "<YYYY-MM-DD o null se illeggibile>",
+                "date_digits": "<data trascritta cifra per cifra come scritta sul foglio (es. '11/04/2026') o null>",
+                "city": "<città o null>",
+                "venue": "<nome impianto specifico (es: Piscina Comunale) o null>",
+                "round": "<giornata/fase (es: Giornata 5, Finale) o null>",
+                "group": "<girone (es: Girone A) o null>"
+            },
+            "officials": {
+                "confidence": <0.0-1.0 fiducia sulla lettura degli ufficiali>,
+                "referees": [
+                    {"name": "<COGNOME NOME o null>", "role": "1st|2nd|null"}
+                ],
+                "timekeeper": "<nome segnapunti o null>"
+            },
+            "scores": {
+                "final_score": "<X-Y o null>",
+                "quarters": {
+                    "1": [<home, away> o null],
+                    "2": [<home, away> o null],
+                    "3": [<home, away> or null],
+                    "4": [<home, away> o null]
+                }
+            },
+            "teams": {
+                "home": {
+                    "name": "<nome>",
+                    "coach": "<nome allenatore o null>",
+                    "confidence": <0.0-1.0 fiducia sulla lettura del roster>,
+                    "players": [{"number": <int o null>, "name": "<cognome nome>"}]
+                },
+                "away": {
+                    "name": "<nome>",
+                    "coach": "<nome allenatore o null>",
+                    "confidence": <0.0-1.0 fiducia sulla lettura del roster>,
+                    "players": [{"number": <int o null>, "name": "<cognome nome>"}]
+                }
+            },
+            "events": [
+                {
+                    "type": "GOAL|EXCLUSION_20|YELLOW_CARD|RED_CARD|TIMEOUT|OTHER",
+                    "player_name": "<nome giocatore o null (null per timeout squadra)>",
+                    "team": "home|away",
+                    "minute": <int o null>,
+                    "quarter": <int o null>,
+                    "is_penalty": <true|false: true se GOAL segnato su rigore o EXCLUSION_20 che ha comportato un rigore; altrimenti false>,
+                    "sanction_duration": <null o intero secondi (es: 20 per esclusione 20 secondi)>
+                }
+            ]
+        }
+
+        Rispondi SOLO con il JSON. Non aggiungere testo, commenti o markdown.
+        """
+
+# V3.2 — variante sperimentale di V3.1 con DUE sole modifiche additive alla
+# sezione EVENTI (giro §8.x, 22/07):
+#   (a) campo "clock" (cronometro a scalare mm:ss) accanto a "minute", con
+#       l'istruzione esplicita che gli stessi valori di clock si ripetono nei
+#       quattro periodi (il clock NON identifica il periodo);
+#   (b) ancoraggio di periodo rinforzato per gli EVENTI ISOLATI: un evento
+#       appartiene al periodo della SEZIONE in cui è scritto anche quando è
+#       l'unico evento di una squadra in quella sezione; se la sezione non è
+#       certa, quarter=null è preferibile a un periodo indovinato.
+# Costruita per SOSTITUZIONE MIRATA su V3 così che ogni altra zona (punteggi,
+# nomi, data, rigori) resti IDENTICA byte-per-byte a V3.1: qualunque scarto sui
+# punteggi tra V3.1 e V3.2 è varianza di campionamento, non effetto del prompt.
+# NON è il default di produzione: si seleziona via settings.OCR_PROMPT_VERSION
+# o dal bench (ocr_bench --prompt-version v3_2). La promozione a default è una
+# decisione di prodotto sui numeri del bench, non un fatto tecnico.
+OCR_SYSTEM_PROMPT_V3_2 = (
+    OCR_SYSTEM_PROMPT_V3
+    # (a) CLOCK COMPLETO: cronometro a scalare mm:ss accanto al minuto.
+    .replace(
+        "           - Importante: Trascrivi i gol (GOL) e le espulsioni (ET come EXCLUSION_20).\n",
+        "           - Importante: Trascrivi i gol (GOL) e le espulsioni (ET come EXCLUSION_20).\n"
+        "           - TEMPO (\"clock\"): la colonna Tempo è un CRONOMETRO A SCALARE dentro il\n"
+        "             periodo, in formato mm:ss: parte da circa 7:55 a inizio periodo e SCENDE\n"
+        "             fino a 0:00. Trascrivilo ESATTAMENTE come scritto nella stringa \"clock\"\n"
+        "             (es. \"4:44\", \"0:58\", \"0:09\"), oltre al campo \"minute\". NON arrotondare.\n"
+        "             Gli STESSI valori di clock si ripetono in tutti e quattro i periodi:\n"
+        "             il clock NON identifica il periodo, indica solo l'ordine dentro la sezione.\n",
+    )
+    # (b) ANCORAGGIO DI PERIODO: rinforzo esplicito per gli eventi isolati.
+    .replace(
+        "           - PERIODO DI OGNI EVENTO (\"quarter\"): la 'STORIA CRONOMETRICA' è divisa in\n"
+        "             sezioni o blocchi, uno per periodo (1°, 2°, 3°, 4° tempo). Ricava il campo\n"
+        "             \"quarter\" di ogni evento dalla SEZIONE in cui l'evento è scritto, non dal\n"
+        "             minuto e non dai punteggi parziali.\n"
+        "           - Se non riesci a stabilire con certezza in quale sezione/periodo cade un\n"
+        "             evento, scrivi null in \"quarter\": è un valore ammesso e preferibile.\n"
+        "             NON dedurre il periodo dal minuto e NON distribuire gli eventi fra i\n"
+        "             periodi per farli tornare con i punteggi parziali.\n",
+        "           - PERIODO DI OGNI EVENTO (\"quarter\"): la 'STORIA CRONOMETRICA' è divisa in\n"
+        "             sezioni o blocchi, uno per periodo (1°, 2°, 3°, 4° tempo). Ricava il campo\n"
+        "             \"quarter\" di ogni evento dalla SEZIONE in cui l'evento è scritto, non dal\n"
+        "             minuto, non dal clock e non dai punteggi parziali.\n"
+        "           - Questo vale ANCHE quando un evento è l'UNICO evento di una squadra in una\n"
+        "             sezione: l'evento appartiene comunque al periodo della SEZIONE in cui è\n"
+        "             scritto sul foglio. NON spostare un evento isolato in un'altra sezione\n"
+        "             perché \"sembra\" appartenerci o per farlo coincidere con eventi di un altro\n"
+        "             periodo: la posizione sul foglio decide, non la plausibilità.\n"
+        "           - Se non riesci a stabilire con certezza in quale sezione/periodo cade un\n"
+        "             evento — isolato o no — scrivi null in \"quarter\": è un valore ammesso e\n"
+        "             preferibile a un periodo indovinato. NON dedurre il periodo dal minuto o\n"
+        "             dal clock e NON distribuire gli eventi fra i periodi per farli tornare con\n"
+        "             i punteggi parziali.\n",
+    )
+    # (a) schema: campo "clock" additivo accanto a "minute" nell'oggetto evento.
+    .replace(
+        "                    \"minute\": <int o null>,\n"
+        "                    \"quarter\": <int o null>,\n",
+        "                    \"minute\": <int o null>,\n"
+        "                    \"clock\": \"<cronometro a scalare mm:ss come scritto sul foglio, es. '4:44', o null>\",\n"
+        "                    \"quarter\": <int o null>,\n",
+    )
+)
+
+# V3.3 — variante CLOCK-ONLY di V3.1 (giro §8.17, 23/07): isola il guadagno
+# reale e indipendente misurato in V3.2 (§8.16) — il campo clock mm:ss — e
+# SCARTA l'ancoraggio di periodo per gli eventi isolati, che in V3.2 ha prodotto
+# zero movimento sul residuo e ha aggiunto peso/rumore alla sezione EVENTI.
+# UNA sola modifica additiva a V3.1, in due punti coordinati della sezione EVENTI:
+#   (a) istruzione "clock" (cronometro a scalare mm:ss) accanto a "minute", con
+#       la nota che gli stessi valori si ripetono nei quattro periodi (il clock
+#       NON identifica il periodo);
+#   (a') schema: campo "clock" additivo accanto a "minute" nell'oggetto evento.
+# Costruita per SOSTITUZIONE MIRATA su V3 con le stesse DUE .replace() del clock
+# di V3.2 (byte-identiche), OMESSA la terza .replace() dell'ancoraggio: così ogni
+# altra zona (punteggi, nomi, data, rigori, ancoraggio di periodo) resta IDENTICA
+# byte-per-byte a V3.1, e V3.3 differisce da V3.2 ESATTAMENTE per il solo blocco
+# di ancoraggio. Qualunque scarto misurato tra V3.1/V3.2 e V3.3 sulle zone
+# invariate è varianza di campionamento, non effetto del prompt.
+# NON è il default di produzione: si seleziona via settings.OCR_PROMPT_VERSION
+# o dal bench (ocr_bench --prompt-version v3_3). La promozione a default è una
+# decisione di prodotto sui numeri del bench, non un fatto tecnico.
+OCR_SYSTEM_PROMPT_V3_3 = (
+    OCR_SYSTEM_PROMPT_V3
+    # (a) CLOCK COMPLETO: cronometro a scalare mm:ss accanto al minuto.
+    # Byte-identica alla (a) di V3.2.
+    .replace(
+        "           - Importante: Trascrivi i gol (GOL) e le espulsioni (ET come EXCLUSION_20).\n",
+        "           - Importante: Trascrivi i gol (GOL) e le espulsioni (ET come EXCLUSION_20).\n"
+        "           - TEMPO (\"clock\"): la colonna Tempo è un CRONOMETRO A SCALARE dentro il\n"
+        "             periodo, in formato mm:ss: parte da circa 7:55 a inizio periodo e SCENDE\n"
+        "             fino a 0:00. Trascrivilo ESATTAMENTE come scritto nella stringa \"clock\"\n"
+        "             (es. \"4:44\", \"0:58\", \"0:09\"), oltre al campo \"minute\". NON arrotondare.\n"
+        "             Gli STESSI valori di clock si ripetono in tutti e quattro i periodi:\n"
+        "             il clock NON identifica il periodo, indica solo l'ordine dentro la sezione.\n",
+    )
+    # (a') schema: campo "clock" additivo accanto a "minute" nell'oggetto evento.
+    # Byte-identica alla (a) schema di V3.2.
+    .replace(
+        "                    \"minute\": <int o null>,\n"
+        "                    \"quarter\": <int o null>,\n",
+        "                    \"minute\": <int o null>,\n"
+        "                    \"clock\": \"<cronometro a scalare mm:ss come scritto sul foglio, es. '4:44', o null>\",\n"
+        "                    \"quarter\": <int o null>,\n",
+    )
+)
+
+# V3.4 — variante di V3.3 (clock-only) + DUE semantiche nuove nella sezione EVENTI
+# (giro §8.18, 23/07). Isola l'effetto di due tipi di evento finora non gestiti dal
+# prompt, misurati sul referto 8 (Unime vs Nautilus Roma):
+#   (A) TIMEOUT: sul foglio è "T.O." con asterisco nella colonna della squadra che
+#       lo chiama. Va estratto come evento con "team" e "clock", SENZA calottina
+#       (il timeout è della squadra, "player_name" null).
+#   (B) ESPULSIONE DEFINITIVA (EXCLUSION_DEF): riga siglata "EDCS" o equivalente, con
+#       nella colonna del PUNTEGGIO il numero dell'articolo di regolamento (es. "9.13").
+#       REGOLA DI PROGETTO: il prompt NON insegna la tassonomia degli articoli. Deve
+#       solo (a) riconoscere che la riga è un'espulsione definitiva e NON un gol,
+#       (b) estrarre l'articolo VERBATIM come stringa, (c) estrarre la sigla verbatim.
+#       La mappatura articolo->tipo vive nel NOSTRO codice (matches/event_types.py,
+#       DEFINITIVE_EXCLUSION_ARTICLES + classify_definitive_exclusion), non qui: un
+#       articolo mai visto resta grezzo e mappabile dopo, non inventato dal modello.
+#       Trappola neutralizzata esplicitamente: l'articolo sta nella colonna del punteggio
+#       e ASSOMIGLIA a un punteggio, ma su una riga di espulsione definitiva è un ARTICOLO
+#       e NON deve mai entrare nella progressione del punteggio.
+# Costruita per SOSTITUZIONE MIRATA su V3.3 (stesso meccanismo di V3.2/V3.3): ogni
+# altra zona resta IDENTICA byte-per-byte a V3.3 (che a sua volta = V3.1 + clock).
+# NON è il default di produzione: si seleziona via settings.OCR_PROMPT_VERSION o dal
+# bench (ocr_bench --prompt-version v3_4). La promozione a default è una decisione di
+# prodotto sui numeri del bench, non un fatto tecnico. DA MISURARE: bloccata dal cap
+# Gemini (nessuna chiamata reale eseguita in questo giro).
+OCR_SYSTEM_PROMPT_V3_4 = (
+    OCR_SYSTEM_PROMPT_V3_3
+    # (A)+(B) istruzioni: timeout di squadra ed espulsione definitiva, aggiunte in
+    # coda al blocco RIGORI della sezione EVENTI (anchor presente in V3.1/V3.3).
+    .replace(
+        '             * Per ogni altro evento "is_penalty" è false (o omesso).\n',
+        '             * Per ogni altro evento "is_penalty" è false (o omesso).\n'
+        '           - TIMEOUT (type "TIMEOUT"): sul foglio è siglato "T.O." con un\n'
+        '             asterisco nella colonna della SQUADRA che lo ha chiamato. Estrailo\n'
+        '             come evento con "team" e "clock" (e "quarter" dalla sezione), ma\n'
+        '             SENZA numero di calottina: il timeout è della SQUADRA, non del\n'
+        '             giocatore, quindi "player_name" è null.\n'
+        '           - ESPULSIONE DEFINITIVA (type "EXCLUSION_DEF"): una riga siglata "EDCS"\n'
+        '             (Espulsione Definitiva Con Sostituzione) o sigla equivalente NON è un\n'
+        '             gol ed è DISTINTA dall\'esclusione di 20 secondi. Per queste righe:\n'
+        '             * usa "type": "EXCLUSION_DEF" (MAI "GOAL");\n'
+        '             * trascrivi la sigla ESATTAMENTE come scritta in "sanction_sigla"\n'
+        '               (es. "EDCS"), senza interpretarla;\n'
+        '             * accanto alla sigla, nella colonna del PUNTEGGIO, c\'è il NUMERO\n'
+        '               DELL\'ARTICOLO di regolamento (es. "9.13"): trascrivilo VERBATIM come\n'
+        '               stringa in "regulation_article". NON dedurre da esso il tipo di\n'
+        '               sanzione e NON normalizzarlo: la mappatura avviene a valle, non è\n'
+        '               compito tuo.\n'
+        '             * TRAPPOLA DA EVITARE: quel numero d\'articolo sta nella colonna del\n'
+        '               punteggio e ASSOMIGLIA a un punteggio, ma NON lo è. Su una riga di\n'
+        '               espulsione definitiva il valore in colonna punteggio è un ARTICOLO,\n'
+        '               non un punteggio: NON deve MAI entrare nella progressione del\n'
+        '               punteggio né nei parziali/risultato finale.\n',
+    )
+    # (B) enum "type": aggiunge EXCLUSION_DEF ai tipi ammessi.
+    .replace(
+        '                    "type": "GOAL|EXCLUSION_20|YELLOW_CARD|RED_CARD|TIMEOUT|OTHER",\n',
+        '                    "type": "GOAL|EXCLUSION_20|EXCLUSION_DEF|YELLOW_CARD|RED_CARD|TIMEOUT|OTHER",\n',
+    )
+    # (B) schema: due campi additivi per l'espulsione definitiva, dopo sanction_duration.
+    .replace(
+        '                    "sanction_duration": <null o intero secondi (es: 20 per esclusione 20 secondi)>\n',
+        '                    "sanction_duration": <null o intero secondi (es: 20 per esclusione 20 secondi)>,\n'
+        '                    "sanction_sigla": "<sigla verbatim della sanzione come scritta sul foglio, es. \'EDCS\', o null>",\n'
+        '                    "regulation_article": "<numero d\'articolo di regolamento VERBATIM come stringa, es. \'9.13\', o null (SOLO per EXCLUSION_DEF)>"\n',
+    )
+)
+
+# Registro delle versioni di prompt selezionabili. Il default di produzione
+# resta "v2" (fallback tecnico); config/settings.py imposta v3 come default reale.
+# V3.2, V3.3 e V3.4 sono sperimentali e NON promosse: si selezionano solo per-chiamata
+# (parametro prompt_version, usato dal bench: ocr_bench --prompt-version v3_4).
+# Aggiungere una versione = una costante sopra + una entry qui.
+OCR_SYSTEM_PROMPTS = {
+    "v2": OCR_SYSTEM_PROMPT_V2,
+    "v3": OCR_SYSTEM_PROMPT_V3,
+    "v3_2": OCR_SYSTEM_PROMPT_V3_2,
+    "v3_3": OCR_SYSTEM_PROMPT_V3_3,
+    "v3_4": OCR_SYSTEM_PROMPT_V3_4,
+}
+
+# Prompt "solo zona" per il SECONDO passaggio della doppia estrazione
+# (Macro 8, giro 2026-07-22). Non è un prompt di produzione a sé: è la seconda
+# lettura, indipendente dalla prima, ristretta alle tre zone in cui vivono gli
+# errori stabili misurati sul gold — griglia 'Risultati parziali' (8 celle),
+# 'Risultato finale' di ciascuna squadra, data della gara. Output JSON minimale
+# (solo quei campi + confidence + warnings). Eredita da V3 le due regole che
+# contano su queste zone: anti-riconciliazione (parziali = letture, mai calcoli;
+# finale trascritto indipendentemente, discordanza somma/finale segnalata e MAI
+# aggiustata) e trascrizione letterale cifra-per-cifra (la data non si deduce dal
+# contesto). Non estrae nomi/roster/eventi: quelli restano al primo passaggio.
+# La seconda chiamata NON deve MAI ricevere il risultato della prima: l'indipendenza
+# è il punto dell'esperimento (secondo atto di lettura, non confronto guidato).
+OCR_SYSTEM_PROMPT_ZONE = """
+        Sei un esperto di analisi di referti di partite di pallanuoto (FIN - GUG).
+        Riceverai la FOTO di un referto ufficiale. Questo è un SECONDO atto di
+        lettura, indipendente: leggi SOLO tre zone del foglio e ignora tutto il
+        resto (roster, eventi, ufficiali, campionato). Non hai memoria di alcuna
+        lettura precedente: trascrivi ciò che vedi ORA sul foglio, mai ciò che
+        "ti aspetteresti" di leggere.
+
+        Le tre zone da leggere, e SOLO queste:
+
+        1. GRIGLIA 'Risultati parziali' (le 8 celle al centro del foglio):
+           - Trascrivi le 8 celle ESATTAMENTE come le vedi, cella per cella. Ogni
+             cella è una LETTURA, mai un calcolo: NON ricavare nessuna cella da
+             altre celle né dal risultato finale.
+           - Se il punteggio di un quarto non è leggibile, usa null per quel quarto.
+
+        2. 'Risultato finale' di ciascuna squadra (il numero in fondo alla casella
+           di ogni squadra: casa in alto a sinistra, ospite in basso a sinistra):
+           - È una trascrizione INDIPENDENTE del numero scritto: NON è la somma dei
+             parziali e NON va ricavato né corretto a partire da essi.
+           - Se la somma dei parziali NON torna col risultato finale trascritto,
+             NON aggiustare niente: riporta i valori discordi esattamente come
+             sono scritti e segnala la discordanza in extraction_warnings. La
+             discordanza è un esito ammesso e prezioso, non un errore da nascondere.
+
+        3. DATA della gara:
+           - Leggila cifra per cifra come scritta sul foglio, senza dedurla dal
+             contesto (stagione, campionato, altre scritte sul foglio).
+           - Riporta in "date_digits" la trascrizione esatta come scritta
+             (es. "11/04/2026") e in "date" la stessa data in formato YYYY-MM-DD.
+           - Se anche una sola cifra è incerta, usa null in "date" e segnala il
+             dubbio in extraction_warnings.
+
+        REGOLE CRITICHE:
+        - Se un dato è ILLEGGIBILE, PARZIALE o AMBIGUO: usa null. NON INDOVINARE MAI.
+        - NON normalizzare, NON dedurre, NON correggere verso valori "attesi":
+          trascrivi esattamente le cifre scritte, anche se il risultato sembra
+          insolito o la somma non torna.
+
+        FORMATO JSON RICHIESTO (SOLO questi campi, niente altro):
+        {
+            "metadata": {
+                "schema_version": "zone-1.0",
+                "confidence": <0.0-1.0 fiducia complessiva sulle tre zone>,
+                "confidence_fields": {
+                    "final_score": <0.0-1.0>,
+                    "quarters": <0.0-1.0>,
+                    "date": <0.0-1.0>
+                },
+                "extraction_warnings": [
+                    "<ogni ambiguità o discordanza somma parziali/finale>"
+                ]
+            },
+            "match_info": {
+                "date": "<YYYY-MM-DD o null se illeggibile>",
+                "date_digits": "<data trascritta cifra per cifra come scritta, o null>"
+            },
+            "scores": {
+                "final_score": "<X-Y o null>",
+                "quarters": {
+                    "1": [<home, away> o null],
+                    "2": [<home, away> o null],
+                    "3": [<home, away> o null],
+                    "4": [<home, away> o null]
+                }
+            }
+        }
+
+        Rispondi SOLO con il JSON. Non aggiungere testo, commenti o markdown.
+        """
+
+# Registro dei prompt del secondo passaggio (doppia estrazione). Tenuto SEPARATO
+# da OCR_SYSTEM_PROMPTS: "zone" non è una versione di prompt di produzione (non
+# estrae roster/eventi), non va mai usata come OCR_PROMPT_VERSION di default.
+OCR_SECOND_PASS_PROMPTS = {
+    "zone": OCR_SYSTEM_PROMPT_ZONE,
+}
+
+# Vista unificata usata dalla risoluzione del prompt (extract_data) e dal bench:
+# accetta sia le versioni di produzione sia i prompt del secondo passaggio.
+OCR_ALL_PROMPTS = {**OCR_SYSTEM_PROMPTS, **OCR_SECOND_PASS_PROMPTS}
+
 class BaseVisionProvider:
     """
     Interfaccia base per i provider OCR/Vision.
@@ -154,6 +592,9 @@ class BaseVisionProvider:
             meta["token_usage"] = {
                 "prompt_tokens": getattr(usage, "prompt_tokens", None),
                 "completion_tokens": getattr(usage, "completion_tokens", None),
+                # Additivo e tollerante: i thought token (fatturati come output) sono
+                # None sui provider/modelli che non li espongono; presenti sui 3.x.
+                "thoughts_tokens": getattr(usage, "thoughts_tokens", None),
             }
 
         # Ensure match_info
@@ -207,8 +648,14 @@ class BaseVisionProvider:
                 if isinstance(p.get("name"), str):
                     p["name"] = p["name"].strip()
 
-        # Ensure events structure
+        # Ensure events structure. `is_penalty` è additivo e retrocompatibile:
+        # un'estrazione che non lo emette (V2, mock, prompt più vecchi) lo riceve
+        # a false qui, così il percorso a valle può leggerlo sempre come booleano.
         data.setdefault("events", [])
+        if isinstance(data["events"], list):
+            for ev in data["events"]:
+                if isinstance(ev, dict):
+                    ev["is_penalty"] = bool(ev.get("is_penalty", False))
 
         return data
 
@@ -317,8 +764,9 @@ class GeminiVisionProvider(BaseVisionProvider):
     """
     Provider reale che utilizza Google Gemini (SDK google-genai) per estrarre
     dati dal referto. Interfaccia extract_data: parametri
-    model/preprocess/sent_image_callback, schema OCR v2 in output, prompt di
-    sistema OCR_SYSTEM_PROMPT_V2. Il modello di default è letto da
+    model/preprocess/sent_image_callback/prompt_version, schema OCR v2 in
+    output, prompt di sistema selezionato da OCR_SYSTEM_PROMPTS (default
+    OCR_SYSTEM_PROMPT_V2). Il modello di default è letto da
     settings.GEMINI_MODEL con fallback a 'gemini-2.5-pro'; --models nel bench
     può passare qualsiasi model string.
     """
@@ -328,11 +776,25 @@ class GeminiVisionProvider(BaseVisionProvider):
         self.client = genai.Client(api_key=getattr(settings, "GEMINI_API_KEY", ""))
 
     def extract_data(self, match_report, model: str = None, preprocess: bool = True,
-                     sent_image_callback=None) -> Tuple[Dict[str, Any], str]:
+                     sent_image_callback=None,
+                     prompt_version: str = None,
+                     thinking_level: str = None,
+                     thinking_budget: int = None) -> Tuple[Dict[str, Any], str]:
         """
         preprocess=False bypassa ImagePreprocessor e invia i byte grezzi;
         sent_image_callback, se fornita, riceve il path del file effettivamente
-        inviato al modello, prima della chiamata API. Ritorna (data, raw_content).
+        inviato al modello, prima della chiamata API. prompt_version seleziona
+        il prompt di sistema fra OCR_SYSTEM_PROMPTS (override per-chiamata >
+        settings.OCR_PROMPT_VERSION > "v2": il default di produzione resta V2).
+
+        thinking_level / thinking_budget: minimizzazione dei token di ragionamento
+        (fatturati come output). Default None su ENTRAMBI => nessun ThinkingConfig
+        passato, config di generazione byte-identica al comportamento di produzione
+        (gemini-2.5-pro). Sono seam per-chiamata usati dal bench: i modelli di
+        generazione 3.x accettano thinking_level in {'minimal','low','high'}
+        ('minimal' azzera i thought token); i modelli 2.5 accettano thinking_budget.
+        Se entrambi valorizzati, thinking_level ha precedenza.
+        Ritorna (data, raw_content).
         """
         import mimetypes
         import os
@@ -342,7 +804,20 @@ class GeminiVisionProvider(BaseVisionProvider):
         # Modello: override per-chiamata > settings.GEMINI_MODEL > default
         model = model or getattr(settings, "GEMINI_MODEL", "gemini-2.5-pro")
 
-        logger.info(f"[GeminiVisionProvider] Avvio preprocessing per report {match_report.id} (model={model})...")
+        # Prompt: override per-chiamata > settings.OCR_PROMPT_VERSION > v2.
+        # Risoluzione su OCR_ALL_PROMPTS: include sia le versioni di produzione
+        # (v2/v3) sia i prompt del secondo passaggio (zone), così il bench può
+        # richiedere "zone" per-chiamata senza che questo diventi una versione
+        # di produzione (OCR_PROMPT_VERSION resta v2 salvo decisione esplicita).
+        prompt_version = prompt_version or getattr(settings, "OCR_PROMPT_VERSION", "v2")
+        if prompt_version not in OCR_ALL_PROMPTS:
+            raise ValueError(
+                f"Prompt version sconosciuta: {prompt_version!r} "
+                f"(disponibili: {', '.join(sorted(OCR_ALL_PROMPTS))})"
+            )
+        system_prompt = OCR_ALL_PROMPTS[prompt_version]
+
+        logger.info(f"[GeminiVisionProvider] Avvio preprocessing per report {match_report.id} (model={model}, prompt={prompt_version})...")
 
         if not match_report.file:
             raise ValueError("Il referto non ha alcun file associato. Impossibile eseguire OCR.")
@@ -373,6 +848,22 @@ class GeminiVisionProvider(BaseVisionProvider):
         # Configurabile via settings.OCR_MAX_OUTPUT_TOKENS senza toccare il codice.
         max_output_tokens = getattr(settings, "OCR_MAX_OUTPUT_TOKENS", 32000)
 
+        # ThinkingConfig SOLO se richiesto per-chiamata: default None su entrambi =>
+        # config identica alla produzione. Non tocca settings, non altera il default.
+        gen_config_kwargs = {
+            "system_instruction": system_prompt,
+            "response_mime_type": "application/json",
+            "max_output_tokens": max_output_tokens,
+        }
+        if thinking_level is not None:
+            gen_config_kwargs["thinking_config"] = types.ThinkingConfig(
+                thinking_level=thinking_level
+            )
+        elif thinking_budget is not None:
+            gen_config_kwargs["thinking_config"] = types.ThinkingConfig(
+                thinking_budget=thinking_budget
+            )
+
         try:
             response = self.client.models.generate_content(
                 model=model,
@@ -380,11 +871,7 @@ class GeminiVisionProvider(BaseVisionProvider):
                     types.Part.from_bytes(data=image_bytes, mime_type=mime_type),
                     OCR_USER_TEXT,
                 ],
-                config=types.GenerateContentConfig(
-                    system_instruction=OCR_SYSTEM_PROMPT_V2,
-                    response_mime_type="application/json",
-                    max_output_tokens=max_output_tokens,
-                ),
+                config=types.GenerateContentConfig(**gen_config_kwargs),
             )
 
             content = response.text
@@ -421,6 +908,7 @@ class GeminiVisionProvider(BaseVisionProvider):
                 usage = SimpleNamespace(
                     prompt_tokens=getattr(usage_meta, "prompt_token_count", None),
                     completion_tokens=getattr(usage_meta, "candidates_token_count", None),
+                    thoughts_tokens=getattr(usage_meta, "thoughts_token_count", None),
                 )
 
             data = self._normalize_response(

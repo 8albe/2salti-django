@@ -1,6 +1,6 @@
 ## 16. Modello stagione e tesseramento per stagione
 
-Stato: ✅ **Implementata su dev** (giro Macro-intera batch, 2026-06-11). **Propagata su PROD il 2026-06-12** (merge `7d8a937f` su origin/master — OPS_RUNBOOK §10.8).
+Stato: ✅ **Implementata su dev** (giro Macro-intera batch, 2026-06-11). **Propagata su PROD il 2026-06-12** (merge `7d8a937f` su origin/master — DEBITI_CHIUSI.md §10.8).
 
 Redesign del modello stagione in 5 fasi: la **stagione diventa l'asse** del tesseramento (non più le date libere), la **lega** è la fonte di verità per la distinzione grandi/giovanili e si introduce il **prestito strutturato**. Le decisioni di prodotto sono **chiuse** (Sprint D 2026-06-06 + D1–D4 del 2026-06-11); le Fasi 2/3/4 sono implementate su dev (suite 336 OK).
 
@@ -58,7 +58,7 @@ Task implementativi:
 
 - [x] Aggiungere `Membership.season` (FK a `Season`) + migration.
 - [x] Sostituire `unique_together = (user, society, team, role)` con `(user, society, team, role, season)`. Implementato 2d-4a (`UniqueConstraint` 5-field, migration `0013`, commit `3696cd3`).
-- [x] Rimuovere `start_date`/`end_date` e il `CheckConstraint` `membership_end_date_after_start` (migration `0009`) — vedi OPS_RUNBOOK §10.6 DEBT-003. Implementato 2d-6 (migration `0014_remove_membership_dates`; DEBT-003 ritirato; rimosso anche il management command `backfill_membership_dates`, obsoleto).
+- [x] Rimuovere `start_date`/`end_date` e il `CheckConstraint` `membership_end_date_after_start` (migration `0009`) — vedi DEBITI_CHIUSI.md §10.6 DEBT-003. Implementato 2d-6 (migration `0014_remove_membership_dates`; DEBT-003 ritirato; rimosso anche il management command `backfill_membership_dates`, obsoleto).
 - [x] Rivedere `MembershipQuerySet.active_at()` (oggi basato su date) → logica per stagione. Implementato 2d-6: `active_at(date)` sostituito da `active()` (is_active) e `active_in_season(season)` — non esiste più la nozione "attiva a una data".
 - [x] Backfill `season` sui 58 record esistenti (migration `0011`, dev reale 58/58 → `2025/2026`).
 - [x] Migration `season` NOT NULL — implementato 2d-7 (migration `0015_membership_season_notnull`): RunPython consolida i NULL residui con la derivazione del backfill ed è **fail-fast** (solleva con elenco pk se non derivabili; migration atomica, il flip non passa). I 3 creation-site falliscono ora in modo esplicito se la stagione non è derivabile (messaggio utente su redeem/approve, RuntimeError sul signal) invece di produrre righe NULL. Test dedicato `management/tests_migrations_membership_notnull.py`.
@@ -109,7 +109,7 @@ Task implementativi:
 - [x] **Censimento `order_by('-season')`** — chiuso. `core/views.py:117` (League, punto core) risolto in Fase 1 (commit `bd0dbfc`, lookup `Season.is_current`). I due punti su `SeasonArchive` — `seasons/models.py:30` (`Meta.ordering=['-season']`) e `accounts/views.py:511` (`SeasonArchive.objects.order_by('-season')`) — sono già coperti: il campo `SeasonArchive.season` porta `validators=[validate_season_format]` dalla Fase 0 (commit `1816567`, migration `seasons/0002`), che vincola il formato al canonico `2025/2026`, rendendo l'ordinamento lessicografico corretto a regime. Limite noto: il validator scatta su `full_clean()`, non su `.save()` nudo — irrilevante oggi (`SeasonArchive` ha 0 righe e 0 scrittori), da ricordare se la tabella verrà popolata in Fase 2.
 - [ ] **Formato slash negli URL/slug**: `2025/2026` contiene `/`; valutare encoding o slug alternativo (`2025-2026`) per route e slug, mantenendo il display con slash. **Confermato fuori scope anche nel giro 2026-06-11 (decisione D3)**: `League.save()` già sanitizza `/`→`-` negli slug nuovi, la nota resta aperta.
 - [x] **Etichette U10/U20** — chiuso (decisione D1, 2026-06-11): U10 = "Pulcini", U20 = "Under 20". Mapping completo in `League.LEAGUE_TYPE_DISPLAY` (dizionario in codice, modificabile senza migration).
-- [x] **Constraint `membership_end_date_after_start` (migration `management/0009`)** — chiuso: rimosso in Fase 2 (migration `management/0014`) insieme a `start_date`/`end_date`. DEBT-003 ritirato (OPS_RUNBOOK §10.6 annotato).
+- [x] **Constraint `membership_end_date_after_start` (migration `management/0009`)** — chiuso: rimosso in Fase 2 (migration `management/0014`) insieme a `start_date`/`end_date`. DEBT-003 ritirato (DEBITI_CHIUSI.md §10.6 annotato).
 - [ ] **Incoerenza slug girone (preesistente)**: su dev gli slug delle leghe "serie B Maschile" sono disallineati al `group_name` reale — lega con `group_name='Girone C'` ha slug `...-girone-d`, e una con `group_name='Girone D'` ha slug `...-girone-D` (maiuscola non slugificata). Indipendente dalla stagione, **non** sanitizzato in Fase 0 (gli slug esistenti non si rigenerano): da indagare in futuro.
 
 ---

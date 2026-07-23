@@ -72,7 +72,13 @@ from django.core.management.base import BaseCommand, CommandError
 from django.utils import timezone
 
 from matches.models import MatchReport
-from matches.services.vision_providers import GeminiVisionProvider, OCR_SYSTEM_PROMPT_V2
+from matches.services.ocr_double_extraction import ZONES, compare_passes
+from matches.services.vision_providers import (
+    GeminiVisionProvider,
+    OCR_ALL_PROMPTS,
+    OCR_SYSTEM_PROMPT_V2,
+    OCR_SYSTEM_PROMPTS,
+)
 
 # Mappa provider bench: nome CLI -> (setting del modello di default, fallback).
 # NB: la CLASSE del provider viene risolta a runtime dentro handle() leggendo i
@@ -121,9 +127,23 @@ GOLD_OUT_DIR_DEFAULT = os.path.join("ocr_bench_out", "gold")
 # Versione del prompt registrata in ogni run: nome del simbolo + hash del testo.
 # L'hash cambia se il prompt cambia, quindi due run sono confrontabili solo a
 # parità di questa stringa. Read-only sulla pipeline: il prompt non si tocca.
-PROMPT_VERSION = "OCR_SYSTEM_PROMPT_V2@sha256:" + hashlib.sha256(
-    OCR_SYSTEM_PROMPT_V2.encode("utf-8")
-).hexdigest()[:12]
+
+
+def prompt_version_string(version):
+    """Stringa identificativa del prompt selezionato: simbolo + hash del testo.
+
+    Risolve su OCR_ALL_PROMPTS: oltre a v2/v3 accetta i prompt del secondo
+    passaggio (zone), così un run di doppia estrazione registra l'hash del
+    prompt zone esattamente come per le versioni di produzione.
+    """
+    text = OCR_ALL_PROMPTS[version]
+    return f"OCR_SYSTEM_PROMPT_{version.upper()}@sha256:" + hashlib.sha256(
+        text.encode("utf-8")
+    ).hexdigest()[:12]
+
+
+# Retrocompatibilità: la costante storica resta la stringa del default (v2).
+PROMPT_VERSION = prompt_version_string("v2")
 
 
 def normalize_team_name(name):
@@ -167,7 +187,9 @@ def confidence_key_for(field):
     if field == "away_team_name":
         return "away_team"
     if field == "date":
-        return None
+        # Chiave presente solo nello schema del prompt v3 (confidence dedicata
+        # alla data); con v2 la chiave manca e la confidence resta N/A come prima.
+        return "date"
     return None
 
 
@@ -279,6 +301,179 @@ def compare_extraction_to_truth(case, data):
         for v in [inversion["final_score"], inversion["team_names"], *inversion["quarters"].values()]
     )
     return fields, inversion
+
+
+def _norm_surname(name):
+    """Cognome normalizzato per confronto: minuscole, iniziale finale e formattazione rimosse.
+
+    'DE LENA D.' e 'de lena d.' -> 'delena'; "D'ANGELO C." -> 'dangelo'. Il confronto
+    ignora l'iniziale del nome (spesso illeggibile e non discriminante) e punteggiatura,
+    perche' il segnale utile e' se il COGNOME e' stato letto, non la sua formattazione.
+    Ritorna None se il nome non e' una stringa (es. casella ambigua o sconosciuta in truth).
+    """
+    if not isinstance(name, str):
+        return None
+    s = name.strip().lower()
+    s = re.sub(r"\s+[a-z]\.?$", "", s)   # via l'iniziale finale ('d.', 'm')
+    s = re.sub(r"[^a-z]", "", s)          # via spazi, apostrofi, punti
+    return s or None
+
+
+def _edit_distance_le1(a, b):
+    """True se `a` e `b` distano al più 1 edit (sostituzione/inserimento/cancellazione).
+
+    Bounded a 1: distingue 'l'OCR ha sbagliato una lettera' (pelliccione/pellicone,
+    d=1) da 'ha letto un altro giocatore' (d>=2). Non serve un Levenshtein pieno.
+    """
+    if a == b:
+        return True
+    la, lb = len(a), len(b)
+    if abs(la - lb) > 1:
+        return False
+    if la == lb:  # una sola sostituzione ammessa
+        return sum(1 for x, y in zip(a, b) if x != y) == 1
+    # lunghezze che differiscono di 1: b deve essere a con un carattere inserito
+    if la > lb:
+        a, b, la, lb = b, a, lb, la
+    i = j = 0
+    skipped = False
+    while i < la and j < lb:
+        if a[i] == b[j]:
+            i += 1
+            j += 1
+        elif skipped:
+            return False
+        else:
+            skipped = True  # salta il carattere in più di b
+            j += 1
+    return True
+
+
+def compare_events_to_truth(case, data):
+    """Confronto ADDITIVO eventi estratti vs truth eventi di un caso gold.
+
+    Non tocca il confronto sui punteggi (compare_extraction_to_truth): misura la
+    dimensione EVENTI, oggi assente dal bench. Ritorna None se il caso non ha
+    `truth.events` (retrocompatibile: i casi senza eventi verificati restano invariati).
+
+    Usa gli stessi SCORE_EVENT_CODES della pipeline: un gol tipizzato con un codice
+    fuori da quell'insieme (es. 'PENALTY_GOAL', emesso davvero dal modello sul referto
+    11) NON conta come gol, esattamente come nel gate di pubblicazione — cosi' il bench
+    riproduce il difetto reale invece di mascherarlo.
+
+    Confronta cio' che entrambe le zone hanno in comune: tipo + squadra + periodo.
+    L'attribuzione al singolo giocatore NON e' confrontabile qui (la truth porta la
+    calottina, l'OCR il nome), ma la presenza/assenza dell'autore sul gol lo e':
+    `goals_with_author` misura il blocker 'Zero Eventi'.
+    """
+    truth = case.get("truth") or {}
+    truth_events = truth.get("events")
+    if not isinstance(truth_events, list):
+        return None
+    from matches.event_types import SCORE_EVENT_CODES
+
+    def summarize(events):
+        goals_by_pt = {}
+        goals_total = {"home": 0, "away": 0}
+        goals_with_author = 0
+        for e in events or []:
+            if not isinstance(e, dict):
+                continue
+            if e.get("type") in SCORE_EVENT_CODES and e.get("team") in ("home", "away"):
+                side = e["team"]
+                goals_total[side] += 1
+                q = e.get("quarter")
+                key = f"{'' if q is None else str(q).strip()}:{side}"
+                goals_by_pt[key] = goals_by_pt.get(key, 0) + 1
+                if e.get("player_name") or e.get("player") or e.get("cap") is not None:
+                    goals_with_author += 1
+        return goals_by_pt, goals_total, goals_with_author
+
+    t_by_pt, t_total, _ = summarize(truth_events)
+    ext_events = data.get("events") or []
+    e_by_pt, e_total, e_author = summarize(ext_events)
+
+    periods = sorted(
+        {k.split(":")[0] for k in set(t_by_pt) | set(e_by_pt) if k.split(":")[0]},
+        key=lambda x: (0, int(x)) if x.isdigit() else (1, x),
+    )
+    per_period = []
+    for q in periods:
+        for side in ("home", "away"):
+            key = f"{q}:{side}"
+            per_period.append({
+                "quarter": q, "team": side,
+                "truth_goals": t_by_pt.get(key, 0),
+                "extracted_goals": e_by_pt.get(key, 0),
+            })
+    return {
+        "truth_goals_total": t_total,
+        "extracted_goals_total": e_total,
+        "extracted_goals_with_author": e_author,
+        "extracted_events_total": len([e for e in ext_events if isinstance(e, dict)]),
+        "truth_events_total": len(truth_events),
+        "per_period_goals": per_period,
+    }
+
+
+def compare_roster_to_truth(case, data):
+    """Confronto ADDITIVO roster estratto vs truth roster di un caso gold.
+
+    Ritorna None se il caso non ha `truth.rosters`. Per lato confronta, per numero di
+    calottina, se il COGNOME e' stato letto. Tre esiti distinti, mai collassati:
+      - `surname_matched`: cognome normalizzato IDENTICO;
+      - `surname_approx`: distanza di edit == 1 (una lettera sbagliata, es.
+        pelliccione/pellicone) — l'OCR ha letto QUEL giocatore ma con un refuso,
+        diverso dall'aver letto un altro giocatore;
+      - `surname_mismatched`: distanza >= 2 (o numero assente nell'estrazione).
+    Le caselle truth senza nome (ambigue o sconosciute, es. away #5 e #10 del caso
+    Olympic) NON sono confrontabili e vengono contate a parte (`unresolved_in_truth`),
+    mai come errore dell'OCR.
+    """
+    truth = case.get("truth") or {}
+    rosters = truth.get("rosters")
+    if not isinstance(rosters, dict):
+        return None
+    teams = data.get("teams") or {}
+    out = {}
+    for side in ("home", "away"):
+        t_players = ((rosters.get(side) or {}).get("players")) or []
+        e_players = ((teams.get(side) or {}).get("players")) or []
+        e_by_num = {}
+        for p in e_players:
+            if isinstance(p, dict) and p.get("number") is not None:
+                e_by_num[p["number"]] = _norm_surname(p.get("name"))
+        matched = approx = mismatched = unresolved = 0
+        details = []
+        for tp in t_players:
+            if not isinstance(tp, dict):
+                continue
+            num = tp.get("number")
+            t_norm = _norm_surname(tp.get("name"))
+            if t_norm is None:  # casella ambigua/sconosciuta in truth: fuori confronto
+                unresolved += 1
+                continue
+            e_norm = e_by_num.get(num)
+            if e_norm is not None and e_norm == t_norm:
+                matched += 1
+            elif e_norm is not None and _edit_distance_le1(e_norm, t_norm):
+                approx += 1
+                details.append({"number": num, "truth": tp.get("name"),
+                                "extracted_norm": e_norm, "kind": "approx"})
+            else:
+                mismatched += 1
+                details.append({"number": num, "truth": tp.get("name"),
+                                "extracted_norm": e_norm, "kind": "mismatch"})
+        out[side] = {
+            "truth_size": len(t_players),
+            "extracted_size": len(e_players),
+            "surname_matched": matched,
+            "surname_approx": approx,
+            "surname_mismatched": mismatched,
+            "unresolved_in_truth": unresolved,
+            "mismatches": details,
+        }
+    return out
 
 
 def aggregate_gold_repeats(per_repeat):
@@ -411,7 +606,8 @@ def aggregate_gold_repeats(per_repeat):
 
 
 def build_gold_proposal(case, data, provider_label, model, resolved_pk, image_path,
-                        image_resolved_from, preprocess, fields, inversion, run_ts):
+                        image_resolved_from, preprocess, fields, inversion, run_ts,
+                        prompt_version_str=PROMPT_VERSION):
     """Costruisce la voce di proposta nello schema di extractions[] dei casi gold.
 
     È una PROPOSTA: va salvata nella directory di output, mai dentro il caso.
@@ -427,6 +623,8 @@ def build_gold_proposal(case, data, provider_label, model, resolved_pk, image_pa
     # Come nello schema esistente: ciò che non è in truth resta unverified.
     verdict.setdefault("roster", "unverified")
     verdict.setdefault("events", "unverified")
+    events_comparison = compare_events_to_truth(case, data)
+    roster_comparison = compare_roster_to_truth(case, data)
     return {
         "case_id": case.get("case_id"),
         "provider": meta.get("provider") or provider_label,
@@ -444,15 +642,25 @@ def build_gold_proposal(case, data, provider_label, model, resolved_pk, image_pa
                 "home_roster": len((teams.get("home") or {}).get("players") or []),
                 "away_roster": len((teams.get("away") or {}).get("players") or []),
             },
+            # Contenuto grezzo persistito additivamente: rende misurabile su dati
+            # esistenti il confronto eventi/roster senza rifare la chiamata API.
+            "events": data.get("events") or [],
+            "rosters": {
+                side: {"players": (teams.get(side) or {}).get("players") or []}
+                for side in ("home", "away")
+            },
         },
         "self_reported_confidence": confidence,
+        "extraction_warnings": meta.get("extraction_warnings") or [],
         "verdict": verdict,
         "inversion_check": inversion,
         "comparison": fields,
+        "events_comparison": events_comparison,
+        "roster_comparison": roster_comparison,
         "bench_run": {
             "provider_cli": provider_label,
             "model": model,
-            "prompt_version": PROMPT_VERSION,
+            "prompt_version": prompt_version_str,
             "preprocessing": preprocess,
             "timestamp": run_ts.isoformat(),
             "image": image_path,
@@ -467,7 +675,8 @@ def build_gold_proposal(case, data, provider_label, model, resolved_pk, image_pa
 
 def build_gold_proposal_repeated(case, per_repeat, provider_label, model, resolved_pk,
                                  image_path, image_resolved_from, preprocess, aggregated,
-                                 summary, run_ts, repeat):
+                                 summary, run_ts, repeat,
+                                 prompt_version_str=PROMPT_VERSION):
     """Come build_gold_proposal, ma per N estrazioni indipendenti (--repeat).
 
     Contiene TUTTE le estrazioni in repeats[] (non solo l'ultima) più l'aggregato
@@ -501,11 +710,20 @@ def build_gold_proposal_repeated(case, per_repeat, provider_label, model, resolv
                     "home_roster": len((teams.get("home") or {}).get("players") or []),
                     "away_roster": len((teams.get("away") or {}).get("players") or []),
                 },
+                # Contenuto grezzo persistito additivamente (vedi build_gold_proposal).
+                "events": data.get("events") or [],
+                "rosters": {
+                    side: {"players": (teams.get(side) or {}).get("players") or []}
+                    for side in ("home", "away")
+                },
             },
             "self_reported_confidence": confidence,
+            "extraction_warnings": meta.get("extraction_warnings") or [],
             "verdict": verdict,
             "inversion_check": entry["inversion"],
             "comparison": entry["fields"],
+            "events_comparison": compare_events_to_truth(case, data),
+            "roster_comparison": compare_roster_to_truth(case, data),
         })
 
     aggregate_out = {
@@ -534,7 +752,7 @@ def build_gold_proposal_repeated(case, per_repeat, provider_label, model, resolv
         "bench_run": {
             "provider_cli": provider_label,
             "model": model,
-            "prompt_version": PROMPT_VERSION,
+            "prompt_version": prompt_version_str,
             "preprocessing": preprocess,
             "timestamp": run_ts.isoformat(),
             "image": image_path,
@@ -693,6 +911,39 @@ class Command(BaseCommand):
             help="Bypassa ImagePreprocessor e invia l'immagine grezza (no auto-rotate, no downscale)",
         )
         parser.add_argument(
+            "--prompt-version",
+            choices=sorted(OCR_ALL_PROMPTS.keys()),
+            default="v2",
+            help=(
+                "Versione del prompt di sistema da usare per l'estrazione "
+                "(default: v2, il prompt di produzione). La versione e l'hash "
+                "del prompt selezionato finiscono nei metadati di run: due run "
+                "sono confrontabili solo a parità di questa stringa."
+            ),
+        )
+        parser.add_argument(
+            "--thinking-level",
+            default=None,
+            metavar="LEVEL",
+            help=(
+                "Livello di ragionamento per i modelli Gemini 3.x "
+                "('minimal' azzera i thought token, 'low', 'high'). "
+                "Default None: nessun ThinkingConfig, comportamento di produzione "
+                "invariato. Seam per-chiamata, non tocca settings."
+            ),
+        )
+        parser.add_argument(
+            "--thinking-budget",
+            type=int,
+            default=None,
+            metavar="TOKENS",
+            help=(
+                "Budget di thinking token per i modelli Gemini 2.5 (alternativa a "
+                "--thinking-level, che ha precedenza se entrambi valorizzati). "
+                "Default None: comportamento di produzione invariato."
+            ),
+        )
+        parser.add_argument(
             "--repeat",
             type=int,
             default=1,
@@ -702,6 +953,30 @@ class Command(BaseCommand):
                 "varianza fra chiamate ripetute allo stesso modello (l'estrazione non "
                 "è deterministica). Richiede --gold-case o --gold-all. Con N=1 "
                 "(default) il comportamento è invariato."
+            ),
+        )
+        parser.add_argument(
+            "--second-pass",
+            action="store_true",
+            help=(
+                "Doppia estrazione per zona (Macro 8, giro 22/07): esegue il SECONDO "
+                "passaggio (prompt 'zone', solo finale/parziali/data) e lo confronta col "
+                "PRIMO passaggio riletto da --first-pass-dir, applicando la regola di "
+                "divergenza (discordanza su finale/parziali/data -> NEEDS_REVIEW). "
+                "Default OFF. Richiede modalità gold e --first-pass-dir. Non attiva nulla "
+                "in produzione: è una misura selezionabile dal bench."
+            ),
+        )
+        parser.add_argument(
+            "--first-pass-dir",
+            default=None,
+            metavar="DIR",
+            help=(
+                "Directory delle proposte del PRIMO passaggio (schema --repeat, es. i "
+                "risultati V3) da riusare come prima lettura in --second-pass, invece di "
+                "rifarle. Per ogni caso/modello si cerca il file "
+                "'<case_id>__<model>_repeat*.json' e si accoppiano le N ripetizioni "
+                "indice per indice con quelle del secondo passaggio."
             ),
         )
 
@@ -732,6 +1007,29 @@ class Command(BaseCommand):
             raise CommandError("--repeat deve essere >= 1.")
         if repeat > 1 and not gold_mode:
             raise CommandError("--repeat > 1 richiede --gold-case o --gold-all.")
+
+        second_pass = options["second_pass"]
+        first_pass_dir = options["first_pass_dir"]
+        if second_pass:
+            if not gold_mode:
+                raise CommandError("--second-pass richiede --gold-case o --gold-all.")
+            if not first_pass_dir:
+                raise CommandError(
+                    "--second-pass richiede --first-pass-dir (la directory delle "
+                    "proposte del primo passaggio da riusare)."
+                )
+            if not os.path.isdir(first_pass_dir):
+                raise CommandError(f"--first-pass-dir non trovata: {first_pass_dir}")
+            if options["prompt_version"] not in ("v2", "zone"):
+                raise CommandError(
+                    "--second-pass usa sempre il prompt 'zone' per il secondo "
+                    f"passaggio: --prompt-version {options['prompt_version']!r} è "
+                    "incompatibile (ometti --prompt-version o passa 'zone')."
+                )
+            # Il secondo passaggio è, per definizione, la lettura 'zone'.
+            options["prompt_version"] = "zone"
+        elif first_pass_dir:
+            raise CommandError("--first-pass-dir ha senso solo con --second-pass.")
 
         provider_name = options["provider"]
         model_setting, model_fallback = PROVIDER_MODEL_SETTINGS[provider_name]
@@ -771,9 +1069,20 @@ class Command(BaseCommand):
         if dump_dir:
             os.makedirs(dump_dir, exist_ok=True)
 
+        prompt_version = options["prompt_version"]
+        prompt_version_str = prompt_version_string(prompt_version)
+        thinking_level = options["thinking_level"]
+        thinking_budget = options["thinking_budget"]
+        if thinking_level or thinking_budget is not None:
+            self.stdout.write(
+                f"  thinking: level={thinking_level!r} budget={thinking_budget!r}"
+            )
+
         if not gold_mode:
             results = self._run_models(
-                provider, provider_name, models, image_opt, preprocess, dump_dir
+                provider, provider_name, models, image_opt, preprocess, dump_dir,
+                prompt_version=prompt_version,
+                thinking_level=thinking_level, thinking_budget=thinking_budget,
             )
             self._print_show_and_save(results, options)
             if validated_fields is not None and results:
@@ -817,7 +1126,7 @@ class Command(BaseCommand):
 
         run_ts = timezone.localtime()
         self.stdout.write(f"Run gold: provider={provider_name} modelli={', '.join(models)}")
-        self.stdout.write(f"  prompt: {PROMPT_VERSION}")
+        self.stdout.write(f"  prompt: {prompt_version_str}")
         self.stdout.write(f"  preprocessing: {'on' if preprocess else 'off'}")
         self.stdout.write(f"  timestamp: {run_ts.isoformat()}")
         self.stdout.write(f"  output proposte: {out_dir}")
@@ -846,16 +1155,30 @@ class Command(BaseCommand):
 
             self.stdout.write(f"\n=== Caso gold: {case_id} ===")
 
+            if second_pass:
+                self._process_gold_case_second_pass(
+                    case, case_id, provider, provider_name, provider_label, models,
+                    image_path, resolved_pk, resolved_from, preprocess, dump_dir,
+                    out_dir, run_ts, repeat, options, first_pass_dir,
+                    prompt_version=prompt_version,
+                    prompt_version_str=prompt_version_str,
+                )
+                continue
+
             if repeat > 1:
                 self._process_gold_case_repeated(
                     case, case_id, provider, provider_name, provider_label, models,
                     image_path, resolved_pk, resolved_from, preprocess, dump_dir,
                     out_dir, run_ts, repeat, options,
+                    prompt_version=prompt_version,
+                    prompt_version_str=prompt_version_str,
                 )
                 continue
 
             results = self._run_models(
-                provider, provider_name, models, image_path, preprocess, dump_dir
+                provider, provider_name, models, image_path, preprocess, dump_dir,
+                prompt_version=prompt_version,
+                thinking_level=thinking_level, thinking_budget=thinking_budget,
             )
             self._print_show_and_save(results, options, case_id=case_id)
 
@@ -865,6 +1188,7 @@ class Command(BaseCommand):
                 proposal = build_gold_proposal(
                     case, data, provider_label, model, resolved_pk, image_path,
                     resolved_from, preprocess, fields, inversion, run_ts,
+                    prompt_version_str=prompt_version_str,
                 )
                 fname = (
                     f"{case_id}__{safe_model_slug(model)}_"
@@ -928,7 +1252,8 @@ class Command(BaseCommand):
             return path, pk, None
         return None, None, "nessuna immagine risolvibile — " + "; ".join(tried) + "."
 
-    def _run_models(self, provider, provider_name, models, image_path, preprocess, dump_dir):
+    def _run_models(self, provider, provider_name, models, image_path, preprocess, dump_dir,
+                    prompt_version="v2", thinking_level=None, thinking_budget=None):
         """Esegue l'estrazione per ogni modello e stampa la tabella. Ritorna {model: data}."""
         # Stub minimale: extract_data usa solo .id (logging) e .file.path
         bench_report = SimpleNamespace(
@@ -942,7 +1267,10 @@ class Command(BaseCommand):
         if not preprocess:
             self.stdout.write("Preprocessing: BYPASSATO (--no-preprocess)")
         self.stdout.write("")
-        header = f"{'modello':<20} {'confidence':>10} {'latenza':>9} {'tok_in':>8} {'tok_out':>8}"
+        header = (
+            f"{'modello':<20} {'confidence':>10} {'latenza':>9} "
+            f"{'tok_in':>8} {'tok_out':>8} {'tok_thk':>8}"
+        )
         self.stdout.write(header)
         self.stdout.write("-" * len(header))
 
@@ -954,6 +1282,12 @@ class Command(BaseCommand):
             extract_kwargs = {"model": model}
             if not preprocess:
                 extract_kwargs["preprocess"] = False
+            if prompt_version != "v2":
+                extract_kwargs["prompt_version"] = prompt_version
+            if thinking_level is not None:
+                extract_kwargs["thinking_level"] = thinking_level
+            if thinking_budget is not None:
+                extract_kwargs["thinking_budget"] = thinking_budget
             if dump_dir:
                 ts = timezone.localtime().strftime("%Y%m%d_%H%M%S")
 
@@ -983,10 +1317,12 @@ class Command(BaseCommand):
             conf_str = f"{confidence:.2f}" if isinstance(confidence, (int, float)) else "N/A"
             tok_in = usage.get("prompt_tokens")
             tok_out = usage.get("completion_tokens")
+            tok_thk = usage.get("thoughts_tokens")
             self.stdout.write(
                 f"{model:<20} {conf_str:>10} {elapsed:>8.1f}s "
                 f"{tok_in if tok_in is not None else 'N/A':>8} "
-                f"{tok_out if tok_out is not None else 'N/A':>8}"
+                f"{tok_out if tok_out is not None else 'N/A':>8} "
+                f"{tok_thk if tok_thk is not None else 'N/A':>8}"
             )
             results[model] = data
 
@@ -1078,7 +1414,8 @@ class Command(BaseCommand):
     def _process_gold_case_repeated(self, case, case_id, provider, provider_name,
                                      provider_label, models, image_path, resolved_pk,
                                      resolved_from, preprocess, dump_dir, out_dir, run_ts,
-                                     repeat, options):
+                                     repeat, options, prompt_version="v2",
+                                     prompt_version_str=PROMPT_VERSION):
         """--repeat N: esegue N estrazioni indipendenti per modello e ne misura la varianza.
 
         Ogni ripetizione è una chiamata reale indipendente (stesso modello, stessa
@@ -1087,10 +1424,14 @@ class Command(BaseCommand):
         invece di trattare una singola chiamata come "la" lettura del modello.
         """
         data_lists = {model: [] for model in models}
+        thinking_level = options.get("thinking_level")
+        thinking_budget = options.get("thinking_budget")
         for i in range(1, repeat + 1):
             self.stdout.write(f"\n-- Ripetizione {i}/{repeat} --")
             results = self._run_models(
-                provider, provider_name, models, image_path, preprocess, dump_dir
+                provider, provider_name, models, image_path, preprocess, dump_dir,
+                prompt_version=prompt_version,
+                thinking_level=thinking_level, thinking_budget=thinking_budget,
             )
             self._print_show_and_save(results, options, case_id=f"{case_id}__run{i}")
             for model, data in results.items():
@@ -1117,6 +1458,7 @@ class Command(BaseCommand):
             proposal = build_gold_proposal_repeated(
                 case, per_repeat, provider_label, model, resolved_pk, image_path,
                 resolved_from, preprocess, aggregated, summary, run_ts, len(data_list),
+                prompt_version_str=prompt_version_str,
             )
             fname = (
                 f"{case_id}__{safe_model_slug(model)}_repeat{len(data_list)}_"
@@ -1208,3 +1550,250 @@ class Command(BaseCommand):
                     f"comparsa (SOLO riferimento interno, MAI un verdetto): "
                     f"{agg['tie_break_hint']!r}"
                 ))
+
+    # --- doppia estrazione per zona (--second-pass) --------------------------
+
+    def _load_first_pass_repeats(self, first_pass_dir, case_id, model):
+        """Carica le estrazioni del primo passaggio per (case_id, model) da first_pass_dir.
+
+        Cerca '<case_id>__<model_slug>_repeat*.json' (schema di
+        build_gold_proposal_repeated). Ritorna (repeats_extracted, source_file,
+        first_prompt_version); (None, None, None) se non trovato.
+        repeats_extracted è la lista dei dict 'extracted' (match_info + scores),
+        cioè le singole letture del primo passaggio, nell'ordine delle ripetizioni.
+        """
+        pattern = os.path.join(
+            first_pass_dir, f"{case_id}__{safe_model_slug(model)}_repeat*.json"
+        )
+        found = sorted(glob.glob(pattern))
+        if not found:
+            return None, None, None
+        source = found[-1]  # se più d'uno, il più recente (timestamp nel nome)
+        with open(source, encoding="utf-8") as f:
+            proposal = json.load(f)
+        extracted = [r.get("extracted") or {} for r in (proposal.get("repeats") or [])]
+        first_prompt = (proposal.get("bench_run") or {}).get("prompt_version")
+        return extracted, source, first_prompt
+
+    @staticmethod
+    def _summarize_divergence(per_repeat):
+        """Riepiloga le divergenze su N ripetizioni accoppiate."""
+        by_zone = {z: 0 for z in ZONES}
+        diverging = 0
+        for entry in per_repeat:
+            div = entry["divergence"]
+            if div["diverges"]:
+                diverging += 1
+            for z in div["diverging_zones"]:
+                by_zone[z] += 1
+        return {
+            "repeats_compared": len(per_repeat),
+            "repeats_diverging": diverging,
+            "by_zone": by_zone,
+            "needs_review_any": diverging > 0,
+        }
+
+    def _process_gold_case_second_pass(self, case, case_id, provider, provider_name,
+                                       provider_label, models, image_path, resolved_pk,
+                                       resolved_from, preprocess, dump_dir, out_dir,
+                                       run_ts, repeat, options, first_pass_dir,
+                                       prompt_version="zone", prompt_version_str=None):
+        """--second-pass: esegue il secondo passaggio (zone) e lo confronta col primo (riusato).
+
+        Per ogni modello esegue `repeat` estrazioni zone (chiamate reali indipendenti),
+        carica le estrazioni del primo passaggio da --first-pass-dir per lo stesso
+        caso/modello e accoppia le ripetizioni indice per indice, applicando la regola
+        di divergenza (compare_passes). Le due letture sono indipendenti: il secondo
+        passaggio NON riceve il risultato del primo (nessun confronto guidato). Salva una
+        proposta per caso/modello con la divergenza per ripetizione e il riepilogo.
+        """
+        data_lists = {model: [] for model in models}
+        sp_thinking_level = options.get("thinking_level")
+        sp_thinking_budget = options.get("thinking_budget")
+        for i in range(1, repeat + 1):
+            self.stdout.write(f"\n-- Secondo passaggio (zone) {i}/{repeat} --")
+            results = self._run_models(
+                provider, provider_name, models, image_path, preprocess, dump_dir,
+                prompt_version=prompt_version,
+                thinking_level=sp_thinking_level, thinking_budget=sp_thinking_budget,
+            )
+            self._print_show_and_save(results, options, case_id=f"{case_id}__zone_run{i}")
+            for model, data in results.items():
+                data_lists[model].append(data)
+
+        for model, second_list in data_lists.items():
+            if not second_list:
+                self.stdout.write(self.style.WARNING(
+                    f"\nModello '{model}': nessuna estrazione zone riuscita su {repeat} "
+                    "tentativi, saltato."
+                ))
+                continue
+
+            first_list, first_src, first_prompt = self._load_first_pass_repeats(
+                first_pass_dir, case_id, model
+            )
+            if not first_list:
+                self.stdout.write(self.style.WARNING(
+                    f"\nModello '{model}': nessuna proposta di primo passaggio in "
+                    f"{first_pass_dir} per '{case_id}' (attesa "
+                    f"'{case_id}__{safe_model_slug(model)}_repeat*.json'), confronto saltato."
+                ))
+                continue
+
+            k = min(len(first_list), len(second_list))
+            if len(first_list) != len(second_list):
+                self.stdout.write(self.style.WARNING(
+                    f"Modello '{model}': primo passaggio {len(first_list)} ripetizioni, "
+                    f"secondo {len(second_list)}: accoppio le prime {k}."
+                ))
+
+            per_repeat = [
+                {
+                    "run_index": i + 1,
+                    "first": first_list[i],
+                    "second": second_list[i],
+                    "divergence": compare_passes(first_list[i], second_list[i]),
+                }
+                for i in range(k)
+            ]
+            summary = self._summarize_divergence(per_repeat)
+            self._print_second_pass_comparison(case_id, model, per_repeat, summary, k)
+
+            proposal = self._build_second_pass_proposal(
+                case_id, model, provider_label, resolved_pk, image_path, resolved_from,
+                preprocess, per_repeat, summary, run_ts, k, first_src, first_prompt,
+                prompt_version_str,
+            )
+            fname = (
+                f"{case_id}__{safe_model_slug(model)}_secondpass{k}_"
+                f"{run_ts.strftime('%Y%m%d_%H%M%S')}.json"
+            )
+            path = os.path.join(out_dir, fname)
+            with open(path, "w", encoding="utf-8") as f:
+                json.dump(proposal, f, indent=2, ensure_ascii=False)
+            self.stdout.write(
+                f"Proposta salvata: {path} "
+                "(regola di divergenza NON attiva in produzione: misura)"
+            )
+
+    def _build_second_pass_proposal(self, case_id, model, provider_label, resolved_pk,
+                                    image_path, resolved_from, preprocess, per_repeat,
+                                    summary, run_ts, k, first_src, first_prompt,
+                                    prompt_version_str):
+        """Proposta della doppia estrazione: divergenza per ripetizione + riepilogo."""
+        return {
+            "case_id": case_id,
+            "mode": "second_pass_divergence",
+            "provider": provider_label,
+            "model": model,
+            "db_report_pk": resolved_pk,
+            "extracted_at": run_ts.date().isoformat(),
+            "first_pass": {
+                "source_file": os.path.basename(first_src) if first_src else None,
+                "prompt_version": first_prompt,
+            },
+            "second_pass": {"prompt_version": prompt_version_str},
+            "bench_run": {
+                "provider_cli": provider_label,
+                "model": model,
+                "preprocessing": preprocess,
+                "timestamp": run_ts.isoformat(),
+                "image": image_path,
+                "image_resolved_from": resolved_from,
+                "repeat": k,
+            },
+            "repeats": [
+                {
+                    "run_index": e["run_index"],
+                    "first": {
+                        "final_score": (e["first"].get("scores") or {}).get("final_score"),
+                        "quarters": (e["first"].get("scores") or {}).get("quarters"),
+                        "date": (e["first"].get("match_info") or {}).get("date"),
+                    },
+                    "second": {
+                        "final_score": (e["second"].get("scores") or {}).get("final_score"),
+                        "quarters": (e["second"].get("scores") or {}).get("quarters"),
+                        "date": (e["second"].get("match_info") or {}).get("date"),
+                        "date_digits": (e["second"].get("match_info") or {}).get("date_digits"),
+                        "extraction_warnings": (
+                            (e["second"].get("metadata") or {}).get("extraction_warnings") or []
+                        ),
+                    },
+                    "divergence": e["divergence"],
+                }
+                for e in per_repeat
+            ],
+            "summary": summary,
+            "notes": [
+                "Proposta generata da ocr_bench --second-pass: misura la regola di "
+                "divergenza fra primo passaggio (riusato da --first-pass-dir) e secondo "
+                "passaggio (zone). Le ripetizioni sono accoppiate indice per indice: due "
+                "serie di campioni indipendenti, l'accoppiamento è arbitrario ma "
+                "equivalente a qualunque altro. La regola (divergenza -> NEEDS_REVIEW) "
+                "NON è attiva in produzione in questo giro: è solo misurata.",
+            ],
+        }
+
+    def _print_second_pass_comparison(self, case_id, model, per_repeat, summary, k):
+        """Tabella per-ripetizione della doppia estrazione: stato di ogni zona + dettaglio."""
+        self.stdout.write(
+            f"\n--- Doppia estrazione (--second-pass, {k} ripetizioni): {case_id} — {model} ---"
+        )
+        headers = ("rip.", "finale", "parziali", "data", "esito")
+        rows = []
+        for e in per_repeat:
+            z = e["divergence"]["zones"]
+            rows.append((
+                str(e["run_index"]),
+                z["final_score"]["status"],
+                z["quarters"]["status"],
+                z["date"]["status"],
+                "DIVERGE" if e["divergence"]["diverges"] else "concorde",
+            ))
+        widths = [
+            max(len(headers[i]), max((len(r[i]) for r in rows), default=0))
+            for i in range(len(headers))
+        ]
+
+        def fmt_row(cells):
+            return "  ".join(
+                cell.ljust(widths[i]) if i == 0 else cell.rjust(widths[i])
+                for i, cell in enumerate(cells)
+            )
+
+        header_line = fmt_row(headers)
+        self.stdout.write(header_line)
+        self.stdout.write("-" * len(header_line))
+        for r in rows:
+            self.stdout.write(fmt_row(r))
+
+        detail_lines = []
+        for e in per_repeat:
+            div = e["divergence"]
+            if not div["diverges"]:
+                continue
+            for zone in div["diverging_zones"]:
+                zd = div["zones"][zone]
+                if zone == "quarters":
+                    cells = ", ".join(
+                        f"{name}={c['first']}|{c['second']}"
+                        for name, c in zd["cells"].items() if c["status"] == "diverge"
+                    )
+                    detail_lines.append(f"  rip {e['run_index']} — parziali: {cells}")
+                else:
+                    detail_lines.append(
+                        f"  rip {e['run_index']} — {zone}: "
+                        f"primo {zd['first']!r} vs secondo {zd['second']!r}"
+                    )
+        if detail_lines:
+            self.stdout.write("Dettaglio divergenze (primo|secondo):")
+            for line in detail_lines:
+                self.stdout.write(line)
+
+        by_zone = summary["by_zone"]
+        self.stdout.write(
+            f"Riepilogo: {summary['repeats_diverging']}/{summary['repeats_compared']} "
+            f"ripetizioni divergenti; per zona final_score={by_zone['final_score']}, "
+            f"quarters={by_zone['quarters']}, date={by_zone['date']}; "
+            f"NEEDS_REVIEW su {summary['repeats_diverging']}/{summary['repeats_compared']}."
+        )

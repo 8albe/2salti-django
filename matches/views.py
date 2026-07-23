@@ -36,8 +36,10 @@ def match_detail(request, match_id):
         'league'
     ), id=match_id)
     
-    # Eventi raggruppati per tipo (Solo se pubblico)
-    if match.is_public:
+    # Eventi raggruppati per tipo (Solo se gli eventi sono pubblicati).
+    # `events_published` e' piu' stretto di `is_public` (Opzione A): un publish
+    # SCORE_ONLY rende pubblico il risultato ma NON la cronologia eventi.
+    if match.events_published:
         goals = list(match.events.filter(event_type=EVENT_TYPE_GOAL).select_related('player', 'team'))
         expulsions = match.events.filter(event_type=EVENT_TYPE_EXCLUSION_20).select_related('player', 'team')
         yellow_cards = match.events.filter(event_type=EVENT_TYPE_YELLOW_CARD).select_related('player', 'team')
@@ -98,6 +100,11 @@ def match_detail(request, match_id):
     home_roster = match.home_team.get_roster() if match.home_team else []
     away_roster = match.away_team.get_roster() if match.away_team else []
 
+    # Pannello "cronologia non disponibile" (Opzione A): il match e' pubblico
+    # (risultato visibile) ma pubblicato SCORE_ONLY, quindi gli eventi non ci
+    # sono per scelta dichiarata — distinto da un FULL con 0 eventi.
+    score_only_notice = match.is_public and not match.events_published
+
     context = {
         'match': match,
         'goals': goals,
@@ -109,6 +116,7 @@ def match_detail(request, match_id):
         'home_scorers': home_scorers_list,
         'away_scorers': away_scorers_list,
         'qs_processed': qs_processed,
+        'score_only_notice': score_only_notice,
         'home_roster': home_roster,
         'away_roster': away_roster,
         'sport': match.league.sport,
@@ -187,7 +195,7 @@ def upload_report(request, match_id=None):
 def league_statistics(request, league_slug):
     """Pagina statistiche avanzate campionato"""
     from core.models import League
-    from .stats_services import get_top_scorers, get_discipline_stats
+    from .stats_services import get_top_scorers, get_discipline_stats, get_fouled_out_stats
     
     league = get_object_or_404(League, slug=league_slug)
     
@@ -231,10 +239,14 @@ def league_statistics(request, league_slug):
         
     bad_boys_list.sort(key=bad_boy_sort_key)
 
+    # 4. Fouled out: quante volte un giocatore raggiunge le 3 espulsioni (dato derivato)
+    fouled_out_list = list(get_fouled_out_stats(league.id, limit=15))
+
     context = {
         'league': league,
         'top_scorers': top_scorers_list[:15], # Show top 15
         'bad_boys': bad_boys_list[:15],       # Show top 15
+        'fouled_out': fouled_out_list,
         'sport': league.sport,
         'sport_color': league.sport.hex_color,
         'seo_title': f"Statistiche e Marcatori {league.name}",

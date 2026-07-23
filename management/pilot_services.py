@@ -2,7 +2,7 @@
 Pilot operations services — daily report generation and urgent alert logic.
 """
 import logging
-from datetime import date, timedelta
+from datetime import timedelta
 
 from django.conf import settings
 from django.core.mail import send_mail
@@ -25,7 +25,10 @@ def generate_daily_report_data(report_date=None):
     Returns a dict suitable for template rendering.
     """
     if report_date is None:
-        report_date = date.today()
+        # Europe/Rome, non la data locale-server (UTC): con `date.today()` nella
+        # finestra notturna 00:00-02:00 di Roma il report conterebbe bug/feedback
+        # sul giorno UTC (ieri). Stesso pattern del fix e435a95 (OPS §10.29).
+        report_date = timezone.localdate()
 
     yesterday = report_date - timedelta(days=1)
 
@@ -125,7 +128,9 @@ def check_and_send_urgent_alerts():
 
     Returns list of triggered alert reasons, or empty list if no alerts fired.
     """
-    today = date.today()
+    # Europe/Rome, non la data locale-server (UTC): il dedup degli alert
+    # (`timestamp__date=today`) deve guardare il giorno di Roma. Vedi OPS §10.29.
+    today = timezone.localdate()
     alerts = []
 
     # 1. Red daily log

@@ -21,6 +21,8 @@ Miglioramento accuracy, preprocessing, gestione errori, dataset test, qualità d
   - **Aggiornamento 2026-07-19 (secondo giro, stesso giorno): censimento + correzione su dev.** Censimento read-only su dev e prod (identici): 4 Match totali, 4 `is_finished`, 4 con punteggio valorizzato, **0 con un report mai `PUBLISHED`** — l'intera popolazione match è a rischio, non solo i 3 casi noti (dettaglio §8.5(d)). 0 `LeagueStanding` non a zero: nessun dato errato ha ancora raggiunto la classifica, perché `StandingsService` filtra su `reports__status='PUBLISHED'`. Confermate sul sistema vivo le due discrepanze: match Olympic/Libertas (id 4) con parziali sbagliati a DB nonostante il finale giusto; match Unime/Nautilus (id 2) con casa/trasferta invertiti a DB (nuova classe di errore, §8.5(e)). **Corrette su dev** (transazione + audit `MATCH_SCORE_CORRECTED`, `is_data_verified=True`, `rebuild_standings --verify` + `check_data_integrity` puliti su entrambe le leghe). **Prod non toccato**, correzione preparata non eseguita. `normalized_data` dei report 8, 10, 11, 16 non toccato: non pubblicarli finché non corretto separatamente (nota operativa in §8.5).
   - **Aggiornamento 2026-07-19 (terzo giro, stesso giorno): dataset a 6 casi, popolazione match chiusa al 100% di errore.** Verificato a mano il quarto e ultimo referto cartaceo disponibile (match 1, Pol. Delta vs Villa York, 06/12/2025, lega 2, report 7): finale 15-9 corretto a DB, **tutti e quattro i parziali sbagliati** (veri 6-2 / 1-2 / 3-4 / 5-1), verità corroborata dalla storia cronometrica del referto (§8.5(f)). Con questo **tutti e 4 i match a DB risultano sbagliati: 4/4** e il controllo "somma parziali == finale" li attraversa tutti — **0% di rilevazione su 100% di errore** (§8.5(d)). Corretto su dev con lo stesso rigore (transazione + audit, `is_data_verified=True`, rebuild lega 2 + `check_data_integrity` puliti); backfill anche di `has_report`, incoerente per una causa applicativa registrata e **non** corretta (§8.5(g)). **Prod non toccato**: sequenza consolidata delle 4 correzioni preparata a parte.
   - **Aggiornamento 2026-07-21: riparazione dei `normalized_data` eseguita su dev (Opzione A, prerequisito 2).** I cinque report 7/8/10/11/16 hanno avuto `normalized_data.scores` (più la sola `match_info.date` del report 11, 2025-04-12 → 2026-04-12) riportati ai valori gold, in un'unica transazione con audit `normalized_data_repair_gold` (before/after dei soli campi toccati; `raw_extracted_data` e status invariati, restano `NEEDS_REVIEW`). **Solo dev; prod gated a parte.** Effetto **voluto e misurato**: dopo la riparazione gli **eventi restano incoerenti coi punteggi per costruzione** — il gold copre punteggio e parziali, non gli eventi — quindi i blocker di `assess_publish_readiness` *aumentano* (da 8/2/3/2/1 a **7/7/7/4/5**) e il report 16 passa da verde a rosso. Chi legge `normalized_data` assumendo coerenza interna deve sapere che qui l'incoerenza è attesa: il check ora misura la distanza dalla verità, non la coerenza con l'errore. La divergenza dev↔prod sui parziali del report 16, prima non spiegata, è chiusa nel caso gold (due estrazioni Gemini indipendenti dello stesso cartaceo).
+  - **Aggiornamento 2026-07-22: riparazione estesa a PROD (Opzione A, prerequisito 2).** Stessa riparazione del 21/07 su dev, eseguita su prod con checklist a 6 blocchi (`scratch/prereq2_repair_prod_20260722.sh`, gated su backup + dry-run su copia del backup + SHA del DB prod invariato). Blocker post-riparazione **7/7/7/4/5** (identici a dev). Confronto dev↔prod: `normalized_data` bit-identico per 7/8/10/11; per il 16 diverge il full (estrazione Gemini indipendente) ma i campi riparati coincidono. Match 1/2/3/4 e LeagueStanding invariati (nessun `PUBLISHED`, zero strutturale). Solo `normalized_data.scores` (+`match_info.date` del solo 11) toccati, audit `normalized_data_repair_gold`, status `NEEDS_REVIEW` invariato. Deploy e dettaglio operativo in OPS_RUNBOOK §2.11.
+  - **Livello di pubblicazione "solo punteggio" (Opzione A, 2026-07-22).** `publish_report` guadagna un parametro `level` (`FULL` | `SCORE_ONLY`, campo `MatchReport.publication_level`, default `FULL` retrocompatibile, migration additiva `0020`). `SCORE_ONLY` pubblica **punteggio e parziali verificati senza creare `MatchEvent`** e cancellando quelli esistenti: è il livello adatto ai referti 7/8/10/11/16, il cui gold copre punteggio e parziali ma non gli eventi. **Non indebolisce la Policy A strict**: l'abort zero-eventi resta identico byte per byte sul livello `FULL` — su `SCORE_ONLY` non viene valutato perché zero eventi è il contratto dichiarato del livello, non un'anomalia. `assess_publish_readiness(data, level)` declassa i soli blocker event-scoped a warning `[fuori livello]` su `SCORE_ONLY`, lasciando i blocker score-scoped. La misura di accuratezza si valuta sul livello dichiarato: un referto `SCORE_ONLY` si giudica su punteggio e parziali, gli eventi restano fuori (già in `not_verified` nei casi gold). Lato pubblico `Match.events_published` (True solo se il referto PUBLISHED è `FULL`) distingue "cronologia non disponibile" da "0 eventi". State machine e side effects in [STATE_MACHINES.md](../STATE_MACHINES.md) §1.
   - Caso motivante: lo stesso match (Bellator Frusino vs SS. Lazio Nuoto, 11/04/2026) ha **due estrazioni divergenti sul punteggio finale** — report 10 (`gpt-4o`): 11-19; report 16 (`gemini-2.5-pro`): 5-19. La verità umana, collazionata sul cartaceo il 2026-07-19, è **4-19**: sbagliano **entrambe**. Il gold standard serve a **due scopi distinti**: (1) misurare l'accuratezza per campo; (2) verificare la calibrazione della confidence per tarare la soglia del quality gate.
   - Nota (2026-07-19): Mistral OCR 4 registrato come provider candidato da benchmarcare contro `gemini-2.5-pro` con `ocr_bench` sul dataset gold quando sarà costruito — nessuna implementazione ora.
 - [x] **Gate del risultato pubblico (2026-07-19)** — la pagina pubblica non mostra il risultato di una partita non verificata: `is_data_verified=True` OPPURE almeno un referto `PUBLISHED`, altrimenti placeholder al posto di finale e parziali (la partita resta pubblica). Gate unico in `matches/services/result_visibility.py`, consumato da template, API pubbliche e AI Stats Engine; staff e admin continuano a vedere il punteggio. Decisione di prodotto in [BLUEPRINT.md](../BLUEPRINT.md) §14, dettaglio in §8.5(h).
@@ -128,6 +130,15 @@ Il campione resta piccolo (4 casi), ma non è più un campione: è la popolazion
 
 Il valore di questo episodio è che non è una dimostrazione costruita: è il finding (b)/(d) che si manifesta spontaneamente, in condizioni operative reali, su un errore di *procedura* invece che di *estrazione*. La stessa proprietà — coerenza interna che regge mentre la verità è sbagliata — protegge un OCR che allucina e un blocco di checklist mai eseguito. Se ne ricava anche una regola operativa generale, registrata in OPS_RUNBOOK §6.5: in una procedura manuale a blocchi la rete non sono i controlli di coerenza, ma l'asserzione finale contro valori esterni noti in anticipo.
 
+**Terza e quarta conferma su casi reali non costruiti (2026-07-22, riparazione prod).** La riparazione `normalized_data` su prod (§8.5 aggiornamento 2026-07-22, OPS_RUNBOOK §2.11) ha esposto due estrazioni Gemini/GPT distinte dello stesso cartaceo (Bellator/Lazio, vero 4-19) che entrambe passano il check "somma parziali == finale" su un finale completamente falso:
+
+| Referto | Finale PRE (falso) | Parziali PRE | Somma torna? | Vero |
+|---|---|---|---|---|
+| 10 (`gpt-4o`) | 11-19 | 2-2/4-5/2-4/3-8 | 2+4+2+3=11, 2+5+4+8=19 ✓ | 4-19 |
+| 16 (`gemini-2.5-pro`) | 5-19 | 1-3/0-5/1-5/3-6 | 1+0+1+3=5, 3+5+5+6=19 ✓ | 4-19 |
+
+**Il conteggio sale a quattro casi reali, zero rilevazioni.** Precedenti: match 4 del deploy 20/07 (OPS_RUNBOOK §6.5, blocco saltato con parziali vecchi che sommavano comunque) e il finding originale del 2026-07-19 (le due estrazioni di §8.5, entrambe con somma coerente). Non è più un limite dimostrato su un caso: è una proprietà stabile della classe di errore — il check somma-parziali è **inutile per costruzione**, confermato quattro volte su dati reali indipendenti. La rete resta il controllo per-periodo (§8.5(b)-1) contro i parziali gold e, in ultima istanza, la collazione umana sul cartaceo.
+
 **Corollario (ipotesi con n=4, non legge): il totale è il campo più affidabile, i parziali il meno affidabile.** Il punteggio finale è corretto in 3 casi su 4 (match 1, 2, 4 — nel match 2 i due totali sono giusti, solo attribuiti alla squadra sbagliata), mentre i parziali sono sbagliati in 4 su 4. Se regge su più casi, ha una conseguenza operativa concreta: la review umana va concentrata sui parziali, e i parziali non andrebbero trattati come dato pubblicabile senza collazione. Da riverificare a ogni nuovo caso gold prima di trasformarla in una regola.
 
 **(e) Nuova classe di errore: INVERSIONE CASA/TRASFERTA (match 2, 2026-07-19).**
@@ -155,13 +166,13 @@ I finding (a)-(g) dicono cosa non funziona; questa è la prima contromisura che 
 - **Perché ora:** con il 100% della popolazione a DB sbagliata (finding (d)), pubblicare un punteggio non verificato significa pubblicare, statisticamente, un punteggio sbagliato. È l'applicazione diretta di "Null invece di invenzione" (BLUEPRINT §1) e del Principio del Dato Certo (§7.4.3): il principio non copre solo il dato *mancante* ma anche quello *non ancora verificato*.
 - **Cosa il gate NON risolve:** le classifiche leggono `LeagueStanding` persistito, che non ricontrolla la pubblicazione a lettura (dipende dal rebuild); e i tre punti di questo elenco restano indipendenti dal gate — `normalized_data` sbagliato, `has_report` (g), duplicati anagrafici (§8.7).
 
-**Decisione di prodotto ratificata (2026-07-21): la classifica resta a una sola strada, il gate del risultato pubblico no.** Durante la propagazione su prod del merge Lazio (§8.7, OPS_RUNBOOK §2.10) la verifica browser ha rilevato la lega 4 con la classifica interamente a zero pur avendo il match 3 concluso e `is_data_verified=True`. Recon read-only ha confermato che lo zero è preesistente e strutturale (nessun referto `PUBLISHED` su prod, vedi apertura di questo §8.5). Alberto ha esaminato il caso e **ratificato** — non lasciato per inerzia — il comportamento attuale di `StandingsService` (`reports__status='PUBLISHED'`, invariato dal codice): *"la classifica si aggiorna solo quando una partita è stata ufficialmente letta e confermata da un referto, e usando i dati che stanno sul referto."* Rifiutata esplicitamente la doppia strada del gate (h): `is_data_verified` **non deve mai diventare fonte per la classifica**, perché è un atto umano (una dichiarazione), mentre la classifica deve poggiare su un artefatto verificabile — il referto pubblicato — e sui dati che quel referto contiene. Conseguenza accettata consapevolmente, non un bug da correggere in UI aggirando il criterio: **l'asimmetria fra pagina match (risultato visibile via `is_data_verified`) e classifica (a zero) è per disegno** finché nessun referto è `PUBLISHED`. L'unica strada per popolare le classifiche resta correggere i `normalized_data` dei referti (giro già dichiarato in OPS_RUNBOOK §10.22) e pubblicarli — non un secondo criterio di lettura.
+**Decisione di prodotto ratificata (2026-07-21): la classifica resta a una sola strada, il gate del risultato pubblico no.** Durante la propagazione su prod del merge Lazio (§8.7, OPS_RUNBOOK §2.10) la verifica browser ha rilevato la lega 4 con la classifica interamente a zero pur avendo il match 3 concluso e `is_data_verified=True`. Recon read-only ha confermato che lo zero è preesistente e strutturale (nessun referto `PUBLISHED` su prod, vedi apertura di questo §8.5). Alberto ha esaminato il caso e **ratificato** — non lasciato per inerzia — il comportamento attuale di `StandingsService` (`reports__status='PUBLISHED'`, invariato dal codice): *"la classifica si aggiorna solo quando una partita è stata ufficialmente letta e confermata da un referto, e usando i dati che stanno sul referto."* Rifiutata esplicitamente la doppia strada del gate (h): `is_data_verified` **non deve mai diventare fonte per la classifica**, perché è un atto umano (una dichiarazione), mentre la classifica deve poggiare su un artefatto verificabile — il referto pubblicato — e sui dati che quel referto contiene. Conseguenza accettata consapevolmente, non un bug da correggere in UI aggirando il criterio: **l'asimmetria fra pagina match (risultato visibile via `is_data_verified`) e classifica (a zero) è per disegno** finché nessun referto è `PUBLISHED`. L'unica strada per popolare le classifiche resta correggere i `normalized_data` dei referti (giro già dichiarato in DEBITI.md §10.22) e pubblicarli — non un secondo criterio di lettura.
 
 Il censimento dei punti di esposizione è stato fatto in modo esaustivo prima dell'implementazione (lezione dallo stato `QUEUED`: 7 punti rotti su 14 perché nessuno li aveva enumerati) e il test `TemplateScoreExposureAuditTest` in `matches/tests_result_visibility.py` **deriva** la lista dai template invece di elencarla a mano: un nuovo template che stampa un punteggio senza gate fa fallire la suite da solo.
 
 **Nota operativa: non pubblicare i report 7, 8, 10, 11, 16.** Questi cinque report hanno `normalized_data` con punteggio e/o attribuzione casa/trasferta sbagliati, non ancora corretti (giro separato, fuori scope Macro 8 attuale). La correzione applicata finora — su dev il 2026-07-19 e su prod il 2026-07-20 — ha toccato solo il `Match`, non il report.
 
-> **Aggiornamento 2026-07-20.** Su prod tutti e cinque sono ora in `NEEDS_REVIEW`: il report 16, che era in `EXTRACTED` (cioè a un click dalla pubblicazione), è stato **demosso a `NEEDS_REVIEW` con audit** all'inizio della finestra di deploy, prima di ogni altra operazione, proprio per togliere di mezzo il rischio durante il lavoro. Il `normalized_data` non è stato toccato: la demozione allontana il pericolo, non lo rimuove. Non esiste tuttora **alcun guardrail a codice** che impedisca la pubblicazione — la protezione è documentale, registrata come debito in OPS_RUNBOOK §10.22. Se uno di questi report venisse pubblicato o ripubblicato, `publish_report()` (`matches/services/publishing_service.py`) sovrascriverebbe `Match.home_score`/`away_score`/`quarter_scores` (e, per match 2, ricreerebbe gli eventi con l'attribuzione squadra ancora sbagliata) leggendo dal `normalized_data` non corretto — vanificando silenziosamente la correzione appena fatta.
+> **Aggiornamento 2026-07-20.** Su prod tutti e cinque sono ora in `NEEDS_REVIEW`: il report 16, che era in `EXTRACTED` (cioè a un click dalla pubblicazione), è stato **demosso a `NEEDS_REVIEW` con audit** all'inizio della finestra di deploy, prima di ogni altra operazione, proprio per togliere di mezzo il rischio durante il lavoro. Il `normalized_data` non è stato toccato: la demozione allontana il pericolo, non lo rimuove. Non esiste tuttora **alcun guardrail a codice** che impedisca la pubblicazione — la protezione è documentale, registrata come debito in DEBITI.md §10.22. Se uno di questi report venisse pubblicato o ripubblicato, `publish_report()` (`matches/services/publishing_service.py`) sovrascriverebbe `Match.home_score`/`away_score`/`quarter_scores` (e, per match 2, ricreerebbe gli eventi con l'attribuzione squadra ancora sbagliata) leggendo dal `normalized_data` non corretto — vanificando silenziosamente la correzione appena fatta.
 
 **(i) Debito dichiarato: il caso Bellator è sotto la soglia di chiusura del dataset gold, ma il match resta pubblico su prod (2026-07-20).**
 
@@ -284,7 +295,7 @@ Due cose lo rendono interessante oltre al censimento in sé:
 
 Anomalia minore rilevata nello stesso censimento: `in_review_at` è valorizzato (2026-04-19) pur essendo lo stato `UPLOADED` — residuo di una transizione passata, incoerente con lo stato attuale.
 
-~~**Non toccato**: non accodato, non collegato, non eliminato.~~ **Superato il 2026-07-21**: il report 15 è stato accodato su prod come oggetto del collaudo end-to-end del worker (OPS_RUNBOOK §2.8) ed è ora in `NEEDS_REVIEW`, orfano. L'esito di merito dell'estrazione è in **§8.10**; la decisione di prodotto (resta orfano documentato, nessuna azione a DB) è registrata lì e in OPS_RUNBOOK §10.23, ora chiusa.
+~~**Non toccato**: non accodato, non collegato, non eliminato.~~ **Superato il 2026-07-21**: il report 15 è stato accodato su prod come oggetto del collaudo end-to-end del worker (OPS_RUNBOOK §2.8) ed è ora in `NEEDS_REVIEW`, orfano. L'esito di merito dell'estrazione è in **§8.10**; la decisione di prodotto (resta orfano documentato, nessuna azione a DB) è registrata lì e in DEBITI_CHIUSI.md §10.23, ora chiusa.
 
 ### 8.9 Baseline Gemini sul dataset gold (2026-07-20)
 
@@ -357,7 +368,7 @@ Conseguenza operativa positiva: **la discovery non ha agganciato nulla** e il re
 
 **Nessun riversamento nel caso gold.** Questa estrazione **non** è stata scritta in `extractions[]` del caso: vale la decisione D1 di §8.2 — il riversamento nel dataset è un atto umano dopo review, mai automatico. I valori qui sopra sono registrati come finding, non come misura del dataset.
 
-**Report 15 — decisione presa (Alberto, 2026-07-21):** resta in `NEEDS_REVIEW` come orfano documentato, nessuna azione a DB. Le due società lette sul foglio non esistono a sistema (e quelle vere, `S.C. Salerno` e `Nautilus Nuoto Roma`, sono rispettivamente assente e presente — §8.2): il referto diventerà risolvibile solo se e quando le anagrafiche mancanti entreranno a DB. Registrato anche in OPS_RUNBOOK §10.23, che si chiude con questa decisione.
+**Report 15 — decisione presa (Alberto, 2026-07-21):** resta in `NEEDS_REVIEW` come orfano documentato, nessuna azione a DB. Le due società lette sul foglio non esistono a sistema (e quelle vere, `S.C. Salerno` e `Nautilus Nuoto Roma`, sono rispettivamente assente e presente — §8.2): il referto diventerà risolvibile solo se e quando le anagrafiche mancanti entreranno a DB. Registrato anche in DEBITI_CHIUSI.md §10.23, che si chiude con questa decisione.
 
 ### 8.11 Fetta A1 — neutralizzazione dei gate sulla confidence (2026-07-21)
 
@@ -387,6 +398,415 @@ Prima contromisura del giro post-collaudo. **Non aggiunge un controllo: ne togli
 **Correzione di framing (D5, 2026-07-21): l'indipendenza fra griglia e cronologia esiste sul foglio, ma non nell'estrazione.** §8.5(b)-1 e §8.5(f) qualificavano il conteggio per periodo come controllo *indipendente* perché legge una zona diversa del referto cartaceo. Sul foglio è vero, ed è ciò che ha permesso la corroborazione umana del match 1 (§8.5(f)). **Nell'estrazione OCR non lo è**: il referto 16, misurato il 2026-07-21, ha eventi per periodo perfettamente coerenti con parziali che sono falsi — un unico atto di lettura ha prodotto entrambe le zone, e le ha rese concordi tra loro e discordi dal foglio. L'indipendenza è una proprietà della *fonte*, non del *lettore*, e un lettore unico la annulla.
 
 Conseguenza operativa, che è il motivo per cui questa correzione va scritta e non solo capita: il check per-periodo **non è la seconda opinione** che la §8.5(b) sperava. Misura la coerenza interna dell'estratto e nulla di più. Vale in una sola direzione — quando **fallisce**, ha trovato un errore certo (D1) o quasi certo (D2); quando **passa**, non ha detto nulla sulla verità dei numeri. Per questo il check è cablato come blocco solo sui fallimenti e la tabella in review non ha alcun segnale di conferma. La corroborazione vera resta quella di §8.5(f): due letture di zone diverse fatte da **lettori diversi**, cioè in pratica la collazione umana sul cartaceo.
+
+### 8.12 Esperimento prompt V3 sul dataset gold (2026-07-22)
+
+Primo esperimento di prompt dopo l'audit del 22/07: `OCR_SYSTEM_PROMPT_V3` = V2 più (a) anti-riconciliazione sulla griglia parziali, (b) trascrizione letterale dei nomi, (c) data cifra per cifra con confidence dedicata (`confidence_fields.date`) e trascrizione grezza (`match_info.date_digits`). V3 vive **accanto** a V2 in `vision_providers.py`, selezionabile via `settings.OCR_PROMPT_VERSION` o `ocr_bench --prompt-version v3`; **il default di produzione resta V2** — la promozione è una decisione di Alberto sui numeri qui sotto, non presa in questo giro.
+
+Run: `gemini-2.5-pro`, prompt `OCR_SYSTEM_PROMPT_V3@sha256:87b86a945215`, preprocessing on, `--repeat 5` × 6 casi = 30 chiamate esatte (67.980 token in, 124.703 out, **$1.33** a listino verificato $1.25/$10 per M — stima dell'audit: ~$1.10). Proposte in `ocr_bench_out/gold_v3_20260722/` su dev (D1: mai riversate nei casi). Avvertenza di confrontabilità: la baseline §8.9 girò sul V2 pre-`5758642` (`31f3335733e2`); il V2 attuale (`a0f50fbe5244`) differisce solo per la derivazione del `quarter` degli eventi, campo fuori dalla truth gold — il confronto sui 78 campi misurati resta sensato, ma va detto.
+
+**Totali sui 78 campi (repeat-5), V3 vs baseline §8.9:** stabili-corretti **59 vs 54** (76% vs 69%), stabili-SBAGLIATI 2 vs 2, instabili 15 vs 16, ambigui **2 vs 6**. Media per singolo passaggio: **86.9%** (5 passaggi: 85-90%) vs 86%. Inversioni casa/trasferta: **0/30** vs 1/36. Nessuna chiamata fallita.
+
+Risposte alle domande di misura del giro:
+
+1. **Il segnale somma≠finale sul Bellator NON compare: 0/5.** I cinque run producono griglie *diverse fra loro* che sommano tutte esattamente al finale sbagliato 5-19: la ricostruzione compensativa sopravvive all'istruzione esplicita. Il segnale è però comparso **una volta altrove** (Olympic run 2: finale 20-1, parziali 25-1 per una cifra selvaggia su Q2 casa): l'istruzione *può* disaccoppiare griglia e finale, e quando lo fa il check meccanico intercetta davvero un errore — ma non disinnesca la classe di errore dove il finale stesso è letto male.
+2. **Celle-parziale Bellator: nessun miglioramento di sostanza** (6 stabili-corretti + 1 stabile-sbagliato + 6 instabili, identico alla baseline; per maggioranza 8/13 → 9/13). Il finale casa resta **stabile-sbagliato 5×5 a confidence 0.998**: secondo giro consecutivo, su due versioni di prompt.
+3. **FRUSINO: sì, maggioranza corretta** — `BELLATOR FRUSINO`×4 vs `FROSINONE`×1 (baseline: FROSINONE×3, maggioranza sbagliata). La trascrizione letterale funziona sul prior linguistico puro. **Non** elimina però il suffisso inventato di Libertas (`P.N.`×3, conf 1.0) né le allucinazioni da foglio illeggibile (Salerno: `CONI`×2, `S.C. TUSCOLANO`; Triscelon: `TRISKELION`×3, con la variante nuova `TRISUS VELON`): quella non è normalizzazione, è lettura impossibile.
+4. **Date: miglioramento parziale, non sui due casi bersaglio.** Delta/Unime/Bellator/Olympic: data stabile-corretta 5×5 (Unime aveva un 2006×1 in baseline, sparito; Bellator e Olympic già corrette). Ma **Triscelon resta stabile-sbagliata 28×5 a conf 1.0** (invariata) e Salerno resta mai-corretta (5 valori tutti sbagliati). La confidence dedicata alla data è attiva (0.998-1.0)… anche sui valori sbagliati: non calibrata, come da §8.11.
+5. **Nessuna regressione sui fogli leggibili**: Delta 13/13 stabile-corretto; Unime 12+1 instabile-con-maggioranza-corretta (`UNIME`×4/`UN.NE`×1), stesso conteggio della baseline (l'instabile era la data, ora è il nome). Olympic **migliora** (11 vs 10 stabili-corretti, sparito lo scambio Q3/Q4 away) e Salerno migliora nettamente (6 vs 2 stabili-corretti, finali 12-17 stabili-corretti 5×5, 0 inversioni).
+
+**Lettura del giro in una riga:** V3 migliora il contorno (nomi da prior, varianza su foglio ruotato, ambigui dimezzati, date già-quasi-buone) ma **non scalfisce i due errori stabili** — Bellator finale casa e Triscelon data — che restano invisibili a qualunque ripetizione e a qualunque coerenza interna. Sono la classe di errore per cui l'audit del 22/07 aveva già indicato la strada successiva: la **doppia estrazione per zona** (secondo atto di lettura indipendente sulla sola griglia/testata), che è l'esperimento candidato del prossimo giro.
+
+### 8.13 Doppia estrazione per zona sul dataset gold (2026-07-22)
+
+Esperimento successivo a §8.12: un **secondo atto di lettura indipendente**, ristretto alle sole tre zone dove vivono gli errori stabili (griglia parziali, finale di ciascuna squadra, data), da confrontare col primo passaggio. Ipotesi da falsificare: *una seconda lettura indipendente discorderà dalla prima sull'errore, esponendolo*.
+
+**Cosa è stato costruito.** `OCR_SYSTEM_PROMPT_ZONE` (`@sha256:8a25dff54e59`) — secondo passaggio, output JSON minimale (solo finale/parziali/data + confidence + warnings), eredita da V3 anti-riconciliazione e trascrizione cifra-per-cifra, **niente crop** (variabile isolata: il secondo atto di lettura, non lo zoom — il crop è l'esperimento dopo). Regola di divergenza pura in `matches/services/ocr_double_extraction.py` (`compare_passes`): discordanza su finale, parziali o data fra le due letture → `NEEDS_REVIEW`; una lettura `null` è **astensione**, non divergenza. La regola **alza la bandiera, non sceglie il valore giusto**, e in questo giro **non è attiva in produzione**: è selezionabile dal bench (`ocr_bench --second-pass --first-pass-dir …`, default off). La seconda chiamata non riceve mai il risultato della prima (indipendenza reale).
+
+Run: `gemini-2.5-pro`, secondo passaggio `--repeat 5` × 6 casi = **30 chiamate zone** (primo passaggio **riusato** dai risultati V3 di §8.12 in `gold_v3_20260722/`, non rifatto). Proposte in `ocr_bench_out/gold_secondpass_20260722/` (D1: mai riversate nei casi). Accoppiamento delle ripetizioni indice per indice — due serie di campioni iid, l'accoppiamento è arbitrario ma equivalente a qualunque altro.
+
+**Tabella divergenze (rip. divergenti su 5, poi per zona):**
+
+| caso | legib. | div/5 | finale | parziali | data | natura |
+|---|---|---|---|---|---|---|
+| Delta vs Villa York | 3 | **0/5** | 0 | 0 | 0 | pulito, nessun falso positivo |
+| Unime vs Nautilus | 2 | **0/5** | 0 | 0 | 0 | pulito, nessun falso positivo |
+| **Bellator** vs Lazio | 1 | 5/5 | **0** | 5 | 0 | vero pos. sui parziali, **finale NON intercettato** |
+| Olympic vs Libertas | 3 | 4/5 | 0 | 4 | 0 | rumore sui parziali (finale e data corretti) |
+| Salerno vs Nautilus | 2 | 5/5 | 5 | 5 | 4 | vero pos. (foglio davvero illeggibile) |
+| **Triscelon** vs Nautilus | 2 | **0/5** | 0 | 0 | 0 | **data NON intercettata** (concordi sul valore sbagliato) |
+
+Separazione netta veri/falsi positivi: **veri positivi** = Salerno (5/5, foglio score-2 che l'OCR legge male: il secondo passaggio legge finali diversi e sbagliati, la bandiera è giusta) e Bellator sui *parziali* (5/5). **Falsi positivi puri** (foglio che l'OCR legge bene, eppure diverge) = **zero sui due controlli** Delta/Unime; ma **Olympic** diverge 4/5 sui soli parziali pur avendo finale e data corretti 5/5 → rumore operativo, la griglia dei parziali è instabile fra letture anche quando il finale è giusto.
+
+**Risposte alle domande di misura:**
+
+1. **Sui due errori stabili la seconda lettura NON diverge dalla prima, e non legge mai il valore giusto. Il meccanismo di confronto fra passaggi non li cattura.** Bellator finale casa: entrambi i passaggi leggono **5-19** in tutti e 5 i run (divergenza sul finale **0/5**, valore corretto 4 letto **0/5**). Triscelon data: entrambi leggono **28** in tutti e 5 (divergenza **0/5**, valore corretto 25 letto **0/5**). L'errore è stabile *fra atti di lettura*, non solo fra ripetizioni dello stesso atto: il modello rilegge "4"→"5" e "25"→"28" in modo sistematico anche nella lettura ristretta. Detto chiaramente: **per i due bersagli il meccanismo non serve.** *Silver lining su Bellator*: il secondo passaggio, ristretto alla griglia, la legge correttamente (somma casa **4**) e **auto-segnala** la discordanza somma≠finale in `extraction_warnings` in **4/5** run — segnale che il V3 a passaggio singolo non produceva mai (§8.12: 0/5). La restrizione di zona **rompe la ricostruzione compensativa**: qui è il check *interno* del secondo passaggio a mordere, non il confronto fra i due.
+2. **Falsi positivi sui fogli puliti: zero sui due controlli** (Delta 0/5, Unime 0/5). Il costo operativo del meccanismo non è sui fogli puliti *certificati*, ma sulla **zona parziali** in generale: Olympic (finale+data corretti) va in review 4/5 per sola instabilità della griglia. Se il trigger scattasse su qualunque divergenza di zona, Olympic sarebbe review inutile 4/5.
+3. **Quando divergono, quale è giusta? Non c'è un criterio.** Bellator parziali: giusta la **seconda** (somma 4 = truth). Salerno finale: giusta la **prima** (12-17), la seconda è sbagliata (17-17/17-12). Il vincitore cambia caso per caso: la regola **può solo alzare la bandiera**, esattamente come progettata — la scelta resta umana.
+4. **Il secondo passaggio riconcilia sui fogli facili, ma NON su Bellator.** Riconcilia (somma parziali == suo finale) 5/5 su Delta, Unime, Triscelon; **1/5 su Bellator** (in 4/5 espone la discordanza: parziali corretti a 4, finale sbagliato a 5). Sulla zona ristretta la trascrizione è davvero indipendente: l'anti-riconciliazione **funziona** dove nel passaggio pieno V3 falliva 5/5.
+5. **Costo reale.** 30 chiamate zone: 35.790 token in, 7.010 out (media **1.193 in / 234 out** per chiamata, latenza media 11,8s). Costo a listino ($1,25/$10 per M): **$0,1148** totali, **$0,0038/chiamata** — ~11× più economica di una chiamata piena V3 ($0,044), perché sia il prompt (breve) sia l'output (minimale) sono piccoli. **A regime la doppia estrazione aggiunge ~$0,0038 per referto** (una chiamata zona sopra il passaggio pieno): **+~8,6%** sul costo di una singola estrazione V3. Trascurabile: la decisione è di efficacia, non di costo.
+
+**Raccomandazione: MODIFICARE, non adottare la regola così com'è né scartare tutto.**
+- **Scartare** il confronto *cross-passaggio* come meccanismo per i due errori bersaglio: misurato **0/5 su entrambi**, non li cattura. Fa scattare la review sull'*instabilità dei parziali* (Olympic, Bellator-parziali), che è un segnale diverso e più rumoroso.
+- **Tenere e valorizzare** ciò che ha funzionato: il **check somma≠finale *interno* al secondo passaggio zona** ha morso su Bellator (4/5) dove il V3 pieno non mordeva mai (0/5), perché la restrizione di zona disaccoppia griglia e finale. È una leva a **una sola chiamata extra** ($0,0038) che aggredisce la classe della ricostruzione compensativa (Bellator) senza bisogno del confronto fra due passaggi: candidato = far scattare `NEEDS_REVIEW` quando il warning somma≠finale del passaggio zona compare, da valutare in un giro dedicato.
+- **L'errore data (Triscelon) non è catturabile da nessun segnale di coerenza**: campo singolo, senza ridondanza interna, e le due letture concordano sul valore sbagliato (28). Non lo prende né il confronto fra passaggi né un check interno. Resta il residuo per l'**esperimento crop/zoom** (lettura ravvicinata della sola testata) o la review umana — la doppia estrazione **non** lo risolve e non va spacciata come tale.
+
+Un debito registra la non-adozione e il residuo: [DEBITI.md](../DEBITI.md) §10.33.
+
+### 8.14 V3.1 — semantica rigori `is_penalty` nello schema OCR (2026-07-22)
+
+Giro innescato dalla trascrizione umana di eventi e roster del referto 11 (caso gold
+Olympic–Libertas, §"gold standard"): il modello, sul foglio, emetteva spontaneamente
+`type: "PENALTY_GOAL"` per il gol su rigore del Libertas — un tipo **fuori** dall'enum
+dello schema, quindi scartato da `SCORE_EVENT_CODES` e invisibile al conteggio. Era la
+causa diretta del blocker "P3 OSPITE 0 eventi-gol vs parziale 1" del referto 11: il gol
+c'era, letto, ma buttato via per tipo inventato.
+
+**Cosa è cambiato.** Aggiunto `events[].is_penalty` (bool, default false) allo schema OCR,
+in modo additivo e retrocompatibile (`_normalize_response` lo forza a false quando assente,
+così V2/mock/prompt più vecchi restano validi). Il prompt **V3** ora istruisce il modello a:
+(i) NON inventare tipi fuori enum (cita `PENALTY_GOAL` come esempio da **non** usare);
+(ii) trascrivere il gol su rigore come `type: "GOAL"` con `is_penalty: true` (conta come
+gol); (iii) marcare l'espulsione che comporta un rigore come `EXCLUSION_20` con
+`is_penalty: true` (la calottina è di chi commette il fallo). Il flag si propaga a valle:
+`MatchDataConverter.get_events_data` → `MatchEvent.is_penalty` (campo già esistente a DB).
+
+**V3 cambia hash: `87b86a945215` → `be51e9c6bc42` (V3.1).** V3 è il prompt promosso a
+produzione, quindi la modifica è tracciata come per V2: hash **fissato a test**
+(`test_v3_hash_is_pinned`), guardrail di contenuto esteso (`is_penalty`, divieto di tipi
+inventati). Conseguenza di confrontabilità: i run bench V3 di §8.12 (`87b86a945215`) e i
+futuri (`be51e9c6bc42`) **non sono confrontabili** sui campi eventi — sui campi
+finale/parziali/data/nomi/roster il prompt è invariato, il confronto lì regge. **Zero
+chiamate API in questo giro**: il re-run V3.1 sul gold è rimandato (decisione Alberto, per
+misurare la versione nuova senza spendere due volte). V2 (`a0f50fbe5244`) e il prompt zone
+(`8a25dff54e59`) invariati.
+
+**Regola di dominio derivata, non estratta.** L'accoppiamento rigore↔gol (gol allo stesso
+clock+periodo di un'espulsione `is_penalty` = rigore realizzato; assenza = sbagliato) resta
+**calcolato a valle**, mai chiesto al modello né codificato nella truth. Stessa natura del
+"fouled out" (3 espulsioni = fuori partita): derivato dalla lista eventi
+(`matches/event_types.py`: `fouled_out_players`, `players_over_exclusion_limit`, soglia
+`FOUL_OUT_EXCLUSIONS=3`), esposto in `get_fouled_out_stats`. Validazione simmetrica del
+limite di 3: sui casi gold (test automatico sulla trascrizione umana) e sui dati OCR
+(`validate_coherence` avvisa se un giocatore supera 3 — segnale di errore di estrazione).
+Le statistiche abilitate (rigori causati/ottenuti/segnati/sbagliati, % realizzazione,
+fouled out per giocatore/partita/stagione) sono idee di prodotto in
+[FUTURE_IDEAS.md](../FUTURE_IDEAS.md) §4: **dato già sul cartaceo**, oggi scartato — a
+differenza delle statistiche avanzate del §1 di FUTURE_IDEAS, che una fonte reale non
+l'hanno.
+
+### 8.15 Misura V3.1 sul gold — eventi, roster e rigori (2026-07-22)
+
+Primo re-run del gold sul prompt **V3.1** (`OCR_SYSTEM_PROMPT_V3@sha256:be51e9c6bc42`),
+rimandato in §8.14. È anche la **prima** misura possibile su EVENTI e ROSTER: la truth
+Olympic è stata promossa (44 eventi, 2 roster, §8.14) e le proposte del bench ora
+persistono il contenuto grezzo eventi/roster (commit `da27fd4`) — senza quello il confronto
+a contenuto è impossibile. Run: `gemini-2.5-pro`, `--repeat 5` × 6 casi = **30 chiamate**
+(5 via `--gold-all` + Triscelon con `--image`, come §8.12), preprocessing on. Proposte in
+`ocr_bench_out/gold_v3_1_20260722/` su dev (D1: mai riversate nei casi). **Costo reale: 30
+chiamate, 76.770 token in, 142.761 out, $1,52** a listino ($1,25/$10 per M); latenza media
+88s (referto Olympic denso di eventi → output alto). Zero chiamate fallite.
+
+**Punteggi — nessuna regressione attribuibile al prompt.** Sui 78 campi (finale/parziali/
+nomi/data), V3.1 vs §8.12 (V3): stabili-corretti **58 vs 59**, stabili-SBAGLIATI **3 vs 2**,
+instabili **15 vs 15**, ambigui **2 vs 2**. Il prompt dei campi punteggio è **identico byte
+per byte** fra V3 e V3.1 (§8.14: cambia solo la sezione eventi), quindi lo scarto 58/3 vs
+59/2 è **varianza di campionamento**, non effetto del prompt rigori. Il campo che diventa
+stabile-sbagliato (Bellator `quarter_3_home`, verità 3, letto **2**) leggeva già "2" in
+maggioranza in §8.12 (3/5 campioni → ora 5/5): stesso valore sbagliato, solo più
+concentrato. I due errori stabili duri restano **invariati** — Bellator finale casa (5≠4) e
+Triscelon data (28≠25). Inversioni casa/trasferta **1/30**. **Verdetto: i rigori non hanno
+introdotto regressioni sui punteggi.**
+
+**Eventi/roster Olympic (vs truth 20 gol casa / 1 ospite, 44 eventi).**
+- **Gol casa estratti: 20/21/19/21/19** sui 5 run (verità 20) — contro la **baseline 11/20**
+  del referto 11. Il difetto di completezza della cronologia è **chiuso**: ±1 gol, esatto
+  (20) nel run 1.
+- **Gol con autore: 21/22/21/22/19** — **tutti** i gol hanno `player_name`. Baseline: **zero**.
+  È la causa diretta del blocker "Zero Eventi", ora rimosso (vedi sotto).
+- **Distribuzione per periodo:** il run 1 è **perfetto** (5-0/4-0/5-1/6-0 = truth). Gli altri
+  sbagliano solo la collocazione dell'unico gol del Libertas.
+- **Gol del Libertas nel periodo giusto (P3):** **1/5** — solo il run 1 lo mette in P3; i run
+  2/4/5 lo spostano in **P4**, il run 3 mette 2 gol in P4. Errore di periodo residuo, non di
+  lettura del gol.
+- **Roster:** casa **14/15 esatti + 1 approx, 0 mismatch** su tutti i run; ospite **9/13
+  esatti (11 confrontabili) + 2 approx, 0 mismatch** (#5 e #10 vuoti in truth, fuori
+  confronto). **Lo slittamento di numerazione dal #10 NON si ripresenta:** i numeri estratti
+  dell'ospite sono `[1..9, 11, 12, 13]` in tutti i 5 run — la casella vuota #10 è percepita e
+  11/12/13 restano ai numeri giusti.
+
+**Rigori (novità V3.1).**
+- **Tipi fuori enum: ELIMINATI.** `PENALTY_GOAL` (e ogni tipo non-enum) **0 occorrenze** su
+  tutti i 6 casi × 5 run. Baseline referto 11: `PENALTY_GOAL` ×1. Il fix del prompt V3.1
+  funziona: il gol su rigore è ora `type=GOAL` con `is_penalty`, quindi **conta**.
+- **Il modello USA `is_penalty`:** 158 EXCLUSION_20 + 111 GOAL marcati su tutti i run.
+- **Olympic vs 7 rigori-truth:** il modello marca **esattamente 7** espulsioni `is_penalty`
+  (run 1–4; 8 nel run 5). Applicando la **regola derivata** (accoppiamento clock+periodo)
+  all'estrazione: realizzati/non **5/2, 5/2, 6/1, 3/4, 4/4** — la truth derivata è **5/2**
+  (run 1–2 esatti, run 3 vicino). **Limite di merito:** l'estrazione salva solo il minuto
+  intero (`minute`), non `mm:ss`, quindi il match posizionale esatto (squadra+periodo+clock)
+  con la truth non è calcolabile; sul multiset (squadra, periodo) l'overlap è **5/7**. Il
+  modello marca tutte le 7 come `away` e **manca l'unica espulsione `home`** (fallo B#12 che
+  dà il rigore al Libertas). Falsi positivi modesti (sovra-marcatura P3/P4, +1 nel run 5).
+
+**Ricalcolo dei 4 blocker del referto 11 (livello FULL, per run).**
+| Blocker baseline (referto 11) | Esito V3.1 |
+|---|---|
+| Zero Eventi (0 gol con autore) | **CHIUSO** — 0/5 run: tutti i gol hanno autore |
+| Incoerenza eventi CASA (11 ≠ 20) | **Sostanzialmente chiuso** — ora 20/21/19/21/19; sparisce nel run 1, altrove ±1 |
+| Per-periodo P3 OSPITE 0 vs 1 (difetto, PENALTY_GOAL scartato) | **Chiuso nel run 1**; riappare 2–5 solo perché il gol Libertas finisce in P4 |
+| Per-periodo P4 OSPITE (eccesso) | Legato allo stesso errore di periodo del gol Libertas |
+
+Nota: sul dato **grezzo del bench** compare un blocker "Riconciliazione incompleta" in tutti
+i run — è un **artefatto**: il bench non esegue lo step di riconciliazione della pipeline
+(mappa vuota → ogni evento con nome scatta), non si presenta in produzione. I blocker
+*strutturali* del referto 11 sono chiusi o ridotti a rumore ±1; il residuo reale è la
+**collocazione di periodo** dell'unico gol ospite.
+
+**Validazione >3 espulsioni su dati reali: SCATTA.** Il check `players_over_exclusion_limit`
+si attiva su più casi/run (es. Salerno `muro p.` 5, `garessan c.` 5; Triscelon `chinnici a.`
+5; Olympic run 3 due giocatori a 4) — segnala correttamente lo sforamento del limite di 3,
+sintomo di errore di lettura (nomi collassati o eventi duplicati). Il limite noto (raggruppa
+per `player_name`) qui **non morde**, perché V3.1 fornisce gli autori: con nome presente il
+check attribuisce e conta. Su un run degradato (Olympic run 5) compare un "giocatore" di
+nome `4` — lettura degradata che il check comunque intercetta.
+
+**Raccomandazione — cosa attaccare dopo.** Il prompt V3.1 ha **risolto la classe che lo ha
+motivato** (autori dei gol → Zero Eventi chiuso; `PENALTY_GOAL` → tipo enum; completezza
+cronologia 11→~20). I due residui, in ordine di valore:
+1. **Collocazione di periodo del gol isolato** (Libertas P3→P4 in 4/5): è il difetto che
+   tiene vivi i blocker per-periodo. Candidato: nel prompt, legare esplicitamente ogni gol al
+   confine di periodo del cronometro (il clock a scalare riparte a ~8:00 a ogni periodo).
+2. **Granularità del clock degli eventi** (`minute` intero invece di `mm:ss`): senza i
+   secondi l'accoppiamento rigore↔gol e il match posizionale coi rigori-truth non sono
+   verificabili con precisione. Candidato: chiedere il clock `mm:ss` nello schema eventi.
+I due errori stabili sui **punteggi** (Bellator finale, Triscelon data) restano fuori portata
+di V3.1 e appartengono alla strada §8.13 (doppia estrazione / check zona), non a questo giro.
+
+### 8.16 Esperimento prompt V3.2 — clock mm:ss e ancoraggio di periodo (2026-07-22)
+
+Variante sperimentale **V3.2** (`OCR_SYSTEM_PROMPT_V3_2@sha256:9661b340d9e1`), attacco ai
+due residui di §8.15, entrambi sulla stessa riga del foglio (P3, clock 1:13: il gol isolato
+del Libertas e l'unica espulsione-rigore lato CASA, fallo B#12). **Due sole modifiche additive
+alla sezione EVENTI**, costruite per sostituzione mirata su V3 così che punteggi/nomi/data/
+rigori restino **identici byte-per-byte** a V3.1 (verificato in test): (a) campo `clock`
+(cronometro a scalare mm:ss) accanto a `minute`, con l'istruzione esplicita che gli stessi
+valori si ripetono nei quattro periodi (il clock **non** identifica il periodo); (b) ancoraggio
+di periodo rinforzato per gli **eventi isolati** (un evento appartiene alla SEZIONE in cui è
+scritto anche quando è l'unico della squadra; quarter=null preferibile a un periodo indovinato).
+V3.2 **non promossa**: V3.1 (`v3`) resta il default di produzione.
+
+**Run parziale per cap di spesa.** `gemini-2.5-pro`, `--prompt-version v3_2 --repeat 5`. Il
+run ha colpito a metà il **cap di spesa mensile del progetto Google** (429 RESOURCE_EXHAUSTED):
+completati **4 casi su 6 × 5 = 20 chiamate riuscite** (pol-delta, unime, bellator, **Olympic**
+— tutti 5/5 reali), falliti Salerno e Triscelon (10×429, costo ~0). **Costo reale: 20 chiamate,
+57.120 token in, 102.561 out, ~$1,10** a listino ($1,25/$10 per M), latenza media 90s. Le
+domande di misura sono tutte Olympic-centriche → rispondibili; le regressioni punteggi si
+leggono sul **sottoinsieme comparabile dei 4 casi comuni** vs V3.1. Proposte in
+`ocr_bench_out/gold_v3_2_20260722/` su dev (D1: mai riversate nei casi). **Nota ops: cap Gemini
+esaurito** — nessuna chiamata reale passa finché Alberto non lo rialza/resetta.
+
+**Risposte alle domande di misura.**
+1. **Gol del Libertas in P3:** **1/5** (solo run 4) — **identico** al baseline V3.1 (1/5).
+   L'ancoraggio rinforzato **non ha spostato il residuo**. Peggio: nei run 2 e 3 il gol away
+   **sparisce del tutto** (0 gol ospite), mentre in V3.1 era presente in tutti e 5 i run.
+2. **Espulsione-rigore CASA (B#12, home/P3/clock 1:13):** ora **misurabile per posizione
+   esatta** grazie al clock. Estratta nella posizione esatta (home, P3, 1:13) in **2/5 run**
+   (run 2 e 5) — baseline esatto **0/5**. Guadagno modesto e rumoroso, in realtà **sottoprodotto
+   del clock** (risoluzione di posizione), non dell'ancoraggio.
+3. **Clock mm:ss:** **popolato su ~100% degli eventi** (47–48/47–48 per run) e **plausibile**
+   (formato mm:ss, valori a scalare). Baseline: 0. **Vittoria netta e indipendente dai residui.**
+   Sblocca l'accoppiamento posizionale rigore↔gol, impossibile in V3.1.
+4. **Completezza cronologia:** gol casa **21/25/23/21/21** (truth 20) — **più rumorosa** del
+   baseline V3.1 (20/21/19/21/19): due run in **sovra-conteggio** (25, 23). Autori: **22/25/0/22/21**
+   — il run 3 **perde tutti gli autori** (0/23), degrado assente in V3.1.
+5. **Regressioni punteggi (4 casi comuni, 20 run):** V3.2 **40 stabili-corretti / 1 sbagliato /
+   9 instabili / 2 ambigui** vs V3.1 **43 / 2 / 7 / 0** sugli stessi 52 campi. Il prompt dei campi
+   punteggio è **byte-identico** fra V3.1 e V3.2 → lo scarto (−3 corretti, +2 instabili, +2 ambigui)
+   è **varianza di campionamento, non regressione attribuibile al prompt**. Inversioni casa/
+   trasferta **0/20** (V3.1 0/20 sugli stessi 4 casi).
+
+**Accoppiamento rigore↔gol per posizione esatta (novità V3.2).** Truth Olympic derivata: **5
+realizzati / 2 non** su 7 rigori. Match posizionale delle 7 espulsioni `is_penalty` estratte
+contro la truth per (squadra+periodo+clock): **5/3/5/4/2 su 7** per run (in V3.1 era **0/7**
+ovunque, il clock mancava). Coupling realizzati/non ricalcolato sull'estrazione: **5/2, 2/5,
+6/2, 4/4, 2/7** (truth 5/2) — il run 1 azzecca esattamente 5/2, gli altri divergono. Il clock
+rende la misura **possibile** ma l'estrazione degli eventi resta **instabile** su questo referto
+denso.
+
+**Lettura.** Il clock è una **vittoria di capacità di misura** (popolazione ~100%, sblocca il
+match posizionale). L'**ancoraggio di periodo rinforzato NON ha ridotto il residuo 1** (gol
+isolato in P3: 1/5 → 1/5) e la sezione eventi più pesante coincide con **più rumore** (gol away
+droppato in 2/5, sovra-conteggio casa, un run senza autori). Il residuo di **collocazione di
+periodo dell'evento isolato appare irriducibile via questo prompt**: la leva mirata (istruzione
+esplicita sull'evento isolato) ha prodotto zero movimento. Va instradato alla strada §8.13
+(doppia estrazione / lettura di zona), come i residui stabili sui punteggi, non a un altro giro
+di prompt.
+
+**Raccomandazione — NON promuovere V3.2.** Il residuo 1 è irriducibile via prompt (misurato:
+nessun movimento). Il clock, però, è un guadagno reale e **indipendente**: se serve, va isolato
+in una variante **clock-only** (senza il paragrafo di ancoraggio, che ha aggiunto peso e rumore
+senza beneficio) e rimisurato **quando il cap Gemini è rialzato**. Decisione sui numeri: Alberto.
+I due errori stabili sui punteggi restano in §8.13.
+
+### 8.17 Variante clock-only V3.3 — implementata, misura RIMANDATA per cap di spesa Gemini (2026-07-23)
+
+Seguito operativo diretto della raccomandazione di §8.16: isolare il **solo** guadagno reale e
+indipendente di V3.2 — il campo `clock` mm:ss per evento — scartando l'ancoraggio di periodo per
+gli eventi isolati, che in §8.16 ha prodotto **zero movimento** sul residuo di collocazione (gol
+isolato Libertas P3: 1/5 → 1/5) e ha aggiunto peso e rumore alla sezione EVENTI (gol away droppato
+in 2/5 run, un run senza autori, sovra-conteggio casa).
+
+**Implementazione (fatta, a repo su dev).** Variante **V3.3** `OCR_SYSTEM_PROMPT_V3_3@sha256:dd9f2af28a1d`,
+costruita per **sostituzione mirata su V3** con le **stesse due `.replace()` del clock di V3.2**
+(istruzione mm:ss nella sezione EVENTI + riga di schema `"clock"`), **byte-identiche** a quelle di
+V3.2, e **omessa** la terza `.replace()` dell'ancoraggio. Conseguenza strutturale, blindata a test
+(`tests_ocr_bench.py`): **V3.3 = V3.1 + solo le due righe del clock** (togliendole si riottiene V3
+byte-per-byte) e **V3.3 = V3.2 meno il solo blocco di ancoraggio** (riscrivendo in V3.2 l'ancoraggio
+rinforzato con quello originale di V3.1 si ottiene V3.3). Quindi qualunque scarto misurato tra
+V3.1/V3.2 e V3.3 sulle zone invariate è **varianza di campionamento, non effetto del prompt**.
+Selezionabile dal bench (`ocr_bench --prompt-version v3_3`, registry-driven come le altre) e via
+`settings.OCR_PROMPT_VERSION`. **NON promossa**: il default di produzione resta `v3` (V3.1); l'hash
+è fissato a test come per V2/V3/V3.2 (un cambio deve essere esplicito, non silenzioso).
+
+**Misura sul gold: RIMANDATA — cap di spesa Gemini ancora attivo.** Prima mossa del giro (come da
+§8.16 "Stato aperto"): **una singola** chiamata reale di sonda sul caso più economico (Unime,
+`--repeat 1`, prompt di default). Esito **429 RESOURCE_EXHAUSTED**, ma con un messaggio ora
+**esplicito** che **falsifica l'ipotesi rate-limit di §8.16**: `"Your project has exceeded its
+monthly spending cap"`. Non è un limite per-minuto auto-resettato: è il **cap di spesa mensile del
+progetto Google**, un blocco duro che si sblocca **solo** rialzando/resettando il cap dalla console
+AI Studio (`https://ai.studio/spend`) — azione di Alberto, fuori dal perimetro batch. Nessuna altra
+chiamata reale tentata dopo la sonda. La misura sul gold di V3.3 (protocollo §8.12/§8.15, tutti e 6
+i casi **inclusi Salerno e Triscelon**, con le domande Olympic-centriche di §8.16: stabilità del
+clock, match posizionale dei rigori per (squadra+periodo+clock), completezza cronologia, regressioni
+punteggi sui casi comuni) resta **da eseguire al primo giro a cap rialzato**.
+
+**Attesa da falsificare alla misura.** Sul residuo di collocazione di periodo dell'evento isolato:
+**nessun movimento atteso** — V3.3 non tocca l'ancoraggio, e il muro è già dichiarato in §8.16 come
+irriducibile via prompt (va alla strada §8.13, doppia estrazione per zona). L'ipotesi vera da
+verificare è che V3.3 **conservi il guadagno del clock** (popolazione ~100%, sblocco del match
+posizionale rigore↔gol) **senza** il rumore sugli eventi introdotto dal blocco di ancoraggio di
+V3.2. Decisione di promozione: Alberto, sui numeri del bench.
+
+### 8.18 Gold referto 8 a truth + variante V3.4 (timeout + espulsione definitiva) — implementata, misura RIMANDATA per cap Gemini (2026-07-23)
+
+Giro interamente **offline** (cap di spesa Gemini ancora attivo, §8.17: nessuna chiamata reale tentata). Due obiettivi entrambi non-OCR.
+
+**(1) Referto 8 (Unime vs Nautilus Roma, 12-10) promosso a truth su EVENTI e ROSTER.** Trascrizione umana del cartaceo (Alberto), stessa forma del referto 11 (§8.14). **51 eventi**: 22 gol (12 casa Unime + 10 ospite Nautilus), 24 esclusioni di 20 secondi, **3 timeout** e **1 espulsione definitiva** (EDCS, art. 9.13); 2 roster (casa 14, ospite 12). `match_info` e attribuzione casa/trasferta **non toccati** (restano quelli già fissati: home = Unime). Le **4 asserzioni derivate esterne** (calcolate a valle dalla cronologia, non dal dato stesso) sono verificate e **TUTTE COINCIDONO**:
+- parziali per tempo **4-2 / 3-1 / 3-4 / 2-3**, finale **12-10** (corroborazione: gol-per-periodo derivati dalla storia cronometrica == riquadro parziali, registrata in `corroboration`, stato *concorde* — necessaria perché il caso è a `legibility.score` 2);
+- **fouled out** (≥3 esclusioni di 20 secondi): **SOLO casa #3 e casa #12**, nessun altro in nessuna delle due squadre;
+- **nessun giocatore supera 3** esclusioni (il check gold `players_over_exclusion_limit` resta a zero violazioni);
+- **3 rigori**, di cui **2 realizzati** (P3 6:48 → gol ospite #9 stesso clock; P4 4:23 → gol ospite #4 stesso clock, entrambi del Nautilus su fallo Unime) e **1 NON realizzato** (P2 6:20, nessun gol a quel clock). L'accoppiamento rigore→gol resta una **regola derivata a valle**, non codificata in truth.
+
+**Due casi-limite ratificati da Alberto, non-errori:** (a) **omonimia legittima** roster casa #11 e #13 = `sciabà g.` (fratelli, stesso cognome e iniziale); (b) **buco di numerazione** roster ospite senza il #3 (l'allenatore non ha convocato il massimo). Validazione **verificata, nessuna modifica richiesta**: il duplicato-nome emette al massimo un **warning informativo** (`"Duplicati: Nomi giocatore duplicati"`), **mai** un blocker (non è fra i `critical_keywords` di `assess_publish_readiness`); il buco di numerazione non genera **né** warning **né** blocker (l'unicità opera sui numeri presenti, la dimensione tollera 7-15). Il `normalized_data` del report 8 resta invariato: la truth eventi è **materiale di misura del bench**, non si riversa nel report (che resta NEEDS_REVIEW).
+
+**(2) Variante prompt V3.4** `OCR_SYSTEM_PROMPT_V3_4@sha256:4e9751eded9b` — **V3.4 = V3.3 (clock-only) + due semantiche nuove**, costruita per **sostituzione mirata su V3.3** (stesso meccanismo `.replace()` di V3.2/V3.3; ogni altra zona identica byte-per-byte a V3.3, blindato a test: rimuovendo le tre aggiunte si riottiene V3.3 e l'hash di V3.3 `dd9f2af28a1d` resta invariato):
+- **(A) TIMEOUT di squadra**: sul foglio `T.O.` con asterisco nella colonna della squadra; estratto come evento con `team` e `clock`, **senza calottina** (`player_name` null — il timeout è della squadra, non del giocatore);
+- **(B) ESPULSIONE DEFINITIVA** (`EXCLUSION_DEF`, sigla EDCS o equivalente): il prompt **NON** insegna la tassonomia degli articoli — riconosce solo che la riga è un'espulsione definitiva e non un gol, estrae l'**articolo verbatim** (`regulation_article`, es. `"9.13"`) e la **sigla verbatim** (`sanction_sigla`). Trappola OCR neutralizzata **esplicitamente**: l'articolo sta nella colonna del punteggio (nel referto 8 la riga sopra è il gol del 10-8) e **assomiglia a un punteggio**, ma è un ARTICOLO e non deve **mai** entrare nella progressione del punteggio.
+
+La **mappatura articolo → tipo** vive nel **nostro codice** (`matches/event_types.py`: `DEFINITIVE_EXCLUSION_ARTICLES` + `classify_definitive_exclusion`), non nel prompt, come **tabella dati esplicita** popolata **solo** con i due articoli verificati (`9.13` = cattiva condotta, senza rigore; `9.14` = brutalità, con rigore e squalifica). Qualunque altro articolo finisce nel ramo **sconosciuto** che conserva la stringa grezza e non blocca. Scelta di modello: `EXCLUSION_DEF` è un **tipo a sé** (non un attributo di `EXCLUSION_20`) perché il conteggio fouled-out/over-limit opera su `EXCLUSION_20` e il pooling corromperebbe quel conteggio (una definitiva non è una delle tre esclusioni di 20 secondi); inoltre porta campi che nessun altro evento porta. **NON** ancora fra i `DEFAULT_EVENT_TYPES` canonici pubblicabili: l'integrazione nel pipeline di pubblicazione (MatchEvent) è **fuori scope** di questo giro (report 8 non pubblicato).
+
+**V3.4 NON promossa**: default di produzione resta `v3` (V3.1). Selezionabile dal bench (`ocr_bench --prompt-version v3_4`) e via `settings.OCR_PROMPT_VERSION`. Hash fissato a test come per le altre versioni.
+
+**Stato di misura: sia V3.3 sia V3.4 sono DA MISURARE, bloccate dal cap di spesa Gemini** (§8.17). Nessuna chiamata reale in questo giro. La misura sul gold di entrambe resta al primo giro a cap rialzato (azione di Alberto sulla console AI Studio). Nuovi test a guardia (tutti mockati, verdi): hash V3.4, semantiche A/B presenti in V3.4 e assenti in V3.3, reversibilità V3.4→V3.3, mappatura `9.13`/`9.14`/sconosciuto, e le asserzioni derivate del referto 8 (fouled out casa #3/#12, timeout senza calottina, articolo mai come punteggio, rigore P2 non accoppiato).
+
+### 8.19 Misura tre bracci V3 / V3.3 / V3.4 sul gold — clock, timeout, espulsione definitiva (2026-07-23)
+
+Cap Gemini **ripristinato** (progetto `careful-yew-501810-s1` a 100 €/mese). Prima misura reale delle due varianti mai misurate (§8.17 V3.3, §8.18 V3.4) contro il baseline V3, **tre bracci nello stesso run** — protocollo §8.12/§8.15 (`--repeat 5`, tutti e 6 i casi gold, Triscelon con `--image`, preprocessing on):
+- `v3` baseline `OCR_SYSTEM_PROMPT_V3@sha256:be51e9c6bc42` (V3.1, default di produzione)
+- `v3_3` clock-only `@sha256:dd9f2af28a1d`
+- `v3_4` clock + timeout + espulsione definitiva `@sha256:4e9751eded9b`
+
+**90 chiamate reali** (3 × 6 × 5), `gemini-2.5-pro`, **zero 429** in tutto il run (~2h30, sequenziale). **Costo effettivo: $5,05** (256.080 tok in @1,25/M = $0,32; 472.901 tok out @10/M = $4,73 — l'output alto è il referto 8, 50+ eventi). Proposte in scratchpad (D1: mai riversate nei casi). **Baseline rimisurato in questo run**, non ripreso da §8.15: il gold è cambiato (referto 8 promosso a truth, §8.18) e l'estrazione è stocastica.
+
+**Trappola del denominatore neutralizzata**: timeout ed espulsione definitiva sono FUORI dal contratto di V3 e V3.3. Le metriche generali (assi a-f) li **escludono** dal confronto; timeout ed `EXCLUSION_DEF` vivono in un **asse separato (g), misurato solo su V3.4**.
+
+**Tabella per braccio (assi a-h):**
+
+| Asse | v3 (baseline) | v3_3 (clock) | v3_4 (clock+TO+EDCS) |
+|---|---|---|---|
+| **a** punteggi/parziali/data — *stabili-corretti* (su 78 campi = 13×6) | **57** sc / 1 sw / 15 inst / 5 amb | **60** sc / 1 sw / 13 inst / 4 amb | **61** sc / 2 sw / 11 inst / 4 amb |
+| **b** completezza eventi-gol referto 8 (denom = solo GOAL, 22) | 22–23/22 (5 rip) | 22/22 (5 rip) | 22/22 (5 rip) |
+| **c** clock mm:ss su gol referto 8 — copertura / *giusto-e-al-posto* | **0/22** (nessun clock) | **22/22** / [20,14,20,19,18] ≈ **83%** | **22/22** / [10,15,14,19,19] ≈ **70%** |
+| **d** rigori referto 8 (2 realizzati P3 6:48 + P4 4:23; 1 NON P2 6:20) | non collocabile (no clock) | 2 realizzati agganciati, **P2 6:20 mai accoppiato** ✓ | come v3_3 ✓ (flag `is_penalty` sull'esclusione incostante, ~2-3/5) |
+| **e** fouled out derivato (atteso casa `geloso`#3 + `cama`#12, nessun altro) | **rumoroso**: manca spesso #3/#12, aggiunge nomi spuri | **rumoroso** (1 rip `over-limit` >3) | **rumoroso** (1 rip `over-limit` >3) |
+| **f** collocazione periodo referto 8 (residuo §8.16) | **nessun movimento** (5/5 match) | **nessun movimento** (5/5) | **nessun movimento** (5/5) |
+| **g** timeout / EDCS (solo V3.4) | fuori contratto | fuori contratto | **timeout 3,3,2,3,3** (4/5 pieni); **EDCS 1/1 ogni rip**, art `9.13` + sigla `EDCS` verbatim, `classify`→noto *misconduct*; **finale 12-10 in tutte** (articolo NON entra nel punteggio), **mai tipizzato GOAL** ✓ |
+| **h** errori stabili noti | Bellator finale casa **5** (truth 4) *stabile*; Triscelon data **28** (truth 25) instabile 4/5 | Bellator **5** *stabile*; Triscelon **28** instabile 4/5 | Bellator finale casa **8** (instabile 8×4/5×1) — **valore DIVERSO**; Triscelon data **28** *ora stabile 5/5* |
+
+**Lettura onesta — asse a (ciò che la produzione pubblica oggi):** i tre bracci sono **statisticamente indistinguibili** sui punteggi/parziali/data. Lo scarto 57→60→61 stabili-corretti **non è un guadagno di qualità**: è la stessa banda di rumore (instabile 15→13→11) che si risolve diversamente fra campioni. La prova è nell'asse h — **nessun braccio corregge un solo errore stabile**, si limitano a **spostarlo**: Bellator finale casa passa `5`→`5`→`8` (V3.4 lo legge *peggio* e lo destabilizza), Triscelon data resta `28` e V3.4 la **stabilizza sul valore sbagliato** (5/5, peggio per la rilevabilità di un'instabile 4/5), e su V3.4 spunta un nuovo stabile-sbagliato (Olympic Q3 ospite `0`). Conferma diretta di §8.13/§8.16: **gli errori stabili di finale/parziali/data appartengono alla strada doppia-estrazione/zona, non al prompt.**
+
+**Guadagni reali e unici:**
+- **V3.3 → clock (asse c):** copertura da 0 a **100%**, correttezza-e-collocazione ≈ **83%**; additivo, **nessuna regressione** su punteggi (asse a non-inferiore) e **zero movimento di periodo** (asse f). L'aggancio posizionale dei rigori (asse d) diventa possibile e sul referto 8 **non produce falsi accoppiamenti** sul rigore NON realizzato.
+- **V3.4 → timeout + espulsione definitiva (asse g):** è l'unico braccio che estrae 3 timeout (4/5 pieni) e l'EDCS con articolo `9.13` verbatim, **senza corrompere il punteggio** (finale 12-10 in tutte le 5, articolo mai nella progressione) e **senza tipizzarla GOAL**. Esattamente il contratto di V3.4, verificato. Ma il clock di V3.4 è **più rumoroso** di V3.3 (70% vs 83%) e Bellator vi deriva a un valore peggiore.
+
+**Guadagno mancato (asse e):** il **fouled out derivato è inaffidabile in tutti e tre i bracci** — nessuno ricostruisce stabilmente `{geloso #3, cama #12}`, tutti aggiungono nomi spuri e V3.3/V3.4 producono in una ripetizione un `over-limit` >3 (impossibile a regolamento). Derivare il fouled-out dalle esclusioni OCR **non è affidabile a nessun prompt**: dipende da una lettura pulita di 24 esclusioni per calottina, che il modello non garantisce.
+
+**RACCOMANDAZIONE (la decisione è di Alberto, nulla promosso a default in questo giro):** **non promuovere né V3.3 né V3.4 a default di produzione su questi numeri.** L'unica cosa che la produzione pubblica oggi — punteggi/parziali/data — è indistinguibile fra i tre bracci, e i guadagni genuini di V3.3 (clock) e V3.4 (timeout/EDCS) sono su campi che la **pipeline pubblicabile non consuma ancora**: il clock non è persistito da nessuna parte, e `TIMEOUT`/`EXCLUSION_DEF` non sono `MatchEvent` canonici (**debito §10.35**). Promuovere ora cambierebbe il prompt di produzione per **zero beneficio visibile in produzione**, con V3.4 che costa più token in output e legge il clock un po' peggio.
+
+**Cosa falsificherebbe questa raccomandazione (e giustificherebbe la promozione):**
+- **V3.3** diventa promuovibile quando il **clock viene effettivamente consumato a valle** (ordinamento eventi dentro il periodo, o aggancio rigore→gol cablato nella pipeline): a quel punto, se una rimisura conferma clock ≥ ~80% e punteggi non-inferiori, si promuove V3.3 (additiva, a rischio zero sull'asse a).
+- **V3.4** diventa promuovibile quando **§10.35 è chiuso** (`EXCLUSION_DEF`/`TIMEOUT` nei `DEFAULT_EVENT_TYPES` + `MatchEvent` + sport config + migration) **e** una rimisura su un gold con più referti a eventi conferma estrazione timeout/EDCS ≥ ~4/5 **senza regressione di punteggio** vs V3.3 — V3.4 sussume il clock di V3.3.
+- In negativo: se una **ri-esecuzione** mostrasse V3.3/V3.4 **materialmente** meglio sull'asse a (es. +5 stabili-corretti con instabile che scende, e che **sopravvive** al ricampionamento), la tesi "è solo rumore" cadrebbe. Questo run mostra il contrario: le differenze sono nella banda di rumore e gli errori stabili si limitano a rilocarsi.
+
+**Nessun movimento su §8.16** (asse f): il muro di collocazione periodo regge in tutti e tre i bracci (5/5 match sul referto 8). La conclusione registrata in §8.16 non è contraddetta.
+
+### 8.20 Braccio Gemini 3 Flash + cross-check Pro↔Flash come rilevatore d'errore (2026-07-23)
+
+Doppio obiettivo, prompt **invariato** (`v3_4 @sha256:4e9751eded9b`, nessuna V3.5): (1) misurare **gemini-3.6-flash** contro il baseline di produzione `gemini-2.5-pro` sul gold; (2) esperimento cross-check — verificare se il **disaccordo** fra i due modelli sullo stesso campo predice l'errore vero (gold = arbitro), come possibile flag della review page che catturi anche gli **errori stabili** che l'instabilità intra-modello non vede (§8.19, caso Triscelon).
+
+**Selezione modello e minimizzazione reasoning.** Fra le flash stabili di generazione 3+ disponibili sull'API (`gemini-3.5-flash`, `gemini-3.6-flash`; `gemini-3-flash-preview` è preview → esclusa) la 3.6 è **strettamente la più economica**: stesso input (\$1,50/M) di 3.5 ma output **\$7,50/M** vs \$9,00 e ~17% meno token di output. Reasoning azzerato con `thinking_level='minimal'` (verificato: `'none'` rifiutato, `'low'` brucia già ~44 thought token, `'minimal'` → **0 thought token** su tutte le 30 chiamate). Nessun tocco a `config/settings.py`: la selezione modello passa da `--models`, il reasoning da un nuovo seam per-chiamata `extract_data(thinking_level/thinking_budget)` con **default None su entrambi ⇒ config di generazione byte-identica alla produzione** (guardie mockate). Il braccio Pro v3_4 è **riusato** dal run §8.19 (stesse 30 proposte, hash prompt identico): nessuna ri-esecuzione, budget risparmiato.
+
+**Braccio Flash — 30 chiamate reali** (6 casi × `--repeat 5`, Triscelon con `--image`), zero 429, **0 thought token**. **Costo \$1,41** (121.610 tok in @1,50/M = \$0,18; 163.752 tok out @7,50/M = \$1,23). Media 4.054 in / 5.458 out per chiamata → **~\$0,047 per estrazione**, contro ~\$0,056 del blended Pro §8.19 (\$5,05/90): Flash **~16% più economico per referto**, non il 65% dei titoli (quello è agentico long-horizon; sull'OCR a singolo colpo l'output domina e lo sconto è modesto, per giunta l'input Flash è più caro di Pro).
+
+**Asse a (78 campi = 13×6, ricalcolato dal modulo versionato — riproduce §8.19 su Pro):**
+
+| Braccio | stabili-corretti | stabili-SBAGLIATI | instabili | ambigui |
+|---|---|---|---|---|
+| Pro v3_4 (2.5-pro, §8.19) | 61 | **2** | 11 | 4 |
+| **Flash v3_4 (3.6-flash)** | **65** | **0** | 12 | 1 |
+
+Lettura onesta (regola §8.12/§8.19): il +4 stabili-corretti è **nella banda di rumore** e non basta da solo a giustificare uno switch. Il dato più solido è **stabili-sbagliati 2→0**: Flash **non riproduce nessuno dei due errori stabili di Pro** (Olympic Q3 ospite `0` e Triscelon data `28`), li legge entrambi **giusti**. Nessuna inversione casa/trasferta.
+
+**Blocco duro sugli eventi: Flash non attribuisce gli autori dei gol.** Su **tutti e 6** i casi Flash estrae i gol (conteggio e clock) ma con `player_name` **null**: gol-con-autore **0/22, 0/24, 0/23, 0/21, 0/28, 0/32**. Pro attribuisce su 5/6 (22, 24, 27, 17/20, **0** su Salerno ruotato, 32). Il campo esiste nello schema Flash, resta vuoto. Conseguenza diretta: al livello `FULL` il gate autori / "Zero Eventi" (Policy A strict) **abortirebbe ogni pubblicazione**. Timeout/EDCS invece Flash li legge bene (timeout 3,3,3,3,3 — meglio del 3,3,2,3,3 di Pro; EDCS 1/1 ovunque). Avvertenza di causalità: `v3_4` è stato scritto e tarato **su Pro**; lo zero-autori potrebbe essere un artefatto di prompt-interaction su Flash, non un limite del modello — è una condizione di falsificazione, non una condanna.
+
+**Cross-check Pro↔Flash (78 campi comparabili, 0 esclusi null):**
+
+| Classe | Conteggio |
+|---|---|
+| concordi-e-giusti | 70 |
+| **concordi-e-SBAGLIATI (cieco)** | **0** |
+| discordi, almeno uno giusto | 4 |
+| discordi, entrambi sbagliati | 4 |
+
+| Metrica del disaccordo come predittore d'errore | Valore |
+|---|---|
+| campi in errore (≥1 braccio sbagliato) | 8 |
+| **recall_union** (errori catturati dal disaccordo) | **100% (8/8)** |
+| **blind_rate** (concordi-e-sbagliati / errori) | **0% (0/8)** |
+| precision_union | 100% (per costruzione: due valori diversi non sono entrambi la verità) |
+| tasso concordi-e-sbagliati / comparabili | **0% (0/78)** |
+| recall_pro (errori del braccio di produzione catturati) | **100% (7/7)**, ciechi 0 |
+
+**Verifica esplicita dei casi noti (§8.19):**
+- **Triscelon data** (Pro stabile-sbagliato `2026-04-28`, truth `2026-04-25`): Flash la legge **giusta e stabile** → **DISCORDI, catturato**. Esattamente ciò che l'instabilità intra-modello *non* può fare (l'errore è stabile 5/5 su Pro): il cross-check inter-modello lo espone perché Flash non lo condivide.
+- **Bellator finale casa** (truth 4): Pro `8`, Flash `7` — **entrambi sbagliati ma su valori diversi** → DISCORDI, flaggato (nessuno dei due dà la verità: il flag dice "rivedi qui", non corregge).
+- L'altro stabile-sbagliato di Pro (Olympic Q3 ospite `0`, truth 1): Flash legge `1` → DISCORDI, catturato.
+
+Gli altri disaccordi (Salerno home/away name, Triskelion/Triskelon, date Salerno) sono in parte **varianti ortografiche di nome squadra** che il layer alias risolve in produzione: contano come "errore" solo sul confronto stretto `name_on_paper`, e vanno normalizzati **prima** di flaggare per non generare falsi allarmi.
+
+**Limiti del metodo (dove è cieco).** Il cross-check è un **rilevatore**, non un correttore: 4 disaccordi su 8 hanno **entrambi** i bracci sbagliati (flag corretto, ma la verità la mette l'umano). Il rischio unico è la cella **concordi-e-sbagliati**, qui **0/8**: ma 8 errori su 6 referti è un campione sottile, e lo zero **non è strutturale** — su Bellator i due modelli *potevano* convergere sullo stesso "4→8" e non l'hanno fatto per caso. Un singolo referto con una cifra fisicamente ambigua che *entrambi* leggono uguale-sbagliata sposterebbe la metrica.
+
+**RACCOMANDAZIONE (decisione di Alberto sui numeri, nulla promosso in questo giro):**
+- **Flash NON sostituisce Pro** come OCR di produzione al livello `FULL`: lo zero-autori sui gol romperebbe il gate Policy A. Il guadagno su asse a è banda di rumore e il risparmio (~16%/referto) non compensa la regressione eventi. **Nicchia reale**: Flash è candidato per i publish `SCORE_ONLY` (Opzione A) — legge punteggi/parziali/data **non-inferiore** a Pro e lì gli autori sono irrilevanti (nessun `MatchEvent`).
+- **Il cross-check MERITA un pilot** come flag della review page sui campi **punteggi/parziali/data** (non sugli eventi, dove l'output senza-autore di Flash sarebbe rumore): su questo gold cattura il 100% degli errori-campo, **inclusi i due stabili di Pro che il ricampionamento non vede**, con 0 ciechi. Costo del secondo lettore trascurabile (~+\$0,047/referto con Flash). È un **detector per l'umano**, non un auto-correttore.
+
+**Cosa lo falsificherebbe:**
+- *Cross-check*: un gold più grande/difficile con **concordi-e-sbagliati > 0 in modo materiale** (i due modelli che convergono sulla stessa cifra sbagliata) — il blind spot è tutto il rischio e 6 referti sono pochi. O reviewer che ignorano il flag perché scatta troppo su varianti-nome benigne (serve normalizzazione alias **prima** del flag).
+- *Flash-come-secondo-lettore*: se su volume la diversità architetturale che oggi dà blind=0 si rivelasse correlata (stessi OCR sbagliano insieme sui fogli degradati).
+- *Flash-sostituisce-Pro* si riapre se un prompt **tarato su Flash** recupera l'attribuzione autori ≥ Pro senza regressione sui punteggi (lo zero-autori attuale può essere artefatto del prompt Pro-centrico).
+
+Strumento versionato a repo (lezione §8.19): `matches/services/ocr_bench_analysis.py` (assi a/eventi + cross-check) e `matches/management/commands/ocr_crosscheck.py`, con test mockati; le proposte restano fuori repo (D1, gitignore). Costo totale reale del giro: **\$1,41** (solo il braccio Flash; Pro riusato, probe modello trascurabili).
 
 ---
 

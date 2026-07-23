@@ -42,6 +42,28 @@ class Match(models.Model):
         return self.reports.filter(status='PUBLISHED').exists()
 
     @property
+    def published_report(self):
+        """Il referto PUBLISHED corrente (l'ultimo pubblicato), o None.
+
+        `publish_report` mantiene un solo PUBLISHED per match (supersede degli
+        altri), ma ordiniamo per `published_at` per robustezza.
+        """
+        return self.reports.filter(status='PUBLISHED').order_by('-published_at').first()
+
+    @property
+    def events_published(self):
+        """Gli eventi (tabellino/cronologia) sono pubblicati per questo match?
+
+        True SOLO se esiste un referto PUBLISHED a livello FULL. Un publish
+        SCORE_ONLY rende pubblico il risultato (finale e parziali) ma NON gli
+        eventi: la cronologia e' dichiarata "non disponibile" (Opzione A).
+        Piu' stretto di `is_public`, che resta il gate della visibilita' del
+        match.
+        """
+        rep = self.published_report
+        return bool(rep and rep.publication_level == 'FULL')
+
+    @property
     def is_result_public(self):
         """
         Il risultato (finale e parziali) e' mostrabile in pubblico?
@@ -173,6 +195,18 @@ class MatchReport(models.Model):
         NEEDS_REVIEW = 'NEEDS_REVIEW', 'Revisione Tecnica Necessaria'
         REJECTED = 'REJECTED', 'Rifiutato/Errore'
 
+    class PublicationLevel(models.TextChoices):
+        # Livello di PUBBLICAZIONE (ortogonale allo status, Opzione A): dichiara
+        # fin dove il referto e' certificato al momento del publish.
+        #  FULL       -> punteggio, parziali ED eventi (tabellino/cronologia).
+        #  SCORE_ONLY -> solo punteggio e parziali verificati; eventi NON
+        #                disponibili (nessun MatchEvent creato). Non e' un
+        #                bypass della Policy A strict: l'abort zero-eventi resta
+        #                identico sul livello FULL — vedi publishing_service.
+        # Scritto SOLO da `publish_report()`. Default FULL retrocompatibile.
+        FULL = 'FULL', 'Completo (punteggio, parziali ed eventi)'
+        SCORE_ONLY = 'SCORE_ONLY', 'Solo punteggio e parziali verificati (eventi non disponibili)'
+
     match = models.ForeignKey(Match, on_delete=models.CASCADE, related_name='reports', null=True, blank=True)
     uploader = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, related_name='uploaded_reports')
     
@@ -188,7 +222,14 @@ class MatchReport(models.Model):
     
     # Stato
     status = models.CharField(max_length=20, choices=Status.choices, default=Status.UPLOADED)
-    
+
+    # Livello di pubblicazione (Opzione A). Scritto solo da `publish_report()`.
+    publication_level = models.CharField(
+        max_length=12, choices=PublicationLevel.choices,
+        default=PublicationLevel.FULL,
+        help_text="Fin dove il referto e' certificato al publish: FULL (con eventi) o SCORE_ONLY (solo punteggio/parziali).",
+    )
+
     # Dati estratti
     raw_extracted_data = models.JSONField(default=dict, blank=True, help_text="Payload JSON grezzo restituito dall'engine OCR")
     raw_api_response = models.TextField(blank=True, help_text="The exact, untouched JSON string from the OCR provider")

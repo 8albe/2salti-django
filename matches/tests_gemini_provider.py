@@ -28,6 +28,7 @@ def _fake_genai_modules():
     fake_types.Part = MagicMock()
     fake_types.Part.from_bytes = MagicMock(return_value="FAKE_PART")
     fake_types.GenerateContentConfig = MagicMock(return_value="FAKE_CONFIG")
+    fake_types.ThinkingConfig = MagicMock(return_value="FAKE_THINKING")
     fake_genai = ModuleType("google.genai")
     fake_genai.types = fake_types
     fake_genai.Client = MagicMock()
@@ -82,7 +83,8 @@ class GeminiVisionProviderTest(TestCase):
         provider = self._make_provider(response)
         sent = []
 
-        with patch.dict(sys.modules, _fake_genai_modules()):
+        fake_mods = _fake_genai_modules()
+        with patch.dict(sys.modules, fake_mods):
             data, raw = provider.extract_data(
                 self.report,
                 model="gemini-2.5-flash",
@@ -103,10 +105,16 @@ class GeminiVisionProviderTest(TestCase):
         self.assertEqual(meta["model"], "gemini-2.5-flash")
         self.assertFalse(meta["preprocessed"])
         self.assertEqual(meta["schema_version"], "2.0")
-        # token_usage mappato da usage_metadata
+        # token_usage mappato da usage_metadata (thoughts_tokens additivo:
+        # None quando l'SDK non espone thoughts_token_count)
         self.assertEqual(meta["token_usage"], {
-            "prompt_tokens": 1200, "completion_tokens": 300,
+            "prompt_tokens": 1200, "completion_tokens": 300, "thoughts_tokens": None,
         })
+
+        # Default: nessun parametro di thinking => NESSUN thinking_config nella
+        # GenerateContentConfig. Il path di produzione resta invariato.
+        _, cfg_kwargs = fake_mods["google.genai.types"].GenerateContentConfig.call_args
+        self.assertNotIn("thinking_config", cfg_kwargs)
 
         # Sezioni schema presenti + trimming stringhe
         self.assertEqual(data["match_info"]["home_team"], "POL. DELTA")
@@ -118,6 +126,65 @@ class GeminiVisionProviderTest(TestCase):
         # Modello passato correttamente all'SDK
         _, call_kwargs = provider.client.models.generate_content.call_args
         self.assertEqual(call_kwargs["model"], "gemini-2.5-flash")
+
+    def test_thinking_level_passes_thinking_config(self):
+        """--thinking-level flows into a ThinkingConfig(thinking_level=...) in the config."""
+        response = SimpleNamespace(
+            text=_gemini_json_payload("gemini-3.6-flash"),
+            usage_metadata=SimpleNamespace(
+                prompt_token_count=1000, candidates_token_count=250,
+                thoughts_token_count=0,
+            ),
+        )
+        provider = self._make_provider(response)
+        with patch.dict(sys.modules, _fake_genai_modules()):
+            data, _ = provider.extract_data(
+                self.report, model="gemini-3.6-flash", preprocess=False,
+                thinking_level="minimal",
+            )
+            types_mod = sys.modules["google.genai.types"]
+            # ThinkingConfig costruito con thinking_level='minimal'
+            _, tc_kwargs = types_mod.ThinkingConfig.call_args
+            self.assertEqual(tc_kwargs, {"thinking_level": "minimal"})
+            # ...e infilato nella GenerateContentConfig
+            _, cfg_kwargs = types_mod.GenerateContentConfig.call_args
+            self.assertEqual(cfg_kwargs["thinking_config"], "FAKE_THINKING")
+        # thoughts_token_count mappato additivamente nel token_usage
+        self.assertEqual(data["metadata"]["token_usage"]["thoughts_tokens"], 0)
+
+    def test_thinking_budget_passes_thinking_config(self):
+        """--thinking-budget flows into a ThinkingConfig(thinking_budget=...) in the config."""
+        response = SimpleNamespace(
+            text=_gemini_json_payload("gemini-2.5-flash"),
+            usage_metadata=SimpleNamespace(
+                prompt_token_count=1000, candidates_token_count=250
+            ),
+        )
+        provider = self._make_provider(response)
+        with patch.dict(sys.modules, _fake_genai_modules()):
+            provider.extract_data(
+                self.report, model="gemini-2.5-flash", preprocess=False,
+                thinking_budget=0,
+            )
+            types_mod = sys.modules["google.genai.types"]
+            _, tc_kwargs = types_mod.ThinkingConfig.call_args
+            self.assertEqual(tc_kwargs, {"thinking_budget": 0})
+
+    def test_thinking_level_takes_precedence_over_budget(self):
+        """Con entrambi valorizzati, thinking_level vince (un solo ThinkingConfig)."""
+        response = SimpleNamespace(
+            text=_gemini_json_payload("gemini-3.6-flash"),
+            usage_metadata=None,
+        )
+        provider = self._make_provider(response)
+        with patch.dict(sys.modules, _fake_genai_modules()):
+            provider.extract_data(
+                self.report, model="gemini-3.6-flash", preprocess=False,
+                thinking_level="low", thinking_budget=512,
+            )
+            types_mod = sys.modules["google.genai.types"]
+            _, tc_kwargs = types_mod.ThinkingConfig.call_args
+            self.assertEqual(tc_kwargs, {"thinking_level": "low"})
 
     def test_extract_data_respects_preprocess_true(self):
         response = SimpleNamespace(

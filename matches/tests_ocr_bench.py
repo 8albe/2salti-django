@@ -75,7 +75,8 @@ class OcrBenchCommandTest(TestCase):
         mock_provider = MagicMock()
         mock_class.return_value = mock_provider
 
-        def _fake_extract(report, model=None, preprocess=True, sent_image_callback=None):
+        def _fake_extract(report, model=None, preprocess=True, sent_image_callback=None,
+                          prompt_version=None):
             # Stesso contratto del provider reale: la callback riceve il path
             # dei byte inviati, prima della chiamata API.
             if sent_image_callback:
@@ -246,6 +247,17 @@ class OcrBenchCommandTest(TestCase):
         )
         kwargs = mock_provider.extract_data.call_args.kwargs
         self.assertEqual(set(kwargs), {"model"})
+
+    def test_prompt_version_v3_propagates_to_provider(self):
+        """--prompt-version v3 passa prompt_version='v3' al provider; v2 resta implicito."""
+        mock_provider = self._patch_provider()
+        call_command(
+            "ocr_bench", "--image", self.image_path, "--models", "gemini-2.5-pro",
+            "--prompt-version", "v3",
+            stdout=StringIO(),
+        )
+        kwargs = mock_provider.extract_data.call_args.kwargs
+        self.assertEqual(kwargs.get("prompt_version"), "v3")
 
     def test_no_preprocess_propagates_flag(self):
         """--no-preprocess passa preprocess=False al provider."""
@@ -447,7 +459,8 @@ class OcrBenchGoldModeTest(TestCase):
         mock_provider = MagicMock()
         mock_class.return_value = mock_provider
 
-        def _fake_extract(report, model=None, preprocess=True, sent_image_callback=None):
+        def _fake_extract(report, model=None, preprocess=True, sent_image_callback=None,
+                          prompt_version=None):
             return extraction_factory(model), "raw"
 
         mock_provider.extract_data.side_effect = _fake_extract
@@ -497,6 +510,17 @@ class OcrBenchGoldModeTest(TestCase):
         self.assertTrue(run["preprocessing"])
         self.assertTrue(run["timestamp"])
         self.assertEqual(run["image_resolved_from"], f"db_report_pk={self.report.pk}")
+
+    def test_gold_case_prompt_v3_recorded_in_proposal(self):
+        """Con --prompt-version v3 la proposta registra simbolo e hash del prompt V3."""
+        case_id = self._write_case(report_pk=self.report.pk)
+        output = self._call_gold("--gold-case", case_id, "--prompt-version", "v3")
+        self.assertIn("OCR_SYSTEM_PROMPT_V3@sha256:", output)
+        _fname, proposal = self._proposal()
+        self.assertIn(
+            "OCR_SYSTEM_PROMPT_V3@sha256:", proposal["bench_run"]["prompt_version"]
+        )
+        self.assertNotIn("OCR_SYSTEM_PROMPT_V2", proposal["bench_run"]["prompt_version"])
 
     def test_gold_case_wrong_and_null_counted_separately(self):
         """wrong e null distinti: l'astensione dichiarata non è un errore."""
@@ -883,6 +907,39 @@ class OcrBenchGoldModeTest(TestCase):
         self.assertEqual(away_scores, ["10-8", "10-9", "10-10"])
         self.assertEqual(proposal["aggregate"]["final_score_away"]["stability"], "instabile")
 
+    def test_repeat_proposal_persists_extraction_warnings(self):
+        """Ogni ripetizione porta i suoi extraction_warnings (segnale somma!=finale misurabile)."""
+        def factory(model):
+            data = gold_truth_extraction(model)
+            data["metadata"]["extraction_warnings"] = [
+                "somma parziali (5) diversa dal finale casa (4)"
+            ]
+            return data
+
+        case_id = self._write_case(report_pk=self.report.pk)
+        self._call_gold("--gold-case", case_id, "--repeat", "2", factory=factory)
+        _, proposal = self._proposal()
+        self.assertEqual(len(proposal["repeats"]), 2)
+        for rep in proposal["repeats"]:
+            self.assertEqual(
+                rep["extraction_warnings"],
+                ["somma parziali (5) diversa dal finale casa (4)"],
+            )
+
+    def test_single_proposal_persists_extraction_warnings(self):
+        """Anche la proposta a estrazione singola porta gli extraction_warnings."""
+        def factory(model):
+            data = gold_truth_extraction(model)
+            data["metadata"]["extraction_warnings"] = ["nome away parzialmente leggibile"]
+            return data
+
+        case_id = self._write_case(report_pk=self.report.pk)
+        self._call_gold("--gold-case", case_id, factory=factory)
+        _, proposal = self._proposal()
+        self.assertEqual(
+            proposal["extraction_warnings"], ["nome away parzialmente leggibile"]
+        )
+
     def test_repeat_all_calls_failing_skips_model_without_crashing(self):
         """Se ogni ripetizione fallisce, il modello viene saltato (non un traceback)."""
         patcher = patch("matches.management.commands.ocr_bench.GeminiVisionProvider")
@@ -902,3 +959,659 @@ class OcrBenchGoldModeTest(TestCase):
         )
         self.assertIn("nessuna estrazione riuscita su 3 tentativi", out.getvalue())
         self.assertEqual(os.listdir(self.out_dir), [])
+
+
+class OcrPromptV3ContentTest(TestCase):
+    """Guardrail sul contenuto dei prompt: V2 immutato, V3 con le tre modifiche del giro 22/07.
+
+    V2 è il prompt di produzione: il suo hash è fissato qui perché la baseline
+    §8.9 (syllabus 8) è confrontabile solo a parità di prompt — se V2 cambia,
+    questo test deve fallire e forzare una decisione esplicita.
+    """
+
+    def test_v2_hash_is_unchanged(self):
+        # Genealogia: la baseline §8.9 (20/07) girò su 31f3335733e2; il 21/07
+        # il commit 5758642 ha aggiunto a V2 la derivazione del "quarter" degli
+        # eventi dalla sezione della storia cronometrica (campo NON coperto
+        # dalla truth gold), portando l'hash a a0f50fbe5244. Se questo test
+        # fallisce, V2 è cambiato di nuovo: aggiornare l'hash è una decisione
+        # esplicita, perché rompe la confrontabilità dei run bench.
+        import hashlib
+        from matches.services.vision_providers import OCR_SYSTEM_PROMPT_V2
+        self.assertEqual(
+            hashlib.sha256(OCR_SYSTEM_PROMPT_V2.encode("utf-8")).hexdigest()[:12],
+            "a0f50fbe5244",
+        )
+
+    def test_registry_exposes_v2_v3_v3_2_v3_3_and_v3_4(self):
+        from matches.services.vision_providers import (
+            OCR_SYSTEM_PROMPT_V2, OCR_SYSTEM_PROMPT_V3, OCR_SYSTEM_PROMPT_V3_2,
+            OCR_SYSTEM_PROMPT_V3_3, OCR_SYSTEM_PROMPT_V3_4, OCR_SYSTEM_PROMPTS,
+        )
+        self.assertEqual(
+            OCR_SYSTEM_PROMPTS,
+            {"v2": OCR_SYSTEM_PROMPT_V2, "v3": OCR_SYSTEM_PROMPT_V3,
+             "v3_2": OCR_SYSTEM_PROMPT_V3_2, "v3_3": OCR_SYSTEM_PROMPT_V3_3,
+             "v3_4": OCR_SYSTEM_PROMPT_V3_4},
+        )
+
+    def test_v3_hash_is_pinned(self):
+        # V3 è il prompt promosso a produzione (syllabus §8.x). Come V2, il suo hash
+        # è fissato qui: un cambio deve essere una decisione esplicita, non silenziosa,
+        # perché rende i run bench non confrontabili a cavallo del cambio.
+        # Genealogia: la baseline V3 del 22/07 (§8.12) girò su 87b86a945215; il giro
+        # successivo (V3.1, 22/07) ha aggiunto events[].is_penalty per esprimere il
+        # rigore senza tipo inventato (PENALTY_GOAL), portando l'hash a be51e9c6bc42.
+        import hashlib
+        from matches.services.vision_providers import OCR_SYSTEM_PROMPT_V3
+        self.assertEqual(
+            hashlib.sha256(OCR_SYSTEM_PROMPT_V3.encode("utf-8")).hexdigest()[:12],
+            "be51e9c6bc42",
+        )
+
+    def test_v3_contains_the_three_experimental_changes(self):
+        from matches.services.vision_providers import OCR_SYSTEM_PROMPT_V3
+        # (a) anti-riconciliazione sulla griglia parziali
+        self.assertIn("NON aggiustare niente", OCR_SYSTEM_PROMPT_V3)
+        self.assertIn("trascrizione\n             INDIPENDENTE", OCR_SYSTEM_PROMPT_V3)
+        # (b) trascrizione letterale dei nomi
+        self.assertIn("FRUSINO", OCR_SYSTEM_PROMPT_V3)
+        self.assertIn("NON normalizzare MAI", OCR_SYSTEM_PROMPT_V3)
+        # (c) data cifra per cifra + campi additivi dello schema
+        self.assertIn("cifra per cifra", OCR_SYSTEM_PROMPT_V3)
+        self.assertIn('"date_digits"', OCR_SYSTEM_PROMPT_V3)
+        self.assertIn('"date": <0.0-1.0>', OCR_SYSTEM_PROMPT_V3)
+
+    def test_v3_1_models_penalty_via_is_penalty_flag_not_invented_type(self):
+        """V3.1: il rigore si esprime col flag is_penalty, MAI con un tipo fuori enum."""
+        from matches.services.vision_providers import OCR_SYSTEM_PROMPT_V3
+        self.assertIn('"is_penalty"', OCR_SYSTEM_PROMPT_V3)
+        self.assertIn("NON inventare MAI tipi", OCR_SYSTEM_PROMPT_V3)
+        self.assertIn("PENALTY_GOAL", OCR_SYSTEM_PROMPT_V3)  # citato come esempio da NON usare
+        # il GOL su rigore resta type GOAL (conta come gol), non un tipo nuovo
+        self.assertIn('"type": "GOAL" con', OCR_SYSTEM_PROMPT_V3)
+
+    def test_v3_2_hash_is_pinned(self):
+        # V3.2 è la variante sperimentale di V3.1 (giro §8.x, 22/07) con DUE sole
+        # modifiche additive alla sezione EVENTI: (a) campo clock mm:ss accanto a
+        # minute; (b) ancoraggio di periodo rinforzato per gli eventi isolati.
+        # È costruita per sostituzione mirata su V3, così che punteggi/nomi/data/
+        # rigori restino identici byte-per-byte a V3.1. Come V2/V3, l'hash è
+        # fissato: un cambio deve essere una decisione esplicita, non silenziosa.
+        import hashlib
+        from matches.services.vision_providers import OCR_SYSTEM_PROMPT_V3_2
+        self.assertEqual(
+            hashlib.sha256(OCR_SYSTEM_PROMPT_V3_2.encode("utf-8")).hexdigest()[:12],
+            "9661b340d9e1",
+        )
+
+    def test_v3_2_adds_clock_and_reinforces_period_anchoring(self):
+        """V3.2: le due sole modifiche alla sezione EVENTI sono presenti."""
+        from matches.services.vision_providers import OCR_SYSTEM_PROMPT_V3_2
+        # (a) clock mm:ss a scalare, additivo accanto a minute
+        self.assertIn("CRONOMETRO A SCALARE", OCR_SYSTEM_PROMPT_V3_2)
+        self.assertIn("il clock NON identifica il periodo", OCR_SYSTEM_PROMPT_V3_2)
+        self.assertIn('"clock": "<cronometro a scalare mm:ss', OCR_SYSTEM_PROMPT_V3_2)
+        # (b) ancoraggio di periodo rinforzato per l'evento isolato
+        self.assertIn("UNICO evento di una squadra", OCR_SYSTEM_PROMPT_V3_2)
+        self.assertIn("NON spostare un evento isolato", OCR_SYSTEM_PROMPT_V3_2)
+
+    def test_v3_2_preserves_v3_1_scores_names_date_rigori_byte_for_byte(self):
+        """V3.2 differisce da V3.1 SOLO nella sezione EVENTI: il resto è identico.
+
+        Garanzia sperimentale: qualunque scarto sui punteggi tra V3.1 e V3.2 è
+        varianza di campionamento, non effetto del prompt. Verifica strutturale:
+        le sezioni 1-2 (pre-EVENTI) sono identiche byte-per-byte, e dalla sezione 4
+        alla fine i due prompt coincidono a meno della sola riga additiva "clock"
+        nello schema dell'oggetto evento.
+        """
+        from matches.services.vision_providers import (
+            OCR_SYSTEM_PROMPT_V3, OCR_SYSTEM_PROMPT_V3_2,
+        )
+        i3v3 = OCR_SYSTEM_PROMPT_V3.index("        3. EVENTI")
+        i4v3 = OCR_SYSTEM_PROMPT_V3.index("        4. DATA DELLA GARA")
+        i3v32 = OCR_SYSTEM_PROMPT_V3_2.index("        3. EVENTI")
+        i4v32 = OCR_SYSTEM_PROMPT_V3_2.index("        4. DATA DELLA GARA")
+        # Sezioni 1-2 (tutto ciò che precede EVENTI): identiche.
+        self.assertEqual(
+            OCR_SYSTEM_PROMPT_V3[:i3v3], OCR_SYSTEM_PROMPT_V3_2[:i3v32]
+        )
+        # Dalla sezione 4 in poi (data, regole critiche, schema): identiche a meno
+        # della sola riga "clock" additiva nello schema events.
+        clock_line = (
+            '                    "clock": "<cronometro a scalare mm:ss '
+            "come scritto sul foglio, es. '4:44', o null>\",\n"
+        )
+        self.assertEqual(
+            OCR_SYSTEM_PROMPT_V3[i4v3:],
+            OCR_SYSTEM_PROMPT_V3_2[i4v32:].replace(clock_line, ""),
+        )
+
+    def test_v3_3_hash_is_pinned(self):
+        # V3.3 è la variante CLOCK-ONLY di V3.1 (giro §8.17, 23/07): isola il solo
+        # guadagno reale di V3.2 (il campo clock mm:ss) e scarta l'ancoraggio di
+        # periodo per gli eventi isolati, che in §8.16 aveva prodotto zero movimento
+        # e aggiunto rumore. È costruita per sostituzione mirata su V3 con le stesse
+        # DUE .replace() del clock di V3.2, omessa la terza dell'ancoraggio: così
+        # punteggi/nomi/data/rigori/ancoraggio restano identici byte-per-byte a V3.1.
+        # Come V2/V3/V3.2, l'hash è fissato: un cambio deve essere una decisione
+        # esplicita, non silenziosa.
+        import hashlib
+        from matches.services.vision_providers import OCR_SYSTEM_PROMPT_V3_3
+        self.assertEqual(
+            hashlib.sha256(OCR_SYSTEM_PROMPT_V3_3.encode("utf-8")).hexdigest()[:12],
+            "dd9f2af28a1d",
+        )
+
+    def test_v3_3_adds_clock_only_without_period_anchoring(self):
+        """V3.3: c'è il clock mm:ss, NON c'è l'ancoraggio di periodo di V3.2."""
+        from matches.services.vision_providers import OCR_SYSTEM_PROMPT_V3_3
+        # (a) clock mm:ss a scalare, additivo accanto a minute — presente come in V3.2
+        self.assertIn("CRONOMETRO A SCALARE", OCR_SYSTEM_PROMPT_V3_3)
+        self.assertIn("il clock NON identifica il periodo", OCR_SYSTEM_PROMPT_V3_3)
+        self.assertIn('"clock": "<cronometro a scalare mm:ss', OCR_SYSTEM_PROMPT_V3_3)
+        # (b) l'ancoraggio di periodo rinforzato per l'evento isolato è ASSENTE:
+        # è ciò che distingue V3.3 (clock-only) da V3.2.
+        self.assertNotIn("UNICO evento di una squadra", OCR_SYSTEM_PROMPT_V3_3)
+        self.assertNotIn("NON spostare un evento isolato", OCR_SYSTEM_PROMPT_V3_3)
+
+    def test_v3_3_preserves_v3_1_byte_for_byte_except_clock(self):
+        """V3.3 differisce da V3.1 SOLO per le due righe additive del clock.
+
+        Garanzia sperimentale: qualunque scarto tra V3.1 e V3.3 sulle zone
+        invariate è varianza di campionamento, non effetto del prompt. Verifica
+        strutturale: togliendo dalla V3.3 le due sole aggiunte del clock
+        (istruzione nella sezione EVENTI + riga di schema) si riottiene V3.1
+        byte-per-byte.
+        """
+        from matches.services.vision_providers import (
+            OCR_SYSTEM_PROMPT_V3, OCR_SYSTEM_PROMPT_V3_3,
+        )
+        clock_line = (
+            '                    "clock": "<cronometro a scalare mm:ss '
+            "come scritto sul foglio, es. '4:44', o null>\",\n"
+        )
+        clock_instr = (
+            '           - TEMPO ("clock"): la colonna Tempo è un CRONOMETRO A SCALARE dentro il\n'
+            "             periodo, in formato mm:ss: parte da circa 7:55 a inizio periodo e SCENDE\n"
+            '             fino a 0:00. Trascrivilo ESATTAMENTE come scritto nella stringa "clock"\n'
+            '             (es. "4:44", "0:58", "0:09"), oltre al campo "minute". NON arrotondare.\n'
+            "             Gli STESSI valori di clock si ripetono in tutti e quattro i periodi:\n"
+            "             il clock NON identifica il periodo, indica solo l'ordine dentro la sezione.\n"
+        )
+        self.assertEqual(
+            OCR_SYSTEM_PROMPT_V3_3.replace(clock_line, "").replace(clock_instr, ""),
+            OCR_SYSTEM_PROMPT_V3,
+        )
+
+    def test_v3_3_differs_from_v3_2_only_by_period_anchoring(self):
+        """V3.3 (clock-only) = V3.2 meno il solo blocco di ancoraggio di periodo.
+
+        Isola sperimentalmente l'effetto dell'ancoraggio: V3.2 e V3.3 condividono
+        clock e ogni altra zona; l'unica differenza è il paragrafo di ancoraggio
+        rinforzato per gli eventi isolati, presente solo in V3.2.
+        """
+        from matches.services.vision_providers import (
+            OCR_SYSTEM_PROMPT_V3_2, OCR_SYSTEM_PROMPT_V3_3,
+        )
+        anchoring_v3_1 = (
+            '           - PERIODO DI OGNI EVENTO ("quarter"): la \'STORIA CRONOMETRICA\' è divisa in\n'
+            "             sezioni o blocchi, uno per periodo (1°, 2°, 3°, 4° tempo). Ricava il campo\n"
+            '             "quarter" di ogni evento dalla SEZIONE in cui l\'evento è scritto, non dal\n'
+            "             minuto e non dai punteggi parziali.\n"
+            "           - Se non riesci a stabilire con certezza in quale sezione/periodo cade un\n"
+            '             evento, scrivi null in "quarter": è un valore ammesso e preferibile.\n'
+            "             NON dedurre il periodo dal minuto e NON distribuire gli eventi fra i\n"
+            "             periodi per farli tornare con i punteggi parziali.\n"
+        )
+        anchoring_v3_2 = (
+            '           - PERIODO DI OGNI EVENTO ("quarter"): la \'STORIA CRONOMETRICA\' è divisa in\n'
+            "             sezioni o blocchi, uno per periodo (1°, 2°, 3°, 4° tempo). Ricava il campo\n"
+            '             "quarter" di ogni evento dalla SEZIONE in cui l\'evento è scritto, non dal\n'
+            "             minuto, non dal clock e non dai punteggi parziali.\n"
+            "           - Questo vale ANCHE quando un evento è l'UNICO evento di una squadra in una\n"
+            "             sezione: l'evento appartiene comunque al periodo della SEZIONE in cui è\n"
+            "             scritto sul foglio. NON spostare un evento isolato in un'altra sezione\n"
+            '             perché "sembra" appartenerci o per farlo coincidere con eventi di un altro\n'
+            "             periodo: la posizione sul foglio decide, non la plausibilità.\n"
+            "           - Se non riesci a stabilire con certezza in quale sezione/periodo cade un\n"
+            "             evento — isolato o no — scrivi null in \"quarter\": è un valore ammesso e\n"
+            "             preferibile a un periodo indovinato. NON dedurre il periodo dal minuto o\n"
+            "             dal clock e NON distribuire gli eventi fra i periodi per farli tornare con\n"
+            "             i punteggi parziali.\n"
+        )
+        # V3.3 contiene l'ancoraggio ORIGINALE di V3.1; V3.2 quello rinforzato.
+        self.assertIn(anchoring_v3_1, OCR_SYSTEM_PROMPT_V3_3)
+        self.assertNotIn(anchoring_v3_2, OCR_SYSTEM_PROMPT_V3_3)
+        # Riscrivendo in V3.2 l'ancoraggio rinforzato con quello di V3.1 si ottiene V3.3.
+        self.assertEqual(
+            OCR_SYSTEM_PROMPT_V3_2.replace(anchoring_v3_2, anchoring_v3_1),
+            OCR_SYSTEM_PROMPT_V3_3,
+        )
+
+    def test_v3_4_hash_is_pinned(self):
+        # V3.4 è la variante di V3.3 (clock-only) + due semantiche nuove nella sezione
+        # EVENTI (giro §8.18, 23/07): (A) TIMEOUT di squadra (senza calottina),
+        # (B) ESPULSIONE DEFINITIVA (EXCLUSION_DEF) con articolo di regolamento verbatim.
+        # È costruita per sostituzione mirata su V3.3, così che ogni altra zona resti
+        # identica byte-per-byte a V3.3. Come le altre versioni, l'hash è fissato: un
+        # cambio deve essere una decisione esplicita, non silenziosa. DA MISURARE:
+        # bloccata dal cap Gemini (nessuna chiamata reale in questo giro).
+        import hashlib
+        from matches.services.vision_providers import OCR_SYSTEM_PROMPT_V3_4
+        self.assertEqual(
+            hashlib.sha256(OCR_SYSTEM_PROMPT_V3_4.encode("utf-8")).hexdigest()[:12],
+            "4e9751eded9b",
+        )
+
+    def test_v3_3_hash_unchanged_by_v3_4(self):
+        """Blindatura: introdurre V3.4 NON deve toccare V3.3.
+
+        Se questo test fallisce insieme a test_v3_3_hash_is_pinned, la costruzione di
+        V3.4 ha modificato la sorgente di V3.3 (la cosa sbagliata): V3.4 deve derivare
+        da V3.3 senza mutarla.
+        """
+        import hashlib
+        from matches.services.vision_providers import OCR_SYSTEM_PROMPT_V3_3
+        self.assertEqual(
+            hashlib.sha256(OCR_SYSTEM_PROMPT_V3_3.encode("utf-8")).hexdigest()[:12],
+            "dd9f2af28a1d",
+        )
+
+    def test_v3_4_adds_timeout_and_definitive_exclusion_semantics(self):
+        """V3.4: le due semantiche nuove sono presenti; V3.3 NON le ha."""
+        from matches.services.vision_providers import (
+            OCR_SYSTEM_PROMPT_V3_3, OCR_SYSTEM_PROMPT_V3_4,
+        )
+        # (A) TIMEOUT di squadra, senza calottina
+        self.assertIn('siglato "T.O."', OCR_SYSTEM_PROMPT_V3_4)
+        self.assertIn('il timeout è della SQUADRA', OCR_SYSTEM_PROMPT_V3_4)
+        self.assertIn('"player_name" è null', OCR_SYSTEM_PROMPT_V3_4)
+        # (B) espulsione definitiva EXCLUSION_DEF + articolo verbatim
+        self.assertIn('EXCLUSION_DEF', OCR_SYSTEM_PROMPT_V3_4)
+        self.assertIn("Espulsione Definitiva Con Sostituzione", OCR_SYSTEM_PROMPT_V3_4)
+        self.assertIn('"sanction_sigla"', OCR_SYSTEM_PROMPT_V3_4)
+        self.assertIn('"regulation_article"', OCR_SYSTEM_PROMPT_V3_4)
+        self.assertIn("VERBATIM", OCR_SYSTEM_PROMPT_V3_4)
+        # (B) trappola articolo-in-colonna-punteggio neutralizzata esplicitamente
+        self.assertIn("ASSOMIGLIA a un punteggio", OCR_SYSTEM_PROMPT_V3_4)
+        self.assertIn("è un ARTICOLO", OCR_SYSTEM_PROMPT_V3_4)
+        # il prompt NON insegna la tassonomia: nessun articolo mappato a un significato
+        self.assertNotIn("cattiva condotta", OCR_SYSTEM_PROMPT_V3_4.lower())
+        self.assertNotIn("brutalit", OCR_SYSTEM_PROMPT_V3_4.lower())
+        # V3.3 (clock-only) non contiene nessuna delle due semantiche
+        self.assertNotIn("EXCLUSION_DEF", OCR_SYSTEM_PROMPT_V3_3)
+        self.assertNotIn('siglato "T.O."', OCR_SYSTEM_PROMPT_V3_3)
+
+    def test_v3_4_reverts_to_v3_3_byte_for_byte(self):
+        """V3.4 differisce da V3.3 SOLO per le tre aggiunte (istruzioni + enum + schema).
+
+        Rimuovendo le tre aggiunte note si riottiene V3.3 byte-per-byte: qualunque
+        scarto tra V3.3 e V3.4 sulle zone invariate è varianza di campionamento, non
+        effetto del prompt.
+        """
+        from matches.services.vision_providers import (
+            OCR_SYSTEM_PROMPT_V3_3, OCR_SYSTEM_PROMPT_V3_4,
+        )
+        instr_block = (
+            '           - TIMEOUT (type "TIMEOUT"): sul foglio è siglato "T.O." con un\n'
+            '             asterisco nella colonna della SQUADRA che lo ha chiamato. Estrailo\n'
+            '             come evento con "team" e "clock" (e "quarter" dalla sezione), ma\n'
+            '             SENZA numero di calottina: il timeout è della SQUADRA, non del\n'
+            '             giocatore, quindi "player_name" è null.\n'
+            '           - ESPULSIONE DEFINITIVA (type "EXCLUSION_DEF"): una riga siglata "EDCS"\n'
+            '             (Espulsione Definitiva Con Sostituzione) o sigla equivalente NON è un\n'
+            '             gol ed è DISTINTA dall\'esclusione di 20 secondi. Per queste righe:\n'
+            '             * usa "type": "EXCLUSION_DEF" (MAI "GOAL");\n'
+            '             * trascrivi la sigla ESATTAMENTE come scritta in "sanction_sigla"\n'
+            '               (es. "EDCS"), senza interpretarla;\n'
+            '             * accanto alla sigla, nella colonna del PUNTEGGIO, c\'è il NUMERO\n'
+            '               DELL\'ARTICOLO di regolamento (es. "9.13"): trascrivilo VERBATIM come\n'
+            '               stringa in "regulation_article". NON dedurre da esso il tipo di\n'
+            '               sanzione e NON normalizzarlo: la mappatura avviene a valle, non è\n'
+            '               compito tuo.\n'
+            '             * TRAPPOLA DA EVITARE: quel numero d\'articolo sta nella colonna del\n'
+            '               punteggio e ASSOMIGLIA a un punteggio, ma NON lo è. Su una riga di\n'
+            '               espulsione definitiva il valore in colonna punteggio è un ARTICOLO,\n'
+            '               non un punteggio: NON deve MAI entrare nella progressione del\n'
+            '               punteggio né nei parziali/risultato finale.\n'
+        )
+        schema_fields = (
+            '                    "sanction_sigla": "<sigla verbatim della sanzione come scritta sul foglio, es. \'EDCS\', o null>",\n'
+            '                    "regulation_article": "<numero d\'articolo di regolamento VERBATIM come stringa, es. \'9.13\', o null (SOLO per EXCLUSION_DEF)>"\n'
+        )
+        reverted = (
+            OCR_SYSTEM_PROMPT_V3_4
+            .replace(instr_block, "")
+            .replace("GOAL|EXCLUSION_20|EXCLUSION_DEF|YELLOW", "GOAL|EXCLUSION_20|YELLOW")
+            .replace(
+                '                    "sanction_duration": <null o intero secondi (es: 20 per esclusione 20 secondi)>,\n'
+                + schema_fields,
+                '                    "sanction_duration": <null o intero secondi (es: 20 per esclusione 20 secondi)>\n',
+            )
+        )
+        self.assertEqual(reverted, OCR_SYSTEM_PROMPT_V3_3)
+
+
+class OcrZonePromptTest(TestCase):
+    """Guardrail sul prompt del secondo passaggio (zone) e sui registri dei prompt."""
+
+    def test_second_pass_registry_and_all_prompts(self):
+        from matches.services.vision_providers import (
+            OCR_SYSTEM_PROMPT_V2, OCR_SYSTEM_PROMPT_V3, OCR_SYSTEM_PROMPT_V3_2,
+            OCR_SYSTEM_PROMPT_V3_3, OCR_SYSTEM_PROMPT_V3_4, OCR_SYSTEM_PROMPT_ZONE,
+            OCR_SYSTEM_PROMPTS, OCR_SECOND_PASS_PROMPTS, OCR_ALL_PROMPTS,
+        )
+        # La registry di produzione espone v2/v3/v3_2/v3_3/v3_4: zone è tenuta separata.
+        self.assertEqual(
+            OCR_SYSTEM_PROMPTS,
+            {"v2": OCR_SYSTEM_PROMPT_V2, "v3": OCR_SYSTEM_PROMPT_V3,
+             "v3_2": OCR_SYSTEM_PROMPT_V3_2, "v3_3": OCR_SYSTEM_PROMPT_V3_3,
+             "v3_4": OCR_SYSTEM_PROMPT_V3_4},
+        )
+        self.assertEqual(OCR_SECOND_PASS_PROMPTS, {"zone": OCR_SYSTEM_PROMPT_ZONE})
+        self.assertEqual(
+            OCR_ALL_PROMPTS,
+            {"v2": OCR_SYSTEM_PROMPT_V2, "v3": OCR_SYSTEM_PROMPT_V3,
+             "v3_2": OCR_SYSTEM_PROMPT_V3_2, "v3_3": OCR_SYSTEM_PROMPT_V3_3,
+             "v3_4": OCR_SYSTEM_PROMPT_V3_4, "zone": OCR_SYSTEM_PROMPT_ZONE},
+        )
+
+    def test_zone_prompt_inherits_v3_rules_and_is_minimal(self):
+        from matches.services.vision_providers import OCR_SYSTEM_PROMPT_ZONE
+        # eredita anti-riconciliazione (parziali = letture, discordanza non aggiustata)
+        self.assertIn("NON aggiustare niente", OCR_SYSTEM_PROMPT_ZONE)
+        self.assertIn("trascrizione INDIPENDENTE", OCR_SYSTEM_PROMPT_ZONE)
+        # eredita la data cifra per cifra
+        self.assertIn("cifra per cifra", OCR_SYSTEM_PROMPT_ZONE)
+        self.assertIn('"date_digits"', OCR_SYSTEM_PROMPT_ZONE)
+        # secondo atto di lettura, indipendente
+        self.assertIn("SECONDO atto", OCR_SYSTEM_PROMPT_ZONE)
+        # output minimale: niente roster/eventi/ufficiali
+        self.assertNotIn("players", OCR_SYSTEM_PROMPT_ZONE)
+        self.assertNotIn("officials", OCR_SYSTEM_PROMPT_ZONE)
+        self.assertNotIn("events", OCR_SYSTEM_PROMPT_ZONE)
+
+    def test_extract_data_resolves_zone_prompt(self):
+        """extract_data accetta prompt_version='zone' (via OCR_ALL_PROMPTS)."""
+        from matches.services.vision_providers import (
+            GeminiVisionProvider, OCR_ALL_PROMPTS,
+        )
+        # Non facciamo la chiamata reale: verifichiamo solo che la risoluzione del
+        # prompt non sollevi ValueError per 'zone' e la sollevi per un nome ignoto.
+        self.assertIn("zone", OCR_ALL_PROMPTS)
+        self.assertNotIn("zone", __import__(
+            "matches.services.vision_providers", fromlist=["OCR_SYSTEM_PROMPTS"]
+        ).OCR_SYSTEM_PROMPTS)
+
+
+def zone_extraction(final_score, quarters, date, warnings=None, date_digits=None):
+    """Estrazione 'solo zona' del secondo passaggio (schema minimale)."""
+    return {
+        "metadata": {
+            "confidence": 0.95,
+            "confidence_fields": {"final_score": 1.0, "quarters": 0.9, "date": 1.0},
+            "extraction_warnings": warnings or [],
+        },
+        "match_info": {"date": date, "date_digits": date_digits},
+        "scores": {"final_score": final_score, "quarters": quarters},
+    }
+
+
+class OcrBenchSecondPassTest(TestCase):
+    """--second-pass: doppia estrazione per zona, confronto col primo passaggio riusato."""
+
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, self.tmp)
+        self.cases_dir = os.path.join(self.tmp, "cases")
+        self.first_dir = os.path.join(self.tmp, "first")
+        self.out_dir = os.path.join(self.tmp, "out")
+        self.media_root = os.path.join(self.tmp, "media")
+        os.makedirs(self.cases_dir)
+        override = override_settings(MEDIA_ROOT=self.media_root)
+        override.enable()
+        self.addCleanup(override.disable)
+        self.report = MatchReport.objects.create(
+            file=SimpleUploadedFile("referto_gold.jpg", b"gold image", content_type="image/jpeg"),
+            status=MatchReport.Status.NEEDS_REVIEW,
+        )
+        self.case_id = "2026-01-01_test-home_vs_test-away"
+        case = {
+            "case_id": self.case_id,
+            "verified_by": "Test Umano",
+            "match": {
+                "date": "2026-01-01",
+                "home_team": {"name_on_paper": "CASA"},
+                "away_team": {"name_on_paper": "OSPITI"},
+            },
+            "truth": {
+                "scores": {
+                    "final_score": "4-19",
+                    "quarters": {"1": [1, 3], "2": [0, 5], "3": [3, 6], "4": [0, 5]},
+                }
+            },
+            "not_verified": [],
+            "extractions": [{"db_report_pk": self.report.pk}],
+        }
+        with open(os.path.join(self.cases_dir, f"{self.case_id}.json"), "w") as f:
+            json.dump(case, f)
+
+    def _call_bench(self, factory, *args):
+        with patch("matches.management.commands.ocr_bench.GeminiVisionProvider") as mock_class:
+            mock_provider = MagicMock()
+            mock_class.return_value = mock_provider
+
+            def _fake_extract(report, model=None, preprocess=True,
+                              sent_image_callback=None, prompt_version=None):
+                return factory(model, prompt_version), "raw"
+
+            mock_provider.extract_data.side_effect = _fake_extract
+            out = StringIO()
+            call_command(
+                "ocr_bench", "--models", "gemini-2.5-pro",
+                "--cases-dir", self.cases_dir, *args, stdout=out,
+            )
+            return out.getvalue()
+
+    def _gen_first_pass(self, first_data, repeat=3):
+        """Genera la proposta del primo passaggio in first_dir (schema --repeat)."""
+        self._call_bench(
+            lambda model, pv: first_data,
+            "--gold-case", self.case_id, "--repeat", str(repeat),
+            "--out-dir", self.first_dir,
+        )
+
+    def _run_second_pass(self, zone_data, repeat=3):
+        return self._call_bench(
+            lambda model, pv: zone_data,
+            "--gold-case", self.case_id, "--repeat", str(repeat),
+            "--second-pass", "--first-pass-dir", self.first_dir,
+            "--out-dir", self.out_dir,
+        )
+
+    def _second_pass_proposal(self):
+        files = [f for f in os.listdir(self.out_dir) if "_secondpass" in f]
+        self.assertEqual(len(files), 1)
+        with open(os.path.join(self.out_dir, files[0])) as f:
+            return json.load(f)
+
+    def test_second_pass_flags_divergence_on_final_score(self):
+        """Primo legge 5-19 (sbagliato), secondo 4-19 (giusto): divergenza -> review."""
+        first = zone_extraction(
+            "5-19", {"1": [1, 3], "2": [0, 5], "3": [3, 6], "4": [0, 5]}, "2026-01-01"
+        )
+        zone = zone_extraction(
+            "4-19", {"1": [1, 3], "2": [0, 5], "3": [3, 6], "4": [0, 5]}, "2026-01-01"
+        )
+        self._gen_first_pass(first, repeat=3)
+        output = self._run_second_pass(zone, repeat=3)
+        self.assertIn("DIVERGE", output)
+        self.assertIn("NEEDS_REVIEW", output)
+        proposal = self._second_pass_proposal()
+        self.assertEqual(proposal["mode"], "second_pass_divergence")
+        self.assertEqual(proposal["summary"]["repeats_compared"], 3)
+        self.assertEqual(proposal["summary"]["repeats_diverging"], 3)
+        self.assertEqual(proposal["summary"]["by_zone"]["final_score"], 3)
+        self.assertEqual(proposal["summary"]["by_zone"]["quarters"], 0)
+        self.assertTrue(proposal["summary"]["needs_review_any"])
+        self.assertEqual(
+            proposal["repeats"][0]["divergence"]["diverging_zones"], ["final_score"]
+        )
+
+    def test_second_pass_no_divergence_when_reads_agree(self):
+        agree = zone_extraction(
+            "4-19", {"1": [1, 3], "2": [0, 5], "3": [3, 6], "4": [0, 5]}, "2026-01-01"
+        )
+        self._gen_first_pass(agree, repeat=2)
+        output = self._run_second_pass(agree, repeat=2)
+        self.assertIn("concorde", output)
+        proposal = self._second_pass_proposal()
+        self.assertEqual(proposal["summary"]["repeats_diverging"], 0)
+        self.assertFalse(proposal["summary"]["needs_review_any"])
+
+    def test_second_pass_persists_zone_extraction_warnings(self):
+        first = zone_extraction("4-19", {"1": [1, 3]}, "2026-01-01")
+        zone = zone_extraction(
+            "4-19", {"1": [1, 3]}, "2026-01-01",
+            warnings=["somma parziali != finale casa (segnalata)"],
+        )
+        self._gen_first_pass(first, repeat=2)
+        self._run_second_pass(zone, repeat=2)
+        proposal = self._second_pass_proposal()
+        self.assertEqual(
+            proposal["repeats"][0]["second"]["extraction_warnings"],
+            ["somma parziali != finale casa (segnalata)"],
+        )
+
+    def test_second_pass_requires_first_pass_dir(self):
+        with self.assertRaises(CommandError):
+            self._call_bench(
+                lambda model, pv: zone_extraction("4-19", {}, "2026-01-01"),
+                "--gold-case", self.case_id, "--second-pass", "--out-dir", self.out_dir,
+            )
+
+    def test_first_pass_dir_requires_second_pass(self):
+        with self.assertRaises(CommandError):
+            self._call_bench(
+                lambda model, pv: zone_extraction("4-19", {}, "2026-01-01"),
+                "--gold-case", self.case_id,
+                "--first-pass-dir", self.first_dir, "--out-dir", self.out_dir,
+            )
+
+    def test_second_pass_requires_gold_mode(self):
+        fd, loose = tempfile.mkstemp(suffix=".jpg", dir=self.tmp)
+        with os.fdopen(fd, "wb") as f:
+            f.write(b"img")
+        os.makedirs(self.first_dir, exist_ok=True)
+        with self.assertRaises(CommandError):
+            self._call_bench(
+                lambda model, pv: zone_extraction("4-19", {}, "2026-01-01"),
+                "--image", loose, "--second-pass", "--first-pass-dir", self.first_dir,
+            )
+
+
+class OcrBenchEventsRosterComparisonTest(TestCase):
+    """Confronto ADDITIVO eventi/roster vs truth (compare_events_to_truth / compare_roster_to_truth).
+
+    Funzioni pure: nessun DB, nessun provider. Verificano che il bench misuri la
+    dimensione eventi/roster senza toccare la logica sui punteggi, e che i casi
+    senza truth.events/rosters restino invariati (None).
+    """
+
+    def _case(self):
+        return {
+            "case_id": "test",
+            "truth": {
+                "scores": {"final_score": "3-1", "quarters": {"1": [2, 0], "2": [1, 1]}},
+                "events": [
+                    {"type": "GOAL", "team": "home", "cap": 6, "quarter": 1},
+                    {"type": "GOAL", "team": "home", "cap": 6, "quarter": 1},
+                    {"type": "GOAL", "team": "home", "cap": 9, "quarter": 2},
+                    {"type": "GOAL", "team": "away", "cap": 2, "quarter": 2, "penalty_awarded_goal": True},
+                    {"type": "EXCLUSION_20", "team": "away", "cap": 7, "quarter": 1},
+                ],
+                "rosters": {
+                    "home": {"players": [{"number": 6, "name": "de lena d."},
+                                         {"number": 9, "name": "proietti c."}]},
+                    "away": {"players": [
+                        {"number": 2, "name": "mustazza d."},
+                        {"number": 5, "name": None, "ambiguous": True,
+                         "variants": ["della rortella c.", "della portella c."]},
+                        {"number": 10, "name": None, "unknown": True}]},
+                },
+            },
+        }
+
+    def test_events_comparison_counts_goals_per_period_and_authors(self):
+        from matches.management.commands.ocr_bench import compare_events_to_truth
+        # Estrazione: away goal messo nel periodo sbagliato (P1 invece di P2), e
+        # un gol away tipizzato PENALTY_GOAL (fuori da SCORE_EVENT_CODES: non conta).
+        data = {"events": [
+            {"type": "GOAL", "team": "home", "quarter": 1, "player_name": "X"},
+            {"type": "GOAL", "team": "home", "quarter": 1},          # senza autore
+            {"type": "PENALTY_GOAL", "team": "away", "quarter": 2},  # non-score type
+            {"type": "GOAL", "team": "away", "quarter": 1},          # periodo sbagliato
+        ]}
+        res = compare_events_to_truth(self._case(), data)
+        self.assertEqual(res["truth_goals_total"], {"home": 3, "away": 1})
+        self.assertEqual(res["extracted_goals_total"], {"home": 2, "away": 1})
+        # PENALTY_GOAL non conteggiato come gol: come nel gate di pubblicazione.
+        self.assertEqual(res["extracted_events_total"], 4)
+        # solo 1 dei 3 gol-score estratti ha autore
+        self.assertEqual(res["extracted_goals_with_author"], 1)
+        # tutti i gol truth hanno la calottina -> contati come "con autore"
+        # (verificato indirettamente: la truth ha cap su ogni gol)
+        by = {(r["quarter"], r["team"]): r for r in res["per_period_goals"]}
+        self.assertEqual(by[("1", "home")]["truth_goals"], 2)
+        self.assertEqual(by[("1", "home")]["extracted_goals"], 2)
+        # away: truth in P2, estratto in P1 -> deficit P2, eccesso P1
+        self.assertEqual(by[("2", "away")]["truth_goals"], 1)
+        self.assertEqual(by[("2", "away")]["extracted_goals"], 0)
+        self.assertEqual(by[("1", "away")]["truth_goals"], 0)
+        self.assertEqual(by[("1", "away")]["extracted_goals"], 1)
+
+    def test_roster_comparison_matches_surnames_and_isolates_ambiguous(self):
+        from matches.management.commands.ocr_bench import compare_roster_to_truth
+        data = {"teams": {
+            "home": {"players": [{"number": 6, "name": "DE LENA D."},      # esatto
+                                 {"number": 9, "name": "CARLEALE A."}]},   # altro giocatore (d>=2)
+            "away": {"players": [{"number": 2, "name": "MUSTAZZA D."},     # esatto
+                                 {"number": 5, "name": "DELLA RORTELLA C."},
+                                 {"number": 10, "name": "QUALCUNO X."}]},
+        }}
+        res = compare_roster_to_truth(self._case(), data)
+        self.assertEqual(res["home"]["surname_matched"], 1)      # #6 de lena
+        self.assertEqual(res["home"]["surname_approx"], 0)
+        self.assertEqual(res["home"]["surname_mismatched"], 1)   # #9 proietti vs carleale
+        self.assertEqual(res["home"]["unresolved_in_truth"], 0)
+        # away: #2 match; #5 e #10 sono ambigui/sconosciuti in truth -> fuori confronto,
+        # mai contati come errore dell'OCR.
+        self.assertEqual(res["away"]["surname_matched"], 1)
+        self.assertEqual(res["away"]["surname_mismatched"], 0)
+        self.assertEqual(res["away"]["unresolved_in_truth"], 2)
+
+    def test_roster_comparison_single_letter_error_is_approx_not_mismatch(self):
+        """garbelli/barbelli: una lettera sostituita -> approx, distinto dal leggere un altro."""
+        from matches.management.commands.ocr_bench import compare_roster_to_truth
+        case = {"truth": {"rosters": {
+            "home": {"players": [{"number": 1, "name": "garbelli c."},   # -> approx (g->b, d=1)
+                                 {"number": 2, "name": "de lena d."}]},   # -> esatto
+            "away": {"players": []},
+        }}}
+        data = {"teams": {
+            "home": {"players": [{"number": 1, "name": "BARBELLI G."},
+                                 {"number": 2, "name": "DE LENA X."}]},
+            "away": {"players": []},
+        }}
+        res = compare_roster_to_truth(case, data)
+        self.assertEqual(res["home"]["surname_matched"], 1)      # #2
+        self.assertEqual(res["home"]["surname_approx"], 1)       # #1: una lettera
+        self.assertEqual(res["home"]["surname_mismatched"], 0)
+
+    def test_returns_none_when_case_has_no_events_or_rosters(self):
+        from matches.management.commands.ocr_bench import (
+            compare_events_to_truth, compare_roster_to_truth)
+        bare = {"truth": {"scores": {"final_score": "1-0"}}}
+        self.assertIsNone(compare_events_to_truth(bare, {"events": [{"type": "GOAL"}]}))
+        self.assertIsNone(compare_roster_to_truth(bare, {"teams": {"home": {}}}))

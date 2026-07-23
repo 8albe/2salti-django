@@ -65,6 +65,7 @@ class MatchDataConverter:
                 "player_id": player_id,
                 "team": e.get("team"), # 'home' or 'away'
                 "quarter": e.get("quarter"),
+                "is_penalty": bool(e.get("is_penalty", False)),  # rigore: additivo, default false
                 "notes": f"Estratto da OCR: {player_name}" if player_name else ""
             })
             
