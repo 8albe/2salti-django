@@ -930,6 +930,50 @@ Giro per portare la doppia estrazione per zona **sugli eventi** (autori/attribuz
 
 **Nota di scoping per la ripresa.** I due casi che contano per la misura degli autori/attribuzione (stadio 4 era esplicitamente "sui 2 casi con ground-truth: unime referto 8 e olympic") **ritagliano entrambi bene**. Chi riprende il giro decide se: (a) affrontare l'orientamento robusto / registrazione su template come progetto a sé (riabilita tutti e 6), oppure (b) procedere allo stadio 3–4 **solo** sui casi orientati, accettando che sc-salerno/triscelon restino fuori dalla misura zona-eventi. È una decisione di prodotto/scope, non tecnica: lasciata ad Alberto.
 
+#### 8.24 — RIPRESA: gate corretto, orientamento risolto, misura sugli assi eventi (2026-07-24)
+
+Il gate dello stadio 2 era **mal formulato** e va corretto: i due casi "falliti" avevano cause **diverse**, nessuna delle due "le foto sono inquadrate diversamente". **sc-salerno** restava verticale perché `ImagePreprocessor` non normalizza l'orientamento (difetto risolvibile a costo zero); **triscelon** non aveva solo `db_report_pk` su dev (irreperibilità del file, non fallimento del ritaglio — si passa con `--image`, come già in §8.22). Quindi le frazioni fisse fallivano su **1 caso su 5 testabili**, per una causa risolvibile a costo nullo: il gate non regge, giro riaperto. Commit `8d9050a` (A) · `135e365` (B) · `843b4c9` (C-harness); tutto **bench-only, default off**; `v3_4` byte-identico; nessuna migration; **spesa reale $2,496 sotto il tetto di $2,50**.
+
+**Stadio A — orientamento (costo zero).** *Come decideva PRIMA:* solo EXIF (`_fix_exif_rotation`) + warp prospettico + deskew fine (<10°); `_auto_rotate_to_portrait` definito ma **non invocato** (ruotare by aspect-ratio corrompeva i referti già orizzontali). Nessuna forzatura a landscape → un foglio ruotato di 90° restava tale. *Come decide ORA:* nuovo `_ensure_landscape` — se dopo la logica esistente l'immagine è più alta che larga, la ruota di 90° **antiorario** (direzione scelta empiricamente su sc-salerno: testata in alto a sx, storia a dx, testo dritto). Applicato in `process()` **dopo** la logica esistente ma **solo su opt-in** `ensure_landscape=True` (default False ⇒ produzione byte-identica; il ritaglio per zona opta per True). **Esito:** con il fallback **tutti i 6 casi** inquadrano la storia cronometrica (sc-salerno risolto; triscelon via `--image`, era già landscape). Il gate ora regge 6/6.
+
+**Stadio B — prompt zona-eventi + confronto (costo zero).** `OCR_SYSTEM_PROMPT_ZONE_EVENTS` in `OCR_SECOND_PASS_PROMPTS` (`zone_events`): legge SOLO la storia cronometrica (gol/esclusioni con calottina, timeout di squadra, EDCS), team dalle sotto-colonne B(casa)/N(ospite), stessa disciplina cap-primario di V3.5. `compare_event_passes` (funzione pura): chiave `(type, quarter, clock)`, payload `(cap, team)`, tricotomia agree/diverge/abstain. Due check da regolamento come funzioni pure e **WARNING** (mai blocker): **max 2 timeout/squadra** (nessuna regola diversa per i supplementari nel dominio — NON inventata) e **max 1 EDCS/giocatore**. 24 test mock.
+
+**Stadio C — misura, separata per asse.** 18 chiamate reali `gemini-2.5-pro`, `tok_in` costante 3564 (immagine downscalata a dimensione fissa ⇒ costo guidato da output+thinking). ASSE A su unime+olympic+bellator (repeat 3) e triscelon (repeat 2); AUTORI/ATTRIBUZIONE su unime+olympic (repeat 3, passaggio pieno V3.5 + secondo passaggio zone_events sul ritaglio). **poldelta e sc-salerno non misurati sull'asse A** (budget esaurito; coperti dall'argomento di costruzione: le zone punteggi/parziali/data di V3.5 sono byte-identiche a V3.4, nessuna regressione possibile lì). Artefatti (proposte JSON con PII) in `/opt/2salti-dev/media/ocr_bench_8.24C/{gold,raw}` — stabile, non volatile, **gitignorato** (stessa scelta dei ritagli).
+
+**(a) ASSE AUTORI — la calottina fa sparire la categoria "a-una-lettera".** Ogni gol estratto porta una calottina: **with_cap = 100%** su tutte le ripetizioni (unime 22/22×3, olympic ~22/22×3). Dove il gol è accoppiabile alla truth per `(team, quarter, clock)`, le calottine coincidono quasi sempre:
+
+| caso | gol truth | with_cap | matched (r1/r2/r3) | cap_correct/matched | cap_wrong |
+|---|---|---|---|---|---|
+| unime (referto 8) | 22 | 100% | 18/21/15 | 18/18, 20/21, 15/15 (~98%) | 1 su 54 |
+| olympic | 21 | 100% | 13/10/12 | 11/13, 9/10, 10/12 (~85%) | 5 su 35 |
+
+Confronto con §8.22 (misura sui **nomi**: 18 esatti + **4 a-una-lettera** + 0 sbagliati su 22): **la categoria "a-una-lettera" scompare per costruzione** — una calottina è un intero, coincide o no, non esiste il quasi-giusto. Su unime le calottine accoppiate sono ~98% esatte; su olympic più rumorose (~85%, referto meno ordinato). Il `matched` basso rispetto al totale è un **artefatto dell'accoppiamento per clock** (stringhe di cronometro che divergono), non un errore di calottina: il segnale forte è with_cap=100% + cap quasi sempre esatta dove confrontabile.
+
+**(b) ASSE ATTRIBUZIONE — divergenza vs check da regolamento, contati SEPARATI (referto 8).** Le due fonti danno risposte opposte, ed è la risposta alla domanda "il secondo passaggio vale il suo costo":
+
+| errore noto referto 8 | fonte DIVERGENZA (2 passaggi) | fonte CHECK REGOLAMENTO |
+|---|---|---|
+| attribuzione squadra delle **esclusioni** | **catturato**: 30 team-flip EXCLUSION_20 su 3 rip (~10/rip), calottina concorde | non applicabile (0) |
+| squadra dei **timeout del 4º periodo** | **catturato**: team-flip TIMEOUT in q4 su rip2 e rip3 | `timeout>2` = **[] su tutte le rip** (l'errore è wrong-team, conteggi ≤2) |
+| **rosso duplicato** per calottina (EDCS) | non riprodotto in questo run (0 EXCLUSION_DEF divergenti) | `EDCS>1` = **[] su tutte le rip** |
+
+**Verdetto:** su referto 8 i **check gratuiti catturano ZERO** (gli errori sono di *squadra sbagliata* a conteggi sotto-soglia, non superamenti di limite), mentre la **divergenza fra i due passaggi cattura sia l'attribuzione delle esclusioni sia i timeout del 4º periodo**. Il secondo passaggio quindi **aggiunge segnale che i check non danno** — ma è un detector **rumoroso**: la calottina concorda quasi sempre (è il *team* B/N a oscillare), la divergenza alza la bandiera senza dire quale lato è giusto, e marca anche molte ambiguità B/N che non sono errori conclamati (unime ~18-20 eventi divergenti/rip su ~48). Vale il costo per l'attribuzione-squadra, non gratis: raddoppia le chiamate.
+
+**(c) ASSE A — nessuna regressione: V3.5 riproduce gli errori stabili noti, identici.** Buckets stability-aware:
+
+| caso | repeat | stable-corretti | stable-sbagliati | note |
+|---|---|---|---|---|
+| unime | 3 | 12 | 1 (`home_team_name`, un NOME) | scores/parziali/data tutti corretti |
+| olympic | 3 | 10 | 2 (`Q3_away`, `Q4_away`) + 1 amb | errori noti §8.12 |
+| bellator | 3 | 8 | 5 (`final_home`+`Q3`/`Q4`) | referto poco leggibile, errori noti §8.12 |
+| triscelon | 2 | 11 | 1 (`date`=2026-04-28) + 1 amb | errore noto §8.12 |
+
+Tutti gli stable-sbagliati sono **errori pre-esistenti già misurati su V3/V3.1** (§8.12/§8.19: Bellator finale casa `5`, Triscelon data `28`, Olympic Q3/Q4): V3.5 li riproduce **identici**, **nessun nuovo** stable-sbagliato compare. Coerente con la costruzione: le zone non-eventi di V3.5 sono byte-identiche a V3.4, quindi una regressione sui punteggi era impossibile — la misura lo **conferma** invece di assumerlo.
+
+**Costo reale.** 18 chiamate `gemini-2.5-pro`, `50.850` tok in / `243.204` tok out+thinking, **$2,496** (calibrazione $0,154 + batch), **sotto il tetto di $2,50** (margine $0,004). `OCR_PROMPT_VERSION`, provider e modello di default **intatti**.
+
+**Cosa resta.** ASSE A su poldelta e sc-salerno (non misurati per budget; costruzione li copre). La direzione del fallback landscape è fissa (antiorario): una foto ruotata nell'altro verso resterebbe capovolta — la messa a testa-in-su robusta (rilevazione orientamento del testo) è un raffinamento separato. Promozione di V3.5 / del secondo passaggio a produzione: **non presa** — questo giro misura, non decide.
+
 ---
 
 ← [Macro precedente](7_profilo_fan.md) | → [Macro successiva](9_sistema_sponsor.md)
