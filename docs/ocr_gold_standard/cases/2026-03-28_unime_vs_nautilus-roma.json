@@ -188,6 +188,7 @@
 
   "corroboration": {
     "status": "concorde",
+    "scope": "Corrobora i soli 22 gol (sequenza clock/calottina/squadra e distribuzione per periodo). NON corroborati da questa seconda lettura: esclusioni di 20 secondi, roster, timeout, articolo di regolamento dell'espulsione definitiva: poggiano sulla sola collazione del 2026-07-20, lettura singola.",
     "corroborated_at": "2026-07-23",
     "corroborated_by": "Alberto Galbiati",
     "method_note": "Seconda zona indipendente del foglio: la STORIA CRONOMETRICA (sequenza dei 22 gol con clock, calottina e squadra) e' stata trascritta a mano separatamente dal riquadro dei parziali. I gol derivati per periodo e squadra (P1 4-2, P2 3-1, P3 3-4, P4 2-3; finale 12-10) COINCIDONO esattamente con i parziali e il finale gia' in truth, verificati per altra via il 2026-07-20/21. Validazione incrociata indipendente fra due letture umane di zone diverse dello stesso foglio. Rilevante perche' il caso e' a legibility.score 2 (< 3): la regola del dataset richiede corroborazione per chiuderlo, e questa e' la seconda fonte concorde dentro il foglio."
