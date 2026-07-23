@@ -339,6 +339,16 @@ Due difetti della stessa famiglia (data UTC dove serviva Europe/Rome), **severit
 
 *Residuo:* nessuno per §10.32. La correttezza end-to-end su prod (console pulita, widget che salvano, Motivazione richiesta) va confermata a occhio nel browser su dev (prompt di verifica Antigravity preparato nel giro). Restano aperti, distinti: §10.30 (`report_review` frontend) e §10.31 (declassamento SCORE_ONLY per wording).
 
+### §10.36 Badge "AI Engine v2" nella dashboard — CHIUSA 2026-07-23
+
+*Cosa era:* nel riquadro **Caricamento Rapido** della dashboard ([templates/accounts/dashboard.html:164](../templates/accounts/dashboard.html)) un badge hardcoded `AI Engine v2`. Il badge sta nella sezione **"AI DISCOVERY QUICK UPLOAD"**, il cui testo parla di *discovery* (identificare squadre/data/campionato dal contenuto), **non** di qualità/versione dell'estrazione OCR. La stringa era **statica**, non legata a `settings.OCR_PROMPT_VERSION` né ad alcuna altra sorgente di versione: **non** era quindi la versione del prompt OCR (v3 in produzione dal 2026-07-23, §8.21). L'ambiguità: un lettore poteva leggere "v2" come numero di versione dell'AI/OCR e confonderlo con le versioni di prompt (v2/v3/V3.x).
+
+*Chiuso:* rimosso il numero di versione dalla stringa (`AI Engine v2` → `AI Engine`), lasciando il solo branding del Discovery **senza** legarlo a `OCR_PROMPT_VERSION` (il badge è correttamente decorrelato dal prompt OCR; il problema era solo il "v2" che suggeriva una versione inesistente come tale). Occorrenza unica (grep), nessun test asserisce la stringa. `python manage.py check` e la suite `accounts` verdi.
+
+*Vive in:* [templates/accounts/dashboard.html](../templates/accounts/dashboard.html) (riga ~164).
+
+*Residuo:* nessuno.
+
 ### §12.9 Debito semantico A1: utility `cyan-*` che rendono blue (Macro 17 Fase 2) — SALDATO 2026-06-30 (A2, `dev`); archiviato qui 2026-07-22
 
 > **ID fuori serie** (unica voce non-§10.x): la voce nasce come §12.9 di OPS_RUNBOOK — sezione 12 "Verifiche e regole di processo", non la sezione 10 dei debiti — e conserva l'ID originale perché syllabus Macro 17, session note e memorie la citano come "OPS §12.9": la continuità di citazione vale più dell'uniformità di numerazione. In OPS_RUNBOOK §12.9 resta il rimando.
