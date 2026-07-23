@@ -759,6 +759,8 @@ Doppio obiettivo, prompt **invariato** (`v3_4 @sha256:4e9751eded9b`, nessuna V3.
 
 **Braccio Flash — 30 chiamate reali** (6 casi × `--repeat 5`, Triscelon con `--image`), zero 429, **0 thought token**. **Costo \$1,41** (121.610 tok in @1,50/M = \$0,18; 163.752 tok out @7,50/M = \$1,23). Media 4.054 in / 5.458 out per chiamata → **~\$0,047 per estrazione**, contro ~\$0,056 del blended Pro §8.19 (\$5,05/90): Flash **~16% più economico per referto**, non il 65% dei titoli (quello è agentico long-horizon; sull'OCR a singolo colpo l'output domina e lo sconto è modesto, per giunta l'input Flash è più caro di Pro).
 
+> **Correzione costo Pro (§8.21).** Il ~\$0,056/referto di Pro qui **omette i token di thinking**, fatturati come output: il costo reale di Pro misurato in produzione è **~\$0,14/referto** (thinking ~1,9× l'output visibile). Flash girava a `thinking_level='minimal'` (0 thought token), quindi **il confronto ~16% è distorto in favore di Pro**: a parità di misura (thinking incluso per entrambi) Flash è **molto** più economico. Dettaglio in §8.21.
+
 **Asse a (78 campi = 13×6, ricalcolato dal modulo versionato — riproduce §8.19 su Pro):**
 
 | Braccio | stabili-corretti | stabili-SBAGLIATI | instabili | ambigui |
@@ -797,6 +799,8 @@ Gli altri disaccordi (Salerno home/away name, Triskelion/Triskelon, date Salerno
 
 **Limiti del metodo (dove è cieco).** Il cross-check è un **rilevatore**, non un correttore: 4 disaccordi su 8 hanno **entrambi** i bracci sbagliati (flag corretto, ma la verità la mette l'umano). Il rischio unico è la cella **concordi-e-sbagliati**, qui **0/8**: ma 8 errori su 6 referti è un campione sottile, e lo zero **non è strutturale** — su Bellator i due modelli *potevano* convergere sullo stesso "4→8" e non l'hanno fatto per caso. Un singolo referto con una cifra fisicamente ambigua che *entrambi* leggono uguale-sbagliata sposterebbe la metrica.
 
+**Precisazione statistica — il denominatore che conta è 8, non 78.** Il "0% concordi-e-sbagliati su 78 campi" è corretto, ma per un **rilevatore d'errore** il denominatore rilevante è il numero di **errori** (8), non i campi totali (78). Con **8 errori e 0 mancati**, la regola del tre dà un limite superiore al 95% sul tasso di mancati ≈ **3/8**: il **recall vero potrebbe essere anche solo ~62%**. Lo 0% osservato è quindi compatibile con un tasso di cattura reale ben sotto il 100%. Il cross-check resta giustificato come **flag per l'occhio umano**, **non** come garanzia di cattura totale — serve un gold più grande per stringere l'intervallo.
+
 **RACCOMANDAZIONE (decisione di Alberto sui numeri, nulla promosso in questo giro):**
 - **Flash NON sostituisce Pro** come OCR di produzione al livello `FULL`: lo zero-autori sui gol romperebbe il gate Policy A. Il guadagno su asse a è banda di rumore e il risparmio (~16%/referto) non compensa la regressione eventi. **Nicchia reale**: Flash è candidato per i publish `SCORE_ONLY` (Opzione A) — legge punteggi/parziali/data **non-inferiore** a Pro e lì gli autori sono irrilevanti (nessun `MatchEvent`).
 - **Il cross-check MERITA un pilot** come flag della review page sui campi **punteggi/parziali/data** (non sugli eventi, dove l'output senza-autore di Flash sarebbe rumore): su questo gold cattura il 100% degli errori-campo, **inclusi i due stabili di Pro che il ricampionamento non vede**, con 0 ciechi. Costo del secondo lettore trascurabile (~+\$0,047/referto con Flash). È un **detector per l'umano**, non un auto-correttore.
@@ -807,6 +811,23 @@ Gli altri disaccordi (Salerno home/away name, Triskelion/Triskelon, date Salerno
 - *Flash-sostituisce-Pro* si riapre se un prompt **tarato su Flash** recupera l'attribuzione autori ≥ Pro senza regressione sui punteggi (lo zero-autori attuale può essere artefatto del prompt Pro-centrico).
 
 Strumento versionato a repo (lezione §8.19): `matches/services/ocr_bench_analysis.py` (assi a/eventi + cross-check) e `matches/management/commands/ocr_crosscheck.py`, con test mockati; le proposte restano fuori repo (D1, gitignore). Costo totale reale del giro: **\$1,41** (solo il braccio Flash; Pro riusato, probe modello trascurabili).
+
+### 8.21 End-to-end di produzione sul referto 8 — V3 / gemini-2.5-pro (2026-07-23)
+
+Con il deploy §2.12 in esercizio (prompt di produzione **V3**, `gemini-2.5-pro`), estrazione end-to-end sul referto 8 (Unime vs Nautilus Roma) attraverso la pipeline reale.
+
+**Campi che la produzione pubblica (asse a): 12/13 corretti.** Punteggio finale, tutti i parziali e i nomi squadra giusti. **Unico errore: la data**, letta `2006` invece di `2026` (errore di cifra sull'anno). È la classe di errore dichiarata **irriducibile via prompt in §8.16** (come la data Triscelon): campo singolo, senza ridondanza interna, che nessun check di coerenza cattura.
+
+**Eventi e roster (assi che il bench NON confronta), collazionati contro la truth del gold:**
+- **Gol: 22/22**, distribuzione per periodo `4-2 / 3-1 / 3-4 / 2-3` — coincide con la truth (finale 12-10). Nessun gol inventato o mancante sul campione rappresentativo.
+- **Roster ospite: 12 voci, buco al #3 rispettato, nessun giocatore inventato** (`unresolved_in_truth = 0`).
+- **Timeout**: conteggio corretto (3) ma **squadra sbagliata** sulla coppia del 4° periodo (i due timeout casa dell'Unime confusi con l'ospite).
+- **Espulsione definitiva**: emessa come `RED_CARD` (V3 non conosce `EXCLUSION_DEF`, introdotto solo in V3.4 §8.18): l'evento reale — casa #7 d'angelo v., art. 9.13 — c'è, ma il tipo è generico e **instabile** fra le ripetizioni (0–2 `RED_CARD` per estrazione), con occorrenze **inventate** (es. ospite #7 cionfi m.: **stesso numero di calottina attribuito all'altra squadra**). In pallanuoto `RED_CARD` ed `EXCLUSION_DEF` sono lo **stesso evento reale** (il rosso *è* l'espulsione definitiva): vedi **debito §10.35** (riformulato di conseguenza).
+- **Espulsioni di 20 secondi**: **attribuzione di squadra sbagliata nel 1° tempo** (truth 2 casa + 2 ospite).
+
+**Questi errori vanno alla strada §8.13 (doppia estrazione per zona), NON a un altro giro di prompt engineering.** Squadra dei timeout, rosso duplicato per numero di calottina uguale, attribuzione di squadra delle espulsioni: sono errori di **collocazione/attribuzione sulla griglia**, la stessa famiglia dei residui stabili di finale/parziali/data. **Il muro è già dichiarato in §8.16** e cambiare il prompt non lo ha scalfito (§8.16, §8.19): la leva è la lettura di zona indipendente, non un'altra V3.x.
+
+**Costo reale per referto — correzione: ~\$0,14, non ~\$0,06.** Misurato oggi in produzione su `gemini-2.5-pro`: **2.559 token in, 4.613 out, 8.784 di thinking**. I token di ragionamento sono **fatturati come output**, quindi il costo reale è `2.559 × \$1,25/M + (4.613 + 8.784) × \$10/M ≈ \$0,003 + \$0,134 ≈` **\$0,14 per referto**. Le stime precedenti (~\$0,044 §8.13, ~\$0,056 §8.20) contavano **solo l'output visibile** e **omettevano il thinking** (qui ~1,9× l'output visibile), sottostimando di ~2,5×. **Il braccio Flash (§8.20) risultava vicino a Pro anche perché girava con `thinking_level='minimal'` (0 thought token)**: a parità di misura — thinking incluso per Pro, assente per Flash — Flash è **molto** più economico di Pro, non ~16%. I costi-totali-run storici del §8 (a listino sui soli token di output visibili) vanno letti come **limite inferiore**.
 
 ---
 
