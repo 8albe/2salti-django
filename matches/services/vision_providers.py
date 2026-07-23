@@ -448,10 +448,58 @@ OCR_SYSTEM_PROMPT_V3_4 = (
     )
 )
 
+# V3.5 — variante di V3.4 (giro §8.24, 23/07) che cambia SOLO l'IDENTITÀ
+# DELL'AUTORE degli eventi. Ogni altra zona (punteggi, parziali, data, roster,
+# timeout, espulsione definitiva) resta IDENTICA byte-per-byte a V3.4: costruita
+# per SOSTITUZIONE MIRATA, come tutta la catena V3.2→V3.4. La modifica isola
+# l'effetto di una sola scoperta: la truth del gold identifica gli autori PER
+# CALOTTINA (il numero in tabella), mentre lo schema V3.x identificava il
+# giocatore solo per NOME (grafia manoscritta) — il campo più costoso della
+# catena. V3.5:
+#   (a) aggiunge il campo "cap" all'oggetto evento: numero di calottina
+#       dell'autore, IDENTIFICATIVO PRIMARIO, obbligatorio su GOL, EXCLUSION_20
+#       ed EXCLUSION_DEF;
+#   (b) declassa "player_name" a SECONDARIO: si riporta se leggibile, altrimenti
+#       null, e un nome null NON è un fallimento quando la calottina c'è;
+#   (c) NON indebolisce il principio "null invece di invenzione": se la calottina
+#       stessa è illeggibile, "cap" è null — mai indovinato.
+# NON è il default di produzione: si seleziona via settings.OCR_PROMPT_VERSION o
+# dal bench (ocr_bench --prompt-version v3_5). La promozione a default è una
+# decisione di prodotto sui numeri del bench, non un fatto tecnico.
+OCR_SYSTEM_PROMPT_V3_5 = (
+    OCR_SYSTEM_PROMPT_V3_4
+    # (a)+(b) istruzioni: la calottina è l'identità primaria; il nome è secondario.
+    # Inserite dopo la riga "Colonne:" della sezione EVENTI (anchor presente in V3).
+    .replace(
+        '           - Colonne: Tempo (Minuto), N. Calottina (chi fa l\'azione), Evento (GOL, ET per Esclusione 20", TR per Rigore, ecc.).\n',
+        '           - Colonne: Tempo (Minuto), N. Calottina (chi fa l\'azione), Evento (GOL, ET per Esclusione 20", TR per Rigore, ecc.).\n'
+        '           - IDENTITÀ DELL\'AUTORE — NUMERO DI CALOTTINA ("cap"): per ogni\n'
+        '             GOL, ogni ESCLUSIONE (EXCLUSION_20) e ogni ESPULSIONE DEFINITIVA\n'
+        '             (EXCLUSION_DEF) il numero di CALOTTINA nella colonna "N. Calottina"\n'
+        '             è l\'IDENTIFICATIVO PRIMARIO del giocatore: trascrivilo SEMPRE nel\n'
+        '             campo "cap" come intero. La calottina è una cifra in tabella, più\n'
+        '             affidabile della grafia del nome.\n'
+        '           - Il "player_name" resta richiesto ma è SECONDARIO: riportalo se il\n'
+        '             nome è leggibile, altrimenti null. Un "player_name" null NON è un\n'
+        '             fallimento quando "cap" è presente: la calottina identifica già il\n'
+        '             giocatore. (Il TIMEOUT resta l\'unico evento con "cap" e\n'
+        '             "player_name" entrambi null: è della SQUADRA, non del giocatore.)\n'
+        '           - "null invece di invenzione" vale anche sulla calottina: se il\n'
+        '             numero di calottina è ILLEGGIBILE o AMBIGUO, usa null in "cap".\n'
+        '             NON indovinarlo MAI.\n',
+    )
+    # (a) schema: campo "cap" additivo, prima di "player_name", nell'oggetto evento.
+    .replace(
+        '                    "player_name": "<nome giocatore o null (null per timeout squadra)>",\n',
+        '                    "cap": <int: numero di calottina dell\'autore, IDENTIFICATIVO PRIMARIO, o null (null per timeout squadra o calottina illeggibile)>,\n'
+        '                    "player_name": "<nome giocatore, SECONDARIO: se leggibile, altrimenti null (null per timeout squadra)>",\n',
+    )
+)
+
 # Registro delle versioni di prompt selezionabili. Il default di produzione
 # resta "v2" (fallback tecnico); config/settings.py imposta v3 come default reale.
-# V3.2, V3.3 e V3.4 sono sperimentali e NON promosse: si selezionano solo per-chiamata
-# (parametro prompt_version, usato dal bench: ocr_bench --prompt-version v3_4).
+# V3.2, V3.3, V3.4 e V3.5 sono sperimentali e NON promosse: si selezionano solo
+# per-chiamata (parametro prompt_version, usato dal bench: ocr_bench --prompt-version v3_5).
 # Aggiungere una versione = una costante sopra + una entry qui.
 OCR_SYSTEM_PROMPTS = {
     "v2": OCR_SYSTEM_PROMPT_V2,
@@ -459,6 +507,7 @@ OCR_SYSTEM_PROMPTS = {
     "v3_2": OCR_SYSTEM_PROMPT_V3_2,
     "v3_3": OCR_SYSTEM_PROMPT_V3_3,
     "v3_4": OCR_SYSTEM_PROMPT_V3_4,
+    "v3_5": OCR_SYSTEM_PROMPT_V3_5,
 }
 
 # Prompt "solo zona" per il SECONDO passaggio della doppia estrazione

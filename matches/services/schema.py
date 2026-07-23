@@ -107,6 +107,12 @@ class OCRSchemaValidator:
         for e in events:
             if not isinstance(e, dict) or "type" not in e:
                 return False, "Gli elementi in 'events' devono essere oggetti con almeno il campo 'type'."
+            # `cap` (numero di calottina dell'autore) e' OPZIONALE (schema V3.5,
+            # §8.24): se presente deve essere un intero o null. E' additivo — i
+            # payload senza `cap` (schema V3.x precedente) restano validi.
+            cap = e.get("cap")
+            if cap is not None and not isinstance(cap, int):
+                return False, "Un evento ha 'cap' non intero: la calottina deve essere un intero o null."
 
         # 7. Verifica Officials (opzionale, struttura soft)
         officials = data.get("officials")
@@ -482,6 +488,40 @@ class OCRSchemaValidator:
                 f"Espulsioni oltre il limite: giocatore {identity} ({side}) con {cnt} "
                 f"espulsioni (max {FOUL_OUT_EXCLUSIONS} a regolamento) — possibile errore di estrazione."
             )
+
+        # 4-quater. Calottina d'evento non presente nel roster della sua squadra
+        # (schema V3.5, §8.24). Se un evento porta "cap" N per la squadra X ma
+        # nel roster di X non esiste il numero N, la calottina e' inventata o
+        # misletta: la riconciliazione per (team, cap) NON deve agganciare nulla e
+        # va segnalata. Warning puro su normalized_data, mai un blocker nuovo.
+        teams_for_cap = data.get("teams", {})
+        roster_numbers = {}
+        for side in ("home", "away"):
+            nums = set()
+            for p in teams_for_cap.get(side, {}).get("players", []) or []:
+                n = p.get("number")
+                if isinstance(n, int):
+                    nums.add(n)
+            roster_numbers[side] = nums
+        seen_missing = set()
+        for e in events:
+            if not isinstance(e, dict):
+                continue
+            cap = e.get("cap")
+            side = e.get("team")
+            if not isinstance(cap, int) or side not in ("home", "away"):
+                continue
+            # Se il roster di quel lato non e' stato estratto affatto, non si puo'
+            # dire che la calottina "non c'e'": nessun warning senza roster.
+            if not roster_numbers[side]:
+                continue
+            if cap not in roster_numbers[side] and (side, cap) not in seen_missing:
+                seen_missing.add((side, cap))
+                label = "CASA" if side == "home" else "OSPITE"
+                warnings.append(
+                    f"Calottina evento non nel roster: numero {cap} ({label}) presente "
+                    f"negli eventi ma assente dal roster — possibile calottina misletta."
+                )
 
         # 5. Unicità numeri giocatori
         teams = data.get("teams", {})
