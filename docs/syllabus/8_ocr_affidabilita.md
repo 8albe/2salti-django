@@ -751,6 +751,63 @@ Cap Gemini **ripristinato** (progetto `careful-yew-501810-s1` a 100 €/mese). P
 
 **Nessun movimento su §8.16** (asse f): il muro di collocazione periodo regge in tutti e tre i bracci (5/5 match sul referto 8). La conclusione registrata in §8.16 non è contraddetta.
 
+### 8.20 Braccio Gemini 3 Flash + cross-check Pro↔Flash come rilevatore d'errore (2026-07-23)
+
+Doppio obiettivo, prompt **invariato** (`v3_4 @sha256:4e9751eded9b`, nessuna V3.5): (1) misurare **gemini-3.6-flash** contro il baseline di produzione `gemini-2.5-pro` sul gold; (2) esperimento cross-check — verificare se il **disaccordo** fra i due modelli sullo stesso campo predice l'errore vero (gold = arbitro), come possibile flag della review page che catturi anche gli **errori stabili** che l'instabilità intra-modello non vede (§8.19, caso Triscelon).
+
+**Selezione modello e minimizzazione reasoning.** Fra le flash stabili di generazione 3+ disponibili sull'API (`gemini-3.5-flash`, `gemini-3.6-flash`; `gemini-3-flash-preview` è preview → esclusa) la 3.6 è **strettamente la più economica**: stesso input (\$1,50/M) di 3.5 ma output **\$7,50/M** vs \$9,00 e ~17% meno token di output. Reasoning azzerato con `thinking_level='minimal'` (verificato: `'none'` rifiutato, `'low'` brucia già ~44 thought token, `'minimal'` → **0 thought token** su tutte le 30 chiamate). Nessun tocco a `config/settings.py`: la selezione modello passa da `--models`, il reasoning da un nuovo seam per-chiamata `extract_data(thinking_level/thinking_budget)` con **default None su entrambi ⇒ config di generazione byte-identica alla produzione** (guardie mockate). Il braccio Pro v3_4 è **riusato** dal run §8.19 (stesse 30 proposte, hash prompt identico): nessuna ri-esecuzione, budget risparmiato.
+
+**Braccio Flash — 30 chiamate reali** (6 casi × `--repeat 5`, Triscelon con `--image`), zero 429, **0 thought token**. **Costo \$1,41** (121.610 tok in @1,50/M = \$0,18; 163.752 tok out @7,50/M = \$1,23). Media 4.054 in / 5.458 out per chiamata → **~\$0,047 per estrazione**, contro ~\$0,056 del blended Pro §8.19 (\$5,05/90): Flash **~16% più economico per referto**, non il 65% dei titoli (quello è agentico long-horizon; sull'OCR a singolo colpo l'output domina e lo sconto è modesto, per giunta l'input Flash è più caro di Pro).
+
+**Asse a (78 campi = 13×6, ricalcolato dal modulo versionato — riproduce §8.19 su Pro):**
+
+| Braccio | stabili-corretti | stabili-SBAGLIATI | instabili | ambigui |
+|---|---|---|---|---|
+| Pro v3_4 (2.5-pro, §8.19) | 61 | **2** | 11 | 4 |
+| **Flash v3_4 (3.6-flash)** | **65** | **0** | 12 | 1 |
+
+Lettura onesta (regola §8.12/§8.19): il +4 stabili-corretti è **nella banda di rumore** e non basta da solo a giustificare uno switch. Il dato più solido è **stabili-sbagliati 2→0**: Flash **non riproduce nessuno dei due errori stabili di Pro** (Olympic Q3 ospite `0` e Triscelon data `28`), li legge entrambi **giusti**. Nessuna inversione casa/trasferta.
+
+**Blocco duro sugli eventi: Flash non attribuisce gli autori dei gol.** Su **tutti e 6** i casi Flash estrae i gol (conteggio e clock) ma con `player_name` **null**: gol-con-autore **0/22, 0/24, 0/23, 0/21, 0/28, 0/32**. Pro attribuisce su 5/6 (22, 24, 27, 17/20, **0** su Salerno ruotato, 32). Il campo esiste nello schema Flash, resta vuoto. Conseguenza diretta: al livello `FULL` il gate autori / "Zero Eventi" (Policy A strict) **abortirebbe ogni pubblicazione**. Timeout/EDCS invece Flash li legge bene (timeout 3,3,3,3,3 — meglio del 3,3,2,3,3 di Pro; EDCS 1/1 ovunque). Avvertenza di causalità: `v3_4` è stato scritto e tarato **su Pro**; lo zero-autori potrebbe essere un artefatto di prompt-interaction su Flash, non un limite del modello — è una condizione di falsificazione, non una condanna.
+
+**Cross-check Pro↔Flash (78 campi comparabili, 0 esclusi null):**
+
+| Classe | Conteggio |
+|---|---|
+| concordi-e-giusti | 70 |
+| **concordi-e-SBAGLIATI (cieco)** | **0** |
+| discordi, almeno uno giusto | 4 |
+| discordi, entrambi sbagliati | 4 |
+
+| Metrica del disaccordo come predittore d'errore | Valore |
+|---|---|
+| campi in errore (≥1 braccio sbagliato) | 8 |
+| **recall_union** (errori catturati dal disaccordo) | **100% (8/8)** |
+| **blind_rate** (concordi-e-sbagliati / errori) | **0% (0/8)** |
+| precision_union | 100% (per costruzione: due valori diversi non sono entrambi la verità) |
+| tasso concordi-e-sbagliati / comparabili | **0% (0/78)** |
+| recall_pro (errori del braccio di produzione catturati) | **100% (7/7)**, ciechi 0 |
+
+**Verifica esplicita dei casi noti (§8.19):**
+- **Triscelon data** (Pro stabile-sbagliato `2026-04-28`, truth `2026-04-25`): Flash la legge **giusta e stabile** → **DISCORDI, catturato**. Esattamente ciò che l'instabilità intra-modello *non* può fare (l'errore è stabile 5/5 su Pro): il cross-check inter-modello lo espone perché Flash non lo condivide.
+- **Bellator finale casa** (truth 4): Pro `8`, Flash `7` — **entrambi sbagliati ma su valori diversi** → DISCORDI, flaggato (nessuno dei due dà la verità: il flag dice "rivedi qui", non corregge).
+- L'altro stabile-sbagliato di Pro (Olympic Q3 ospite `0`, truth 1): Flash legge `1` → DISCORDI, catturato.
+
+Gli altri disaccordi (Salerno home/away name, Triskelion/Triskelon, date Salerno) sono in parte **varianti ortografiche di nome squadra** che il layer alias risolve in produzione: contano come "errore" solo sul confronto stretto `name_on_paper`, e vanno normalizzati **prima** di flaggare per non generare falsi allarmi.
+
+**Limiti del metodo (dove è cieco).** Il cross-check è un **rilevatore**, non un correttore: 4 disaccordi su 8 hanno **entrambi** i bracci sbagliati (flag corretto, ma la verità la mette l'umano). Il rischio unico è la cella **concordi-e-sbagliati**, qui **0/8**: ma 8 errori su 6 referti è un campione sottile, e lo zero **non è strutturale** — su Bellator i due modelli *potevano* convergere sullo stesso "4→8" e non l'hanno fatto per caso. Un singolo referto con una cifra fisicamente ambigua che *entrambi* leggono uguale-sbagliata sposterebbe la metrica.
+
+**RACCOMANDAZIONE (decisione di Alberto sui numeri, nulla promosso in questo giro):**
+- **Flash NON sostituisce Pro** come OCR di produzione al livello `FULL`: lo zero-autori sui gol romperebbe il gate Policy A. Il guadagno su asse a è banda di rumore e il risparmio (~16%/referto) non compensa la regressione eventi. **Nicchia reale**: Flash è candidato per i publish `SCORE_ONLY` (Opzione A) — legge punteggi/parziali/data **non-inferiore** a Pro e lì gli autori sono irrilevanti (nessun `MatchEvent`).
+- **Il cross-check MERITA un pilot** come flag della review page sui campi **punteggi/parziali/data** (non sugli eventi, dove l'output senza-autore di Flash sarebbe rumore): su questo gold cattura il 100% degli errori-campo, **inclusi i due stabili di Pro che il ricampionamento non vede**, con 0 ciechi. Costo del secondo lettore trascurabile (~+\$0,047/referto con Flash). È un **detector per l'umano**, non un auto-correttore.
+
+**Cosa lo falsificherebbe:**
+- *Cross-check*: un gold più grande/difficile con **concordi-e-sbagliati > 0 in modo materiale** (i due modelli che convergono sulla stessa cifra sbagliata) — il blind spot è tutto il rischio e 6 referti sono pochi. O reviewer che ignorano il flag perché scatta troppo su varianti-nome benigne (serve normalizzazione alias **prima** del flag).
+- *Flash-come-secondo-lettore*: se su volume la diversità architetturale che oggi dà blind=0 si rivelasse correlata (stessi OCR sbagliano insieme sui fogli degradati).
+- *Flash-sostituisce-Pro* si riapre se un prompt **tarato su Flash** recupera l'attribuzione autori ≥ Pro senza regressione sui punteggi (lo zero-autori attuale può essere artefatto del prompt Pro-centrico).
+
+Strumento versionato a repo (lezione §8.19): `matches/services/ocr_bench_analysis.py` (assi a/eventi + cross-check) e `matches/management/commands/ocr_crosscheck.py`, con test mockati; le proposte restano fuori repo (D1, gitignore). Costo totale reale del giro: **\$1,41** (solo il braccio Flash; Pro riusato, probe modello trascurabili).
+
 ---
 
 ← [Macro precedente](7_profilo_fan.md) | → [Macro successiva](9_sistema_sponsor.md)
