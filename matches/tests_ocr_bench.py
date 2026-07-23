@@ -983,15 +983,16 @@ class OcrPromptV3ContentTest(TestCase):
             "a0f50fbe5244",
         )
 
-    def test_registry_exposes_v2_v3_v3_2_and_v3_3(self):
+    def test_registry_exposes_v2_v3_v3_2_v3_3_and_v3_4(self):
         from matches.services.vision_providers import (
             OCR_SYSTEM_PROMPT_V2, OCR_SYSTEM_PROMPT_V3, OCR_SYSTEM_PROMPT_V3_2,
-            OCR_SYSTEM_PROMPT_V3_3, OCR_SYSTEM_PROMPTS,
+            OCR_SYSTEM_PROMPT_V3_3, OCR_SYSTEM_PROMPT_V3_4, OCR_SYSTEM_PROMPTS,
         )
         self.assertEqual(
             OCR_SYSTEM_PROMPTS,
             {"v2": OCR_SYSTEM_PROMPT_V2, "v3": OCR_SYSTEM_PROMPT_V3,
-             "v3_2": OCR_SYSTEM_PROMPT_V3_2, "v3_3": OCR_SYSTEM_PROMPT_V3_3},
+             "v3_2": OCR_SYSTEM_PROMPT_V3_2, "v3_3": OCR_SYSTEM_PROMPT_V3_3,
+             "v3_4": OCR_SYSTEM_PROMPT_V3_4},
         )
 
     def test_v3_hash_is_pinned(self):
@@ -1188,6 +1189,109 @@ class OcrPromptV3ContentTest(TestCase):
             OCR_SYSTEM_PROMPT_V3_3,
         )
 
+    def test_v3_4_hash_is_pinned(self):
+        # V3.4 è la variante di V3.3 (clock-only) + due semantiche nuove nella sezione
+        # EVENTI (giro §8.18, 23/07): (A) TIMEOUT di squadra (senza calottina),
+        # (B) ESPULSIONE DEFINITIVA (EXCLUSION_DEF) con articolo di regolamento verbatim.
+        # È costruita per sostituzione mirata su V3.3, così che ogni altra zona resti
+        # identica byte-per-byte a V3.3. Come le altre versioni, l'hash è fissato: un
+        # cambio deve essere una decisione esplicita, non silenziosa. DA MISURARE:
+        # bloccata dal cap Gemini (nessuna chiamata reale in questo giro).
+        import hashlib
+        from matches.services.vision_providers import OCR_SYSTEM_PROMPT_V3_4
+        self.assertEqual(
+            hashlib.sha256(OCR_SYSTEM_PROMPT_V3_4.encode("utf-8")).hexdigest()[:12],
+            "4e9751eded9b",
+        )
+
+    def test_v3_3_hash_unchanged_by_v3_4(self):
+        """Blindatura: introdurre V3.4 NON deve toccare V3.3.
+
+        Se questo test fallisce insieme a test_v3_3_hash_is_pinned, la costruzione di
+        V3.4 ha modificato la sorgente di V3.3 (la cosa sbagliata): V3.4 deve derivare
+        da V3.3 senza mutarla.
+        """
+        import hashlib
+        from matches.services.vision_providers import OCR_SYSTEM_PROMPT_V3_3
+        self.assertEqual(
+            hashlib.sha256(OCR_SYSTEM_PROMPT_V3_3.encode("utf-8")).hexdigest()[:12],
+            "dd9f2af28a1d",
+        )
+
+    def test_v3_4_adds_timeout_and_definitive_exclusion_semantics(self):
+        """V3.4: le due semantiche nuove sono presenti; V3.3 NON le ha."""
+        from matches.services.vision_providers import (
+            OCR_SYSTEM_PROMPT_V3_3, OCR_SYSTEM_PROMPT_V3_4,
+        )
+        # (A) TIMEOUT di squadra, senza calottina
+        self.assertIn('siglato "T.O."', OCR_SYSTEM_PROMPT_V3_4)
+        self.assertIn('il timeout è della SQUADRA', OCR_SYSTEM_PROMPT_V3_4)
+        self.assertIn('"player_name" è null', OCR_SYSTEM_PROMPT_V3_4)
+        # (B) espulsione definitiva EXCLUSION_DEF + articolo verbatim
+        self.assertIn('EXCLUSION_DEF', OCR_SYSTEM_PROMPT_V3_4)
+        self.assertIn("Espulsione Definitiva Con Sostituzione", OCR_SYSTEM_PROMPT_V3_4)
+        self.assertIn('"sanction_sigla"', OCR_SYSTEM_PROMPT_V3_4)
+        self.assertIn('"regulation_article"', OCR_SYSTEM_PROMPT_V3_4)
+        self.assertIn("VERBATIM", OCR_SYSTEM_PROMPT_V3_4)
+        # (B) trappola articolo-in-colonna-punteggio neutralizzata esplicitamente
+        self.assertIn("ASSOMIGLIA a un punteggio", OCR_SYSTEM_PROMPT_V3_4)
+        self.assertIn("è un ARTICOLO", OCR_SYSTEM_PROMPT_V3_4)
+        # il prompt NON insegna la tassonomia: nessun articolo mappato a un significato
+        self.assertNotIn("cattiva condotta", OCR_SYSTEM_PROMPT_V3_4.lower())
+        self.assertNotIn("brutalit", OCR_SYSTEM_PROMPT_V3_4.lower())
+        # V3.3 (clock-only) non contiene nessuna delle due semantiche
+        self.assertNotIn("EXCLUSION_DEF", OCR_SYSTEM_PROMPT_V3_3)
+        self.assertNotIn('siglato "T.O."', OCR_SYSTEM_PROMPT_V3_3)
+
+    def test_v3_4_reverts_to_v3_3_byte_for_byte(self):
+        """V3.4 differisce da V3.3 SOLO per le tre aggiunte (istruzioni + enum + schema).
+
+        Rimuovendo le tre aggiunte note si riottiene V3.3 byte-per-byte: qualunque
+        scarto tra V3.3 e V3.4 sulle zone invariate è varianza di campionamento, non
+        effetto del prompt.
+        """
+        from matches.services.vision_providers import (
+            OCR_SYSTEM_PROMPT_V3_3, OCR_SYSTEM_PROMPT_V3_4,
+        )
+        instr_block = (
+            '           - TIMEOUT (type "TIMEOUT"): sul foglio è siglato "T.O." con un\n'
+            '             asterisco nella colonna della SQUADRA che lo ha chiamato. Estrailo\n'
+            '             come evento con "team" e "clock" (e "quarter" dalla sezione), ma\n'
+            '             SENZA numero di calottina: il timeout è della SQUADRA, non del\n'
+            '             giocatore, quindi "player_name" è null.\n'
+            '           - ESPULSIONE DEFINITIVA (type "EXCLUSION_DEF"): una riga siglata "EDCS"\n'
+            '             (Espulsione Definitiva Con Sostituzione) o sigla equivalente NON è un\n'
+            '             gol ed è DISTINTA dall\'esclusione di 20 secondi. Per queste righe:\n'
+            '             * usa "type": "EXCLUSION_DEF" (MAI "GOAL");\n'
+            '             * trascrivi la sigla ESATTAMENTE come scritta in "sanction_sigla"\n'
+            '               (es. "EDCS"), senza interpretarla;\n'
+            '             * accanto alla sigla, nella colonna del PUNTEGGIO, c\'è il NUMERO\n'
+            '               DELL\'ARTICOLO di regolamento (es. "9.13"): trascrivilo VERBATIM come\n'
+            '               stringa in "regulation_article". NON dedurre da esso il tipo di\n'
+            '               sanzione e NON normalizzarlo: la mappatura avviene a valle, non è\n'
+            '               compito tuo.\n'
+            '             * TRAPPOLA DA EVITARE: quel numero d\'articolo sta nella colonna del\n'
+            '               punteggio e ASSOMIGLIA a un punteggio, ma NON lo è. Su una riga di\n'
+            '               espulsione definitiva il valore in colonna punteggio è un ARTICOLO,\n'
+            '               non un punteggio: NON deve MAI entrare nella progressione del\n'
+            '               punteggio né nei parziali/risultato finale.\n'
+        )
+        schema_fields = (
+            '                    "sanction_sigla": "<sigla verbatim della sanzione come scritta sul foglio, es. \'EDCS\', o null>",\n'
+            '                    "regulation_article": "<numero d\'articolo di regolamento VERBATIM come stringa, es. \'9.13\', o null (SOLO per EXCLUSION_DEF)>"\n'
+        )
+        reverted = (
+            OCR_SYSTEM_PROMPT_V3_4
+            .replace(instr_block, "")
+            .replace("GOAL|EXCLUSION_20|EXCLUSION_DEF|YELLOW", "GOAL|EXCLUSION_20|YELLOW")
+            .replace(
+                '                    "sanction_duration": <null o intero secondi (es: 20 per esclusione 20 secondi)>,\n'
+                + schema_fields,
+                '                    "sanction_duration": <null o intero secondi (es: 20 per esclusione 20 secondi)>\n',
+            )
+        )
+        self.assertEqual(reverted, OCR_SYSTEM_PROMPT_V3_3)
+
 
 class OcrZonePromptTest(TestCase):
     """Guardrail sul prompt del secondo passaggio (zone) e sui registri dei prompt."""
@@ -1195,21 +1299,22 @@ class OcrZonePromptTest(TestCase):
     def test_second_pass_registry_and_all_prompts(self):
         from matches.services.vision_providers import (
             OCR_SYSTEM_PROMPT_V2, OCR_SYSTEM_PROMPT_V3, OCR_SYSTEM_PROMPT_V3_2,
-            OCR_SYSTEM_PROMPT_V3_3, OCR_SYSTEM_PROMPT_ZONE,
+            OCR_SYSTEM_PROMPT_V3_3, OCR_SYSTEM_PROMPT_V3_4, OCR_SYSTEM_PROMPT_ZONE,
             OCR_SYSTEM_PROMPTS, OCR_SECOND_PASS_PROMPTS, OCR_ALL_PROMPTS,
         )
-        # La registry di produzione espone v2/v3/v3_2/v3_3: zone è tenuta separata.
+        # La registry di produzione espone v2/v3/v3_2/v3_3/v3_4: zone è tenuta separata.
         self.assertEqual(
             OCR_SYSTEM_PROMPTS,
             {"v2": OCR_SYSTEM_PROMPT_V2, "v3": OCR_SYSTEM_PROMPT_V3,
-             "v3_2": OCR_SYSTEM_PROMPT_V3_2, "v3_3": OCR_SYSTEM_PROMPT_V3_3},
+             "v3_2": OCR_SYSTEM_PROMPT_V3_2, "v3_3": OCR_SYSTEM_PROMPT_V3_3,
+             "v3_4": OCR_SYSTEM_PROMPT_V3_4},
         )
         self.assertEqual(OCR_SECOND_PASS_PROMPTS, {"zone": OCR_SYSTEM_PROMPT_ZONE})
         self.assertEqual(
             OCR_ALL_PROMPTS,
             {"v2": OCR_SYSTEM_PROMPT_V2, "v3": OCR_SYSTEM_PROMPT_V3,
              "v3_2": OCR_SYSTEM_PROMPT_V3_2, "v3_3": OCR_SYSTEM_PROMPT_V3_3,
-             "zone": OCR_SYSTEM_PROMPT_ZONE},
+             "v3_4": OCR_SYSTEM_PROMPT_V3_4, "zone": OCR_SYSTEM_PROMPT_ZONE},
         )
 
     def test_zone_prompt_inherits_v3_rules_and_is_minimal(self):

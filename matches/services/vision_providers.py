@@ -382,16 +382,83 @@ OCR_SYSTEM_PROMPT_V3_3 = (
     )
 )
 
+# V3.4 — variante di V3.3 (clock-only) + DUE semantiche nuove nella sezione EVENTI
+# (giro §8.18, 23/07). Isola l'effetto di due tipi di evento finora non gestiti dal
+# prompt, misurati sul referto 8 (Unime vs Nautilus Roma):
+#   (A) TIMEOUT: sul foglio è "T.O." con asterisco nella colonna della squadra che
+#       lo chiama. Va estratto come evento con "team" e "clock", SENZA calottina
+#       (il timeout è della squadra, "player_name" null).
+#   (B) ESPULSIONE DEFINITIVA (EXCLUSION_DEF): riga siglata "EDCS" o equivalente, con
+#       nella colonna del PUNTEGGIO il numero dell'articolo di regolamento (es. "9.13").
+#       REGOLA DI PROGETTO: il prompt NON insegna la tassonomia degli articoli. Deve
+#       solo (a) riconoscere che la riga è un'espulsione definitiva e NON un gol,
+#       (b) estrarre l'articolo VERBATIM come stringa, (c) estrarre la sigla verbatim.
+#       La mappatura articolo->tipo vive nel NOSTRO codice (matches/event_types.py,
+#       DEFINITIVE_EXCLUSION_ARTICLES + classify_definitive_exclusion), non qui: un
+#       articolo mai visto resta grezzo e mappabile dopo, non inventato dal modello.
+#       Trappola neutralizzata esplicitamente: l'articolo sta nella colonna del punteggio
+#       e ASSOMIGLIA a un punteggio, ma su una riga di espulsione definitiva è un ARTICOLO
+#       e NON deve mai entrare nella progressione del punteggio.
+# Costruita per SOSTITUZIONE MIRATA su V3.3 (stesso meccanismo di V3.2/V3.3): ogni
+# altra zona resta IDENTICA byte-per-byte a V3.3 (che a sua volta = V3.1 + clock).
+# NON è il default di produzione: si seleziona via settings.OCR_PROMPT_VERSION o dal
+# bench (ocr_bench --prompt-version v3_4). La promozione a default è una decisione di
+# prodotto sui numeri del bench, non un fatto tecnico. DA MISURARE: bloccata dal cap
+# Gemini (nessuna chiamata reale eseguita in questo giro).
+OCR_SYSTEM_PROMPT_V3_4 = (
+    OCR_SYSTEM_PROMPT_V3_3
+    # (A)+(B) istruzioni: timeout di squadra ed espulsione definitiva, aggiunte in
+    # coda al blocco RIGORI della sezione EVENTI (anchor presente in V3.1/V3.3).
+    .replace(
+        '             * Per ogni altro evento "is_penalty" è false (o omesso).\n',
+        '             * Per ogni altro evento "is_penalty" è false (o omesso).\n'
+        '           - TIMEOUT (type "TIMEOUT"): sul foglio è siglato "T.O." con un\n'
+        '             asterisco nella colonna della SQUADRA che lo ha chiamato. Estrailo\n'
+        '             come evento con "team" e "clock" (e "quarter" dalla sezione), ma\n'
+        '             SENZA numero di calottina: il timeout è della SQUADRA, non del\n'
+        '             giocatore, quindi "player_name" è null.\n'
+        '           - ESPULSIONE DEFINITIVA (type "EXCLUSION_DEF"): una riga siglata "EDCS"\n'
+        '             (Espulsione Definitiva Con Sostituzione) o sigla equivalente NON è un\n'
+        '             gol ed è DISTINTA dall\'esclusione di 20 secondi. Per queste righe:\n'
+        '             * usa "type": "EXCLUSION_DEF" (MAI "GOAL");\n'
+        '             * trascrivi la sigla ESATTAMENTE come scritta in "sanction_sigla"\n'
+        '               (es. "EDCS"), senza interpretarla;\n'
+        '             * accanto alla sigla, nella colonna del PUNTEGGIO, c\'è il NUMERO\n'
+        '               DELL\'ARTICOLO di regolamento (es. "9.13"): trascrivilo VERBATIM come\n'
+        '               stringa in "regulation_article". NON dedurre da esso il tipo di\n'
+        '               sanzione e NON normalizzarlo: la mappatura avviene a valle, non è\n'
+        '               compito tuo.\n'
+        '             * TRAPPOLA DA EVITARE: quel numero d\'articolo sta nella colonna del\n'
+        '               punteggio e ASSOMIGLIA a un punteggio, ma NON lo è. Su una riga di\n'
+        '               espulsione definitiva il valore in colonna punteggio è un ARTICOLO,\n'
+        '               non un punteggio: NON deve MAI entrare nella progressione del\n'
+        '               punteggio né nei parziali/risultato finale.\n',
+    )
+    # (B) enum "type": aggiunge EXCLUSION_DEF ai tipi ammessi.
+    .replace(
+        '                    "type": "GOAL|EXCLUSION_20|YELLOW_CARD|RED_CARD|TIMEOUT|OTHER",\n',
+        '                    "type": "GOAL|EXCLUSION_20|EXCLUSION_DEF|YELLOW_CARD|RED_CARD|TIMEOUT|OTHER",\n',
+    )
+    # (B) schema: due campi additivi per l'espulsione definitiva, dopo sanction_duration.
+    .replace(
+        '                    "sanction_duration": <null o intero secondi (es: 20 per esclusione 20 secondi)>\n',
+        '                    "sanction_duration": <null o intero secondi (es: 20 per esclusione 20 secondi)>,\n'
+        '                    "sanction_sigla": "<sigla verbatim della sanzione come scritta sul foglio, es. \'EDCS\', o null>",\n'
+        '                    "regulation_article": "<numero d\'articolo di regolamento VERBATIM come stringa, es. \'9.13\', o null (SOLO per EXCLUSION_DEF)>"\n',
+    )
+)
+
 # Registro delle versioni di prompt selezionabili. Il default di produzione
 # resta "v2" (fallback tecnico); config/settings.py imposta v3 come default reale.
-# V3.2 e V3.3 sono sperimentali e NON promosse: si selezionano solo per-chiamata
-# (parametro prompt_version, usato dal bench: ocr_bench --prompt-version v3_3).
+# V3.2, V3.3 e V3.4 sono sperimentali e NON promosse: si selezionano solo per-chiamata
+# (parametro prompt_version, usato dal bench: ocr_bench --prompt-version v3_4).
 # Aggiungere una versione = una costante sopra + una entry qui.
 OCR_SYSTEM_PROMPTS = {
     "v2": OCR_SYSTEM_PROMPT_V2,
     "v3": OCR_SYSTEM_PROMPT_V3,
     "v3_2": OCR_SYSTEM_PROMPT_V3_2,
     "v3_3": OCR_SYSTEM_PROMPT_V3_3,
+    "v3_4": OCR_SYSTEM_PROMPT_V3_4,
 }
 
 # Prompt "solo zona" per il SECONDO passaggio della doppia estrazione
