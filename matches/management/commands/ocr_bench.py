@@ -916,9 +916,11 @@ class Command(BaseCommand):
             default="v2",
             help=(
                 "Versione del prompt di sistema da usare per l'estrazione "
-                "(default: v2, il prompt di produzione). La versione e l'hash "
-                "del prompt selezionato finiscono nei metadati di run: due run "
-                "sono confrontabili solo a parità di questa stringa."
+                "(default del bench: v2, per confrontabilità con le baseline "
+                "storiche; il prompt di PRODUZIONE è v3 dal 2026-07-23 — passare "
+                "--prompt-version v3 per misurare la produzione). La versione e "
+                "l'hash del prompt selezionato finiscono nei metadati di run: due "
+                "run sono confrontabili solo a parità di questa stringa."
             ),
         )
         parser.add_argument(

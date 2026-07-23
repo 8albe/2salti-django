@@ -785,7 +785,10 @@ class GeminiVisionProvider(BaseVisionProvider):
         sent_image_callback, se fornita, riceve il path del file effettivamente
         inviato al modello, prima della chiamata API. prompt_version seleziona
         il prompt di sistema fra OCR_SYSTEM_PROMPTS (override per-chiamata >
-        settings.OCR_PROMPT_VERSION > "v2": il default di produzione resta V2).
+        settings.OCR_PROMPT_VERSION > "v2" come fallback tecnico). Il default
+        di PRODUZIONE è **v3** dal 2026-07-23 (impostato in config/settings.py,
+        commit 1a6af02); "v2" resta solo il fallback se settings non definisce
+        OCR_PROMPT_VERSION.
 
         thinking_level / thinking_budget: minimizzazione dei token di ragionamento
         (fatturati come output). Default None su ENTRAMBI => nessun ThinkingConfig
@@ -804,11 +807,13 @@ class GeminiVisionProvider(BaseVisionProvider):
         # Modello: override per-chiamata > settings.GEMINI_MODEL > default
         model = model or getattr(settings, "GEMINI_MODEL", "gemini-2.5-pro")
 
-        # Prompt: override per-chiamata > settings.OCR_PROMPT_VERSION > v2.
-        # Risoluzione su OCR_ALL_PROMPTS: include sia le versioni di produzione
-        # (v2/v3) sia i prompt del secondo passaggio (zone), così il bench può
-        # richiedere "zone" per-chiamata senza che questo diventi una versione
-        # di produzione (OCR_PROMPT_VERSION resta v2 salvo decisione esplicita).
+        # Prompt: override per-chiamata > settings.OCR_PROMPT_VERSION > "v2"
+        # (l'ultimo è solo il fallback tecnico se settings non definisce la var;
+        # il default di produzione è v3 dal 2026-07-23, impostato in settings —
+        # commit 1a6af02). Risoluzione su OCR_ALL_PROMPTS: include sia le versioni
+        # di produzione (v2/v3) sia i prompt del secondo passaggio (zone), così il
+        # bench può richiedere "zone" per-chiamata senza che questo diventi una
+        # versione di produzione.
         prompt_version = prompt_version or getattr(settings, "OCR_PROMPT_VERSION", "v2")
         if prompt_version not in OCR_ALL_PROMPTS:
             raise ValueError(
