@@ -688,6 +688,28 @@ verificare è che V3.3 **conservi il guadagno del clock** (popolazione ~100%, sb
 posizionale rigore↔gol) **senza** il rumore sugli eventi introdotto dal blocco di ancoraggio di
 V3.2. Decisione di promozione: Alberto, sui numeri del bench.
 
+### 8.18 Gold referto 8 a truth + variante V3.4 (timeout + espulsione definitiva) — implementata, misura RIMANDATA per cap Gemini (2026-07-23)
+
+Giro interamente **offline** (cap di spesa Gemini ancora attivo, §8.17: nessuna chiamata reale tentata). Due obiettivi entrambi non-OCR.
+
+**(1) Referto 8 (Unime vs Nautilus Roma, 12-10) promosso a truth su EVENTI e ROSTER.** Trascrizione umana del cartaceo (Alberto), stessa forma del referto 11 (§8.14). **51 eventi**: 22 gol (12 casa Unime + 10 ospite Nautilus), 24 esclusioni di 20 secondi, **3 timeout** e **1 espulsione definitiva** (EDCS, art. 9.13); 2 roster (casa 14, ospite 12). `match_info` e attribuzione casa/trasferta **non toccati** (restano quelli già fissati: home = Unime). Le **4 asserzioni derivate esterne** (calcolate a valle dalla cronologia, non dal dato stesso) sono verificate e **TUTTE COINCIDONO**:
+- parziali per tempo **4-2 / 3-1 / 3-4 / 2-3**, finale **12-10** (corroborazione: gol-per-periodo derivati dalla storia cronometrica == riquadro parziali, registrata in `corroboration`, stato *concorde* — necessaria perché il caso è a `legibility.score` 2);
+- **fouled out** (≥3 esclusioni di 20 secondi): **SOLO casa #3 e casa #12**, nessun altro in nessuna delle due squadre;
+- **nessun giocatore supera 3** esclusioni (il check gold `players_over_exclusion_limit` resta a zero violazioni);
+- **3 rigori**, di cui **2 realizzati** (P3 6:48 → gol ospite #9 stesso clock; P4 4:23 → gol ospite #4 stesso clock, entrambi del Nautilus su fallo Unime) e **1 NON realizzato** (P2 6:20, nessun gol a quel clock). L'accoppiamento rigore→gol resta una **regola derivata a valle**, non codificata in truth.
+
+**Due casi-limite ratificati da Alberto, non-errori:** (a) **omonimia legittima** roster casa #11 e #13 = `sciabà g.` (fratelli, stesso cognome e iniziale); (b) **buco di numerazione** roster ospite senza il #3 (l'allenatore non ha convocato il massimo). Validazione **verificata, nessuna modifica richiesta**: il duplicato-nome emette al massimo un **warning informativo** (`"Duplicati: Nomi giocatore duplicati"`), **mai** un blocker (non è fra i `critical_keywords` di `assess_publish_readiness`); il buco di numerazione non genera **né** warning **né** blocker (l'unicità opera sui numeri presenti, la dimensione tollera 7-15). Il `normalized_data` del report 8 resta invariato: la truth eventi è **materiale di misura del bench**, non si riversa nel report (che resta NEEDS_REVIEW).
+
+**(2) Variante prompt V3.4** `OCR_SYSTEM_PROMPT_V3_4@sha256:4e9751eded9b` — **V3.4 = V3.3 (clock-only) + due semantiche nuove**, costruita per **sostituzione mirata su V3.3** (stesso meccanismo `.replace()` di V3.2/V3.3; ogni altra zona identica byte-per-byte a V3.3, blindato a test: rimuovendo le tre aggiunte si riottiene V3.3 e l'hash di V3.3 `dd9f2af28a1d` resta invariato):
+- **(A) TIMEOUT di squadra**: sul foglio `T.O.` con asterisco nella colonna della squadra; estratto come evento con `team` e `clock`, **senza calottina** (`player_name` null — il timeout è della squadra, non del giocatore);
+- **(B) ESPULSIONE DEFINITIVA** (`EXCLUSION_DEF`, sigla EDCS o equivalente): il prompt **NON** insegna la tassonomia degli articoli — riconosce solo che la riga è un'espulsione definitiva e non un gol, estrae l'**articolo verbatim** (`regulation_article`, es. `"9.13"`) e la **sigla verbatim** (`sanction_sigla`). Trappola OCR neutralizzata **esplicitamente**: l'articolo sta nella colonna del punteggio (nel referto 8 la riga sopra è il gol del 10-8) e **assomiglia a un punteggio**, ma è un ARTICOLO e non deve **mai** entrare nella progressione del punteggio.
+
+La **mappatura articolo → tipo** vive nel **nostro codice** (`matches/event_types.py`: `DEFINITIVE_EXCLUSION_ARTICLES` + `classify_definitive_exclusion`), non nel prompt, come **tabella dati esplicita** popolata **solo** con i due articoli verificati (`9.13` = cattiva condotta, senza rigore; `9.14` = brutalità, con rigore e squalifica). Qualunque altro articolo finisce nel ramo **sconosciuto** che conserva la stringa grezza e non blocca. Scelta di modello: `EXCLUSION_DEF` è un **tipo a sé** (non un attributo di `EXCLUSION_20`) perché il conteggio fouled-out/over-limit opera su `EXCLUSION_20` e il pooling corromperebbe quel conteggio (una definitiva non è una delle tre esclusioni di 20 secondi); inoltre porta campi che nessun altro evento porta. **NON** ancora fra i `DEFAULT_EVENT_TYPES` canonici pubblicabili: l'integrazione nel pipeline di pubblicazione (MatchEvent) è **fuori scope** di questo giro (report 8 non pubblicato).
+
+**V3.4 NON promossa**: default di produzione resta `v3` (V3.1). Selezionabile dal bench (`ocr_bench --prompt-version v3_4`) e via `settings.OCR_PROMPT_VERSION`. Hash fissato a test come per le altre versioni.
+
+**Stato di misura: sia V3.3 sia V3.4 sono DA MISURARE, bloccate dal cap di spesa Gemini** (§8.17). Nessuna chiamata reale in questo giro. La misura sul gold di entrambe resta al primo giro a cap rialzato (azione di Alberto sulla console AI Studio). Nuovi test a guardia (tutti mockati, verdi): hash V3.4, semantiche A/B presenti in V3.4 e assenti in V3.3, reversibilità V3.4→V3.3, mappatura `9.13`/`9.14`/sconosciuto, e le asserzioni derivate del referto 8 (fouled out casa #3/#12, timeout senza calottina, articolo mai come punteggio, rigore P2 non accoppiato).
+
 ---
 
 ← [Macro precedente](7_profilo_fan.md) | → [Macro successiva](9_sistema_sponsor.md)
