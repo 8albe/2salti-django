@@ -339,15 +339,59 @@ OCR_SYSTEM_PROMPT_V3_2 = (
     )
 )
 
+# V3.3 — variante CLOCK-ONLY di V3.1 (giro §8.17, 23/07): isola il guadagno
+# reale e indipendente misurato in V3.2 (§8.16) — il campo clock mm:ss — e
+# SCARTA l'ancoraggio di periodo per gli eventi isolati, che in V3.2 ha prodotto
+# zero movimento sul residuo e ha aggiunto peso/rumore alla sezione EVENTI.
+# UNA sola modifica additiva a V3.1, in due punti coordinati della sezione EVENTI:
+#   (a) istruzione "clock" (cronometro a scalare mm:ss) accanto a "minute", con
+#       la nota che gli stessi valori si ripetono nei quattro periodi (il clock
+#       NON identifica il periodo);
+#   (a') schema: campo "clock" additivo accanto a "minute" nell'oggetto evento.
+# Costruita per SOSTITUZIONE MIRATA su V3 con le stesse DUE .replace() del clock
+# di V3.2 (byte-identiche), OMESSA la terza .replace() dell'ancoraggio: così ogni
+# altra zona (punteggi, nomi, data, rigori, ancoraggio di periodo) resta IDENTICA
+# byte-per-byte a V3.1, e V3.3 differisce da V3.2 ESATTAMENTE per il solo blocco
+# di ancoraggio. Qualunque scarto misurato tra V3.1/V3.2 e V3.3 sulle zone
+# invariate è varianza di campionamento, non effetto del prompt.
+# NON è il default di produzione: si seleziona via settings.OCR_PROMPT_VERSION
+# o dal bench (ocr_bench --prompt-version v3_3). La promozione a default è una
+# decisione di prodotto sui numeri del bench, non un fatto tecnico.
+OCR_SYSTEM_PROMPT_V3_3 = (
+    OCR_SYSTEM_PROMPT_V3
+    # (a) CLOCK COMPLETO: cronometro a scalare mm:ss accanto al minuto.
+    # Byte-identica alla (a) di V3.2.
+    .replace(
+        "           - Importante: Trascrivi i gol (GOL) e le espulsioni (ET come EXCLUSION_20).\n",
+        "           - Importante: Trascrivi i gol (GOL) e le espulsioni (ET come EXCLUSION_20).\n"
+        "           - TEMPO (\"clock\"): la colonna Tempo è un CRONOMETRO A SCALARE dentro il\n"
+        "             periodo, in formato mm:ss: parte da circa 7:55 a inizio periodo e SCENDE\n"
+        "             fino a 0:00. Trascrivilo ESATTAMENTE come scritto nella stringa \"clock\"\n"
+        "             (es. \"4:44\", \"0:58\", \"0:09\"), oltre al campo \"minute\". NON arrotondare.\n"
+        "             Gli STESSI valori di clock si ripetono in tutti e quattro i periodi:\n"
+        "             il clock NON identifica il periodo, indica solo l'ordine dentro la sezione.\n",
+    )
+    # (a') schema: campo "clock" additivo accanto a "minute" nell'oggetto evento.
+    # Byte-identica alla (a) schema di V3.2.
+    .replace(
+        "                    \"minute\": <int o null>,\n"
+        "                    \"quarter\": <int o null>,\n",
+        "                    \"minute\": <int o null>,\n"
+        "                    \"clock\": \"<cronometro a scalare mm:ss come scritto sul foglio, es. '4:44', o null>\",\n"
+        "                    \"quarter\": <int o null>,\n",
+    )
+)
+
 # Registro delle versioni di prompt selezionabili. Il default di produzione
 # resta "v2" (fallback tecnico); config/settings.py imposta v3 come default reale.
-# V3.2 è sperimentale e NON promossa: si seleziona solo per-chiamata (parametro
-# prompt_version, usato dal bench: ocr_bench --prompt-version v3_2).
+# V3.2 e V3.3 sono sperimentali e NON promosse: si selezionano solo per-chiamata
+# (parametro prompt_version, usato dal bench: ocr_bench --prompt-version v3_3).
 # Aggiungere una versione = una costante sopra + una entry qui.
 OCR_SYSTEM_PROMPTS = {
     "v2": OCR_SYSTEM_PROMPT_V2,
     "v3": OCR_SYSTEM_PROMPT_V3,
     "v3_2": OCR_SYSTEM_PROMPT_V3_2,
+    "v3_3": OCR_SYSTEM_PROMPT_V3_3,
 }
 
 # Prompt "solo zona" per il SECONDO passaggio della doppia estrazione

@@ -983,15 +983,15 @@ class OcrPromptV3ContentTest(TestCase):
             "a0f50fbe5244",
         )
 
-    def test_registry_exposes_v2_v3_and_v3_2(self):
+    def test_registry_exposes_v2_v3_v3_2_and_v3_3(self):
         from matches.services.vision_providers import (
             OCR_SYSTEM_PROMPT_V2, OCR_SYSTEM_PROMPT_V3, OCR_SYSTEM_PROMPT_V3_2,
-            OCR_SYSTEM_PROMPTS,
+            OCR_SYSTEM_PROMPT_V3_3, OCR_SYSTEM_PROMPTS,
         )
         self.assertEqual(
             OCR_SYSTEM_PROMPTS,
             {"v2": OCR_SYSTEM_PROMPT_V2, "v3": OCR_SYSTEM_PROMPT_V3,
-             "v3_2": OCR_SYSTEM_PROMPT_V3_2},
+             "v3_2": OCR_SYSTEM_PROMPT_V3_2, "v3_3": OCR_SYSTEM_PROMPT_V3_3},
         )
 
     def test_v3_hash_is_pinned(self):
@@ -1086,6 +1086,108 @@ class OcrPromptV3ContentTest(TestCase):
             OCR_SYSTEM_PROMPT_V3_2[i4v32:].replace(clock_line, ""),
         )
 
+    def test_v3_3_hash_is_pinned(self):
+        # V3.3 è la variante CLOCK-ONLY di V3.1 (giro §8.17, 23/07): isola il solo
+        # guadagno reale di V3.2 (il campo clock mm:ss) e scarta l'ancoraggio di
+        # periodo per gli eventi isolati, che in §8.16 aveva prodotto zero movimento
+        # e aggiunto rumore. È costruita per sostituzione mirata su V3 con le stesse
+        # DUE .replace() del clock di V3.2, omessa la terza dell'ancoraggio: così
+        # punteggi/nomi/data/rigori/ancoraggio restano identici byte-per-byte a V3.1.
+        # Come V2/V3/V3.2, l'hash è fissato: un cambio deve essere una decisione
+        # esplicita, non silenziosa.
+        import hashlib
+        from matches.services.vision_providers import OCR_SYSTEM_PROMPT_V3_3
+        self.assertEqual(
+            hashlib.sha256(OCR_SYSTEM_PROMPT_V3_3.encode("utf-8")).hexdigest()[:12],
+            "dd9f2af28a1d",
+        )
+
+    def test_v3_3_adds_clock_only_without_period_anchoring(self):
+        """V3.3: c'è il clock mm:ss, NON c'è l'ancoraggio di periodo di V3.2."""
+        from matches.services.vision_providers import OCR_SYSTEM_PROMPT_V3_3
+        # (a) clock mm:ss a scalare, additivo accanto a minute — presente come in V3.2
+        self.assertIn("CRONOMETRO A SCALARE", OCR_SYSTEM_PROMPT_V3_3)
+        self.assertIn("il clock NON identifica il periodo", OCR_SYSTEM_PROMPT_V3_3)
+        self.assertIn('"clock": "<cronometro a scalare mm:ss', OCR_SYSTEM_PROMPT_V3_3)
+        # (b) l'ancoraggio di periodo rinforzato per l'evento isolato è ASSENTE:
+        # è ciò che distingue V3.3 (clock-only) da V3.2.
+        self.assertNotIn("UNICO evento di una squadra", OCR_SYSTEM_PROMPT_V3_3)
+        self.assertNotIn("NON spostare un evento isolato", OCR_SYSTEM_PROMPT_V3_3)
+
+    def test_v3_3_preserves_v3_1_byte_for_byte_except_clock(self):
+        """V3.3 differisce da V3.1 SOLO per le due righe additive del clock.
+
+        Garanzia sperimentale: qualunque scarto tra V3.1 e V3.3 sulle zone
+        invariate è varianza di campionamento, non effetto del prompt. Verifica
+        strutturale: togliendo dalla V3.3 le due sole aggiunte del clock
+        (istruzione nella sezione EVENTI + riga di schema) si riottiene V3.1
+        byte-per-byte.
+        """
+        from matches.services.vision_providers import (
+            OCR_SYSTEM_PROMPT_V3, OCR_SYSTEM_PROMPT_V3_3,
+        )
+        clock_line = (
+            '                    "clock": "<cronometro a scalare mm:ss '
+            "come scritto sul foglio, es. '4:44', o null>\",\n"
+        )
+        clock_instr = (
+            '           - TEMPO ("clock"): la colonna Tempo è un CRONOMETRO A SCALARE dentro il\n'
+            "             periodo, in formato mm:ss: parte da circa 7:55 a inizio periodo e SCENDE\n"
+            '             fino a 0:00. Trascrivilo ESATTAMENTE come scritto nella stringa "clock"\n'
+            '             (es. "4:44", "0:58", "0:09"), oltre al campo "minute". NON arrotondare.\n'
+            "             Gli STESSI valori di clock si ripetono in tutti e quattro i periodi:\n"
+            "             il clock NON identifica il periodo, indica solo l'ordine dentro la sezione.\n"
+        )
+        self.assertEqual(
+            OCR_SYSTEM_PROMPT_V3_3.replace(clock_line, "").replace(clock_instr, ""),
+            OCR_SYSTEM_PROMPT_V3,
+        )
+
+    def test_v3_3_differs_from_v3_2_only_by_period_anchoring(self):
+        """V3.3 (clock-only) = V3.2 meno il solo blocco di ancoraggio di periodo.
+
+        Isola sperimentalmente l'effetto dell'ancoraggio: V3.2 e V3.3 condividono
+        clock e ogni altra zona; l'unica differenza è il paragrafo di ancoraggio
+        rinforzato per gli eventi isolati, presente solo in V3.2.
+        """
+        from matches.services.vision_providers import (
+            OCR_SYSTEM_PROMPT_V3_2, OCR_SYSTEM_PROMPT_V3_3,
+        )
+        anchoring_v3_1 = (
+            '           - PERIODO DI OGNI EVENTO ("quarter"): la \'STORIA CRONOMETRICA\' è divisa in\n'
+            "             sezioni o blocchi, uno per periodo (1°, 2°, 3°, 4° tempo). Ricava il campo\n"
+            '             "quarter" di ogni evento dalla SEZIONE in cui l\'evento è scritto, non dal\n'
+            "             minuto e non dai punteggi parziali.\n"
+            "           - Se non riesci a stabilire con certezza in quale sezione/periodo cade un\n"
+            '             evento, scrivi null in "quarter": è un valore ammesso e preferibile.\n'
+            "             NON dedurre il periodo dal minuto e NON distribuire gli eventi fra i\n"
+            "             periodi per farli tornare con i punteggi parziali.\n"
+        )
+        anchoring_v3_2 = (
+            '           - PERIODO DI OGNI EVENTO ("quarter"): la \'STORIA CRONOMETRICA\' è divisa in\n'
+            "             sezioni o blocchi, uno per periodo (1°, 2°, 3°, 4° tempo). Ricava il campo\n"
+            '             "quarter" di ogni evento dalla SEZIONE in cui l\'evento è scritto, non dal\n'
+            "             minuto, non dal clock e non dai punteggi parziali.\n"
+            "           - Questo vale ANCHE quando un evento è l'UNICO evento di una squadra in una\n"
+            "             sezione: l'evento appartiene comunque al periodo della SEZIONE in cui è\n"
+            "             scritto sul foglio. NON spostare un evento isolato in un'altra sezione\n"
+            '             perché "sembra" appartenerci o per farlo coincidere con eventi di un altro\n'
+            "             periodo: la posizione sul foglio decide, non la plausibilità.\n"
+            "           - Se non riesci a stabilire con certezza in quale sezione/periodo cade un\n"
+            "             evento — isolato o no — scrivi null in \"quarter\": è un valore ammesso e\n"
+            "             preferibile a un periodo indovinato. NON dedurre il periodo dal minuto o\n"
+            "             dal clock e NON distribuire gli eventi fra i periodi per farli tornare con\n"
+            "             i punteggi parziali.\n"
+        )
+        # V3.3 contiene l'ancoraggio ORIGINALE di V3.1; V3.2 quello rinforzato.
+        self.assertIn(anchoring_v3_1, OCR_SYSTEM_PROMPT_V3_3)
+        self.assertNotIn(anchoring_v3_2, OCR_SYSTEM_PROMPT_V3_3)
+        # Riscrivendo in V3.2 l'ancoraggio rinforzato con quello di V3.1 si ottiene V3.3.
+        self.assertEqual(
+            OCR_SYSTEM_PROMPT_V3_2.replace(anchoring_v3_2, anchoring_v3_1),
+            OCR_SYSTEM_PROMPT_V3_3,
+        )
+
 
 class OcrZonePromptTest(TestCase):
     """Guardrail sul prompt del secondo passaggio (zone) e sui registri dei prompt."""
@@ -1093,20 +1195,21 @@ class OcrZonePromptTest(TestCase):
     def test_second_pass_registry_and_all_prompts(self):
         from matches.services.vision_providers import (
             OCR_SYSTEM_PROMPT_V2, OCR_SYSTEM_PROMPT_V3, OCR_SYSTEM_PROMPT_V3_2,
-            OCR_SYSTEM_PROMPT_ZONE,
+            OCR_SYSTEM_PROMPT_V3_3, OCR_SYSTEM_PROMPT_ZONE,
             OCR_SYSTEM_PROMPTS, OCR_SECOND_PASS_PROMPTS, OCR_ALL_PROMPTS,
         )
-        # La registry di produzione espone v2/v3/v3_2: zone è tenuta separata.
+        # La registry di produzione espone v2/v3/v3_2/v3_3: zone è tenuta separata.
         self.assertEqual(
             OCR_SYSTEM_PROMPTS,
             {"v2": OCR_SYSTEM_PROMPT_V2, "v3": OCR_SYSTEM_PROMPT_V3,
-             "v3_2": OCR_SYSTEM_PROMPT_V3_2},
+             "v3_2": OCR_SYSTEM_PROMPT_V3_2, "v3_3": OCR_SYSTEM_PROMPT_V3_3},
         )
         self.assertEqual(OCR_SECOND_PASS_PROMPTS, {"zone": OCR_SYSTEM_PROMPT_ZONE})
         self.assertEqual(
             OCR_ALL_PROMPTS,
             {"v2": OCR_SYSTEM_PROMPT_V2, "v3": OCR_SYSTEM_PROMPT_V3,
-             "v3_2": OCR_SYSTEM_PROMPT_V3_2, "zone": OCR_SYSTEM_PROMPT_ZONE},
+             "v3_2": OCR_SYSTEM_PROMPT_V3_2, "v3_3": OCR_SYSTEM_PROMPT_V3_3,
+             "zone": OCR_SYSTEM_PROMPT_ZONE},
         )
 
     def test_zone_prompt_inherits_v3_rules_and_is_minimal(self):
