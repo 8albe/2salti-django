@@ -129,7 +129,17 @@ class MatchEvent(models.Model):
     
     # Extra info
     notes = models.CharField(max_length=200, blank=True, help_text="Es: 'Su rigore', 'Doppia espulsione'")
-    
+
+    # Metadati sanzione — valorizzati solo su un'espulsione definitiva (EDCS)
+    # proiettata come RED_CARD; null su ogni altro evento e anche su un rosso
+    # legittimo privo di articolo (il V3 di produzione emette il rosso SENZA
+    # articolo, il V3.4 come EXCLUSION_DEF CON articolo: entrambe le forme sono
+    # valide, nessuna validazione qui pretende l'articolo). Estratti VERBATIM
+    # dall'OCR e portati a valle dal converter; la classificazione della sanzione
+    # NON si persiste: si deriva a render-time da classify_definitive_exclusion.
+    regulation_article = models.CharField(max_length=20, null=True, blank=True, help_text="Articolo di regolamento verbatim (es. '9.13'), solo per espulsione definitiva")
+    sanction_sigla = models.CharField(max_length=50, null=True, blank=True, help_text="Sigla verbatim della sanzione come scritta sul referto (es. 'EDCS')")
+
     created_at = models.DateTimeField(auto_now_add=True)
     
     def __str__(self):
