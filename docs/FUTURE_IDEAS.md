@@ -104,3 +104,11 @@ Costo della valutazione: quasi nullo. Alibaba Cloud Model Studio dà ~70M token 
 PREREQUISITO NON NEGOZIABILE: valutazione privacy prima di qualunque chiamata con referti reali. I referti contengono nomi e cognomi di atleti potenzialmente minorenni, e l'endpoint è extra-UE. La valutazione va fatta prima della misura, non dopo.
 
 Sequenziamento: viene dopo il test dello zero-autori su Flash, perché quel test decide se il lettore primario resta Pro o diventa Flash, e quindi quale posto Qwen andrebbe a occupare.
+
+Aggiornamento 2026-07-23 (cambiano i presupposti, l'idea resta valida):
+- La free quota gratuita è **solo** sull'endpoint **Singapore (extra-UE)**; la regione **Germany (Frankfurt)** è disponibile ma **a pagamento** — eliminerebbe il trasferimento extra-UE (chiude il prerequisito privacy) al prezzo di rinunciare al credito gratuito.
+- **Qwen3-VL risulta superato dalla serie Qwen3.6**: il candidato concreto andrebbe rivalutato su quella generazione, non su Qwen3-VL.
+- Serve comunque un **account cloud nuovo** (non posseduto), e al volume attuale il risparmio API non ripaga il costo d'accesso.
+- Il candidato "famiglia diversa" più a portata (chiave già presente, provider già scritto) — **OpenAI gpt-5** — è stato misurato in §8.23 con **esito negativo**: con `v3_4` invariato gpt-5 si astiene (asse A debole, autori a zero) e non è un secondo lettore migliore di Flash. Questo **non** falsifica Qwen (modello e prompt diversi), ma alza l'asticella: un secondo lettore di altra famiglia va misurato, non assunto migliore, e va dato un prompt che non ne spenga la resa.
+
+Le tre condizioni che riaprirebbero il dossier (tutte necessarie): (a) il cross-check con lettore di altra famiglia **funziona davvero** — cioè su un gold più grande Pro+Flash mostra un blind spot > 0 materiale, dando alla famiglia diversa un punto cieco vero da restringere (oggi Pro+Flash è a blind=0, §8.20/§8.23: non c'è nulla da restringere); (b) **i nomi diventano il collo di bottiglia** della pipeline pubblicabile; (c) **le vie alternative sui nomi sono state provate e non bastano** (reasoning alto su Flash — già risolutivo in §8.22 — e prompt tarato sul modello secondario).

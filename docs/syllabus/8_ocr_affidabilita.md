@@ -874,6 +874,48 @@ Zero stabili-sbagliati su finale/parziali/data in entrambe le configurazioni: al
 
 **Esito e riapertura.** §8.20 aveva chiuso "Flash → solo `SCORE_ONLY`" con l'esplicita clausola "si riapre se un prompt tarato su Flash recupera l'attribuzione". Il giro mostra che **non serve un prompt nuovo**: basta il **parametro** `thinking_level='high'`, e `v3_4` resta invariato. Flash + `v3_4` + `high` è quindi tecnicamente candidabile anche al `FULL` (autori 100%, asse A non-inferiore). Ma la scelta non è più tecnica bensì **economica**: a parità di costo con Pro e con Pro già in produzione e collaudato end-to-end (§8.21), promuovere Flash a `FULL` non ha una giustificazione di risparmio. **Nulla promosso: questo giro misura, non decide.** La nicchia `SCORE_ONLY` per Flash-a-`minimal` (economico, autori irrilevanti) resta valida e distinta.
 
+### 8.23 Secondo lettore OpenAI (gpt-5, famiglia diversa) nel cross-check — misura, esito NEGATIVO (2026-07-23)
+
+Giro **bench-only e di misura** (nulla promosso, produzione intatta): rimettere in piedi un provider di visione **OpenAI** dietro il seam esistente e misurarlo come **secondo lettore** del cross-check §8.20. Ipotesi da testare (registrata in [[FUTURE_IDEAS.md]]): un lettore di **famiglia diversa** da Gemini dovrebbe commettere errori più **scorrelati** della coppia Pro/Flash (stesso addestramento), quindi restringere il punto cieco (concordi-e-sbagliati).
+
+**Perché OpenAI e non Qwen.** Qwen richiede un account cloud nuovo, con free quota **solo** sull'endpoint Singapore (extra-UE, referti con nomi di minori), e al volume attuale il risparmio API non ripaga il costo d'accesso; inoltre Qwen3-VL risulta superato dalla serie Qwen3.6 (dettaglio e condizioni di riapertura in [[FUTURE_IDEAS.md]]). OpenAI ha invece la chiave già presente (dev), il pacchetto già in `requirements` (AIStatsEngine), e il seam provider era nato attorno a OpenAI prima della migrazione a Gemini.
+
+**Configurazione.** Provider `OpenAIVisionProvider` **riscritto da zero** sull'interfaccia attuale `extract_data` (il vecchio `GPT4oVisionProvider`, rimosso in `6b67385`, era codice morto: `gpt-4o`, `max_tokens=4000`, nessun reasoning) — stesso seam di GeminiVisionProvider, stesso schema OCR v2, prompt `v3_4` **invariato** via `OCR_ALL_PROMPTS`, OpenAI Chat Completions con immagine data-URI `detail=high`, `max_completion_tokens=OCR_MAX_OUTPUT_TOKENS`. **NON** nel path di produzione: `OCRService.get_provider()` non lo conosce, selezionabile SOLO dal bench (`--provider openai`, default resta `gemini`). Nessun tocco a `config/settings.py` (`OPENAI_OCR_MODEL` non definito → fallback `gpt-5`). Modello: **`gpt-5`** (non le 5.4/5.5/5.6 disponibili sull'account: pricing a listino noto e stabile, indispensabile col tetto di spesa). **`reasoning_effort='high'`** (lezione §8.22: mai lasciare il ragionamento al minimo), mappato dal flag `--thinking-level high`. Protocollo §8.12/§8.22: 6 casi × `--repeat 3`, Triscelon con `--image`, preprocessing on.
+
+**Lezione §8.22 applicata alla calibrazione.** Prima chiamata (referto 8, il più denso): gpt-5 legge finale/data/nomi ma restituisce **0 eventi e 0 roster casa** (`finish_reason=stop`, non troncato). Prima ipotesi da falsificare = il parametro di ragionamento — ma reasoning è **già `high` e consumato** (7.360 thought token su quella chiamata): lo zero-eventi **NON è H1** (budget di ragionamento). gpt-5 **si astiene**, dichiarando nei warning "roster casa quasi illeggibile", "storia cronometrica poco leggibile: gol/espulsioni non estratti": applica **alla lettera** la regola null-preference di `v3_4` (tarata su Pro). È un effetto **H2/prompt-interaction**, non un limite di reasoning. Come da vincolo del giro, `v3_4` **non è stato toccato** (misurare il modello, non il prompt): l'astensione è un esito, registrato com'è.
+
+**Tre assi (78 campi = 13×6, metodo stability-aware §8.19/§8.20/§8.22):**
+
+| Asse | gpt-5 `v3_4` `high` | riferimento |
+|---|---|---|
+| **A** punteggi/parziali/data — buckets | **19 sc / 3 sw / 21 null / 24 inst / 11 amb** | Pro V3.1 58/3/0/15/2 · Flash `high` 66/0/–/12/0 (§8.22) |
+| **AUTORI** (sui gol) | **0 gol estratti su tutti i 6 casi, tutte le ripetizioni → 0 autori** | Flash `high` 100% autori, 21–32 gol/caso (§8.22) |
+| **CROSS-CHECK** Pro↔gpt-5 (campi comparabili) | vedi sotto | Pro↔Flash §8.20 |
+
+Sull'**asse A** gpt-5 è **nettamente più debole**: 19 stabili-corretti contro 58–66, con **21 campi null** (astensione dichiarata) e **24 instabili**. Sull'**asse autori** l'astensione è **totale**: 0 gol su 18 estrazioni. La "coincidenza cognome↔truth" è **non applicabile** (nessun autore emesso); il roster è inutilizzabile (roster casa vuoto, calottine `null` sull'ospite → nessun aggancio per numero).
+
+**Cross-check Pro↔gpt-5.** Le proposte Pro `v3_4` di §8.19/§8.20 erano in scratchpad e non sono più su disco; le varianti V3.x differiscono da `v3_4` **solo sugli eventi**, non su punteggi/parziali/data/nomi, quindi come proxy dell'asse-a-di-v3_4 è stata usata la Pro **V3.1** (default di produzione; controprova su Pro V2 sotto). Nessuna chiamata Pro rifatta.
+
+| Metrica (Pro V3.1 ↔ gpt-5 `v3_4`) | Valore | §8.20 Pro↔Flash |
+|---|---|---|
+| campi comparabili | **48** (esclusi 30 null su gpt-5) | 78 (0 esclusi) |
+| concordi-e-giusti | 30 | 70 |
+| **concordi-e-SBAGLIATI (cieco)** | **0** | **0** |
+| discordi, ≥1 giusto | 16 | 4 |
+| discordi, entrambi sbagliati | 2 | 4 |
+| error_fields / recall_union | 18 / **100%** | 8 / 100% |
+| **blind_rate** | **0% (0/18)** | 0% (0/8) |
+
+Controprova su **Pro V2**: blind **0/20**, comparabili 48 — stesso esito, robusto al prompt Pro. gpt-5 **cattura entrambi gli errori stabili di Pro** verificati in §8.20 (Triscelon data: Pro `2026-04-28` stabile-sbagliato, gpt-5 `2026-04-25` giusto → DISCORDI; Bellator finale casa: Pro `5`, gpt-5 `7`, entrambi ≠4 → DISCORDI).
+
+**Confronto dei punti ciechi (la sola domanda per cui il giro esiste).** Entrambe le coppie hanno **blind = 0**: Pro+Flash (stessa famiglia) 0/8, Pro+gpt-5 (famiglia diversa) 0/18. **Il campione è troppo piccolo per distinguerle**, e per una ragione strutturale: Pro+Flash **era già a 0** su questo gold — non c'è un punto cieco da restringere, quindi la famiglia diversa **non può dimostrare** un miglioramento qui. Peggio: l'astensione pesante di gpt-5 **restringe la copertura** del rilevatore da 78 a **48 campi** (30 campi senza alcuna lettura del secondo braccio → nessun segnale di divergenza lì), l'opposto di ciò che serve a un secondo lettore. La regola del tre (blind 0 su 18 errori) dà comunque un limite superiore ~**3/18 ≈ 17%** sul tasso di mancati reali: lo 0% osservato non è una garanzia.
+
+**Esito — NEGATIVO, registrato con la stessa chiarezza di un positivo (task 13).** Su questo gold **gpt-5 con `v3_4` non è un secondo lettore migliore di Flash**, è **peggiore**: (a) asse A molto più debole con astensione sul 27% dei campi (21/78 null) e alta instabilità; (b) asse autori a **zero** (Flash-`high` fa 100%); (c) il cross-check resta blind=0 ma su **meno copertura** (48 vs 78 campi), e il blind=0 non è attribuibile alla diversità di famiglia perché la coppia same-family era già a 0. **La leva §8.22 (alzare il reasoning) NON recupera gpt-5** come recuperava Flash: qui il ragionamento è già `high` e l'astensione è guidata dal prompt, non dal budget. Un recupero richiederebbe un prompt **tarato su gpt-5** (regola null-preference meno rigida) — fuori dal vincolo del giro (misurare il modello, non il prompt) e non tentato.
+
+**Costo reale.** 18 chiamate batch + 1 calibrazione = **19 chiamate reali**. `68.821 tok in / 133.531 tok out` (di cui **119.488 reasoning token**, fatturati come output). A listino gpt-5 ($1,25/M in, $10/M out): **$1,42** (batch $1,33 + calibrazione $0,087), **sotto il tetto di $3**. Tutto BENCH-ONLY: `OCR_PROMPT_VERSION`, provider e modello di default **intatti**.
+
+**Cosa riaprirebbe il dossier OpenAI.** (a) un prompt tarato su gpt-5 che ne spenga l'astensione senza regredire i punteggi (misurerebbe il modello a parità di disponibilità a leggere); (b) un gold molto più grande dove Pro+Flash mostri un blind > 0 **materiale**, dando alla famiglia diversa un punto cieco vero da restringere. Finché Pro+Flash resta a blind=0, un terzo lettore di altra famiglia non ha un problema da risolvere.
+
 ---
 
 ← [Macro precedente](7_profilo_fan.md) | → [Macro successiva](9_sistema_sponsor.md)
