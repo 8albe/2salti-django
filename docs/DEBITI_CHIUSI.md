@@ -349,6 +349,46 @@ Due difetti della stessa famiglia (data UTC dove serviva Europe/Rome), **severit
 
 *Residuo:* nessuno.
 
+### §10.35 `EXCLUSION_DEF` perde i metadati sanzione al publish e si proietta come codice grezzo — CHIUSA 2026-07-23
+
+*Cosa era:* l'espulsione definitiva (EDCS) era un tipo di schema OCR/gold non integrato nella pipeline pubblicabile. Al converter `MatchDataConverter.get_events_data` faceva passare il tipo verbatim ma **scartava silenziosamente** `regulation_article` e `sanction_sigla` — proprio i campi che distinguono una definitiva da un evento generico. A valle l'evento si proiettava come codice tecnico (punto etichetta poi scorporato in §10.38). Blast radius allora nullo (V3.4 non default di produzione, referto 8 non pubblicato), ma perdita di dato latente e reale su un percorso vivo.
+
+*Disegno ratificato:* `RED_CARD` ed `EXCLUSION_DEF` descrivono **lo stesso evento reale** in pallanuoto (l'EDCS), e `RED_CARD` è già un tipo canonico pubblicabile con blocco di template dedicato. La chiusura non introduce un tipo parallelo ma **arricchisce il `RED_CARD` esistente**.
+
+*Chiuso:*
+- **Modello + migration** ([matches/models.py](../matches/models.py), migration `0021_matchevent_sanction_metadata`): due `CharField` nullable additivi su `MatchEvent` — `regulation_article` (max 20) e `sanction_sigla` (max 50). Migration unica, puramente additiva, nessuna data-migration. Il campo `player` era già nullable: non toccato.
+- **Converter** ([matches/services/converters.py](../matches/services/converters.py)): `EXCLUSION_DEF` → `RED_CARD`; `regulation_article` e `sanction_sigla` portati a valle **verbatim**. Possono restare **null** su un rosso legittimo (forma V3 di produzione, che emette `RED_CARD` senza articolo): nessuna validazione li pretende. La classificazione **non** si persiste — si deriva a render-time da `classify_definitive_exclusion`.
+- **Publishing** ([matches/services/publishing_service.py](../matches/services/publishing_service.py)): i due campi passati a `MatchEvent.objects.create(...)`.
+- **Invarianza fouled-out:** il conteggio opera solo su `EXCLUSION_20` ([matches/stats_services.py](../matches/stats_services.py)) e la mappatura porta a `RED_CARD`, non a `EXCLUSION_20` — un test lo asserisce esplicitamente.
+
+*Test:* [matches/tests_event_enrichment.py](../matches/tests_event_enrichment.py) — mappatura, metadati verbatim (forma V3.4), rosso senza articolo (forma V3), l'`EXCLUSION_DEF` che non diventa mai `EXCLUSION_20`, e la persistenza al publish con metadati. Suite intera verde (886 test, skipped=2).
+
+*Residuo:* nessuno per §10.35. Il prompt V3.4 resta prompt di misura (non default): la promozione è una decisione di prodotto separata. Il warning sugli eventi non riconciliati e il fallback etichetta sono §10.37 / §10.38, chiusi nello stesso giro.
+
+### §10.37 Gli eventi senza `player_id` vengono scartati in silenzio al publish — CHIUSA 2026-07-23
+
+*Cosa era:* `publish_report` creava il `MatchEvent` **solo** se `ed["player_id"]` era valorizzato. Conseguenze: i **TIMEOUT** (per contratto `player_name` null: il timeout è della squadra) **non venivano mai persistiti** — cadevano nel ramo di scarto pur essendo statistiche di livello Base promesse dal BLUEPRINT §7.4.3; un **rosso/esclusione non riconciliato per nome** veniva scartato **senza traccia né warning**.
+
+*Chiuso:* distinzione per natura dell'evento resa **strutturale** — attributo `is_team_level` del tipo in [matches/event_types.py](../matches/event_types.py) (con helper `is_team_level_event`), non un elenco di stringhe nel publishing:
+- Eventi **team-level** (TIMEOUT): persistiti con `player=None`, squadra e riferimento temporale (`minute`/`quarter`).
+- Eventi **player-level non riconciliati**: **non** persistiti (non attribuibili) ma **non** più inghiottiti — confluiscono nella lista `warnings` già usata da audit/log e resa nel messaggio di review, con l'evento e il nome che non ha agganciato il roster.
+
+*Vincolo rispettato:* è un **WARNING, non un blocker**. Nessun blocker nuovo introdotto: la lista `warnings` esistente non alimenta i marker event-scoped di `schema.py`, quindi i publish SCORE_ONLY non sono toccati. Nessun campo `clock` aggiunto a `MatchEvent` (fuori scope, deciso a monte): i timeout usano i campi temporali esistenti `minute`/`quarter`.
+
+*Test:* [matches/tests_event_enrichment.py](../matches/tests_event_enrichment.py) — persistenza TIMEOUT con `player` null; warning col nome sull'evento player-level non riconciliato + sua non-persistenza.
+
+*Residuo:* la riconciliazione resta **per nome, non per calottina** ([matches/services/converters.py](../matches/services/converters.py)): un giocatore reale con nome divergente dal roster produce ora un warning (non più uno scarto silenzioso), ma non viene agganciato — il match per calottina resta un possibile miglioramento futuro, fuori dallo scope di questo giro.
+
+### §10.38 `display_label` mostra il codice tecnico perché `SportEventConfig` è vuota — CHIUSA 2026-07-23
+
+*Cosa era:* `display_label` consultava **solo** `SportEventConfig` e ripiegava su `self.event_type` (codice grezzo). La tabella è **vuota** su dev e prod (verificato read-only), quindi ogni evento pubblicato mostrava all'utente la stringa tecnica (es. `"RED_CARD"`) dove `{{ event.display_label }}` è reso — testo rivolto al pubblico. `EVENT_LABELS`/`get_event_label` esistevano ma non erano chiamati dalla resa.
+
+*Chiuso:* [matches/models.py](../matches/models.py) — `display_label` è ora una catena a tre livelli: `SportEventConfig` (override per sport) → `get_event_label`/`EVENT_LABELS` (default centralizzati a codice, [matches/event_types.py](../matches/event_types.py)) → codice grezzo (ultima spiaggia). Fix **a codice**, nessun dato seminato: funziona in ogni ambiente senza dipendere da righe in tabella. `SportEventConfig` **resta** l'override più alto (personalizzazione per sport). `EVENT_LABELS` copre per costruzione tutti i `DEFAULT_EVENT_TYPES`.
+
+*Test:* [matches/tests_display_label.py](../matches/tests_display_label.py) — con `SportEventConfig` vuota restituisce l'etichetta leggibile e non il codice; l'override quando presente vince; il tipo mai visto ripiega sul grezzo; copertura di tutti i `DEFAULT_EVENT_TYPES`.
+
+*Residuo:* nessuno.
+
 ### §12.9 Debito semantico A1: utility `cyan-*` che rendono blue (Macro 17 Fase 2) — SALDATO 2026-06-30 (A2, `dev`); archiviato qui 2026-07-22
 
 > **ID fuori serie** (unica voce non-§10.x): la voce nasce come §12.9 di OPS_RUNBOOK — sezione 12 "Verifiche e regole di processo", non la sezione 10 dei debiti — e conserva l'ID originale perché syllabus Macro 17, session note e memorie la citano come "OPS §12.9": la continuità di citazione vale più dell'uniformità di numerazione. In OPS_RUNBOOK §12.9 resta il rimando.
