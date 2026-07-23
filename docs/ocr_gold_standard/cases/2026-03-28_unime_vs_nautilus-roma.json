@@ -18,7 +18,7 @@
     "db_match_pk": 2,
     "db_league_pk": 3,
     "db_league_name": "serie B Maschile",
-    "db_lookup_note": "Verificato sul sistema vivo il 2026-07-19 (dev e prod identici a quella data per questo match). Match id=2, report id=8 (NEEDS_REVIEW, mai pubblicato). PRIMA della correzione, il DB aveva casa/trasferta INVERTITI rispetto a questa verita' cartacea: home_team=Nautilus N. Roma (12), away_team=Unime (10) — il vincitore registrato era sbagliato. CORRETTO SU DEV il 2026-07-19: scambiate le FK home_team/away_team insieme a punteggio e parziali nella stessa transazione (audit MATCH_SCORE_CORRECTED, before/after allegati; is_data_verified ora True). Nessun MatchEvent e nessuna Convocation collegati al match (recon pre-correzione: zero effetti collaterali su altre tabelle). PROD ancora al valore invertito: correzione preparata ma non eseguita (fuori scope di questo giro, richiede intervento di Alberto). report.normalized_data del report 8: l'attribuzione casa/trasferta NON era invertita (home = Unime, gia' corretta) — l'inversione stava nelle FK del Match (home_team/away_team), sistemate il 2026-07-19, NON nel normalized_data (correzione della nota precedente, imprecisa). Sbagliati erano invece i punteggi/parziali del normalized_data, RIPARATI dal gold il 2026-07-21 (solo dev, audit 'normalized_data_repair_gold': scores 12-10 con parziali 4-2/3-1/3-4/2-3). Il report resta NEEDS_REVIEW e non va ancora pubblicato: dopo la riparazione gli eventi restano incoerenti coi parziali per costruzione (il gold non copre gli eventi).",
+    "db_lookup_note": "Verificato sul sistema vivo il 2026-07-19 (dev e prod identici a quella data per questo match). Match id=2, report id=8 (NEEDS_REVIEW, mai pubblicato). PRIMA della correzione, il DB aveva casa/trasferta INVERTITI rispetto a questa verita' cartacea: home_team=Nautilus N. Roma (12), away_team=Unime (10) — il vincitore registrato era sbagliato. CORRETTO SU DEV il 2026-07-19: scambiate le FK home_team/away_team insieme a punteggio e parziali nella stessa transazione (audit MATCH_SCORE_CORRECTED, before/after allegati; is_data_verified ora True). Nessun MatchEvent e nessuna Convocation collegati al match (recon pre-correzione: zero effetti collaterali su altre tabelle). PROD ancora al valore invertito: correzione preparata ma non eseguita (fuori scope di questo giro, richiede intervento di Alberto). report.normalized_data del report 8: l'attribuzione casa/trasferta NON era invertita (home = Unime, gia' corretta) — l'inversione stava nelle FK del Match (home_team/away_team), sistemate il 2026-07-19, NON nel normalized_data (correzione della nota precedente, imprecisa). Sbagliati erano invece i punteggi/parziali del normalized_data, RIPARATI dal gold il 2026-07-21 (solo dev, audit 'normalized_data_repair_gold': scores 12-10 con parziali 4-2/3-1/3-4/2-3). Il report resta NEEDS_REVIEW e non va ancora pubblicato: gli eventi del normalized_data restano incoerenti coi parziali per costruzione (l'estrazione OCR non e' stata riparata). Nota: da questo giro (2026-07-23) il gold COPRE gli eventi (vedi truth.events), ma il normalized_data del report resta invariato — la truth eventi e' materiale di misura del bench, non viene riversata nel report.",
     "season": "2025/2026",
     "date": "2026-03-28",
     "competition_on_paper": "Serie B",
@@ -51,14 +51,121 @@
         "3": [3, 4],
         "4": [2, 3]
       }
+    },
+    "_conventions": {
+      "clock": "cronometro a scalare del periodo in formato mm:ss; scende da ~8:00 (inizio) a 0:00 (fine). NON e' un minuto progressivo di partita: gli stessi valori si ripetono nei quattro periodi.",
+      "cap": "numero di calottina del giocatore. 'team' home=Unime (B sul foglio), away=Nautilus Roma (N sul foglio). NON dedurre home/away da B/N: l'attribuzione casa/trasferta e' quella gia' fissata in match (home=Unime), non ricavata dalle sigle.",
+      "goal_cap": "sui gol, 'cap' e' chi ha segnato; 'score_after' e' il punteggio progressivo home-away (Unime-Nautilus) dopo il gol.",
+      "rigore_gol_coupling": "NON codificato in questa truth: l'accoppiamento rigore->gol e' una REGOLA derivata (gol allo stesso clock+periodo di un'espulsione is_penalty = rigore realizzato; assenza = non realizzato), da calcolare a valle, non un'osservazione.",
+      "is_penalty": "su un'espulsione, is_penalty=true significa che quell'espulsione ha COMPORTATO un tiro di rigore per la squadra avversaria (il cap e' chi commette il fallo, non chi tira). Sui GOL is_penalty NON e' impostato in truth: quale gol sia su rigore e' derivato (stesso clock+periodo di un'espulsione is_penalty), non osservato sulla riga del gol.",
+      "timeout": "type=TIMEOUT: il timeout e' della SQUADRA, non del giocatore. Ha 'team' e 'clock' ma NON ha 'cap' (nessun numero di calottina). Sul foglio e' siglato 'T.O.' con asterisco nella colonna della squadra che lo ha chiamato.",
+      "definitive_exclusion": "type=EXCLUSION_DEF: espulsione definitiva (sigla EDCS o equivalente sul foglio), sanzione DISTINTA dall'esclusione di 20 secondi. Porta 'regulation_article' (numero d'articolo verbatim, es. '9.13') e 'sanction_sigla' (sigla verbatim). L'articolo e' scritto nella colonna del PUNTEGGIO e NON e' un punteggio: non entra nella progressione. La mappatura articolo->tipo di espulsione vive nel codice (matches/event_types.py DEFINITIVE_EXCLUSION_ARTICLES), non qui. Un'espulsione definitiva NON conta fra le esclusioni di 20 secondi (tipo diverso): non entra nel conteggio fouled-out."
+    },
+    "events": [
+      {"type": "GOAL", "team": "home", "cap": 9, "quarter": 1, "clock": "7:40", "score_after": "1-0"},
+      {"type": "GOAL", "team": "home", "cap": 7, "quarter": 1, "clock": "5:13", "score_after": "2-0"},
+      {"type": "GOAL", "team": "away", "cap": 6, "quarter": 1, "clock": "4:43", "score_after": "2-1"},
+      {"type": "GOAL", "team": "home", "cap": 5, "quarter": 1, "clock": "4:11", "score_after": "3-1"},
+      {"type": "GOAL", "team": "home", "cap": 12, "quarter": 1, "clock": "1:57", "score_after": "4-1"},
+      {"type": "GOAL", "team": "away", "cap": 9, "quarter": 1, "clock": "1:26", "score_after": "4-2"},
+
+      {"type": "GOAL", "team": "away", "cap": 8, "quarter": 2, "clock": "7:15", "score_after": "4-3"},
+      {"type": "GOAL", "team": "home", "cap": 8, "quarter": 2, "clock": "6:44", "score_after": "5-3"},
+      {"type": "GOAL", "team": "home", "cap": 11, "quarter": 2, "clock": "2:31", "score_after": "6-3"},
+      {"type": "GOAL", "team": "home", "cap": 12, "quarter": 2, "clock": "1:44", "score_after": "7-3"},
+
+      {"type": "GOAL", "team": "home", "cap": 7, "quarter": 3, "clock": "7:13", "score_after": "8-3"},
+      {"type": "GOAL", "team": "away", "cap": 9, "quarter": 3, "clock": "6:48", "score_after": "8-4"},
+      {"type": "GOAL", "team": "home", "cap": 12, "quarter": 3, "clock": "5:23", "score_after": "9-4"},
+      {"type": "GOAL", "team": "away", "cap": 6, "quarter": 3, "clock": "4:56", "score_after": "9-5"},
+      {"type": "GOAL", "team": "home", "cap": 11, "quarter": 3, "clock": "4:24", "score_after": "10-5"},
+      {"type": "GOAL", "team": "away", "cap": 8, "quarter": 3, "clock": "4:04", "score_after": "10-6"},
+      {"type": "GOAL", "team": "away", "cap": 4, "quarter": 3, "clock": "3:11", "score_after": "10-7"},
+
+      {"type": "GOAL", "team": "away", "cap": 12, "quarter": 4, "clock": "6:39", "score_after": "10-8"},
+      {"type": "GOAL", "team": "home", "cap": 8, "quarter": 4, "clock": "5:09", "score_after": "11-8"},
+      {"type": "GOAL", "team": "home", "cap": 8, "quarter": 4, "clock": "4:35", "score_after": "12-8"},
+      {"type": "GOAL", "team": "away", "cap": 4, "quarter": 4, "clock": "4:23", "score_after": "12-9"},
+      {"type": "GOAL", "team": "away", "cap": 8, "quarter": 4, "clock": "0:30", "score_after": "12-10"},
+
+      {"type": "EXCLUSION_20", "team": "away", "cap": 8, "quarter": 1, "clock": "5:17", "sanction_duration": 20},
+      {"type": "EXCLUSION_20", "team": "home", "cap": 10, "quarter": 1, "clock": "4:57", "sanction_duration": 20},
+      {"type": "EXCLUSION_20", "team": "home", "cap": 7, "quarter": 1, "clock": "4:53", "sanction_duration": 20},
+      {"type": "EXCLUSION_20", "team": "away", "cap": 9, "quarter": 1, "clock": "4:19", "sanction_duration": 20},
+
+      {"type": "EXCLUSION_20", "team": "home", "cap": 10, "quarter": 2, "clock": "6:20", "sanction_duration": 20, "is_penalty": true},
+      {"type": "EXCLUSION_20", "team": "away", "cap": 4, "quarter": 2, "clock": "3:59", "sanction_duration": 20},
+      {"type": "EXCLUSION_20", "team": "home", "cap": 3, "quarter": 2, "clock": "1:04", "sanction_duration": 20},
+      {"type": "EXCLUSION_20", "team": "home", "cap": 11, "quarter": 2, "clock": "0:24", "sanction_duration": 20},
+
+      {"type": "EXCLUSION_20", "team": "away", "cap": 4, "quarter": 3, "clock": "7:26", "sanction_duration": 20},
+      {"type": "EXCLUSION_20", "team": "home", "cap": 9, "quarter": 3, "clock": "6:48", "sanction_duration": 20, "is_penalty": true},
+      {"type": "EXCLUSION_20", "team": "away", "cap": 8, "quarter": 3, "clock": "6:20", "sanction_duration": 20},
+      {"type": "EXCLUSION_20", "team": "home", "cap": 3, "quarter": 3, "clock": "6:06", "sanction_duration": 20},
+      {"type": "EXCLUSION_20", "team": "home", "cap": 5, "quarter": 3, "clock": "5:11", "sanction_duration": 20},
+      {"type": "EXCLUSION_20", "team": "away", "cap": 11, "quarter": 3, "clock": "3:48", "sanction_duration": 20},
+      {"type": "EXCLUSION_20", "team": "home", "cap": 12, "quarter": 3, "clock": "3:24", "sanction_duration": 20},
+      {"type": "EXCLUSION_20", "team": "home", "cap": 8, "quarter": 3, "clock": "2:35", "sanction_duration": 20},
+      {"type": "EXCLUSION_20", "team": "home", "cap": 9, "quarter": 3, "clock": "2:18", "sanction_duration": 20},
+      {"type": "EXCLUSION_20", "team": "away", "cap": 12, "quarter": 3, "clock": "0:08", "sanction_duration": 20},
+
+      {"type": "EXCLUSION_20", "team": "home", "cap": 12, "quarter": 4, "clock": "6:47", "sanction_duration": 20},
+      {"type": "EXCLUSION_20", "team": "away", "cap": 5, "quarter": 4, "clock": "5:23", "sanction_duration": 20},
+      {"type": "EXCLUSION_20", "team": "home", "cap": 4, "quarter": 4, "clock": "4:23", "sanction_duration": 20, "is_penalty": true},
+      {"type": "EXCLUSION_20", "team": "away", "cap": 9, "quarter": 4, "clock": "2:07", "sanction_duration": 20},
+      {"type": "EXCLUSION_20", "team": "home", "cap": 3, "quarter": 4, "clock": "1:51", "sanction_duration": 20},
+      {"type": "EXCLUSION_20", "team": "home", "cap": 12, "quarter": 4, "clock": "1:49", "sanction_duration": 20},
+
+      {"type": "TIMEOUT", "team": "away", "quarter": 2, "clock": "0:24"},
+      {"type": "TIMEOUT", "team": "home", "quarter": 4, "clock": "2:07"},
+      {"type": "TIMEOUT", "team": "home", "quarter": 4, "clock": "0:21"},
+
+      {"type": "EXCLUSION_DEF", "team": "home", "cap": 7, "quarter": 4, "clock": "6:39", "regulation_article": "9.13", "sanction_sigla": "EDCS"}
+    ],
+    "rosters": {
+      "home": {
+        "name_on_paper": "Unime",
+        "players": [
+          {"number": 1, "name": "caliri a."},
+          {"number": 2, "name": "costa a."},
+          {"number": 3, "name": "geloso c."},
+          {"number": 4, "name": "denaro p."},
+          {"number": 5, "name": "milana l."},
+          {"number": 6, "name": "albatino s."},
+          {"number": 7, "name": "d'angelo v."},
+          {"number": 8, "name": "vinci a."},
+          {"number": 9, "name": "iane p."},
+          {"number": 10, "name": "mazza m."},
+          {"number": 11, "name": "sciabà g.", "note": "OMONIMIA LEGITTIMA con il numero 13: stesso cognome e stessa iniziale (fratelli). Ratificato da Alberto: NON e' un errore di trascrizione ne' un duplicato da correggere."},
+          {"number": 12, "name": "cama f."},
+          {"number": 13, "name": "sciabà g.", "note": "OMONIMIA LEGITTIMA con il numero 11: stesso cognome e stessa iniziale (fratelli). Ratificato da Alberto: NON e' un errore di trascrizione ne' un duplicato da correggere."},
+          {"number": 14, "name": "finanze p."}
+        ]
+      },
+      "away": {
+        "name_on_paper": "Nautilus Roma",
+        "numbering_note": "Il numero 3 e' ASSENTE ed e' corretto cosi': l'allenatore non ha convocato il numero massimo di giocatori e nessuno ha scelto il 3. Ratificato da Alberto. Un buco nella numerazione NON e' un errore di estrazione ne' un giocatore mancante da riempire.",
+        "players": [
+          {"number": 1, "name": "galbiati a."},
+          {"number": 2, "name": "pacciani g."},
+          {"number": 4, "name": "perna m."},
+          {"number": 5, "name": "scarfagna m."},
+          {"number": 6, "name": "garcia a."},
+          {"number": 7, "name": "cionfi m."},
+          {"number": 8, "name": "bogni d."},
+          {"number": 9, "name": "garcia g."},
+          {"number": 10, "name": "pisu e."},
+          {"number": 11, "name": "bonetti f."},
+          {"number": 12, "name": "giordani c."},
+          {"number": 13, "name": "notarini l."}
+        ]
+      }
     }
   },
 
   "not_verified": [
-    "roster casa e trasferta (nomi, numeri di maglia)",
-    "eventi (marcatori, minuti, esclusioni, cartellini)",
     "ufficiali di gara (arbitro, segretario, cronometrista)",
-    "attribuzione dei gol ai singoli giocatori per periodo",
+    "allenatori (coach) di entrambe le squadre",
     "ospitante Unime (letto dal referto, non verificato con lo stesso rigore del punteggio)"
   ],
 
@@ -68,6 +175,21 @@
     "Somma parziali verificata: 4+3+3+2=12, 2+1+4+3=10, coerente col finale 12-10.",
     "Confermato sul sistema vivo: casa/trasferta erano invertiti a DB, con conseguenza diretta sul vincitore registrato (falsava anche i punti classifica, sebbene qui senza impatto reale perche' nessun report e' mai stato PUBLISHED per questo match). E' una classe di errore distinta dai parziali compensativi: nessun controllo aritmetico la rileva, perche' i numeri sono tutti presenti e coerenti — cambia solo a chi sono attribuiti (vedi syllabus §8.5, 'inversione casa/trasferta').",
     "Corretto su dev il 2026-07-19 scambiando le FK home_team/away_team insieme a punteggio e parziali nella stessa transazione; prod ancora da correggere.",
-    "'Nautilus Roma' vs 'Nautilus N. Roma' a DB (Team pk=3): divergenza di grafia foglio<->DB CONFERMATA da riverifica il 2026-07-20 (vedi 'reverification'). E' uno dei casi fondativi della fase 3 (tabella alias)."
-  ]
+    "'Nautilus Roma' vs 'Nautilus N. Roma' a DB (Team pk=3): divergenza di grafia foglio<->DB CONFERMATA da riverifica il 2026-07-20 (vedi 'reverification'). E' uno dei casi fondativi della fase 3 (tabella alias).",
+    "Eventi e roster promossi in truth il 2026-07-23 da trascrizione umana del referto cartaceo (NON da proposta del bench; riversamento umano legittimo, regola D1). 51 eventi: 22 gol (12 casa Unime + 10 ospite Nautilus), 24 esclusioni di 20 secondi, 3 timeout e 1 espulsione definitiva (EDCS, art. 9.13).",
+    "Cross-check indipendente: gol-per-periodo derivati dalla cronologia == parziali gia' in truth (P1 4-2, P2 3-1, P3 3-4, P4 2-3; finale 12-10, COINCIDONO). Vedi 'corroboration'.",
+    "Rigori: 3 esclusioni con is_penalty (P2 6:20 fallo B#10, P3 6:48 fallo B#9, P4 4:23 fallo B#4). Diagnostica a valle (NON codificata in truth): 2 rigori REALIZZATI — P3 6:48 (gol away N#9 stesso clock, 8-4) e P4 4:23 (gol away N#4 stesso clock, 12-9) — e 1 rigore NON realizzato (P2 6:20: nessun gol a quel clock). I due rigori realizzati sono entrambi del Nautilus, su fallo dell'Unime.",
+    "Coerenza espulsioni: fouled out (>=3 esclusioni di 20 secondi) SOLO home B#3 e home B#12 (3 ciascuno). Nessun altro giocatore, in nessuna delle due squadre, raggiunge le 3. Nessun giocatore SUPERA le 3 -> nessun sospetto di errore di trascrizione sul conteggio. L'espulsione definitiva di home B#7 (art. 9.13) e' un tipo diverso (EXCLUSION_DEF) e NON entra nel conteggio delle esclusioni di 20 secondi: B#7 resta a 1 esclusione di 20 secondi.",
+    "OMONIMIA LEGITTIMA nel roster casa: i numeri 11 e 13 dell'Unime hanno nome identico ('sciabà g.') perche' sono due fratelli (stesso cognome, stessa iniziale). Ratificato da Alberto: NON e' un errore. La validazione OCR (validate_coherence) emette al massimo un warning informativo 'Duplicati: Nomi giocatore duplicati', mai un blocker (verificato: il messaggio non e' fra i critical_keywords di assess_publish_readiness). Nessuna modifica al validatore richiesta.",
+    "BUCO DI NUMERAZIONE LEGITTIMO nel roster ospite: il Nautilus non ha il numero 3 (roster 1,2,4-13, 12 giocatori) perche' l'allenatore non ha convocato il massimo e nessuno ha scelto il 3. Ratificato da Alberto: NON e' un errore ne' un giocatore mancante. La validazione OCR non produce alcun warning/blocker su un buco di numerazione (il check di unicita' opera sui numeri presenti, il check di dimensione tollera 7-15): verificato, nessuna modifica richiesta.",
+    "Timeout: 3 eventi TIMEOUT (P2 0:24 ospite Nautilus, P4 2:07 casa Unime, P4 0:21 casa Unime), estratti col solo 'team' e 'clock', SENZA cap (il timeout e' della squadra). Semantica aggiunta al prompt sperimentale V3.4 (§8.18).",
+    "Espulsione definitiva: 1 evento EXCLUSION_DEF (P4 6:39, casa B#7, sigla EDCS, art. 9.13 = cattiva condotta, espulsione definitiva con sostituzione, NESSUN rigore). TRAPPOLA OCR: la riga precedente e' il gol del 10-8 (away N#12, stesso clock 6:39) e l'articolo '9.13' e' scritto nella colonna del PUNTEGGIO — assomiglia a un punteggio ma NON lo e'. Il prompt V3.4 (§8.18) istruisce esplicitamente a non far entrare l'articolo nella progressione del punteggio. Mappatura articolo->tipo nel codice (matches/event_types.py), non nel prompt."
+  ],
+
+  "corroboration": {
+    "status": "concorde",
+    "corroborated_at": "2026-07-23",
+    "corroborated_by": "Alberto Galbiati",
+    "method_note": "Seconda zona indipendente del foglio: la STORIA CRONOMETRICA (sequenza dei 22 gol con clock, calottina e squadra) e' stata trascritta a mano separatamente dal riquadro dei parziali. I gol derivati per periodo e squadra (P1 4-2, P2 3-1, P3 3-4, P4 2-3; finale 12-10) COINCIDONO esattamente con i parziali e il finale gia' in truth, verificati per altra via il 2026-07-20/21. Validazione incrociata indipendente fra due letture umane di zone diverse dello stesso foglio. Rilevante perche' il caso e' a legibility.score 2 (< 3): la regola del dataset richiede corroborazione per chiuderlo, e questa e' la seconda fonte concorde dentro il foglio."
+  }
 }
