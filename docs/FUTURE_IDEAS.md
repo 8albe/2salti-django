@@ -90,3 +90,17 @@ per-stagione, e il flag "uscito per falli" nel timeline della singola partita.
 
 Cosa riaprirebbe/allargherebbe: dati reali a regime (più referti con eventi riconciliati) e
 una decisione UX su dove mostrarli (profilo atleta, pagina lega, timeline partita).
+
+### Qwen3-VL come secondo lettore decorrelato nel cross-check
+
+Il cross-check misurato in §8.20 accoppia gemini-2.5-pro e gemini-3.6-flash: 0 concordi-e-sbagliati su 8 errori, su 6 referti. Il metodo funziona perché i due modelli sbagliano in punti diversi, e il suo unico punto cieco sono gli errori commessi da entrambi.
+
+Pro e Flash appartengono però alla stessa famiglia e allo stesso addestramento: i loro errori sono verosimilmente più correlati di quelli di due modelli di fornitori diversi. Sui 6 referti del gold la correlazione non è emersa, ma il campione è troppo piccolo per escluderla. Un secondo lettore di famiglia diversa dovrebbe restringere il punto cieco.
+
+Qwen3-VL (Alibaba, Model Studio) è l'unico candidato non-Google architetturalmente compatibile: è un VLM generalista che sa produrre output strutturato, quindi si innesta nell'architettura a provider già esistente (che ospitava OpenAI prima della migrazione a Gemini). Gli OCR specializzati (Mistral OCR, DeepSeek-OCR, GLM-OCR) sono invece esclusi: restituiscono testo o markdown, non il JSON con semantica di dominio (is_penalty, articolo EDCS, clock per periodo, roster per calottina), e senza gli stessi campi il confronto campo-per-campo del cross-check non è possibile.
+
+Costo della valutazione: quasi nullo. Alibaba Cloud Model Studio dà ~70M token gratuiti per 90 giorni sull'endpoint Singapore, sufficienti a misurare Qwen sul gold senza spesa. Il lavoro è la scrittura del provider nel bench.
+
+PREREQUISITO NON NEGOZIABILE: valutazione privacy prima di qualunque chiamata con referti reali. I referti contengono nomi e cognomi di atleti potenzialmente minorenni, e l'endpoint è extra-UE. La valutazione va fatta prima della misura, non dopo.
+
+Sequenziamento: viene dopo il test dello zero-autori su Flash, perché quel test decide se il lettore primario resta Pro o diventa Flash, e quindi quale posto Qwen andrebbe a occupare.
