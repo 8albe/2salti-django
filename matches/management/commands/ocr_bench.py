@@ -922,6 +922,28 @@ class Command(BaseCommand):
             ),
         )
         parser.add_argument(
+            "--thinking-level",
+            default=None,
+            metavar="LEVEL",
+            help=(
+                "Livello di ragionamento per i modelli Gemini 3.x "
+                "('minimal' azzera i thought token, 'low', 'high'). "
+                "Default None: nessun ThinkingConfig, comportamento di produzione "
+                "invariato. Seam per-chiamata, non tocca settings."
+            ),
+        )
+        parser.add_argument(
+            "--thinking-budget",
+            type=int,
+            default=None,
+            metavar="TOKENS",
+            help=(
+                "Budget di thinking token per i modelli Gemini 2.5 (alternativa a "
+                "--thinking-level, che ha precedenza se entrambi valorizzati). "
+                "Default None: comportamento di produzione invariato."
+            ),
+        )
+        parser.add_argument(
             "--repeat",
             type=int,
             default=1,
@@ -1049,11 +1071,18 @@ class Command(BaseCommand):
 
         prompt_version = options["prompt_version"]
         prompt_version_str = prompt_version_string(prompt_version)
+        thinking_level = options["thinking_level"]
+        thinking_budget = options["thinking_budget"]
+        if thinking_level or thinking_budget is not None:
+            self.stdout.write(
+                f"  thinking: level={thinking_level!r} budget={thinking_budget!r}"
+            )
 
         if not gold_mode:
             results = self._run_models(
                 provider, provider_name, models, image_opt, preprocess, dump_dir,
                 prompt_version=prompt_version,
+                thinking_level=thinking_level, thinking_budget=thinking_budget,
             )
             self._print_show_and_save(results, options)
             if validated_fields is not None and results:
@@ -1149,6 +1178,7 @@ class Command(BaseCommand):
             results = self._run_models(
                 provider, provider_name, models, image_path, preprocess, dump_dir,
                 prompt_version=prompt_version,
+                thinking_level=thinking_level, thinking_budget=thinking_budget,
             )
             self._print_show_and_save(results, options, case_id=case_id)
 
@@ -1223,7 +1253,7 @@ class Command(BaseCommand):
         return None, None, "nessuna immagine risolvibile — " + "; ".join(tried) + "."
 
     def _run_models(self, provider, provider_name, models, image_path, preprocess, dump_dir,
-                    prompt_version="v2"):
+                    prompt_version="v2", thinking_level=None, thinking_budget=None):
         """Esegue l'estrazione per ogni modello e stampa la tabella. Ritorna {model: data}."""
         # Stub minimale: extract_data usa solo .id (logging) e .file.path
         bench_report = SimpleNamespace(
@@ -1237,7 +1267,10 @@ class Command(BaseCommand):
         if not preprocess:
             self.stdout.write("Preprocessing: BYPASSATO (--no-preprocess)")
         self.stdout.write("")
-        header = f"{'modello':<20} {'confidence':>10} {'latenza':>9} {'tok_in':>8} {'tok_out':>8}"
+        header = (
+            f"{'modello':<20} {'confidence':>10} {'latenza':>9} "
+            f"{'tok_in':>8} {'tok_out':>8} {'tok_thk':>8}"
+        )
         self.stdout.write(header)
         self.stdout.write("-" * len(header))
 
@@ -1251,6 +1284,10 @@ class Command(BaseCommand):
                 extract_kwargs["preprocess"] = False
             if prompt_version != "v2":
                 extract_kwargs["prompt_version"] = prompt_version
+            if thinking_level is not None:
+                extract_kwargs["thinking_level"] = thinking_level
+            if thinking_budget is not None:
+                extract_kwargs["thinking_budget"] = thinking_budget
             if dump_dir:
                 ts = timezone.localtime().strftime("%Y%m%d_%H%M%S")
 
@@ -1280,10 +1317,12 @@ class Command(BaseCommand):
             conf_str = f"{confidence:.2f}" if isinstance(confidence, (int, float)) else "N/A"
             tok_in = usage.get("prompt_tokens")
             tok_out = usage.get("completion_tokens")
+            tok_thk = usage.get("thoughts_tokens")
             self.stdout.write(
                 f"{model:<20} {conf_str:>10} {elapsed:>8.1f}s "
                 f"{tok_in if tok_in is not None else 'N/A':>8} "
-                f"{tok_out if tok_out is not None else 'N/A':>8}"
+                f"{tok_out if tok_out is not None else 'N/A':>8} "
+                f"{tok_thk if tok_thk is not None else 'N/A':>8}"
             )
             results[model] = data
 
@@ -1385,11 +1424,14 @@ class Command(BaseCommand):
         invece di trattare una singola chiamata come "la" lettura del modello.
         """
         data_lists = {model: [] for model in models}
+        thinking_level = options.get("thinking_level")
+        thinking_budget = options.get("thinking_budget")
         for i in range(1, repeat + 1):
             self.stdout.write(f"\n-- Ripetizione {i}/{repeat} --")
             results = self._run_models(
                 provider, provider_name, models, image_path, preprocess, dump_dir,
                 prompt_version=prompt_version,
+                thinking_level=thinking_level, thinking_budget=thinking_budget,
             )
             self._print_show_and_save(results, options, case_id=f"{case_id}__run{i}")
             for model, data in results.items():
@@ -1566,11 +1608,14 @@ class Command(BaseCommand):
         proposta per caso/modello con la divergenza per ripetizione e il riepilogo.
         """
         data_lists = {model: [] for model in models}
+        sp_thinking_level = options.get("thinking_level")
+        sp_thinking_budget = options.get("thinking_budget")
         for i in range(1, repeat + 1):
             self.stdout.write(f"\n-- Secondo passaggio (zone) {i}/{repeat} --")
             results = self._run_models(
                 provider, provider_name, models, image_path, preprocess, dump_dir,
                 prompt_version=prompt_version,
+                thinking_level=sp_thinking_level, thinking_budget=sp_thinking_budget,
             )
             self._print_show_and_save(results, options, case_id=f"{case_id}__zone_run{i}")
             for model, data in results.items():

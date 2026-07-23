@@ -592,6 +592,9 @@ class BaseVisionProvider:
             meta["token_usage"] = {
                 "prompt_tokens": getattr(usage, "prompt_tokens", None),
                 "completion_tokens": getattr(usage, "completion_tokens", None),
+                # Additivo e tollerante: i thought token (fatturati come output) sono
+                # None sui provider/modelli che non li espongono; presenti sui 3.x.
+                "thoughts_tokens": getattr(usage, "thoughts_tokens", None),
             }
 
         # Ensure match_info
@@ -774,13 +777,23 @@ class GeminiVisionProvider(BaseVisionProvider):
 
     def extract_data(self, match_report, model: str = None, preprocess: bool = True,
                      sent_image_callback=None,
-                     prompt_version: str = None) -> Tuple[Dict[str, Any], str]:
+                     prompt_version: str = None,
+                     thinking_level: str = None,
+                     thinking_budget: int = None) -> Tuple[Dict[str, Any], str]:
         """
         preprocess=False bypassa ImagePreprocessor e invia i byte grezzi;
         sent_image_callback, se fornita, riceve il path del file effettivamente
         inviato al modello, prima della chiamata API. prompt_version seleziona
         il prompt di sistema fra OCR_SYSTEM_PROMPTS (override per-chiamata >
         settings.OCR_PROMPT_VERSION > "v2": il default di produzione resta V2).
+
+        thinking_level / thinking_budget: minimizzazione dei token di ragionamento
+        (fatturati come output). Default None su ENTRAMBI => nessun ThinkingConfig
+        passato, config di generazione byte-identica al comportamento di produzione
+        (gemini-2.5-pro). Sono seam per-chiamata usati dal bench: i modelli di
+        generazione 3.x accettano thinking_level in {'minimal','low','high'}
+        ('minimal' azzera i thought token); i modelli 2.5 accettano thinking_budget.
+        Se entrambi valorizzati, thinking_level ha precedenza.
         Ritorna (data, raw_content).
         """
         import mimetypes
@@ -835,6 +848,22 @@ class GeminiVisionProvider(BaseVisionProvider):
         # Configurabile via settings.OCR_MAX_OUTPUT_TOKENS senza toccare il codice.
         max_output_tokens = getattr(settings, "OCR_MAX_OUTPUT_TOKENS", 32000)
 
+        # ThinkingConfig SOLO se richiesto per-chiamata: default None su entrambi =>
+        # config identica alla produzione. Non tocca settings, non altera il default.
+        gen_config_kwargs = {
+            "system_instruction": system_prompt,
+            "response_mime_type": "application/json",
+            "max_output_tokens": max_output_tokens,
+        }
+        if thinking_level is not None:
+            gen_config_kwargs["thinking_config"] = types.ThinkingConfig(
+                thinking_level=thinking_level
+            )
+        elif thinking_budget is not None:
+            gen_config_kwargs["thinking_config"] = types.ThinkingConfig(
+                thinking_budget=thinking_budget
+            )
+
         try:
             response = self.client.models.generate_content(
                 model=model,
@@ -842,11 +871,7 @@ class GeminiVisionProvider(BaseVisionProvider):
                     types.Part.from_bytes(data=image_bytes, mime_type=mime_type),
                     OCR_USER_TEXT,
                 ],
-                config=types.GenerateContentConfig(
-                    system_instruction=system_prompt,
-                    response_mime_type="application/json",
-                    max_output_tokens=max_output_tokens,
-                ),
+                config=types.GenerateContentConfig(**gen_config_kwargs),
             )
 
             content = response.text
@@ -883,6 +908,7 @@ class GeminiVisionProvider(BaseVisionProvider):
                 usage = SimpleNamespace(
                     prompt_tokens=getattr(usage_meta, "prompt_token_count", None),
                     completion_tokens=getattr(usage_meta, "candidates_token_count", None),
+                    thoughts_tokens=getattr(usage_meta, "thoughts_token_count", None),
                 )
 
             data = self._normalize_response(
