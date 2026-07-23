@@ -649,6 +649,45 @@ in una variante **clock-only** (senza il paragrafo di ancoraggio, che ha aggiunt
 senza beneficio) e rimisurato **quando il cap Gemini è rialzato**. Decisione sui numeri: Alberto.
 I due errori stabili sui punteggi restano in §8.13.
 
+### 8.17 Variante clock-only V3.3 — implementata, misura RIMANDATA per cap di spesa Gemini (2026-07-23)
+
+Seguito operativo diretto della raccomandazione di §8.16: isolare il **solo** guadagno reale e
+indipendente di V3.2 — il campo `clock` mm:ss per evento — scartando l'ancoraggio di periodo per
+gli eventi isolati, che in §8.16 ha prodotto **zero movimento** sul residuo di collocazione (gol
+isolato Libertas P3: 1/5 → 1/5) e ha aggiunto peso e rumore alla sezione EVENTI (gol away droppato
+in 2/5 run, un run senza autori, sovra-conteggio casa).
+
+**Implementazione (fatta, a repo su dev).** Variante **V3.3** `OCR_SYSTEM_PROMPT_V3_3@sha256:dd9f2af28a1d`,
+costruita per **sostituzione mirata su V3** con le **stesse due `.replace()` del clock di V3.2**
+(istruzione mm:ss nella sezione EVENTI + riga di schema `"clock"`), **byte-identiche** a quelle di
+V3.2, e **omessa** la terza `.replace()` dell'ancoraggio. Conseguenza strutturale, blindata a test
+(`tests_ocr_bench.py`): **V3.3 = V3.1 + solo le due righe del clock** (togliendole si riottiene V3
+byte-per-byte) e **V3.3 = V3.2 meno il solo blocco di ancoraggio** (riscrivendo in V3.2 l'ancoraggio
+rinforzato con quello originale di V3.1 si ottiene V3.3). Quindi qualunque scarto misurato tra
+V3.1/V3.2 e V3.3 sulle zone invariate è **varianza di campionamento, non effetto del prompt**.
+Selezionabile dal bench (`ocr_bench --prompt-version v3_3`, registry-driven come le altre) e via
+`settings.OCR_PROMPT_VERSION`. **NON promossa**: il default di produzione resta `v3` (V3.1); l'hash
+è fissato a test come per V2/V3/V3.2 (un cambio deve essere esplicito, non silenzioso).
+
+**Misura sul gold: RIMANDATA — cap di spesa Gemini ancora attivo.** Prima mossa del giro (come da
+§8.16 "Stato aperto"): **una singola** chiamata reale di sonda sul caso più economico (Unime,
+`--repeat 1`, prompt di default). Esito **429 RESOURCE_EXHAUSTED**, ma con un messaggio ora
+**esplicito** che **falsifica l'ipotesi rate-limit di §8.16**: `"Your project has exceeded its
+monthly spending cap"`. Non è un limite per-minuto auto-resettato: è il **cap di spesa mensile del
+progetto Google**, un blocco duro che si sblocca **solo** rialzando/resettando il cap dalla console
+AI Studio (`https://ai.studio/spend`) — azione di Alberto, fuori dal perimetro batch. Nessuna altra
+chiamata reale tentata dopo la sonda. La misura sul gold di V3.3 (protocollo §8.12/§8.15, tutti e 6
+i casi **inclusi Salerno e Triscelon**, con le domande Olympic-centriche di §8.16: stabilità del
+clock, match posizionale dei rigori per (squadra+periodo+clock), completezza cronologia, regressioni
+punteggi sui casi comuni) resta **da eseguire al primo giro a cap rialzato**.
+
+**Attesa da falsificare alla misura.** Sul residuo di collocazione di periodo dell'evento isolato:
+**nessun movimento atteso** — V3.3 non tocca l'ancoraggio, e il muro è già dichiarato in §8.16 come
+irriducibile via prompt (va alla strada §8.13, doppia estrazione per zona). L'ipotesi vera da
+verificare è che V3.3 **conservi il guadagno del clock** (popolazione ~100%, sblocco del match
+posizionale rigore↔gol) **senza** il rumore sugli eventi introdotto dal blocco di ancoraggio di
+V3.2. Decisione di promozione: Alberto, sui numeri del bench.
+
 ---
 
 ← [Macro precedente](7_profilo_fan.md) | → [Macro successiva](9_sistema_sponsor.md)
