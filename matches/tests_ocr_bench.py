@@ -1021,17 +1021,37 @@ class OcrPromptV3ContentTest(TestCase):
             "a0f50fbe5244",
         )
 
-    def test_registry_exposes_v2_v3_v3_2_v3_3_and_v3_4(self):
+    def test_registry_exposes_v2_v3_v3_2_v3_3_v3_4_and_v3_5(self):
         from matches.services.vision_providers import (
             OCR_SYSTEM_PROMPT_V2, OCR_SYSTEM_PROMPT_V3, OCR_SYSTEM_PROMPT_V3_2,
-            OCR_SYSTEM_PROMPT_V3_3, OCR_SYSTEM_PROMPT_V3_4, OCR_SYSTEM_PROMPTS,
+            OCR_SYSTEM_PROMPT_V3_3, OCR_SYSTEM_PROMPT_V3_4, OCR_SYSTEM_PROMPT_V3_5,
+            OCR_SYSTEM_PROMPTS,
         )
         self.assertEqual(
             OCR_SYSTEM_PROMPTS,
             {"v2": OCR_SYSTEM_PROMPT_V2, "v3": OCR_SYSTEM_PROMPT_V3,
              "v3_2": OCR_SYSTEM_PROMPT_V3_2, "v3_3": OCR_SYSTEM_PROMPT_V3_3,
-             "v3_4": OCR_SYSTEM_PROMPT_V3_4},
+             "v3_4": OCR_SYSTEM_PROMPT_V3_4, "v3_5": OCR_SYSTEM_PROMPT_V3_5},
         )
+
+    def test_v3_4_hash_is_pinned_v3_5_derives_from_it(self):
+        # §8.24: V3.5 (identità per calottina) deriva da V3.4 per sostituzione
+        # mirata e V3.4 deve restare BYTE-IDENTICO (è il prompt delle misure
+        # §8.19/§8.20/§8.22/§8.23). Se questo hash cambia, una modifica ha toccato
+        # V3.4 di nascosto: deve essere una decisione esplicita, non un effetto.
+        import hashlib
+        from matches.services.vision_providers import (
+            OCR_SYSTEM_PROMPT_V3_4, OCR_SYSTEM_PROMPT_V3_5,
+        )
+        self.assertEqual(
+            hashlib.sha256(OCR_SYSTEM_PROMPT_V3_4.encode("utf-8")).hexdigest()[:12],
+            "4e9751eded9b",
+        )
+        # V3.5 aggiunge SOLO l'identità per calottina: campo cap nello schema
+        # eventi e istruzione sulla calottina primaria; nient'altro.
+        self.assertIn('"cap":', OCR_SYSTEM_PROMPT_V3_5)
+        self.assertIn("IDENTIFICATIVO PRIMARIO", OCR_SYSTEM_PROMPT_V3_5)
+        self.assertNotIn('"cap":', OCR_SYSTEM_PROMPT_V3_4)
 
     def test_v3_hash_is_pinned(self):
         # V3 è il prompt promosso a produzione (syllabus §8.x). Come V2, il suo hash
@@ -1337,22 +1357,24 @@ class OcrZonePromptTest(TestCase):
     def test_second_pass_registry_and_all_prompts(self):
         from matches.services.vision_providers import (
             OCR_SYSTEM_PROMPT_V2, OCR_SYSTEM_PROMPT_V3, OCR_SYSTEM_PROMPT_V3_2,
-            OCR_SYSTEM_PROMPT_V3_3, OCR_SYSTEM_PROMPT_V3_4, OCR_SYSTEM_PROMPT_ZONE,
+            OCR_SYSTEM_PROMPT_V3_3, OCR_SYSTEM_PROMPT_V3_4, OCR_SYSTEM_PROMPT_V3_5,
+            OCR_SYSTEM_PROMPT_ZONE,
             OCR_SYSTEM_PROMPTS, OCR_SECOND_PASS_PROMPTS, OCR_ALL_PROMPTS,
         )
-        # La registry di produzione espone v2/v3/v3_2/v3_3/v3_4: zone è tenuta separata.
+        # La registry di produzione espone v2/v3/v3_2/v3_3/v3_4/v3_5: zone è tenuta separata.
         self.assertEqual(
             OCR_SYSTEM_PROMPTS,
             {"v2": OCR_SYSTEM_PROMPT_V2, "v3": OCR_SYSTEM_PROMPT_V3,
              "v3_2": OCR_SYSTEM_PROMPT_V3_2, "v3_3": OCR_SYSTEM_PROMPT_V3_3,
-             "v3_4": OCR_SYSTEM_PROMPT_V3_4},
+             "v3_4": OCR_SYSTEM_PROMPT_V3_4, "v3_5": OCR_SYSTEM_PROMPT_V3_5},
         )
         self.assertEqual(OCR_SECOND_PASS_PROMPTS, {"zone": OCR_SYSTEM_PROMPT_ZONE})
         self.assertEqual(
             OCR_ALL_PROMPTS,
             {"v2": OCR_SYSTEM_PROMPT_V2, "v3": OCR_SYSTEM_PROMPT_V3,
              "v3_2": OCR_SYSTEM_PROMPT_V3_2, "v3_3": OCR_SYSTEM_PROMPT_V3_3,
-             "v3_4": OCR_SYSTEM_PROMPT_V3_4, "zone": OCR_SYSTEM_PROMPT_ZONE},
+             "v3_4": OCR_SYSTEM_PROMPT_V3_4, "v3_5": OCR_SYSTEM_PROMPT_V3_5,
+             "zone": OCR_SYSTEM_PROMPT_ZONE},
         )
 
     def test_zone_prompt_inherits_v3_rules_and_is_minimal(self):
