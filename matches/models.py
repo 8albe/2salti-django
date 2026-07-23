@@ -148,22 +148,29 @@ class MatchEvent(models.Model):
 
     @property
     def display_label(self):
-        """
-        Returns the label for the event.
-        Priority: 
-        1. SportEventConfig (DB)
-        2. Centralized defaults
+        """Etichetta leggibile dell'evento, in catena a tre livelli:
+
+        1. SportEventConfig (override per sport, se presente in DB) — livello di
+           personalizzazione piu' alto;
+        2. EVENT_LABELS / get_event_label (default centralizzati a codice) —
+           copre tutti i DEFAULT_EVENT_TYPES, funziona in ogni ambiente senza
+           dipendere da righe in tabella;
+        3. codice grezzo (ultima spiaggia) per un tipo mai visto.
+
+        SportEventConfig e' vuota su dev e prod, quindi prima di questa catena la
+        resa ripiegava sul codice tecnico (es. "RED_CARD") mostrato all'utente
+        (DEBITI §10.38). Il livello 2 chiude il buco a codice, senza seminare dati.
         """
         if self.match.league and self.match.league.sport:
             conf = SportEventConfig.objects.filter(
-                sport=self.match.league.sport, 
+                sport=self.match.league.sport,
                 event_code=self.event_type
             ).first()
             if conf:
                 return conf.label
-        
-        # Spring-loaded from a local dictionary if available, or just the type
-        return self.event_type
+
+        from matches.event_types import get_event_label
+        return get_event_label(self.event_type)
     
     class Meta:
         ordering = ['match', 'quarter', 'minute']
